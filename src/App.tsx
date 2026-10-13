@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useAuth } from './AuthContext';
+import { useState } from 'react';
+import { useAuth } from './auth';
 import './App.css';
 
 function App() {
