@@ -9,7 +9,7 @@ import { auth } from "./firebase";
 
 const AuthContext = createContext<any>({});
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: any) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 

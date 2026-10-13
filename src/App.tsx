@@ -8,7 +8,7 @@ function App() {
   const [password, setPassword] = useState('');
   const { user, login, logout } = useAuth();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: any) => {
     e.preventDefault();
     try {
       await login(email, password);
