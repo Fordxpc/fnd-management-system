@@ -160,3 +160,68 @@
   text-align: center;
   color: #64748b;
 }
+/* Export buttons */
+.export-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+}
+.export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.jpg-btn { background-color: #0891b2; color: white; }
+.jpg-btn:hover:not(:disabled) { background-color: #0e7490; }
+.pdf-btn { background-color: #dc2626; color: white; }
+.pdf-btn:hover:not(:disabled) { background-color: #b91c1c; }
+
+/* Export area title */
+.roster-export-area {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.roster-title {
+  text-align: center;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #1e293b;
+  padding-bottom: 12px;
+}
+.roster-title h1 {
+  font-size: 20px;
+  margin: 0;
+  color: #1e293b;
+  letter-spacing: 0.5px;
+}
+.roster-title p {
+  margin: 6px 0 0;
+  color: #475569;
+  font-weight: 600;
+}
+
+/* Date column header */
+.date-col {
+  min-width: 70px;
+  padding: 6px 4px !important;
+}
+.day-name {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+}
+.day-num {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Compact grid for monthly view */
+.roster-grid th, .roster-grid td {
+  font-size: 11px;
+  padding: 8px 4px;
+}
+.shift-cell { font-size: 10px !important; }
+.leave-cell { font-size: 9px !important; white-space: normal !important; }
+.off-day-cell { font-size: 10px !important; }
