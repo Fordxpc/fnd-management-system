@@ -3,6 +3,7 @@ import { useAuth } from './auth';
 import './Dashboard.css';
 import StaffPage from './pages/StaffPage';
 import RosterPage from './pages/RosterPage';
+import LeavePage from './pages/LeavePage';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
@@ -16,7 +17,7 @@ function Dashboard({ user, logout }: any) {
     dashboard: <div className="page-content"><h2>Dashboard</h2><p>Overview coming soon...</p></div>,
     staff: <StaffPage />,
     roster: <RosterPage />,
-    leave: <div className="page-content"><h2>Leave Management</h2><p>Coming soon...</p></div>,
+    leave: <LeavePage />,
     overtime: <div className="page-content"><h2>Overtime</h2><p>Coming soon...</p></div>,
     settings: <div className="page-content"><h2>Settings</h2><p>Coming soon...</p></div>,
   };

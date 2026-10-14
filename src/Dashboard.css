@@ -586,3 +586,126 @@
     margin: 6mm;
   }
 }
+
+/* ==================== LEAVE PAGE ==================== */
+.leave-balance-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+}
+.leave-balance-card h3 {
+  margin: 0 0 16px;
+  color: #1e293b;
+  font-size: 15px;
+}
+.balance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+.balance-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.balance-label {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.balance-value {
+  font-size: 16px;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+/* Leave tabs */
+.leave-tabs {
+  display: flex;
+  gap: 6px;
+  background: white;
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.leave-tab {
+  padding: 8px 14px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.leave-tab:hover { background: #f1f5f9; }
+.leave-tab.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.status-pending  { background: #fef3c7; color: #92400e; }
+.status-approved { background: #d1fae5; color: #065f46; }
+.status-rejected { background: #fee2e2; color: #991b1b; }
+.status-cancelled{ background: #e2e8f0; color: #475569; }
+
+/* Leave type badge */
+.leave-type-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Approve/Reject buttons */
+.approve-btn {
+  background-color: #16a34a;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-right: 6px;
+}
+.approve-btn:hover { background-color: #15803d; }
+
+.reject-btn {
+  background-color: #dc2626;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.reject-btn:hover { background-color: #b91c1c; }
