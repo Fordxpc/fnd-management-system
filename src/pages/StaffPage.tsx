@@ -2,19 +2,20 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
-// The default FND Ground Operations staff list with positions
 const FND_STAFF = [
-  { sn: 'SN-0439', name: 'Hassan Sujaau', position: 'Senior Airport Officer' },
-  { sn: 'SN-0729', name: 'Mohamed Fuadh', position: 'Operations Officer' },
-  { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer' },
-  { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand' },
-  { sn: 'SN-0038', name: 'Adam Skakir', position: 'Airport Hand' },
-  { sn: 'SN-0758', name: 'Mohamed Adam', position: 'Airport Hand' },
-  { sn: 'SN-0733', name: 'Thoriq Mohamed', position: 'Airport Hand' },
-  { sn: 'SN-0725', name: 'Ahmed Aseel', position: 'Airport Hand' },
-  { sn: 'SN-0730', name: 'Mohamed Nadheem', position: 'Airport Hand' },
-  { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand' },
+  { sn: 'SN-0439', name: 'Hassan Sujaau', position: 'Senior Airport Officer', department: 'Ground Operations' },
+  { sn: 'SN-0729', name: 'Mohamed Fuadh', position: 'Operations Officer', department: 'Ground Operations' },
+  { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer', department: 'Ground Operations' },
+  { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0038', name: 'Adam Skakir', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0758', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0733', name: 'Thoriq Mohamed', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0725', name: 'Ahmed Aseel', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0730', name: 'Mohamed Nadheem', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
 ];
+
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security'];
 
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
@@ -26,7 +27,7 @@ function StaffPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [department, setDepartment] = useState('Operations');
+  const [department, setDepartment] = useState('Ground Operations');
   const [position, setPosition] = useState('');
 
   useEffect(() => {
@@ -42,7 +43,7 @@ function StaffPage() {
     setName('');
     setEmail('');
     setPhone('');
-    setDepartment('Operations');
+    setDepartment('Ground Operations');
     setPosition('');
     setEditingId(null);
   };
@@ -53,28 +54,15 @@ function StaffPage() {
       alert('Name and Email are required');
       return;
     }
-
     try {
       if (editingId) {
-        // Update existing
         await updateDoc(doc(db, 'staff', editingId), {
-          sn,
-          name,
-          email,
-          phone,
-          department,
-          position,
+          sn, name, email, phone, department, position,
         });
         alert('Staff updated successfully!');
       } else {
-        // Add new
         await addDoc(collection(db, 'staff'), {
-          sn,
-          name,
-          email,
-          phone,
-          department,
-          position,
+          sn, name, email, phone, department, position,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -93,7 +81,7 @@ function StaffPage() {
     setName(s.name || '');
     setEmail(s.email || '');
     setPhone(s.phone || '');
-    setDepartment(s.department || 'Operations');
+    setDepartment(s.department || 'Ground Operations');
     setPosition(s.position || '');
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -128,7 +116,7 @@ function StaffPage() {
           name: member.name,
           email: `${member.sn.toLowerCase()}@funadhooairport.com`,
           phone: '',
-          department: 'Operations',
+          department: member.department,
           position: member.position,
           status: 'active',
           createdAt: new Date().toISOString(),
@@ -199,11 +187,9 @@ function StaffPage() {
             onChange={(e) => setPosition(e.target.value)}
           />
           <select value={department} onChange={(e) => setDepartment(e.target.value)}>
-            <option>Operations</option>
-            <option>Security</option>
-            <option>Maintenance</option>
-            <option>Administration</option>
-            <option>Fire & Rescue</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
           </select>
           <button type="submit">
             {editingId ? '💾 Save Changes' : 'Save Staff Member'}

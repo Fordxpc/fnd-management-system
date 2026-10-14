@@ -5,7 +5,8 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 
-// --- Date helpers ---
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security'];
+
 const formatDate = (date: Date) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -81,10 +82,12 @@ const LEAVE_OPTIONS = [
 function RosterPage() {
   const { profile } = useAuth();
 
-  // FULL ACCESS roles — see all departments
   const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
   const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role);
   const userDepartment = profile?.department;
+
+  // Selected department for admins. 'all' means every department.
+  const [selectedDept, setSelectedDept] = useState<string>('all');
 
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
@@ -103,8 +106,15 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
+  // Filter staff based on role + selected department
   const visibleStaff = [...staff]
-    .filter((s) => isAdmin || !userDepartment || s.department === userDepartment)
+    .filter((s) => {
+      if (isAdmin) {
+        if (selectedDept === 'all') return true;
+        return s.department === selectedDept;
+      }
+      return s.department === userDepartment;
+    })
     .sort(sortStaff);
 
   useEffect(() => {
@@ -219,7 +229,7 @@ function RosterPage() {
       const canvas = await captureCanvas();
       if (!canvas) return;
       const link = document.createElement('a');
-      link.download = `FND-Duty-Roster-${formatDate(periodStart)}.jpg`;
+      link.download = `FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
       link.click();
     } catch (err: any) { alert('Export failed: ' + err.message); }
@@ -244,14 +254,26 @@ function RosterPage() {
       const imgX = (pageWidth - imgW) / 2;
       const imgY = (pageHeight - imgH) / 2;
       pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
-      pdf.save(`FND-Duty-Roster-${formatDate(periodStart)}.pdf`);
+      pdf.save(`FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.pdf`);
     } catch (err: any) { alert('Export failed: ' + err.message); }
     setExporting(false);
   };
 
-  const departmentLabel = isAdmin
-    ? 'All Departments'
-    : userDepartment || 'All Departments';
+  const handlePrint = () => {
+    // Add a class to body so print CSS knows we're printing the roster
+    document.body.classList.add('printing-roster');
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove('printing-roster');
+    }, 100);
+  };
+
+  // Title department label
+  const titleDept = isAdmin
+    ? (selectedDept === 'all' ? 'ALL DEPARTMENTS' : selectedDept.toUpperCase())
+    : (userDepartment || '').toUpperCase();
+
+  const titleDeptSafe = titleDept.replace(/\s+/g, '-');
 
   return (
     <div className="page-content">
@@ -259,7 +281,7 @@ function RosterPage() {
         <h2>
           Duty Roster
           <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
-            ({departmentLabel})
+            ({isAdmin ? (selectedDept === 'all' ? 'All Departments' : selectedDept) : userDepartment})
           </span>
         </h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -275,11 +297,35 @@ function RosterPage() {
           <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>
             {exporting ? 'Exporting...' : '📄 Export PDF (A4)'}
           </button>
+          <button className="export-btn print-btn" onClick={handlePrint}>
+            🖨️ Print
+          </button>
           <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : '+ Assign Shift'}
           </button>
         </div>
       </div>
+
+      {/* Department tabs (only for admins / SMT / manager) */}
+      {isAdmin && (
+        <div className="dept-tabs">
+          <button
+            className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'}
+            onClick={() => setSelectedDept('all')}
+          >
+            All Departments
+          </button>
+          {DEPARTMENTS.map((d) => (
+            <button
+              key={d}
+              className={selectedDept === d ? 'dept-tab active' : 'dept-tab'}
+              onClick={() => setSelectedDept(d)}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+      )}
 
       {reorderMode && (
         <div className="reorder-banner">
@@ -327,9 +373,7 @@ function RosterPage() {
 
       <div ref={gridRef} className="roster-export-area">
         <div className="roster-title">
-          <h1>
-            FND {isAdmin ? 'GROUND OPERATIONS' : (userDepartment || '').toUpperCase()} DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}
-          </h1>
+          <h1>FND {titleDept} DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
         </div>
 
         {weeks.map((week, weekIndex) => (
@@ -355,7 +399,7 @@ function RosterPage() {
                       colSpan={week.length + (reorderMode ? 3 : 2)}
                       style={{ textAlign: 'center', padding: '15px' }}
                     >
-                      No staff members found for {departmentLabel}.
+                      No staff members found for {isAdmin ? (selectedDept === 'all' ? 'All Departments' : selectedDept) : userDepartment}.
                     </td>
                   </tr>
                 ) : (

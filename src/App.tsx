@@ -5,16 +5,12 @@ import { db } from './firebase';
 import Dashboard from './Dashboard';
 import './App.css';
 
-// Roles that use the SMT / MANAGER tab
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
-// All departments in the system
 const DEPARTMENTS = [
-  'Operations',
-  'Security',
+  'Ground Operations',
   'Maintenance',
-  'Administration',
-  'Fire & Rescue',
+  'Security',
 ];
 
 function App() {
@@ -30,17 +26,14 @@ function App() {
     setChecking(true);
 
     try {
-      // 1. Validate department is chosen for employees
       if (tab === 'employee' && !department) {
         alert('Please select your department.');
         setChecking(false);
         return;
       }
 
-      // 2. Sign in with Firebase Auth
       const cred = await login(email, password);
 
-      // 3. Load the user's role + department from Firestore
       const userRef = doc(db, 'users', cred.user.uid);
       const userSnap = await getDoc(userRef);
       const data = userSnap.exists() ? userSnap.data() : {};
@@ -49,7 +42,6 @@ function App() {
 
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
-      // 4. Validate the tab matches the actual role
       if (tab === 'management' && !isManagement) {
         await logout();
         alert('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
@@ -64,7 +56,6 @@ function App() {
         return;
       }
 
-      // 5. Validate the selected department matches the user's profile
       if (tab === 'employee' && userDept && userDept !== department) {
         await logout();
         alert(
@@ -74,8 +65,6 @@ function App() {
         setChecking(false);
         return;
       }
-
-      // Success — AuthProvider handles the redirect
     } catch (error: any) {
       alert('Error: ' + error.message);
     } finally {
@@ -163,9 +152,7 @@ function App() {
 
         <div className="footer-links">
           <a href="#">Forgot password?</a>
-          <p>
-            No account? <a href="#">Register</a>
-          </p>
+          <p>No account? <a href="#">Register</a></p>
         </div>
       </div>
     </div>
