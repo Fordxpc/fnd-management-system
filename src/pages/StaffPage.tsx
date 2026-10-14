@@ -15,47 +15,31 @@ const FND_STAFF = [
   { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
 ];
 
-// Departments available in staff form + staff page tabs
+// Only real departments (SMT is a STATUS, not a department)
 const DEPARTMENTS = [
   'Ground Operations',
   'Maintenance',
   'Security',
   'Fire & Rescue',
-  'SMT',
 ];
 
 // Preset designations (users can also type a custom one)
 const DESIGNATIONS = [
-  // Management / Admin / Safety
   'Airport Manager',
   'Assistant Manager',
-  'Safety Officer',
   'Assistant Safety Officer',
-  'Administrative Officer',
-  'Assistant Administrative Officer',
-
-  // Ground Operations
   'Senior Airport Officer',
-  'Senior Operations Officer',
   'Operations Officer',
   'Assistant Operations Officer',
-  'Airport Hand',
-
-  // Security
-  'Security Officer',
   'Assistant Security Officer',
-  'Security Agent',
-
-  // Maintenance
-  'Maintenance Officer',
-  'Maintenance Technician',
-  'Maintenance Agent',
-
-  // Fire & Rescue
-  'Fire Incharge',
+  'Assistant Administrative Officer',
   'Senior Fire Fighter',
   'Fire Fighter',
   'Junior Fire Fighter',
+  'Airport Hand',
+  'Security Agent',
+  'Maintenance Agent',
+  'Cleaning and Gardening',
 ];
 
 function StaffPage() {
@@ -71,6 +55,7 @@ function StaffPage() {
   const [phone, setPhone] = useState('');
   const [department, setDepartment] = useState('Ground Operations');
   const [position, setPosition] = useState('');
+  const [isSMT, setIsSMT] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'staff'), (snapshot) => {
@@ -87,6 +72,7 @@ function StaffPage() {
     setPhone('');
     setDepartment('Ground Operations');
     setPosition('');
+    setIsSMT(false);
     setEditingId(null);
   };
 
@@ -99,12 +85,12 @@ function StaffPage() {
     try {
       if (editingId) {
         await updateDoc(doc(db, 'staff', editingId), {
-          sn, name, email, phone, department, position,
+          sn, name, email, phone, department, position, isSMT,
         });
         alert('Staff updated successfully!');
       } else {
         await addDoc(collection(db, 'staff'), {
-          sn, name, email, phone, department, position,
+          sn, name, email, phone, department, position, isSMT,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -125,6 +111,7 @@ function StaffPage() {
     setPhone(s.phone || '');
     setDepartment(s.department || 'Ground Operations');
     setPosition(s.position || '');
+    setIsSMT(!!s.isSMT);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -160,6 +147,7 @@ function StaffPage() {
           phone: '',
           department: member.department,
           position: member.position,
+          isSMT: false,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -175,6 +163,7 @@ function StaffPage() {
   const visibleStaff = staff
     .filter((s) => {
       if (selectedDept === 'all') return true;
+      if (selectedDept === 'SMT') return s.isSMT === true;
       return s.department === selectedDept;
     })
     .sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
@@ -214,7 +203,7 @@ function StaffPage() {
         </div>
       </div>
 
-      {/* Department tabs */}
+      {/* Department tabs — SMT is shown separately */}
       <div className="dept-tabs">
         <button
           className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'}
@@ -231,6 +220,17 @@ function StaffPage() {
             {d}
           </button>
         ))}
+        <button
+          className={selectedDept === 'SMT' ? 'dept-tab active' : 'dept-tab'}
+          onClick={() => setSelectedDept('SMT')}
+          style={{
+            borderColor: '#f59e0b',
+            color: selectedDept === 'SMT' ? '#fff' : '#92400e',
+            backgroundColor: selectedDept === 'SMT' ? '#f59e0b' : '#fef3c7',
+          }}
+        >
+          ⭐ SMT Members
+        </button>
       </div>
 
       {showForm && (
@@ -275,6 +275,33 @@ function StaffPage() {
               <option key={d} value={d}>{d}</option>
             ))}
           </select>
+
+          {/* SMT member checkbox */}
+          <label
+            style={{
+              gridColumn: 'span 2',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px 12px',
+              background: '#fef3c7',
+              border: '1px solid #f59e0b',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              color: '#92400e',
+              fontSize: '14px',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isSMT}
+              onChange={(e) => setIsSMT(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            ⭐ Mark as SMT (Senior Management Team) member
+          </label>
+
           <button type="submit">
             {editingId ? '💾 Save Changes' : 'Save Staff Member'}
           </button>
@@ -299,6 +326,7 @@ function StaffPage() {
                 <th>Phone</th>
                 <th>Designation</th>
                 <th>Department</th>
+                <th>SMT</th>
                 <th></th>
               </tr>
             </thead>
@@ -311,6 +339,9 @@ function StaffPage() {
                   <td>{s.phone || '—'}</td>
                   <td>{s.position || '—'}</td>
                   <td>{s.department}</td>
+                  <td style={{ textAlign: 'center', fontSize: '16px' }}>
+                    {s.isSMT ? '⭐' : '—'}
+                  </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button
                       className="edit-btn"
