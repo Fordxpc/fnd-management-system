@@ -340,6 +340,12 @@
   padding: 1px 2px !important;
 }
 
+/* Out-of-period cells (before 16th, after 15th) — grey & blank */
+.week-grid tbody td.out-of-period-cell {
+  background-color: #e2e8f0 !important;
+  color: #94a3b8 !important;
+}
+
 /* ==================== REORDER MODE ==================== */
 .reorder-col {
   background-color: #fef3c7 !important;

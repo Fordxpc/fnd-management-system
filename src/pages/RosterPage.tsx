@@ -40,19 +40,23 @@ const getPeriodEnd = (start: Date) => {
   return d;
 };
 
-// Break period into Sat–Fri weeks (first week partial from start)
+// Returns the Saturday on or before the given date
+const getSaturdayOnOrBefore = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay(); // 0=Sun, 6=Sat
+  const diff = (day + 1) % 7; // Sat→0, Sun→1, Mon→2, ..., Fri→6
+  d.setDate(d.getDate() - diff);
+  return d;
+};
+
+// Break into full Sat–Fri weeks (always 7 days each)
 const chunkIntoWeeks = (start: Date, end: Date): Date[][] => {
   const weeks: Date[][] = [];
-  let current = new Date(start);
-  const firstWeek: Date[] = [];
-  while (current <= end && current.getDay() !== 6) {
-    firstWeek.push(new Date(current));
-    current.setDate(current.getDate() + 1);
-  }
-  if (firstWeek.length > 0) weeks.push(firstWeek);
+  let current = getSaturdayOnOrBefore(start);
   while (current <= end) {
     const week: Date[] = [];
-    for (let i = 0; i < 7 && current <= end; i++) {
+    for (let i = 0; i < 7; i++) {
       week.push(new Date(current));
       current.setDate(current.getDate() + 1);
     }
@@ -365,6 +369,18 @@ function RosterPage() {
                       <td className="col-name">{s.name}</td>
                       {week.map((d) => {
                         const dStr = formatDate(d);
+                        const isInPeriod =
+                          dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
+
+                        // Cell outside the 16→15 period → blank grey cell
+                        if (!isInPeriod) {
+                          return (
+                            <td key={dStr} className="out-of-period-cell">
+                              &nbsp;
+                            </td>
+                          );
+                        }
+
                         const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                         let displayValue = '';
                         let cellClass = 'empty-cell';
