@@ -1,34 +1,62 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot } from 'firebase/firestore';
+
+// Helper to format date as YYYY-MM-DD
+const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+// Helper to get the start of the week (Sunday)
+const getStartOfWeek = (date: Date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day;
+  return new Date(d.setDate(diff));
+};
+
+const SHIFT_OPTIONS = [
+  '06:00 - 14:00',
+  '08:00 - 16:00',
+  '16:00 - 00:00',
+  '00:00 - 08:00',
+  'CUSTOM'
+];
+
+const LEAVE_OPTIONS = [
+  'OFF DAY',
+  'ANNUAL LEAVE',
+  'SICK LEAVE',
+  'SICK LEAVE / MC',
+  'PATERNITY LEAVE',
+  'MATERNITY LEAVE',
+  'FAMILY RESPONSIBILITY LEAVE (FRL)'
+];
 
 function RosterPage() {
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
-  const shifts = [
-    { code: 'M', name: 'Morning', time: '06:00 - 14:00' },
-    { code: 'A', name: 'Afternoon', time: '14:00 - 22:00' },
-    { code: 'N', name: 'Night', time: '22:00 - 06:00' },
-    { code: 'OFF', name: 'Day Off', time: 'Rest Day' },
-  ];
-
+  const [currentWeekStart, setCurrentWeekStart] = useState(getStartOfWeek(new Date()));
+  
   const [showForm, setShowForm] = useState(false);
   const [staffId, setStaffId] = useState('');
-  const [shiftCode, setShiftCode] = useState('M');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(formatDate(new Date()));
+  const [shiftTime, setShiftTime] = useState('06:00 - 14:00');
+  const [customShift, setCustomShift] = useState('');
+  const [status, setStatus] = useState('scheduled'); 
+
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(currentWeekStart);
+    d.setDate(d.getDate() + i);
+    return formatDate(d);
+  });
 
   useEffect(() => {
     const unsubStaff = onSnapshot(collection(db, 'staff'), (snapshot) => {
       setStaff(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
 
-    const unsubRoster = onSnapshot(
-      query(collection(db, 'roster_entries'), orderBy('date', 'desc')),
-      (snapshot) => {
-        setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-      }
-    );
+    const unsubRoster = onSnapshot(collection(db, 'roster_entries'), (snapshot) => {
+      setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
 
     return () => {
       unsubStaff();
@@ -43,31 +71,38 @@ function RosterPage() {
       return;
     }
     const staffMember = staff.find((s) => s.id === staffId);
-    const shift = shifts.find((s) => s.code === shiftCode);
+
+    // Figure out what to save
+    let finalShiftTime = '';
+    if (status === 'scheduled') {
+      finalShiftTime = shiftTime === 'CUSTOM' ? customShift : shiftTime;
+      if (!finalShiftTime) {
+        alert('Please enter the custom shift time');
+        return;
+      }
+    }
 
     try {
       await addDoc(collection(db, 'roster_entries'), {
         staffId,
         staffName: staffMember?.name || 'Unknown',
-        shiftCode,
-        shiftName: shift?.name || '',
-        shiftTime: shift?.time || '',
         date,
-        notes,
-        status: 'scheduled',
+        shiftTime: finalShiftTime,
+        status: status === 'scheduled' ? 'scheduled' : status, 
         createdAt: new Date().toISOString(),
       });
-      setNotes('');
       setShowForm(false);
+      setCustomShift('');
       alert('Roster entry added!');
     } catch (error: any) {
       alert('Error: ' + error.message);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this roster entry?')) return;
-    await deleteDoc(doc(db, 'roster_entries', id));
+  const changeWeek = (direction: number) => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + direction * 7);
+    setCurrentWeekStart(newDate);
   };
 
   return (
@@ -84,70 +119,94 @@ function RosterPage() {
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
             {staff.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+              <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>
             ))}
           </select>
 
-          <select value={shiftCode} onChange={(e) => setShiftCode(e.target.value)}>
-            {shifts.map((s) => (
-              <option key={s.code} value={s.code}>
-                {s.name} ({s.time})
-              </option>
-            ))}
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="scheduled">Scheduled Shift</option>
+            {LEAVE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
 
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-          />
+          {status === 'scheduled' && (
+            <>
+              <select value={shiftTime} onChange={(e) => setShiftTime(e.target.value)}>
+                {SHIFT_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+              {shiftTime === 'CUSTOM' && (
+                <input 
+                  placeholder="Enter custom time (e.g. 07:00 - 15:00)" 
+                  value={customShift} 
+                  onChange={(e) => setCustomShift(e.target.value)} 
+                  required 
+                />
+              )}
+            </>
+          )}
 
-          <input
-            placeholder="Notes (optional)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-
-          <button type="submit">Save Assignment</button>
+          <button type="submit">Save Entry</button>
         </form>
       )}
 
-      <div className="staff-list">
-        {entries.length === 0 ? (
-          <div className="empty-state">
-            <p>No shifts assigned yet. Click "+ Assign Shift" to get started.</p>
-          </div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Staff</th>
-                <th>Shift</th>
-                <th>Time</th>
-                <th>Notes</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr key={e.id}>
-                  <td>{e.date}</td>
-                  <td><strong>{e.staffName}</strong></td>
-                  <td>{e.shiftName}</td>
-                  <td>{e.shiftTime}</td>
-                  <td>{e.notes || '—'}</td>
-                  <td>
-                    <button className="delete-btn" onClick={() => handleDelete(e.id)}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+      <div className="week-nav">
+        <button onClick={() => changeWeek(-1)}>← Previous Week</button>
+        <span>{weekDates[0]} to {weekDates[6]}</span>
+        <button onClick={() => changeWeek(1)}>Next Week →</button>
+      </div>
+
+      <div className="roster-grid-container">
+        <table className="roster-grid">
+          <thead>
+            <tr>
+              <th className="sticky-col">SN No.</th>
+              <th className="sticky-col-name">NAME</th>
+              {weekDates.map((d) => (
+                <th key={d}>{d}</th>
               ))}
-            </tbody>
-          </table>
-        )}
+            </tr>
+          </thead>
+          <tbody>
+            {staff.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>
+                  No staff members found. Add staff first.
+                </td>
+              </tr>
+            ) : (
+              staff.map((s) => (
+                <tr key={s.id}>
+                  <td className="sticky-col">{s.sn || '—'}</td>
+                  <td className="sticky-col-name"><strong>{s.name}</strong></td>
+                  {weekDates.map((d) => {
+                    const entry = entries.find((e) => e.staffId === s.id && e.date === d);
+                    
+                    let displayValue = '—';
+                    let cellClass = 'empty-cell';
+                    
+                    if (entry) {
+                      displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.status;
+                      if (entry.status === 'OFF DAY') {
+                        cellClass = 'off-day-cell';
+                      } else if (entry.status && entry.status !== 'scheduled') {
+                        cellClass = 'leave-cell';
+                      } else {
+                        cellClass = 'shift-cell';
+                      }
+                    }
+
+                    return (
+                      <td key={d} className={cellClass}>
+                        {displayValue}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
