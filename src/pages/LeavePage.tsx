@@ -46,23 +46,62 @@ const formatDisplay = (dateStr: string): string => {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 };
 
-const countDays = (start: string, end: string): number => {
+// Check if a date string (YYYY-MM-DD) is a Friday
+const isFriday = (dateStr: string): boolean => {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.getDay() === 5; // Friday
+};
+
+// Count days between start and end (inclusive)
+// For ANNUAL LEAVE: Fridays are skipped (off day)
+const countDays = (start: string, end: string, leaveType: string): number => {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return 0;
-  return Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
+
+  const skipFridays = leaveType === 'ANNUAL LEAVE';
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const dStr = formatDate(cur);
+    if (!(skipFridays && isFriday(dStr))) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
 };
 
-const dateRange = (start: string, end: string): string[] => {
+// Build a YYYY-MM-DD range from start to end inclusive
+// For ANNUAL LEAVE: Fridays are excluded
+const dateRange = (start: string, end: string, leaveType: string): string[] => {
   const dates: string[] = [];
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
+  const skipFridays = leaveType === 'ANNUAL LEAVE';
   const cur = new Date(s);
   while (cur <= e) {
-    dates.push(formatDate(cur));
+    const dStr = formatDate(cur);
+    if (!(skipFridays && isFriday(dStr))) {
+      dates.push(dStr);
+    }
     cur.setDate(cur.getDate() + 1);
   }
   return dates;
+};
+
+// Count only Fridays in the range (for display info)
+const countFridaysInRange = (start: string, end: string): number => {
+  const s = new Date(start + 'T00:00:00');
+  const e = new Date(end + 'T00:00:00');
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return 0;
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    if (cur.getDay() === 5) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
 };
 
 function LeavePage() {
@@ -171,7 +210,11 @@ function LeavePage() {
       return;
     }
 
-    const days = countDays(startDate, endDate);
+    const days = countDays(startDate, endDate, leaveType);
+    if (days === 0) {
+      alert('This leave period contains no countable days (all Fridays for annual leave).');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -219,7 +262,8 @@ function LeavePage() {
         reviewedAt: new Date().toISOString(),
       });
 
-      const days = dateRange(r.startDate, r.endDate);
+      // Use dateRange which skips Fridays for annual leave
+      const days = dateRange(r.startDate, r.endDate, r.leaveType);
       for (const d of days) {
         const q = query(
           collection(db, 'roster_entries'),
@@ -275,6 +319,10 @@ function LeavePage() {
       alert('Error: ' + error.message);
     }
   };
+
+  // Preview values for the form
+  const previewDays = countDays(startDate, endDate, leaveType);
+  const previewFridays = leaveType === 'ANNUAL LEAVE' ? countFridaysInRange(startDate, endDate) : 0;
 
   if (loading) {
     return <div className="page-content"><p>Loading...</p></div>;
@@ -352,14 +400,24 @@ function LeavePage() {
             style={{ gridColumn: 'span 2' }}
           />
 
-          <div style={{ gridColumn: 'span 2', fontSize: '13px', color: '#475569', padding: '8px 12px', background: '#f1f5f9', borderRadius: '6px' }}>
-            <strong>Total:</strong> {countDays(startDate, endDate)} day(s)
+          <div style={{ gridColumn: 'span 2', fontSize: '13px', color: '#475569', padding: '10px 12px', background: '#f1f5f9', borderRadius: '6px' }}>
+            <div>
+              <strong>Countable days:</strong> {previewDays}
+            </div>
+            {previewFridays > 0 && (
+              <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded (weekly off day for annual leave)
+              </div>
+            )}
             {endDate < startDate && (
-              <span style={{ color: '#dc2626', marginLeft: '8px' }}>⚠ End date is before start date</span>
+              <div style={{ color: '#dc2626', marginTop: '4px' }}>⚠ End date is before start date</div>
+            )}
+            {previewDays === 0 && endDate >= startDate && (
+              <div style={{ color: '#dc2626', marginTop: '4px' }}>⚠ No countable days in this range</div>
             )}
           </div>
 
-          <button type="submit" disabled={submitting}>
+          <button type="submit" disabled={submitting || previewDays === 0}>
             {submitting ? 'Submitting...' : 'Submit Leave Request'}
           </button>
         </form>
