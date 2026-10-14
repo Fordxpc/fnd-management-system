@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import './Dashboard.css';
 import StaffPage from './pages/StaffPage';
+import RosterPage from './pages/RosterPage';
 
 function Dashboard({ user, logout }: any) {
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -8,7 +9,7 @@ function Dashboard({ user, logout }: any) {
   const pages: { [key: string]: any } = {
     dashboard: <div className="page-content"><h2>Dashboard</h2><p>Overview coming soon...</p></div>,
     staff: <StaffPage />,
-    roster: <div className="page-content"><h2>Duty Roster</h2><p>Calendar coming soon...</p></div>,
+    roster: <RosterPage />,
     leave: <div className="page-content"><h2>Leave Management</h2><p>Coming soon...</p></div>,
     overtime: <div className="page-content"><h2>Overtime</h2><p>Coming soon...</p></div>,
     settings: <div className="page-content"><h2>Settings</h2><p>Coming soon...</p></div>,
