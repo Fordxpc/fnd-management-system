@@ -30,7 +30,7 @@ export function AuthProvider({ children }: any) {
             const defaultProfile = {
               email: currentUser.email,
               department: "Operations",
-              role: "staff", // 'staff' | 'manager' | 'admin'
+              role: "staff", // 'developer' | 'manager' | 'owner' | 'admin' | 'smt' | 'staff'
               createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, defaultProfile);
@@ -38,7 +38,6 @@ export function AuthProvider({ children }: any) {
           }
         } catch (err) {
           console.error("Failed to load user profile:", err);
-          // Fallback: minimal profile so app still works
           setProfile({ email: currentUser.email, department: "Operations", role: "staff" });
         }
       } else {

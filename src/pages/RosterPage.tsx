@@ -81,11 +81,9 @@ const LEAVE_OPTIONS = [
 function RosterPage() {
   const { profile } = useAuth();
 
-  // Department filtering logic
-  // - admin or senior_management → see all departments
-  // - everyone else → only their own department
-  const isAdmin =
-    profile?.role === 'admin' || profile?.role === 'senior_management';
+  // FULL ACCESS roles — see all departments
+  const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
+  const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role);
   const userDepartment = profile?.department;
 
   const [entries, setEntries] = useState<any[]>([]);
@@ -105,7 +103,6 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-  // Filter staff by department (unless admin)
   const visibleStaff = [...staff]
     .filter((s) => isAdmin || !userDepartment || s.department === userDepartment)
     .sort(sortStaff);
@@ -165,7 +162,6 @@ function RosterPage() {
     } catch (err: any) { alert('Reorder failed: ' + err.message); }
   };
 
-  // --- Export ---
   const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
@@ -329,7 +325,6 @@ function RosterPage() {
         <button onClick={() => changePeriod(1)}>Next Month →</button>
       </div>
 
-      {/* Exportable area */}
       <div ref={gridRef} className="roster-export-area">
         <div className="roster-title">
           <h1>FND GROUND OPERATIONS DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
