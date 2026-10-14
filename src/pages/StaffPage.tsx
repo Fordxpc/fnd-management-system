@@ -5,6 +5,7 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firesto
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [sn, setSn] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -27,6 +28,7 @@ function StaffPage() {
     }
     try {
       await addDoc(collection(db, 'staff'), {
+        sn,
         name,
         email,
         phone,
@@ -35,7 +37,11 @@ function StaffPage() {
         status: 'active',
         createdAt: new Date().toISOString(),
       });
-      setName(''); setEmail(''); setPhone(''); setPosition('');
+      setSn('');
+      setName('');
+      setEmail('');
+      setPhone('');
+      setPosition('');
       setShowForm(false);
       alert('Staff added successfully!');
     } catch (error: any) {
@@ -59,10 +65,34 @@ function StaffPage() {
 
       {showForm && (
         <form className="staff-form" onSubmit={handleAddStaff}>
-          <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
-          <input type="email" placeholder="Email *" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          <input placeholder="Position (e.g. Security Officer)" value={position} onChange={(e) => setPosition(e.target.value)} />
+          <input
+            placeholder="SN Number (e.g. SN-0439)"
+            value={sn}
+            onChange={(e) => setSn(e.target.value)}
+          />
+          <input
+            placeholder="Full Name *"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <input
+            type="email"
+            placeholder="Email *"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <input
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <input
+            placeholder="Position (e.g. Security Officer)"
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+          />
           <select value={department} onChange={(e) => setDepartment(e.target.value)}>
             <option>Operations</option>
             <option>Security</option>
@@ -83,6 +113,7 @@ function StaffPage() {
           <table>
             <thead>
               <tr>
+                <th>SN</th>
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
@@ -94,13 +125,16 @@ function StaffPage() {
             <tbody>
               {staff.map((s) => (
                 <tr key={s.id}>
+                  <td>{s.sn || '—'}</td>
                   <td><strong>{s.name}</strong></td>
                   <td>{s.email}</td>
                   <td>{s.phone || '—'}</td>
                   <td>{s.department}</td>
                   <td>{s.position || '—'}</td>
                   <td>
-                    <button className="delete-btn" onClick={() => handleDelete(s.id)}>Delete</button>
+                    <button className="delete-btn" onClick={() => handleDelete(s.id)}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
