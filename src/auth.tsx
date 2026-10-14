@@ -1,22 +1,53 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { 
-  signInWithEmailAndPassword, 
-  signOut, 
-  onAuthStateChanged
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "./firebase";
 
 const AuthContext = createContext<any>({});
 
 export function AuthProvider({ children }: any) {
   const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+
+      if (currentUser) {
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userRef);
+
+          if (userSnap.exists()) {
+            setProfile(userSnap.data());
+          } else {
+            // Auto-create default profile on first login
+            const defaultProfile = {
+              email: currentUser.email,
+              department: "Operations",
+              role: "staff", // 'staff' | 'manager' | 'admin'
+              createdAt: new Date().toISOString(),
+            };
+            await setDoc(userRef, defaultProfile);
+            setProfile(defaultProfile);
+          }
+        } catch (err) {
+          console.error("Failed to load user profile:", err);
+          // Fallback: minimal profile so app still works
+          setProfile({ email: currentUser.email, department: "Operations", role: "staff" });
+        }
+      } else {
+        setProfile(null);
+      }
+
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
@@ -29,7 +60,7 @@ export function AuthProvider({ children }: any) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, profile, login, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

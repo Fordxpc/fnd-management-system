@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, doc, writeBatch } from 'firebase/firestore';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { useAuth } from '../auth';
 
 // --- Date helpers ---
 const formatDate = (date: Date) => {
@@ -40,17 +41,15 @@ const getPeriodEnd = (start: Date) => {
   return d;
 };
 
-// Returns the Saturday on or before the given date
 const getSaturdayOnOrBefore = (date: Date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  const day = d.getDay(); // 0=Sun, 6=Sat
-  const diff = (day + 1) % 7; // Sat→0, Sun→1, Mon→2, ..., Fri→6
+  const day = d.getDay();
+  const diff = (day + 1) % 7;
   d.setDate(d.getDate() - diff);
   return d;
 };
 
-// Break into full Sat–Fri weeks (always 7 days each)
 const chunkIntoWeeks = (start: Date, end: Date): Date[][] => {
   const weeks: Date[][] = [];
   let current = getSaturdayOnOrBefore(start);
@@ -80,6 +79,15 @@ const LEAVE_OPTIONS = [
 ];
 
 function RosterPage() {
+  const { profile } = useAuth();
+
+  // Department filtering logic
+  // - admin or senior_management → see all departments
+  // - everyone else → only their own department
+  const isAdmin =
+    profile?.role === 'admin' || profile?.role === 'senior_management';
+  const userDepartment = profile?.department;
+
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [periodStart, setPeriodStart] = useState(getPeriodStart(new Date()));
@@ -96,7 +104,11 @@ function RosterPage() {
 
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
-  const sortedStaff = [...staff].sort(sortStaff);
+
+  // Filter staff by department (unless admin)
+  const visibleStaff = [...staff]
+    .filter((s) => isAdmin || !userDepartment || s.department === userDepartment)
+    .sort(sortStaff);
 
   useEffect(() => {
     const unsubStaff = onSnapshot(collection(db, 'staff'), (snapshot) => {
@@ -121,6 +133,7 @@ function RosterPage() {
       await addDoc(collection(db, 'roster_entries'), {
         staffId,
         staffName: staffMember?.name || 'Unknown',
+        staffDepartment: staffMember?.department || '',
         date,
         shiftTime: finalShiftTime,
         status: status === 'scheduled' ? 'scheduled' : status,
@@ -139,7 +152,7 @@ function RosterPage() {
   };
 
   const moveStaff = async (id: string, direction: 'up' | 'down') => {
-    const list = [...sortedStaff];
+    const list = [...visibleStaff];
     const index = list.findIndex((s) => s.id === id);
     if (index === -1) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -152,7 +165,7 @@ function RosterPage() {
     } catch (err: any) { alert('Reorder failed: ' + err.message); }
   };
 
-  // --- Export: capture canvas using off-screen wrapper with fixed width ---
+  // --- Export ---
   const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
@@ -186,7 +199,6 @@ function RosterPage() {
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 200));
-
       const canvas = await html2canvas(wrapper, {
         scale: 2,
         backgroundColor: '#ffffff',
@@ -197,7 +209,6 @@ function RosterPage() {
         windowWidth: wrapper.scrollWidth,
         windowHeight: wrapper.scrollHeight,
       });
-
       document.body.removeChild(wrapper);
       return canvas;
     } catch (err) {
@@ -225,30 +236,36 @@ function RosterPage() {
       const canvas = await captureCanvas();
       if (!canvas) return;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 8;
       const availWidth = pageWidth - margin * 2;
       const availHeight = pageHeight - margin * 2;
-
       const ratio = Math.min(availWidth / canvas.width, availHeight / canvas.height);
       const imgW = canvas.width * ratio;
       const imgH = canvas.height * ratio;
       const imgX = (pageWidth - imgW) / 2;
       const imgY = (pageHeight - imgH) / 2;
-
       pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
       pdf.save(`FND-Duty-Roster-${formatDate(periodStart)}.pdf`);
     } catch (err: any) { alert('Export failed: ' + err.message); }
     setExporting(false);
   };
 
+  const departmentLabel = isAdmin
+    ? 'All Departments'
+    : userDepartment || 'All Departments';
+
   return (
     <div className="page-content">
       <div className="staff-header">
-        <h2>Duty Roster</h2>
+        <h2>
+          Duty Roster
+          <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
+            ({departmentLabel})
+          </span>
+        </h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             className={`export-btn ${reorderMode ? 'pdf-btn' : 'jpg-btn'}`}
@@ -278,7 +295,7 @@ function RosterPage() {
         <form className="staff-form" onSubmit={handleAdd}>
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
-            {sortedStaff.map((s) => (
+            {visibleStaff.map((s) => (
               <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>
             ))}
           </select>
@@ -335,17 +352,17 @@ function RosterPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedStaff.length === 0 ? (
+                {visibleStaff.length === 0 ? (
                   <tr>
                     <td
                       colSpan={week.length + (reorderMode ? 3 : 2)}
                       style={{ textAlign: 'center', padding: '15px' }}
                     >
-                      No staff members found.
+                      No staff members found for {departmentLabel}.
                     </td>
                   </tr>
                 ) : (
-                  sortedStaff.map((s, staffIndex) => (
+                  visibleStaff.map((s, staffIndex) => (
                     <tr key={s.id}>
                       {reorderMode && (
                         <td className="reorder-col" style={{ padding: '2px' }}>
@@ -359,7 +376,7 @@ function RosterPage() {
                           <button
                             className="reorder-btn"
                             onClick={() => moveStaff(s.id, 'down')}
-                            disabled={staffIndex === sortedStaff.length - 1}
+                            disabled={staffIndex === visibleStaff.length - 1}
                           >
                             ▼
                           </button>
@@ -372,7 +389,6 @@ function RosterPage() {
                         const isInPeriod =
                           dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
 
-                        // Cell outside the 16→15 period → blank grey cell
                         if (!isInPeriod) {
                           return (
                             <td key={dStr} className="out-of-period-cell">
