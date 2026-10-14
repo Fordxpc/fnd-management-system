@@ -149,55 +149,61 @@ function RosterPage() {
   };
 
   // --- Export ---
-  const captureCanvas = async () => {
+    const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
+
+    // Create a visible wrapper off-screen with fixed dimensions
+    const wrapper = document.createElement('div');
+    Object.assign(wrapper.style, {
+      position: 'absolute',
+      left: '-10000px',
+      top: '0',
+      width: '1600px',
+      background: '#ffffff',
+      padding: '16px',
+      fontFamily: 'Arial, Helvetica, sans-serif',
+      zIndex: '1',
+    });
+
     const clone = original.cloneNode(true) as HTMLElement;
-    clone.style.position = 'fixed';
-    clone.style.left = '-99999px';
-    clone.style.top = '0';
-    clone.style.width = 'auto';
+    clone.style.width = '100%';
     clone.style.background = '#ffffff';
-    clone.style.padding = '10px';
+    clone.style.padding = '0';
+    clone.style.borderRadius = '0';
+    clone.style.boxShadow = 'none';
+
+    // Remove sticky positioning and reorder column
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => {
       (el as HTMLElement).style.position = 'static';
     });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
-    document.body.appendChild(clone);
+
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
     try {
-      const canvas = await html2canvas(clone, {
+      // Wait for layout & fonts
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const canvas = await html2canvas(wrapper, {
         scale: 2,
         backgroundColor: '#ffffff',
-        windowWidth: clone.scrollWidth,
-        width: clone.scrollWidth,
+        useCORS: true,
+        logging: false,
+        width: wrapper.scrollWidth,
+        height: wrapper.scrollHeight,
+        windowWidth: wrapper.scrollWidth,
+        windowHeight: wrapper.scrollHeight,
       });
-      document.body.removeChild(clone);
+
+      document.body.removeChild(wrapper);
       return canvas;
     } catch (err) {
-      document.body.removeChild(clone);
+      document.body.removeChild(wrapper);
       throw err;
     }
   };
-
-  const exportToJPG = async () => {
-    setExporting(true);
-    try {
-      const canvas = await captureCanvas();
-      if (!canvas) return;
-      const link = document.createElement('a');
-      link.download = `FND-Duty-Roster-${formatDate(periodStart)}.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.95);
-      link.click();
-    } catch (err: any) { alert('Export failed: ' + err.message); }
-    setExporting(false);
-  };
-
-  const exportToPDF = async () => {
-    setExporting(true);
-    try {
-      const canvas = await captureCanvas();
-      if (!canvas) return;
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
       // A4 Landscape: 297mm x 210mm
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
