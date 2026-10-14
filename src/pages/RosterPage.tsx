@@ -148,12 +148,11 @@ function RosterPage() {
     } catch (err: any) { alert('Reorder failed: ' + err.message); }
   };
 
-  // --- Export ---
-    const captureCanvas = async () => {
+  // --- Export: capture canvas using off-screen wrapper with fixed width ---
+  const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
 
-    // Create a visible wrapper off-screen with fixed dimensions
     const wrapper = document.createElement('div');
     Object.assign(wrapper.style, {
       position: 'absolute',
@@ -173,7 +172,6 @@ function RosterPage() {
     clone.style.borderRadius = '0';
     clone.style.boxShadow = 'none';
 
-    // Remove sticky positioning and reorder column
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => {
       (el as HTMLElement).style.position = 'static';
     });
@@ -183,7 +181,6 @@ function RosterPage() {
     document.body.appendChild(wrapper);
 
     try {
-      // Wait for layout & fonts
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       const canvas = await html2canvas(wrapper, {
@@ -205,16 +202,33 @@ function RosterPage() {
     }
   };
 
-      // A4 Landscape: 297mm x 210mm
-      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();   // 297
-      const pageHeight = pdf.internal.pageSize.getHeight(); // 210
-      const margin = 8;
+  const exportToJPG = async () => {
+    setExporting(true);
+    try {
+      const canvas = await captureCanvas();
+      if (!canvas) return;
+      const link = document.createElement('a');
+      link.download = `FND-Duty-Roster-${formatDate(periodStart)}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.click();
+    } catch (err: any) { alert('Export failed: ' + err.message); }
+    setExporting(false);
+  };
 
+  const exportToPDF = async () => {
+    setExporting(true);
+    try {
+      const canvas = await captureCanvas();
+      if (!canvas) return;
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8;
       const availWidth = pageWidth - margin * 2;
       const availHeight = pageHeight - margin * 2;
 
-      // Scale to fit both dimensions (contain)
       const ratio = Math.min(availWidth / canvas.width, availHeight / canvas.height);
       const imgW = canvas.width * ratio;
       const imgH = canvas.height * ratio;
@@ -275,7 +289,12 @@ function RosterPage() {
                 {SHIFT_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
               </select>
               {shiftTime === 'CUSTOM' && (
-                <input placeholder="Custom time (e.g. 07:00 - 15:00)" value={customShift} onChange={(e) => setCustomShift(e.target.value)} required />
+                <input
+                  placeholder="Custom time (e.g. 07:00 - 15:00)"
+                  value={customShift}
+                  onChange={(e) => setCustomShift(e.target.value)}
+                  required
+                />
               )}
             </>
           )}
@@ -314,7 +333,10 @@ function RosterPage() {
               <tbody>
                 {sortedStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={week.length + (reorderMode ? 3 : 2)} style={{ textAlign: 'center', padding: '15px' }}>
+                    <td
+                      colSpan={week.length + (reorderMode ? 3 : 2)}
+                      style={{ textAlign: 'center', padding: '15px' }}
+                    >
                       No staff members found.
                     </td>
                   </tr>
@@ -323,8 +345,20 @@ function RosterPage() {
                     <tr key={s.id}>
                       {reorderMode && (
                         <td className="reorder-col" style={{ padding: '2px' }}>
-                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')} disabled={staffIndex === 0}>▲</button>
-                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')} disabled={staffIndex === sortedStaff.length - 1}>▼</button>
+                          <button
+                            className="reorder-btn"
+                            onClick={() => moveStaff(s.id, 'up')}
+                            disabled={staffIndex === 0}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            className="reorder-btn"
+                            onClick={() => moveStaff(s.id, 'down')}
+                            disabled={staffIndex === sortedStaff.length - 1}
+                          >
+                            ▼
+                          </button>
                         </td>
                       )}
                       <td className="col-sn">{s.sn || '—'}</td>
