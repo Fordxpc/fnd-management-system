@@ -13,16 +13,20 @@ const formatDate = (date: Date) => {
 };
 
 const monthsFull = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+const monthsShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const daysShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 const formatLongDate = (date: Date) =>
   `${date.getDate()} ${monthsFull[date.getMonth()]} ${date.getFullYear()}`;
 
+const formatHeaderDate = (date: Date) =>
+  `${daysShort[date.getDay()]}, ${date.getDate()} ${monthsShort[date.getMonth()]}, ${date.getFullYear()}`;
+
 const getPeriodStart = (date: Date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  if (d.getDate() >= 16) {
-    d.setDate(16);
-  } else {
+  if (d.getDate() >= 16) d.setDate(16);
+  else {
     d.setMonth(d.getMonth() - 1);
     d.setDate(16);
   }
@@ -36,6 +40,7 @@ const getPeriodEnd = (start: Date) => {
   return d;
 };
 
+// Break period into Sat–Fri weeks (first week partial from start)
 const chunkIntoWeeks = (start: Date, end: Date): Date[][] => {
   const weeks: Date[][] = [];
   let current = new Date(start);
@@ -56,7 +61,6 @@ const chunkIntoWeeks = (start: Date, end: Date): Date[][] => {
   return weeks;
 };
 
-// Sort: by custom order if set, otherwise by SN
 const sortStaff = (a: any, b: any) => {
   const aOrder = typeof a.order === 'number' ? a.order : 9999;
   const bOrder = typeof b.order === 'number' ? b.order : 9999;
@@ -64,22 +68,11 @@ const sortStaff = (a: any, b: any) => {
   return (a.sn || '').localeCompare(b.sn || '');
 };
 
-const SHIFT_OPTIONS = [
-  '06:00 - 14:00',
-  '08:00 - 16:00',
-  '16:00 - 00:00',
-  '00:00 - 08:00',
-  'CUSTOM',
-];
+const SHIFT_OPTIONS = ['06:00 - 14:00','08:00 - 16:00','16:00 - 00:00','00:00 - 08:00','CUSTOM'];
 
 const LEAVE_OPTIONS = [
-  'OFF DAY',
-  'ANNUAL LEAVE',
-  'SICK LEAVE',
-  'SICK LEAVE / MC',
-  'PATERNITY LEAVE',
-  'MATERNITY LEAVE',
-  'FAMILY RESPONSIBILITY LEAVE (FRL)',
+  'OFF DAY','ANNUAL LEAVE','SICK LEAVE','SICK LEAVE / MC',
+  'PATERNITY LEAVE','MATERNITY LEAVE','FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
 
 function RosterPage() {
@@ -108,29 +101,18 @@ function RosterPage() {
     const unsubRoster = onSnapshot(collection(db, 'roster_entries'), (snapshot) => {
       setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => {
-      unsubStaff();
-      unsubRoster();
-    };
+    return () => { unsubStaff(); unsubRoster(); };
   }, []);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
-    if (!staffId) {
-      alert('Please select a staff member');
-      return;
-    }
+    if (!staffId) { alert('Please select a staff member'); return; }
     const staffMember = staff.find((s) => s.id === staffId);
-
     let finalShiftTime = '';
     if (status === 'scheduled') {
       finalShiftTime = shiftTime === 'CUSTOM' ? customShift : shiftTime;
-      if (!finalShiftTime) {
-        alert('Please enter the custom shift time');
-        return;
-      }
+      if (!finalShiftTime) { alert('Please enter the custom shift time'); return; }
     }
-
     try {
       await addDoc(collection(db, 'roster_entries'), {
         staffId,
@@ -143,9 +125,7 @@ function RosterPage() {
       setShowForm(false);
       setCustomShift('');
       alert('Roster entry added!');
-    } catch (error: any) {
-      alert('Error: ' + error.message);
-    }
+    } catch (error: any) { alert('Error: ' + error.message); }
   };
 
   const changePeriod = (direction: number) => {
@@ -154,30 +134,21 @@ function RosterPage() {
     setPeriodStart(newDate);
   };
 
-  // --- Reorder logic ---
   const moveStaff = async (id: string, direction: 'up' | 'down') => {
     const list = [...sortedStaff];
     const index = list.findIndex((s) => s.id === id);
     if (index === -1) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= list.length) return;
-
-    // Swap positions
     [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
-
-    // Save new order to Firestore
     try {
       const batch = writeBatch(db);
-      list.forEach((s, i) => {
-        batch.update(doc(db, 'staff', s.id), { order: i });
-      });
+      list.forEach((s, i) => batch.update(doc(db, 'staff', s.id), { order: i }));
       await batch.commit();
-    } catch (err: any) {
-      alert('Reorder failed: ' + err.message);
-    }
+    } catch (err: any) { alert('Reorder failed: ' + err.message); }
   };
 
-  // --- Export helpers ---
+  // --- Export ---
   const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
@@ -185,16 +156,14 @@ function RosterPage() {
     clone.style.position = 'fixed';
     clone.style.left = '-99999px';
     clone.style.top = '0';
-    clone.style.width = 'auto';
+    clone.style.width = '1400px'; // wider canvas for high quality export
     clone.style.background = '#ffffff';
-    clone.style.padding = '20px';
-    // Remove sticky + reorder column from export
+    clone.style.padding = '30px';
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => {
       (el as HTMLElement).style.position = 'static';
     });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
     document.body.appendChild(clone);
-
     try {
       const canvas = await html2canvas(clone, {
         scale: 2,
@@ -219,9 +188,7 @@ function RosterPage() {
       link.download = `FND-Duty-Roster-${formatDate(periodStart)}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
       link.click();
-    } catch (err: any) {
-      alert('Export failed: ' + err.message);
-    }
+    } catch (err: any) { alert('Export failed: ' + err.message); }
     setExporting(false);
   };
 
@@ -231,18 +198,26 @@ function RosterPage() {
       const canvas = await captureCanvas();
       if (!canvas) return;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+      // A4 Landscape: 297mm x 210mm
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const ratio = Math.min(pdfWidth / canvas.width, (pdfHeight - 20) / canvas.height);
+      const pageWidth = pdf.internal.pageSize.getWidth();   // 297
+      const pageHeight = pdf.internal.pageSize.getHeight(); // 210
+      const margin = 8;
+
+      const availWidth = pageWidth - margin * 2;
+      const availHeight = pageHeight - margin * 2;
+
+      // Scale to fit both dimensions (contain)
+      const ratio = Math.min(availWidth / canvas.width, availHeight / canvas.height);
       const imgW = canvas.width * ratio;
       const imgH = canvas.height * ratio;
-      const imgX = (pdfWidth - imgW) / 2;
-      pdf.addImage(imgData, 'JPEG', imgX, 10, imgW, imgH);
+      const imgX = (pageWidth - imgW) / 2;
+      const imgY = (pageHeight - imgH) / 2;
+
+      pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
       pdf.save(`FND-Duty-Roster-${formatDate(periodStart)}.pdf`);
-    } catch (err: any) {
-      alert('Export failed: ' + err.message);
-    }
+    } catch (err: any) { alert('Export failed: ' + err.message); }
     setExporting(false);
   };
 
@@ -261,7 +236,7 @@ function RosterPage() {
             {exporting ? 'Exporting...' : '📷 Export JPG'}
           </button>
           <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>
-            {exporting ? 'Exporting...' : '📄 Export PDF'}
+            {exporting ? 'Exporting...' : '📄 Export PDF (A4)'}
           </button>
           <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : '+ Assign Shift'}
@@ -271,8 +246,7 @@ function RosterPage() {
 
       {reorderMode && (
         <div className="reorder-banner">
-          ↕️ <strong>Reorder Mode:</strong> Use the ↑ ↓ arrows next to each name to arrange the staff in your preferred order. 
-          The changes save automatically and will apply to the exported JPG/PDF.
+          ↕️ <strong>Reorder Mode:</strong> Use the ↑ ↓ arrows next to each name to arrange the staff. Changes save automatically.
         </div>
       )}
 
@@ -281,32 +255,21 @@ function RosterPage() {
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
             {sortedStaff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.sn || 'No SN'})
-              </option>
+              <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>
             ))}
           </select>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="scheduled">Scheduled Shift</option>
-            {LEAVE_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
+            {LEAVE_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
           </select>
           {status === 'scheduled' && (
             <>
               <select value={shiftTime} onChange={(e) => setShiftTime(e.target.value)}>
-                {SHIFT_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
+                {SHIFT_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
               </select>
               {shiftTime === 'CUSTOM' && (
-                <input
-                  placeholder="Custom time (e.g. 07:00 - 15:00)"
-                  value={customShift}
-                  onChange={(e) => setCustomShift(e.target.value)}
-                  required
-                />
+                <input placeholder="Custom time (e.g. 07:00 - 15:00)" value={customShift} onChange={(e) => setCustomShift(e.target.value)} required />
               )}
             </>
           )}
@@ -323,8 +286,7 @@ function RosterPage() {
       {/* Exportable area */}
       <div ref={gridRef} className="roster-export-area">
         <div className="roster-title">
-          <h1>FND GROUND OPERATIONS DUTY ROSTER</h1>
-          <p>{formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</p>
+          <h1>FND GROUND OPERATIONS DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
         </div>
 
         {weeks.map((week, weekIndex) => (
@@ -338,7 +300,7 @@ function RosterPage() {
                   <th className="col-name">NAME</th>
                   {week.map((d) => (
                     <th key={formatDate(d)} className="col-date">
-                      {formatDate(d)}
+                      {formatHeaderDate(d)}
                     </th>
                   ))}
                 </tr>
@@ -355,22 +317,8 @@ function RosterPage() {
                     <tr key={s.id}>
                       {reorderMode && (
                         <td className="reorder-col" style={{ padding: '2px' }}>
-                          <button
-                            className="reorder-btn"
-                            onClick={() => moveStaff(s.id, 'up')}
-                            disabled={staffIndex === 0}
-                            title="Move Up"
-                          >
-                            ▲
-                          </button>
-                          <button
-                            className="reorder-btn"
-                            onClick={() => moveStaff(s.id, 'down')}
-                            disabled={staffIndex === sortedStaff.length - 1}
-                            title="Move Down"
-                          >
-                            ▼
-                          </button>
+                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')} disabled={staffIndex === 0}>▲</button>
+                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')} disabled={staffIndex === sortedStaff.length - 1}>▼</button>
                         </td>
                       )}
                       <td className="col-sn">{s.sn || '—'}</td>
@@ -380,7 +328,6 @@ function RosterPage() {
                         const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                         let displayValue = '';
                         let cellClass = 'empty-cell';
-
                         if (entry) {
                           displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.status;
                           if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';

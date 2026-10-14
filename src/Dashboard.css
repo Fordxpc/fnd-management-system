@@ -1,13 +1,15 @@
+/* ==================== GLOBAL RESET ==================== */
 * { box-sizing: border-box; }
 
+/* ==================== DASHBOARD LAYOUT ==================== */
 .dashboard-layout {
   display: flex;
   min-height: 100vh;
-  font-family: sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background-color: #f1f5f9;
 }
 
-/* Sidebar */
+/* ==================== SIDEBAR ==================== */
 .sidebar {
   width: 260px;
   background-color: #0f172a;
@@ -15,14 +17,22 @@
   display: flex;
   flex-direction: column;
   padding: 20px 0;
+  flex-shrink: 0;
 }
 
 .sidebar-header {
   padding: 0 20px 20px;
   border-bottom: 1px solid #1e293b;
 }
-.sidebar-header h2 { margin: 0; font-size: 18px; }
-.sidebar-header p { margin: 4px 0 0; font-size: 12px; color: #94a3b8; }
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.sidebar-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
 
 .sidebar-nav {
   flex: 1;
@@ -42,15 +52,28 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  font-family: inherit;
 }
-.nav-item:hover { background-color: #1e293b; color: #fff; }
-.nav-item.active { background-color: #2563eb; color: #fff; font-weight: 600; }
+.nav-item:hover {
+  background-color: #1e293b;
+  color: #fff;
+}
+.nav-item.active {
+  background-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
 
 .sidebar-footer {
   padding: 16px 20px 0;
   border-top: 1px solid #1e293b;
 }
-.user-email { font-size: 12px; color: #94a3b8; margin: 0 0 8px; word-break: break-all; }
+.user-email {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0 0 8px;
+  word-break: break-all;
+}
 .logout-btn {
   width: 100%;
   padding: 8px;
@@ -60,27 +83,41 @@
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
+  font-family: inherit;
 }
-.logout-btn:hover { background-color: #b91c1c; }
+.logout-btn:hover {
+  background-color: #b91c1c;
+}
 
-/* Main Content */
+/* ==================== MAIN CONTENT ==================== */
 .main-content {
   flex: 1;
   padding: 30px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.page-content h2 { margin-top: 0; color: #1e293b; }
-.page-content p { color: #64748b; }
+.page-content h2 {
+  margin-top: 0;
+  color: #1e293b;
+}
+.page-content p {
+  color: #64748b;
+}
 
-/* Staff Page Styles */
+/* ==================== STAFF PAGE ==================== */
 .staff-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
-.staff-header h2 { margin: 0; color: #1e293b; }
+.staff-header h2 {
+  margin: 0;
+  color: #1e293b;
+}
 
 .add-staff-btn {
   background-color: #2563eb;
@@ -90,24 +127,36 @@
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
 }
-.add-staff-btn:hover { background-color: #1d4ed8; }
+.add-staff-btn:hover {
+  background-color: #1d4ed8;
+}
 
 .staff-form {
   background: white;
   padding: 20px;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   margin-bottom: 20px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
 }
-.staff-form input, .staff-form select {
+.staff-form input,
+.staff-form select {
   padding: 10px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+}
+.staff-form input:focus,
+.staff-form select:focus {
+  outline: none;
+  border-color: #2563eb;
 }
 .staff-form button {
   grid-column: span 2;
@@ -118,20 +167,26 @@
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
 }
-.staff-form button:hover { background-color: #15803d; }
+.staff-form button:hover {
+  background-color: #15803d;
+}
 
 .staff-list {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  overflow-x: auto;
 }
 .staff-list table {
   width: 100%;
   border-collapse: collapse;
 }
-.staff-list th, .staff-list td {
+.staff-list th,
+.staff-list td {
   padding: 14px 18px;
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
@@ -141,8 +196,11 @@
   background-color: #f8fafc;
   font-weight: 600;
   color: #475569;
+  font-size: 13px;
 }
-.staff-list tr:hover { background-color: #f8fafc; }
+.staff-list tr:hover {
+  background-color: #f8fafc;
+}
 
 .delete-btn {
   background-color: #fee2e2;
@@ -152,104 +210,184 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
 }
-.delete-btn:hover { background-color: #fecaca; }
+.delete-btn:hover {
+  background-color: #fecaca;
+}
 
 .empty-state {
   padding: 40px;
   text-align: center;
   color: #64748b;
 }
-/* Export buttons */
+
+/* ==================== EXPORT BUTTONS ==================== */
 .export-btn {
   padding: 10px 16px;
   border: none;
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.jpg-btn {
+  background-color: #0891b2;
+  color: white;
+}
+.jpg-btn:hover:not(:disabled) {
+  background-color: #0e7490;
+}
+.pdf-btn {
+  background-color: #dc2626;
+  color: white;
+}
+.pdf-btn:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+/* ==================== WEEK NAVIGATION ==================== */
+.week-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.week-nav button {
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: inherit;
+  font-size: 13px;
+}
+.week-nav button:hover {
+  background-color: #1d4ed8;
+}
+.week-nav span {
+  font-weight: 600;
+  color: #1e293b;
   font-size: 14px;
 }
-.export-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.jpg-btn { background-color: #0891b2; color: white; }
-.jpg-btn:hover:not(:disabled) { background-color: #0e7490; }
-.pdf-btn { background-color: #dc2626; color: white; }
-.pdf-btn:hover:not(:disabled) { background-color: #b91c1c; }
 
-/* Export area title */
+/* ==================== EXPORT AREA (Roster Print View) ==================== */
 .roster-export-area {
   background: #ffffff;
-  padding: 20px;
+  padding: 24px;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .roster-title {
   text-align: center;
   margin-bottom: 16px;
-  border-bottom: 2px solid #1e293b;
-  padding-bottom: 12px;
 }
 .roster-title h1 {
-  font-size: 20px;
+  font-size: 16px;
   margin: 0;
-  color: #1e293b;
+  color: #000000;
+  font-weight: 700;
   letter-spacing: 0.5px;
 }
-.roster-title p {
-  margin: 6px 0 0;
-  color: #475569;
-  font-weight: 600;
-}
 
-/* Date column header */
-.date-col {
-  min-width: 70px;
-  padding: 6px 4px !important;
+/* Week section */
+.roster-week-section {
+  margin-bottom: 18px;
 }
-.day-name {
-  font-size: 10px;
-  color: #64748b;
-  text-transform: uppercase;
-}
-.day-num {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-/* Compact grid for monthly view */
-.roster-grid th, .roster-grid td {
+.week-label {
   font-size: 11px;
-  padding: 8px 4px;
+  font-weight: 700;
+  color: #000000;
+  padding: 2px 0;
+  margin-bottom: 2px;
 }
-.shift-cell { font-size: 10px !important; }
-.leave-cell { font-size: 9px !important; white-space: normal !important; }
-.off-day-cell { font-size: 10px !important; }
-.edit-btn {
-  background-color: #dbeafe;
-  color: #1d4ed8;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
+
+/* Week table */
+.week-grid {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+.week-grid th,
+.week-grid td {
+  border: 1px solid #000000;
+  padding: 4px 6px;
+  font-size: 10px;
+  text-align: center;
+  white-space: nowrap;
+  color: #000000;
+  background-color: #ffffff;
+}
+
+/* Header row - Green */
+.week-grid thead th {
+  background-color: #22c55e !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 6px 6px;
+}
+
+.week-grid .col-sn {
+  width: 70px;
+  font-weight: 600;
+  text-align: left;
+}
+.week-grid .col-name {
+  min-width: 160px;
+  text-align: left;
   font-weight: 600;
 }
-.edit-btn:hover { background-color: #bfdbfe; }
-
-/* Reorder mode banner */
-.reorder-banner {
-  background-color: #fef3c7;
-  color: #92400e;
-  padding: 12px 16px;
-  border-radius: 6px;
-  border-left: 4px solid #f59e0b;
-  margin-bottom: 20px;
-  font-size: 13px;
-  line-height: 1.5;
+.week-grid .col-date {
+  min-width: 95px;
 }
 
-/* Reorder column */
+/* Alternating rows */
+.week-grid tbody tr:nth-child(odd) td {
+  background-color: #ffffff;
+}
+.week-grid tbody tr:nth-child(even) td {
+  background-color: #fdf6e3;
+}
+
+/* Cell types */
+.week-grid tbody td.shift-cell {
+  background-color: #d1fae5 !important;
+  color: #000000;
+  font-weight: 600;
+}
+.week-grid tbody td.off-day-cell {
+  background-color: #fecaca !important;
+  color: #000000;
+  font-weight: 600;
+}
+.week-grid tbody td.leave-cell {
+  background-color: #dc2626 !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 9px !important;
+  white-space: normal !important;
+}
+.week-grid tbody td.empty-cell {
+  background-color: #ffffff;
+}
+
+/* ==================== REORDER MODE ==================== */
 .reorder-col {
   background-color: #fef3c7 !important;
   width: 50px;
@@ -267,6 +405,80 @@
   cursor: pointer;
   margin-bottom: 2px;
   font-weight: 700;
+  font-family: inherit;
 }
-.reorder-btn:hover:not(:disabled) { background-color: #d97706; }
-.reorder-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.reorder-btn:hover:not(:disabled) {
+  background-color: #d97706;
+}
+.reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.reorder-banner {
+  background-color: #fef3c7;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 4px solid #f59e0b;
+  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ==================== EDIT BUTTON ==================== */
+.edit-btn {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.edit-btn:hover {
+  background-color: #bfdbfe;
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 900px) {
+  .sidebar {
+    width: 200px;
+  }
+  .staff-form {
+    grid-template-columns: 1fr;
+  }
+  .staff-form button {
+    grid-column: span 1;
+  }
+  .main-content {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: 100%;
+    padding: 12px 0;
+  }
+  .sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+    gap: 6px;
+  }
+  .nav-item {
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .sidebar-header,
+  .sidebar-footer {
+    padding: 8px 16px;
+  }
+}
