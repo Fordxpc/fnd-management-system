@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from './auth';
+import Dashboard from './Dashboard';
 import './App.css';
 
 function App() {
@@ -12,28 +13,17 @@ function App() {
     e.preventDefault();
     try {
       await login(email, password);
-      alert("Successfully logged in!");
     } catch (error: any) {
       alert("Error: " + error.message);
     }
   };
 
-  // If user is logged in, show a temporary dashboard
+  // If logged in → show the Dashboard
   if (user) {
-    return (
-      <div className="login-container">
-        <div className="login-box" style={{ textAlign: 'center' }}>
-          <h1>Welcome!</h1>
-          <p>You are logged in as: <strong>{user.email}</strong></p>
-          <button onClick={logout} className="submit-btn" style={{ marginTop: '20px' }}>
-            Log Out
-          </button>
-        </div>
-      </div>
-    );
+    return <Dashboard user={user} logout={logout} />;
   }
 
-  // If not logged in, show the login form
+  // If not logged in → show the login page
   return (
     <div className="login-container">
       <div className="login-box">
@@ -58,9 +48,9 @@ function App() {
         <form className="login-form" onSubmit={handleLogin}>
           <div className="input-group">
             <label>Email</label>
-            <input 
-              type="email" 
-              placeholder="name@funadhooairport.com" 
+            <input
+              type="email"
+              placeholder="name@funadhooairport.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -68,9 +58,9 @@ function App() {
           </div>
           <div className="input-group">
             <label>Password</label>
-            <input 
-              type="password" 
-              placeholder="Your password" 
+            <input
+              type="password"
+              placeholder="Your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
