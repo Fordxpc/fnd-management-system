@@ -2,9 +2,24 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 
+// The default FND Ground Operations staff list
+const FND_STAFF = [
+  { sn: 'SN-0439', name: 'Hassan Sujaau' },
+  { sn: 'SN-0729', name: 'Mohamed Fuadh' },
+  { sn: 'SN-0754', name: 'Ali Shameem' },
+  { sn: 'SN-0037', name: 'Adam Faisal' },
+  { sn: 'SN-0038', name: 'Adam Skakir' },
+  { sn: 'SN-0758', name: 'Mohamed Adam' },
+  { sn: 'SN-0733', name: 'Thoriq Mohamed' },
+  { sn: 'SN-0725', name: 'Ahmed Aseel' },
+  { sn: 'SN-0730', name: 'Mohamed Nadheem' },
+  { sn: 'SN-1173', name: 'Mohamed Sameeh' },
+];
+
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [seeding, setSeeding] = useState(false);
   const [sn, setSn] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -54,13 +69,58 @@ function StaffPage() {
     await deleteDoc(doc(db, 'staff', id));
   };
 
+  const handleImportFNDStaff = async () => {
+    if (!window.confirm(
+      `This will add ${FND_STAFF.length} FND Ground Operations staff members to the database.\n\n` +
+      `Their email addresses will be placeholders — you can edit them later.\n\n` +
+      `Continue?`
+    )) return;
+
+    setSeeding(true);
+    let added = 0;
+    try {
+      for (const member of FND_STAFF) {
+        // Skip if already exists (by SN)
+        const exists = staff.some((s) => s.sn === member.sn);
+        if (exists) continue;
+
+        await addDoc(collection(db, 'staff'), {
+          sn: member.sn,
+          name: member.name,
+          email: `${member.sn.toLowerCase()}@funadhooairport.com`,
+          phone: '',
+          department: 'Operations',
+          position: 'Ground Operations',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        });
+        added++;
+      }
+      alert(`Successfully imported ${added} staff members!`);
+    } catch (error: any) {
+      alert('Import failed: ' + error.message);
+    }
+    setSeeding(false);
+  };
+
   return (
     <div className="page-content">
       <div className="staff-header">
         <h2>Staff Management</h2>
-        <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ Add Staff'}
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {staff.length === 0 && (
+            <button
+              className="export-btn jpg-btn"
+              onClick={handleImportFNDStaff}
+              disabled={seeding}
+            >
+              {seeding ? 'Importing...' : '📥 Import FND Ground Ops Staff'}
+            </button>
+          )}
+          <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '+ Add Staff'}
+          </button>
+        </div>
       </div>
 
       {showForm && (
@@ -107,7 +167,7 @@ function StaffPage() {
       <div className="staff-list">
         {staff.length === 0 ? (
           <div className="empty-state">
-            <p>No staff members yet. Click "+ Add Staff" to add your first one.</p>
+            <p>No staff members yet. Click <strong>"📥 Import FND Ground Ops Staff"</strong> to load your team, or <strong>"+ Add Staff"</strong> to add one manually.</p>
           </div>
         ) : (
           <table>
