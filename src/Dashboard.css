@@ -225,3 +225,15 @@
 .shift-cell { font-size: 10px !important; }
 .leave-cell { font-size: 9px !important; white-space: normal !important; }
 .off-day-cell { font-size: 10px !important; }
+
+.edit-btn {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.edit-btn:hover { background-color: #bfdbfe; }
