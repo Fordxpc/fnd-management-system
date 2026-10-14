@@ -156,9 +156,9 @@ function RosterPage() {
     clone.style.position = 'fixed';
     clone.style.left = '-99999px';
     clone.style.top = '0';
-    clone.style.width = '1400px'; // wider canvas for high quality export
+    clone.style.width = 'auto';
     clone.style.background = '#ffffff';
-    clone.style.padding = '30px';
+    clone.style.padding = '10px';
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => {
       (el as HTMLElement).style.position = 'static';
     });
