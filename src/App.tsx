@@ -5,13 +5,23 @@ import { db } from './firebase';
 import Dashboard from './Dashboard';
 import './App.css';
 
-// Roles that are considered "management/owner" — must use the Owner/Manager tab
+// Roles that use the SMT / MANAGER tab
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
+// All departments in the system
+const DEPARTMENTS = [
+  'Operations',
+  'Security',
+  'Maintenance',
+  'Administration',
+  'Fire & Rescue',
+];
+
 function App() {
-  const [isOwner, setIsOwner] = useState(true);
+  const [tab, setTab] = useState<'management' | 'employee'>('management');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [department, setDepartment] = useState('');
   const [checking, setChecking] = useState(false);
   const { user, login, logout } = useAuth();
 
@@ -20,35 +30,52 @@ function App() {
     setChecking(true);
 
     try {
-      // 1. Sign in with Firebase Auth
+      // 1. Validate department is chosen for employees
+      if (tab === 'employee' && !department) {
+        alert('Please select your department.');
+        setChecking(false);
+        return;
+      }
+
+      // 2. Sign in with Firebase Auth
       const cred = await login(email, password);
 
-      // 2. Load the user's role from Firestore
+      // 3. Load the user's role + department from Firestore
       const userRef = doc(db, 'users', cred.user.uid);
       const userSnap = await getDoc(userRef);
-      const role = userSnap.exists() ? userSnap.data().role : 'staff';
+      const data = userSnap.exists() ? userSnap.data() : {};
+      const role = data.role || 'staff';
+      const userDept = data.department || '';
 
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
-      // 3. Validate the tab matches the actual role
-      if (isOwner && !isManagement) {
-        // Picked Owner/Manager tab but account is a regular staff
+      // 4. Validate the tab matches the actual role
+      if (tab === 'management' && !isManagement) {
         await logout();
-        alert('This account is a Staff account. Please use the "Staff" tab to sign in.');
+        alert('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
         setChecking(false);
         return;
       }
 
-      if (!isOwner && isManagement) {
-        // Picked Staff tab but account is a manager
+      if (tab === 'employee' && isManagement) {
         await logout();
-        alert('This account is an Owner/Manager account. Please use the "Owner / Manager" tab to sign in.');
+        alert('This is an SMT / Manager account. Please use the "SMT / MANAGER" tab to sign in.');
         setChecking(false);
         return;
       }
 
-      // 4. Role matches the tab — proceed to dashboard
-      // (AuthProvider already handled the redirect via `user` state)
+      // 5. Validate the selected department matches the user's profile
+      if (tab === 'employee' && userDept && userDept !== department) {
+        await logout();
+        alert(
+          `Your account is registered under "${userDept}". ` +
+          `Please select "${userDept}" in the department dropdown.`
+        );
+        setChecking(false);
+        return;
+      }
+
+      // Success — AuthProvider handles the redirect
     } catch (error: any) {
       alert('Error: ' + error.message);
     } finally {
@@ -56,7 +83,6 @@ function App() {
     }
   };
 
-  // If logged in → show the Dashboard
   if (user) {
     return <Dashboard user={user} logout={logout} />;
   }
@@ -71,25 +97,25 @@ function App() {
 
         <div className="role-toggle">
           <button
-            className={isOwner ? 'active' : ''}
-            onClick={() => setIsOwner(true)}
+            className={tab === 'management' ? 'active' : ''}
+            onClick={() => { setTab('management'); setDepartment(''); }}
             type="button"
           >
-            Owner / Manager
+            SMT / MANAGER
           </button>
           <button
-            className={!isOwner ? 'active' : ''}
-            onClick={() => setIsOwner(false)}
+            className={tab === 'employee' ? 'active' : ''}
+            onClick={() => setTab('employee')}
             type="button"
           >
-            Staff
+            EMPLOYEE
           </button>
         </div>
 
         <p className="subtitle">
-          {isOwner
-            ? 'Sign in to manage your airport roster'
-            : 'Sign in to view your schedule'}
+          {tab === 'management'
+            ? 'Sign in to manage rosters, staff and approvals'
+            : 'Sign in to view your schedule and requests'}
         </p>
 
         <form className="login-form" onSubmit={handleLogin}>
@@ -113,6 +139,23 @@ function App() {
               required
             />
           </div>
+
+          {tab === 'employee' && (
+            <div className="input-group">
+              <label>Department</label>
+              <select
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                required
+              >
+                <option value="">Select your department...</option>
+                {DEPARTMENTS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button type="submit" className="submit-btn" disabled={checking}>
             {checking ? 'Signing in...' : 'Sign In'}
           </button>

@@ -327,7 +327,9 @@ function RosterPage() {
 
       <div ref={gridRef} className="roster-export-area">
         <div className="roster-title">
-          <h1>FND GROUND OPERATIONS DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
+          <h1>
+            FND {isAdmin ? 'GROUND OPERATIONS' : (userDepartment || '').toUpperCase()} DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}
+          </h1>
         </div>
 
         {weeks.map((week, weekIndex) => (

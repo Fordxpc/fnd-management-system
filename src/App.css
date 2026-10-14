@@ -84,3 +84,20 @@
 .footer-links a { color: #2563eb; text-decoration: none; }
 .footer-links a:hover { text-decoration: underline; }
 .footer-links p { margin-top: 8px; color: #64748b; }
+
+/* Department dropdown on login */
+.login-form select {
+  padding: 10px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: border 0.2s;
+  background-color: #ffffff;
+  font-family: inherit;
+  color: #1e293b;
+  cursor: pointer;
+}
+.login-form select:focus {
+  border-color: #2563eb;
+}
