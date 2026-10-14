@@ -15,33 +15,47 @@ const FND_STAFF = [
   { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
 ];
 
-// All departments available in staff form
+// Departments available in staff form + staff page tabs
 const DEPARTMENTS = [
   'Ground Operations',
   'Maintenance',
   'Security',
-  'Administration',
-  'Airport Manager',
+  'Fire & Rescue',
+  'SMT',
 ];
 
 // Preset designations (users can also type a custom one)
 const DESIGNATIONS = [
+  // Management / Admin / Safety
   'Airport Manager',
-  'Manager',
   'Assistant Manager',
+  'Safety Officer',
+  'Assistant Safety Officer',
+  'Administrative Officer',
+  'Assistant Administrative Officer',
+
+  // Ground Operations
   'Senior Airport Officer',
-  'Assistant Senior Airport Officer',
+  'Senior Operations Officer',
   'Operations Officer',
   'Assistant Operations Officer',
   'Airport Hand',
-  'Senior Airport Hand',
+
+  // Security
   'Security Officer',
   'Assistant Security Officer',
   'Security Agent',
+
+  // Maintenance
   'Maintenance Officer',
   'Maintenance Technician',
-  'Administrative Officer',
-  'Administrative Assistant',
+  'Maintenance Agent',
+
+  // Fire & Rescue
+  'Fire Incharge',
+  'Senior Fire Fighter',
+  'Fire Fighter',
+  'Junior Fire Fighter',
 ];
 
 function StaffPage() {
@@ -49,6 +63,7 @@ function StaffPage() {
   const [showForm, setShowForm] = useState(false);
   const [seeding, setSeeding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedDept, setSelectedDept] = useState<string>('all');
 
   const [sn, setSn] = useState('');
   const [name, setName] = useState('');
@@ -157,6 +172,13 @@ function StaffPage() {
     setSeeding(false);
   };
 
+  const visibleStaff = staff
+    .filter((s) => {
+      if (selectedDept === 'all') return true;
+      return s.department === selectedDept;
+    })
+    .sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
+
   return (
     <div className="page-content">
       {/* Datalist for designation suggestions */}
@@ -167,7 +189,12 @@ function StaffPage() {
       </datalist>
 
       <div className="staff-header">
-        <h2>Staff Management</h2>
+        <h2>
+          Staff Management
+          <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
+            ({selectedDept === 'all' ? 'All Departments' : selectedDept})
+          </span>
+        </h2>
         <div style={{ display: 'flex', gap: '8px' }}>
           {staff.length === 0 && (
             <button
@@ -185,6 +212,25 @@ function StaffPage() {
             {showForm ? 'Cancel' : '+ Add Staff'}
           </button>
         </div>
+      </div>
+
+      {/* Department tabs */}
+      <div className="dept-tabs">
+        <button
+          className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'}
+          onClick={() => setSelectedDept('all')}
+        >
+          All Departments
+        </button>
+        {DEPARTMENTS.map((d) => (
+          <button
+            key={d}
+            className={selectedDept === d ? 'dept-tab active' : 'dept-tab'}
+            onClick={() => setSelectedDept(d)}
+          >
+            {d}
+          </button>
+        ))}
       </div>
 
       {showForm && (
@@ -236,9 +282,12 @@ function StaffPage() {
       )}
 
       <div className="staff-list">
-        {staff.length === 0 ? (
+        {visibleStaff.length === 0 ? (
           <div className="empty-state">
-            <p>No staff members yet. Click <strong>"📥 Import FND Ground Ops Staff"</strong> to load your team, or <strong>"+ Add Staff"</strong> to add one manually.</p>
+            <p>
+              No staff members found for{' '}
+              <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.
+            </p>
           </div>
         ) : (
           <table>
@@ -254,31 +303,28 @@ function StaffPage() {
               </tr>
             </thead>
             <tbody>
-              {staff
-                .slice()
-                .sort((a, b) => (a.sn || '').localeCompare(b.sn || ''))
-                .map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.sn || '—'}</td>
-                    <td><strong>{s.name}</strong></td>
-                    <td>{s.email}</td>
-                    <td>{s.phone || '—'}</td>
-                    <td>{s.position || '—'}</td>
-                    <td>{s.department}</td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      <button
-                        className="edit-btn"
-                        onClick={() => handleEdit(s)}
-                        style={{ marginRight: '6px' }}
-                      >
-                        Edit
-                      </button>
-                      <button className="delete-btn" onClick={() => handleDelete(s.id)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+              {visibleStaff.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.sn || '—'}</td>
+                  <td><strong>{s.name}</strong></td>
+                  <td>{s.email}</td>
+                  <td>{s.phone || '—'}</td>
+                  <td>{s.position || '—'}</td>
+                  <td>{s.department}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      className="edit-btn"
+                      onClick={() => handleEdit(s)}
+                      style={{ marginRight: '6px' }}
+                    >
+                      Edit
+                    </button>
+                    <button className="delete-btn" onClick={() => handleDelete(s.id)}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

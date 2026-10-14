@@ -7,13 +7,12 @@ import './App.css';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
-// Login dropdown — includes operational departments + admin-level departments
+// Only operational departments need to pick a department at login
 const DEPARTMENTS = [
   'Ground Operations',
   'Maintenance',
   'Security',
-  'Administration',
-  'Airport Manager',
+  'Fire & Rescue',
 ];
 
 function App() {

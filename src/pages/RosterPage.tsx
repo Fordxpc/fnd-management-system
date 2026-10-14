@@ -6,7 +6,7 @@ import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 
 // Only these 3 departments have roster tabs
-const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security'];
+const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
 
 // Users with these roles OR departments get full access (all departments view)
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
