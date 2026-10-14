@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
 import {
   collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc,
   query, where, getDocs
 } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useAuth } from '../auth';
 
 const LEAVE_TYPES = [
@@ -15,7 +15,6 @@ const LEAVE_TYPES = [
   'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
 
-// Designations that CAN approve within their own department
 const APPROVER_DESIGNATIONS = [
   'Airport Manager',
   'Assistant Manager',
@@ -28,43 +27,33 @@ const APPROVER_DESIGNATIONS = [
   'Senior Fire Fighter',
 ];
 
-// Designations that can approve across ALL departments
-const GLOBAL_APPROVERS = [
-  'Airport Manager',
-  'Assistant Manager',
-];
-
-// Developer role always gets full override access
+const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 const DEVELOPER_ROLES = ['developer'];
 
-const DEPARTMENTS = [
-  'Ground Operations',
-  'Maintenance',
-  'Security',
-  'Fire & Rescue',
-];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
 
-const formatDate = (date: Date) => {
+const formatDate = (date: Date): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 };
 
-const formatDisplay = (dateStr: string) => {
+const formatDisplay = (dateStr: string): string => {
   if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  return `${d}/${m}/${y}`;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
 };
 
-const countDays = (start: string, end: string) => {
+const countDays = (start: string, end: string): number => {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return 0;
   return Math.floor((e.getTime() - s.getTime()) / 86400000) + 1;
 };
 
-const dateRange = (start: string, end: string) => {
+const dateRange = (start: string, end: string): string[] => {
   const dates: string[] = [];
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
@@ -79,22 +68,22 @@ const dateRange = (start: string, end: string) => {
 function LeavePage() {
   const { profile, user } = useAuth();
 
-  const isDeveloper = DEVELOPER_ROLES.includes(profile?.role);
+  const isDeveloper: boolean = DEVELOPER_ROLES.includes(profile?.role || '');
 
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [staffList, setStaffList] = useState<any[]>([]);
-  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending');
+  const [tab, setTab] = useState<string>('pending');
   const [filterDept, setFilterDept] = useState<string>('all');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const [showForm, setShowForm] = useState(false);
-  const [selectedStaffId, setSelectedStaffId] = useState('');
-  const [leaveType, setLeaveType] = useState('ANNUAL LEAVE');
-  const [startDate, setStartDate] = useState(formatDate(new Date()));
-  const [endDate, setEndDate] = useState(formatDate(new Date()));
-  const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  const [leaveType, setLeaveType] = useState<string>('ANNUAL LEAVE');
+  const [startDate, setStartDate] = useState<string>(formatDate(new Date()));
+  const [endDate, setEndDate] = useState<string>(formatDate(new Date()));
+  const [reason, setReason] = useState<string>('');
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'staff'), (snap) => {
@@ -118,58 +107,51 @@ function LeavePage() {
     return () => unsub();
   }, []);
 
-  // ===== Approval authority logic =====
-  const canApproveAny = isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position);
+  const canApproveAny: boolean =
+    isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
 
-  const canApproveRequest = (r: any) => {
-    // Developer or global approver → everyone
+  const isDeptManager: boolean =
+    canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
+
+  const canApproveRequest = (r: any): boolean => {
     if (canApproveAny) return true;
-
-    // Not an approver designation → no
-    if (!APPROVER_DESIGNATIONS.includes(myStaff?.position)) return false;
-
-    // Approver must be from the same department as the requester
+    if (!APPROVER_DESIGNATIONS.includes(myStaff?.position || '')) return false;
     if (myStaff?.department === r.staffDepartment) return true;
-
     return false;
   };
 
-  // SMT members can't self-approve their own leave
-  const isSMTMember = myStaff?.isSMT === true;
-
-  // ===== Filtering =====
-  const isDeptManager = APPROVER_DESIGNATIONS.includes(myStaff?.position) || canApproveAny;
-
-  const visibleRequests = requests
-    .filter((r) => {
+  const visibleRequests: any[] = requests
+    .filter((r: any): boolean => {
       if (!isDeptManager) {
-        return myStaff && r.staffId === myStaff.id;
+        if (!myStaff) return false;
+        return r.staffId === myStaff.id;
       }
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
-      // SMT members can only be viewed/approved by global approvers
-      // (their requests still show up if the viewer is an approver in that dept
-      //  OR a global approver — but a fellow SMT approver cannot self-approve)
       return true;
     })
-    .filter((r) => (tab === 'all' ? true : r.status === tab))
-    .sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+    .filter((r: any): boolean => {
+      if (tab === 'all') return true;
+      return r.status === tab;
+    })
+    .sort((a: any, b: any) =>
+      (b.requestedAt || '').localeCompare(a.requestedAt || '')
+    );
 
-  // Balance for current staff
-  const currentYear = new Date().getFullYear();
-  const balance = LEAVE_TYPES.reduce((acc: any, t) => {
-    acc[t] = 0;
-    return acc;
-  }, {});
+  const currentYear: number = new Date().getFullYear();
+  const balance: { [key: string]: number } = {};
+  LEAVE_TYPES.forEach((t) => { balance[t] = 0; });
   if (myStaff) {
     requests
       .filter(
-        (r) =>
+        (r: any) =>
           r.staffId === myStaff.id &&
           r.status === 'approved' &&
           (r.startDate || '').startsWith(String(currentYear))
       )
-      .forEach((r) => {
-        if (balance[r.leaveType] !== undefined) balance[r.leaveType] += r.days || 0;
+      .forEach((r: any) => {
+        if (balance[r.leaveType] !== undefined) {
+          balance[r.leaveType] += r.days || 0;
+        }
       });
   }
 
@@ -184,7 +166,10 @@ function LeavePage() {
       return;
     }
     const staff = staffList.find((s) => s.id === selectedStaffId);
-    if (!staff) { alert('Staff not found'); return; }
+    if (!staff) {
+      alert('Staff not found');
+      return;
+    }
 
     const days = countDays(startDate, endDate);
 
@@ -215,17 +200,17 @@ function LeavePage() {
   };
 
   const handleApprove = async (r: any) => {
-    // Prevent SMT members from approving their own requests
     if (myStaff && r.staffId === myStaff.id) {
       alert('You cannot approve your own leave request. Ask another manager.');
       return;
     }
 
-    if (!window.confirm(
+    const ok = window.confirm(
       `Approve ${r.leaveType} for ${r.staffName}?\n` +
       `${formatDisplay(r.startDate)} to ${formatDisplay(r.endDate)} (${r.days} days)\n\n` +
       `This will mark these days as "${r.leaveType}" on the roster.`
-    )) return;
+    );
+    if (!ok) return;
 
     try {
       await updateDoc(doc(db, 'leave_requests', r.id), {
@@ -279,7 +264,8 @@ function LeavePage() {
   };
 
   const handleCancelMine = async (r: any) => {
-    if (!window.confirm('Cancel this leave request?')) return;
+    const ok = window.confirm('Cancel this leave request?');
+    if (!ok) return;
     try {
       await updateDoc(doc(db, 'leave_requests', r.id), {
         status: 'cancelled',
@@ -303,7 +289,6 @@ function LeavePage() {
         </button>
       </div>
 
-      {/* Balance card */}
       {myStaff && !isDeptManager && (
         <div className="leave-balance-card">
           <h3>My Leave Balance ({currentYear})</h3>
@@ -318,7 +303,6 @@ function LeavePage() {
         </div>
       )}
 
-      {/* Request form */}
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
@@ -370,7 +354,9 @@ function LeavePage() {
 
           <div style={{ gridColumn: 'span 2', fontSize: '13px', color: '#475569', padding: '8px 12px', background: '#f1f5f9', borderRadius: '6px' }}>
             <strong>Total:</strong> {countDays(startDate, endDate)} day(s)
-            {endDate < startDate && <span style={{ color: '#dc2626', marginLeft: '8px' }}>⚠ End date is before start date</span>}
+            {endDate < startDate && (
+              <span style={{ color: '#dc2626', marginLeft: '8px' }}>⚠ End date is before start date</span>
+            )}
           </div>
 
           <button type="submit" disabled={submitting}>
@@ -379,7 +365,6 @@ function LeavePage() {
         </form>
       )}
 
-      {/* Tabs */}
       <div className="leave-tabs">
         <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>
           Pending
@@ -414,11 +399,13 @@ function LeavePage() {
         )}
       </div>
 
-      {/* Requests table */}
       <div className="staff-list" style={{ marginTop: '16px' }}>
         {visibleRequests.length === 0 ? (
           <div className="empty-state">
-            <p>No {tab !== 'all' ? tab : ''} leave requests{filterDept !== 'all' ? ` for ${filterDept}` : ''}.</p>
+            <p>
+              No {tab !== 'all' ? tab : ''} leave requests
+              {filterDept !== 'all' ? ` for ${filterDept}` : ''}.
+            </p>
           </div>
         ) : (
           <table>
@@ -435,14 +422,21 @@ function LeavePage() {
               </tr>
             </thead>
             <tbody>
-              {visibleRequests.map((r) => {
-                const canApprove = canApproveRequest(r) && r.status === 'pending' && r.staffId !== myStaff?.id;
+              {visibleRequests.map((r: any) => {
+                const canApprove =
+                  canApproveRequest(r) &&
+                  r.status === 'pending' &&
+                  r.staffId !== myStaff?.id;
                 return (
                   <tr key={r.id}>
                     <td>
                       <strong>{r.staffName}</strong>
-                      {r.staffIsSMT && <span style={{ marginLeft: '6px' }} title="SMT Member">⭐</span>}
-                      {r.staffSN && <div style={{ fontSize: '11px', color: '#64748b' }}>{r.staffSN}</div>}
+                      {r.staffIsSMT && (
+                        <span style={{ marginLeft: '6px' }} title="SMT Member">⭐</span>
+                      )}
+                      {r.staffSN && (
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>{r.staffSN}</div>
+                      )}
                     </td>
                     <td>{r.staffDepartment || '—'}</td>
                     <td><span className="leave-type-badge">{r.leaveType}</span></td>
@@ -451,7 +445,7 @@ function LeavePage() {
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
                     <td>
                       <span className={`status-badge status-${r.status}`}>
-                        {r.status.toUpperCase()}
+                        {String(r.status).toUpperCase()}
                       </span>
                     </td>
                     <td>
