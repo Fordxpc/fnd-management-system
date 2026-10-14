@@ -193,6 +193,8 @@
 .jpg-btn:hover:not(:disabled) { background-color: #0e7490; }
 .pdf-btn { background-color: #dc2626; color: white; }
 .pdf-btn:hover:not(:disabled) { background-color: #b91c1c; }
+.print-btn { background-color: #475569; color: white; }
+.print-btn:hover { background-color: #334155; }
 
 /* ==================== WEEK NAVIGATION ==================== */
 .week-nav {
@@ -242,10 +244,7 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Week section */
-.roster-week-section {
-  margin-bottom: 8px;
-}
+.roster-week-section { margin-bottom: 8px; }
 .week-label {
   font-size: 10px;
   font-weight: 700;
@@ -256,7 +255,6 @@
   line-height: 1.2;
 }
 
-/* Week table */
 .week-grid {
   width: 100%;
   border-collapse: collapse;
@@ -278,17 +276,14 @@
   background-color: #ffffff;
   height: 18px;
 }
-
-/* Header row - all GREEN */
 .week-grid thead th {
   background-color: #22c55e !important;
   color: #ffffff !important;
   font-weight: 700;
   font-size: 9px;
-  padding: 3px 3px;
+  padding: 3px;
   height: 22px;
 }
-
 .week-grid .col-sn {
   width: 65px;
   font-weight: 600;
@@ -302,34 +297,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.week-grid .col-date {
-  width: auto;
-}
+.week-grid .col-date { width: auto; }
 
-/* Alternating row colors for empty cells */
 .week-grid tbody tr:nth-child(odd) td.empty-cell { background-color: #ffffff; }
 .week-grid tbody tr:nth-child(even) td.empty-cell { background-color: #fdf6e3; }
-
 .week-grid tbody tr:nth-child(odd) td.col-sn,
 .week-grid tbody tr:nth-child(odd) td.col-name { background-color: #ffffff; }
 .week-grid tbody tr:nth-child(even) td.col-sn,
 .week-grid tbody tr:nth-child(even) td.col-name { background-color: #fdf6e3; }
 
-/* Shift cell - light green */
 .week-grid tbody td.shift-cell {
   background-color: #d1fae5 !important;
   color: #000000;
   font-weight: 600;
 }
-
-/* OFF DAY - light pink */
 .week-grid tbody td.off-day-cell {
   background-color: #fecaca !important;
   color: #000000;
   font-weight: 600;
 }
-
-/* LEAVE - dark red with white text */
 .week-grid tbody td.leave-cell {
   background-color: #dc2626 !important;
   color: #ffffff !important;
@@ -339,8 +325,6 @@
   line-height: 1.05;
   padding: 1px 2px !important;
 }
-
-/* Out-of-period cells (before 16th, after 15th) — grey & blank */
 .week-grid tbody td.out-of-period-cell {
   background-color: #e2e8f0 !important;
   color: #94a3b8 !important;
@@ -394,117 +378,7 @@
 }
 .edit-btn:hover { background-color: #bfdbfe; }
 
-/* ==================== RESPONSIVE ==================== */
-@media (max-width: 900px) {
-  .sidebar { width: 200px; }
-  .staff-form { grid-template-columns: 1fr; }
-  .staff-form button { grid-column: span 1; }
-  .main-content { padding: 16px; }
-}
-@media (max-width: 640px) {
-  .dashboard-layout { flex-direction: column; }
-  .sidebar { width: 100%; padding: 12px 0; }
-  .sidebar-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 8px;
-    gap: 6px;
-  }
-  .nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
-  .sidebar-header,
-  .sidebar-footer { padding: 8px 16px; }
-}
-
-/* ==================== DEPARTMENT TABS (Roster) ==================== */
-.dept-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  background: white;
-  padding: 8px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-.dept-tab {
-  padding: 8px 16px;
-  border: 1px solid #cbd5e1;
-  background-color: #ffffff;
-  color: #475569;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-.dept-tab:hover {
-  background-color: #f1f5f9;
-}
-.dept-tab.active {
-  background-color: #2563eb;
-  color: #ffffff;
-  border-color: #2563eb;
-}
-
-/* Print button */
-.print-btn {
-  background-color: #475569;
-  color: white;
-}
-.print-btn:hover {
-  background-color: #334155;
-}
-
-/* ==================== PRINT STYLES ==================== */
-@media print {
-  /* Hide everything except the roster */
-  .sidebar,
-  .staff-header,
-  .week-nav,
-  .reorder-banner,
-  .staff-form,
-  .dept-tabs,
-  .reorder-col {
-    display: none !important;
-  }
-
-  body,
-  html {
-    background: #ffffff !important;
-  }
-
-  .dashboard-layout,
-  .main-content,
-  .page-content {
-    background: #ffffff !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    display: block !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-  }
-
-  .roster-export-area {
-    box-shadow: none !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
-    background: #ffffff !important;
-  }
-
-  .week-grid th,
-  .week-grid td {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  @page {
-    size: A4 landscape;
-    margin: 6mm;
-  }
-}
-
-/* ==================== DEPARTMENT TABS (Roster) ==================== */
+/* ==================== DEPARTMENT TABS ==================== */
 .dept-tabs {
   display: flex;
   gap: 8px;
@@ -532,59 +406,6 @@
   background-color: #2563eb;
   color: #ffffff;
   border-color: #2563eb;
-}
-
-/* Print button */
-.print-btn {
-  background-color: #475569;
-  color: white;
-}
-.print-btn:hover { background-color: #334155; }
-
-/* ==================== PRINT STYLES ==================== */
-@media print {
-  .sidebar,
-  .staff-header,
-  .week-nav,
-  .reorder-banner,
-  .staff-form,
-  .dept-tabs,
-  .reorder-col {
-    display: none !important;
-  }
-
-  body, html {
-    background: #ffffff !important;
-  }
-
-  .dashboard-layout,
-  .main-content,
-  .page-content {
-    background: #ffffff !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    display: block !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-  }
-
-  .roster-export-area {
-    box-shadow: none !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
-    background: #ffffff !important;
-  }
-
-  .week-grid th,
-  .week-grid td {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-  @page {
-    size: A4 landscape;
-    margin: 6mm;
-  }
 }
 
 /* ==================== LEAVE PAGE ==================== */
@@ -626,7 +447,6 @@
   font-weight: 700;
 }
 
-/* Leave tabs */
 .leave-tabs {
   display: flex;
   gap: 6px;
@@ -656,7 +476,6 @@
   border-color: #2563eb;
 }
 
-/* Status badges */
 .status-badge {
   display: inline-block;
   padding: 3px 8px;
@@ -670,7 +489,6 @@
 .status-rejected { background: #fee2e2; color: #991b1b; }
 .status-cancelled{ background: #e2e8f0; color: #475569; }
 
-/* Leave type badge */
 .leave-type-badge {
   display: inline-block;
   padding: 3px 8px;
@@ -682,7 +500,6 @@
   white-space: nowrap;
 }
 
-/* Approve/Reject buttons */
 .approve-btn {
   background-color: #16a34a;
   color: white;
@@ -709,3 +526,65 @@
   font-family: inherit;
 }
 .reject-btn:hover { background-color: #b91c1c; }
+
+/* ==================== PRINT STYLES ==================== */
+@media print {
+  .sidebar,
+  .staff-header,
+  .week-nav,
+  .reorder-banner,
+  .staff-form,
+  .dept-tabs,
+  .reorder-col {
+    display: none !important;
+  }
+
+  body, html { background: #ffffff !important; }
+
+  .dashboard-layout,
+  .main-content,
+  .page-content {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .roster-export-area {
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .week-grid th,
+  .week-grid td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page { size: A4 landscape; margin: 6mm; }
+}
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 900px) {
+  .sidebar { width: 200px; }
+  .staff-form { grid-template-columns: 1fr; }
+  .staff-form button { grid-column: span 1; }
+  .main-content { padding: 16px; }
+}
+@media (max-width: 640px) {
+  .dashboard-layout { flex-direction: column; }
+  .sidebar { width: 100%; padding: 12px 0; }
+  .sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+    gap: 6px;
+  }
+  .nav-item { white-space: nowrap; padding: 8px 12px; font-size: 13px; }
+  .sidebar-header,
+  .sidebar-footer { padding: 8px 16px; }
+}
