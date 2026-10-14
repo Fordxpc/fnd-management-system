@@ -503,3 +503,86 @@
     margin: 6mm;
   }
 }
+
+/* ==================== DEPARTMENT TABS (Roster) ==================== */
+.dept-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  background: white;
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.dept-tab {
+  padding: 8px 16px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #475569;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.dept-tab:hover { background-color: #f1f5f9; }
+.dept-tab.active {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+
+/* Print button */
+.print-btn {
+  background-color: #475569;
+  color: white;
+}
+.print-btn:hover { background-color: #334155; }
+
+/* ==================== PRINT STYLES ==================== */
+@media print {
+  .sidebar,
+  .staff-header,
+  .week-nav,
+  .reorder-banner,
+  .staff-form,
+  .dept-tabs,
+  .reorder-col {
+    display: none !important;
+  }
+
+  body, html {
+    background: #ffffff !important;
+  }
+
+  .dashboard-layout,
+  .main-content,
+  .page-content {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .roster-export-area {
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .week-grid th,
+  .week-grid td {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+}

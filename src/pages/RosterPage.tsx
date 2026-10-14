@@ -5,7 +5,12 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security'];
+// Only these 3 departments have roster tabs
+const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security'];
+
+// Users with these roles OR departments get full access (all departments view)
+const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
+const FULL_ACCESS_DEPARTMENTS = ['Administration', 'Airport Manager'];
 
 const formatDate = (date: Date) => {
   const y = date.getFullYear();
@@ -82,11 +87,13 @@ const LEAVE_OPTIONS = [
 function RosterPage() {
   const { profile } = useAuth();
 
-  const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-  const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role);
+  // Full access if role is management OR department is Administration/Airport Manager
+  const isAdmin =
+    FULL_ACCESS_ROLES.includes(profile?.role) ||
+    FULL_ACCESS_DEPARTMENTS.includes(profile?.department);
+
   const userDepartment = profile?.department;
 
-  // Selected department for admins. 'all' means every department.
   const [selectedDept, setSelectedDept] = useState<string>('all');
 
   const [entries, setEntries] = useState<any[]>([]);
@@ -106,7 +113,6 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-  // Filter staff based on role + selected department
   const visibleStaff = [...staff]
     .filter((s) => {
       if (isAdmin) {
@@ -260,7 +266,6 @@ function RosterPage() {
   };
 
   const handlePrint = () => {
-    // Add a class to body so print CSS knows we're printing the roster
     document.body.classList.add('printing-roster');
     setTimeout(() => {
       window.print();
@@ -268,7 +273,6 @@ function RosterPage() {
     }, 100);
   };
 
-  // Title department label
   const titleDept = isAdmin
     ? (selectedDept === 'all' ? 'ALL DEPARTMENTS' : selectedDept.toUpperCase())
     : (userDepartment || '').toUpperCase();
@@ -306,7 +310,7 @@ function RosterPage() {
         </div>
       </div>
 
-      {/* Department tabs (only for admins / SMT / manager) */}
+      {/* Department tabs — only for admins/SMT/manager/Admin dept */}
       {isAdmin && (
         <div className="dept-tabs">
           <button
@@ -315,7 +319,7 @@ function RosterPage() {
           >
             All Departments
           </button>
-          {DEPARTMENTS.map((d) => (
+          {ROSTER_DEPARTMENTS.map((d) => (
             <button
               key={d}
               className={selectedDept === d ? 'dept-tab active' : 'dept-tab'}

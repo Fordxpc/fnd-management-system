@@ -15,7 +15,34 @@ const FND_STAFF = [
   { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
 ];
 
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security'];
+// All departments available in staff form
+const DEPARTMENTS = [
+  'Ground Operations',
+  'Maintenance',
+  'Security',
+  'Administration',
+  'Airport Manager',
+];
+
+// Preset designations (users can also type a custom one)
+const DESIGNATIONS = [
+  'Airport Manager',
+  'Manager',
+  'Assistant Manager',
+  'Senior Airport Officer',
+  'Assistant Senior Airport Officer',
+  'Operations Officer',
+  'Assistant Operations Officer',
+  'Airport Hand',
+  'Senior Airport Hand',
+  'Security Officer',
+  'Assistant Security Officer',
+  'Security Agent',
+  'Maintenance Officer',
+  'Maintenance Technician',
+  'Administrative Officer',
+  'Administrative Assistant',
+];
 
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
@@ -132,6 +159,13 @@ function StaffPage() {
 
   return (
     <div className="page-content">
+      {/* Datalist for designation suggestions */}
+      <datalist id="designation-options">
+        {DESIGNATIONS.map((d) => (
+          <option key={d} value={d} />
+        ))}
+      </datalist>
+
       <div className="staff-header">
         <h2>Staff Management</h2>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -181,11 +215,15 @@ function StaffPage() {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />
+
+          {/* Designation with autocomplete suggestions */}
           <input
-            placeholder="Position (e.g. Airport Hand)"
+            list="designation-options"
+            placeholder="Designation (type or pick from list)"
             value={position}
             onChange={(e) => setPosition(e.target.value)}
           />
+
           <select value={department} onChange={(e) => setDepartment(e.target.value)}>
             {DEPARTMENTS.map((d) => (
               <option key={d} value={d}>{d}</option>
@@ -210,7 +248,7 @@ function StaffPage() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Phone</th>
-                <th>Position</th>
+                <th>Designation</th>
                 <th>Department</th>
                 <th></th>
               </tr>
