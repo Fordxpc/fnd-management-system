@@ -636,11 +636,28 @@
   font-family: inherit;
   background: #ffffff;
 }
-.bulk-field select:focus,
-.bulk-field input:focus {
-  outline: none;
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+.bulk-field select,
+.bulk-field input {
+  padding: 10px;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+  color: #1e293b;
+  -webkit-text-fill-color: #1e293b;
+  opacity: 1;
+}
+
+.bulk-field select option {
+  color: #1e293b;
+  background: #ffffff;
+}
+
+.bulk-field input::placeholder {
+  color: #94a3b8;
+  -webkit-text-fill-color: #94a3b8;
+  opacity: 1;
 }
 
 .bulk-day-buttons {
