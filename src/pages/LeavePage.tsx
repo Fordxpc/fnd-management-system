@@ -46,14 +46,11 @@ const formatDisplay = (dateStr: string): string => {
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 };
 
-// Check if a date string (YYYY-MM-DD) is a Friday
 const isFriday = (dateStr: string): boolean => {
   const d = new Date(dateStr + 'T00:00:00');
-  return d.getDay() === 5; // Friday
+  return d.getDay() === 5;
 };
 
-// Count days between start and end (inclusive)
-// For ANNUAL LEAVE: Fridays are skipped (off day)
 const countDays = (start: string, end: string, leaveType: string): number => {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
@@ -64,33 +61,12 @@ const countDays = (start: string, end: string, leaveType: string): number => {
   const cur = new Date(s);
   while (cur <= e) {
     const dStr = formatDate(cur);
-    if (!(skipFridays && isFriday(dStr))) {
-      count++;
-    }
+    if (!(skipFridays && isFriday(dStr))) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
 };
 
-// Build a YYYY-MM-DD range from start to end inclusive
-// For ANNUAL LEAVE: Fridays are excluded
-const dateRange = (start: string, end: string, leaveType: string): string[] => {
-  const dates: string[] = [];
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  const skipFridays = leaveType === 'ANNUAL LEAVE';
-  const cur = new Date(s);
-  while (cur <= e) {
-    const dStr = formatDate(cur);
-    if (!(skipFridays && isFriday(dStr))) {
-      dates.push(dStr);
-    }
-    cur.setDate(cur.getDate() + 1);
-  }
-  return dates;
-};
-
-// Count only Fridays in the range (for display info)
 const countFridaysInRange = (start: string, end: string): number => {
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
@@ -156,6 +132,14 @@ function LeavePage() {
     if (canApproveAny) return true;
     if (!APPROVER_DESIGNATIONS.includes(myStaff?.position || '')) return false;
     if (myStaff?.department === r.staffDepartment) return true;
+    return false;
+  };
+
+  const canDeleteRequest = (r: any): boolean => {
+    // Admins/Dept managers/Developer → delete anything
+    if (isDeveloper || isDeptManager) return true;
+    // Staff → can only delete their own
+    if (myStaff && r.staffId === myStaff.id) return true;
     return false;
   };
 
@@ -262,9 +246,19 @@ function LeavePage() {
         reviewedAt: new Date().toISOString(),
       });
 
-      // Use dateRange which skips Fridays for annual leave
-      const days = dateRange(r.startDate, r.endDate, r.leaveType);
-      for (const d of days) {
+      // Build day list (skip Fridays for annual leave)
+      const dates: string[] = [];
+      const s = new Date(r.startDate + 'T00:00:00');
+      const e = new Date(r.endDate + 'T00:00:00');
+      const skipFridays = r.leaveType === 'ANNUAL LEAVE';
+      const cur = new Date(s);
+      while (cur <= e) {
+        const dStr = formatDate(cur);
+        if (!(skipFridays && isFriday(dStr))) dates.push(dStr);
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      for (const d of dates) {
         const q = query(
           collection(db, 'roster_entries'),
           where('staffId', '==', r.staffId),
@@ -307,20 +301,38 @@ function LeavePage() {
     }
   };
 
-  const handleCancelMine = async (r: any) => {
-    const ok = window.confirm('Cancel this leave request?');
+  // NEW: Full delete (removes request + any associated roster entries)
+  const handleDelete = async (r: any) => {
+    const ok = window.confirm(
+      `⚠️ DELETE this leave request permanently?\n\n` +
+      `${r.staffName} — ${r.leaveType}\n` +
+      `${formatDisplay(r.startDate)} to ${formatDisplay(r.endDate)}\n` +
+      `Status: ${String(r.status).toUpperCase()}\n\n` +
+      `This will also remove any roster entries created by this leave.\n` +
+      `This cannot be undone.`
+    );
     if (!ok) return;
+
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), {
-        status: 'cancelled',
-        reviewedAt: new Date().toISOString(),
-      });
+      // 1. Delete all roster entries linked to this leave request
+      const q = query(
+        collection(db, 'roster_entries'),
+        where('leaveRequestId', '==', r.id)
+      );
+      const linkedRoster = await getDocs(q);
+      for (const docSnap of linkedRoster.docs) {
+        await deleteDoc(doc(db, 'roster_entries', docSnap.id));
+      }
+
+      // 2. Delete the leave request itself
+      await deleteDoc(doc(db, 'leave_requests', r.id));
+
+      alert('Leave request deleted.');
     } catch (error: any) {
       alert('Error: ' + error.message);
     }
   };
 
-  // Preview values for the form
   const previewDays = countDays(startDate, endDate, leaveType);
   const previewFridays = leaveType === 'ANNUAL LEAVE' ? countFridaysInRange(startDate, endDate) : 0;
 
@@ -401,9 +413,7 @@ function LeavePage() {
           />
 
           <div style={{ gridColumn: 'span 2', fontSize: '13px', color: '#475569', padding: '10px 12px', background: '#f1f5f9', borderRadius: '6px' }}>
-            <div>
-              <strong>Countable days:</strong> {previewDays}
-            </div>
+            <div><strong>Countable days:</strong> {previewDays}</div>
             {previewFridays > 0 && (
               <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
                 ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded (weekly off day for annual leave)
@@ -485,6 +495,7 @@ function LeavePage() {
                   canApproveRequest(r) &&
                   r.status === 'pending' &&
                   r.staffId !== myStaff?.id;
+                const canDelete = canDeleteRequest(r);
                 return (
                   <tr key={r.id}>
                     <td>
@@ -506,18 +517,25 @@ function LeavePage() {
                         {String(r.status).toUpperCase()}
                       </span>
                     </td>
-                    <td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
                       {canApprove && (
                         <>
-                          <button className="approve-btn" onClick={() => handleApprove(r)}>✓ Approve</button>
-                          <button className="reject-btn" onClick={() => handleReject(r)}>✕ Reject</button>
+                          <button className="approve-btn" onClick={() => handleApprove(r)}>✓</button>
+                          <button className="reject-btn" onClick={() => handleReject(r)}>✕</button>
                         </>
                       )}
-                      {!isDeptManager && r.status === 'pending' && myStaff && r.staffId === myStaff.id && (
-                        <button className="delete-btn" onClick={() => handleCancelMine(r)}>Cancel</button>
+                      {canDelete && (
+                        <button
+                          className="delete-btn"
+                          onClick={() => handleDelete(r)}
+                          style={{ marginLeft: '6px' }}
+                          title="Delete permanently"
+                        >
+                          🗑 Delete
+                        </button>
                       )}
                       {r.status !== 'pending' && (
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                        <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>
                           {r.reviewedBy ? `By ${r.reviewedBy}` : ''}
                         </span>
                       )}
