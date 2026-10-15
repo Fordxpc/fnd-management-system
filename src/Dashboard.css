@@ -588,3 +588,117 @@
   .sidebar-header,
   .sidebar-footer { padding: 8px 16px; }
 }
+/* ==================== BULK ASSIGN FORM ==================== */
+.bulk-btn { background-color: #7c3aed; color: white; }
+.bulk-btn:hover { background-color: #6d28d9; }
+.copy-btn { background-color: #0891b2; color: white; }
+.copy-btn:hover:not(:disabled) { background-color: #0e7490; }
+
+.bulk-form {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  border: 2px solid #a855f7;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
+}
+.bulk-form-title {
+  font-weight: 700;
+  color: #6d28d9;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+
+.bulk-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bulk-field-full { grid-column: span 2; }
+.bulk-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b21a8;
+  letter-spacing: 0.3px;
+}
+.bulk-field select,
+.bulk-field input {
+  padding: 10px;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+}
+.bulk-field select:focus,
+.bulk-field input:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+
+.bulk-day-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.day-btn {
+  padding: 8px 14px;
+  border: 1px solid #c4b5fd;
+  background: #ffffff;
+  color: #6b21a8;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.day-btn:hover { background: #ede9fe; }
+.day-btn.active {
+  background: #7c3aed;
+  color: #ffffff;
+  border-color: #7c3aed;
+}
+.day-btn.quick {
+  background: #f3e8ff;
+  color: #6d28d9;
+  font-size: 11px;
+}
+.day-btn.quick:hover { background: #e9d5ff; }
+
+.bulk-preview {
+  background: #ffffff;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  color: #6d28d9;
+  font-size: 14px;
+}
+
+.bulk-submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: #7c3aed;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.bulk-submit-btn:hover:not(:disabled) { background: #6d28d9; }
+.bulk-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+  .bulk-form-grid { grid-template-columns: 1fr; }
+  .bulk-field-full { grid-column: span 1; }
+}
