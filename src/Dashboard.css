@@ -299,17 +299,28 @@
 }
 .week-grid .col-date { width: auto; }
 
-.week-grid tbody tr:nth-child(odd) td.empty-cell { background-color: #ffffff; }
-.week-grid tbody tr:nth-child(even) td.empty-cell { background-color: #fdf6e3; }
+.week-grid tbody tr:nth-child(odd) td.empty-cell,
+.week-grid tbody tr:nth-child(odd) td.shift-cell { background-color: #ffffff !important; }
+
+.week-grid tbody tr:nth-child(even) td.empty-cell,
+.week-grid tbody tr:nth-child(even) td.shift-cell { background-color: #fdf6e3 !important; }
 .week-grid tbody tr:nth-child(odd) td.col-sn,
 .week-grid tbody tr:nth-child(odd) td.col-name { background-color: #ffffff; }
 .week-grid tbody tr:nth-child(even) td.col-sn,
 .week-grid tbody tr:nth-child(even) td.col-name { background-color: #fdf6e3; }
 
 .week-grid tbody td.shift-cell {
-  background-color: #d1fae5 !important;
+  background-color: transparent !important;
   color: #000000;
-  font-weight: 600;
+  font-weight: 500;
+}
+
+/* Row colors must still show through shift cells */
+.week-grid tbody tr:nth-child(odd) td.shift-cell {
+  background-color: #ffffff !important;
+}
+.week-grid tbody tr:nth-child(even) td.shift-cell {
+  background-color: #fdf6e3 !important;
 }
 .week-grid tbody td.off-day-cell {
   background-color: #fecaca !important;
