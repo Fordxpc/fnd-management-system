@@ -61,7 +61,7 @@ function HolidaysPage() {
     await deleteDoc(doc(db, 'holidays', id));
   };
 
-  // All Fridays of the selected year
+  // All Fridays of the selected year (company calendar holidays)
   const fridaysOfYear: string[] = [];
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
@@ -76,7 +76,12 @@ function HolidaysPage() {
     .sort((a: any, b: any) => a.date.localeCompare(b.date));
 
   const allOffDays = [
-    ...fridaysOfYear.map((d) => ({ date: d, name: 'Friday (Weekly Off)', isFriday: true, id: '' })),
+    ...fridaysOfYear.map((d) => ({
+      date: d,
+      name: 'Friday',
+      isFriday: true,
+      id: '',
+    })),
     ...customHolidaysThisYear.map((h: any) => ({
       date: h.date,
       name: h.name,
@@ -88,7 +93,7 @@ function HolidaysPage() {
   return (
     <div className="page-content">
       <div className="staff-header">
-        <h2>Holidays & Off Days</h2>
+        <h2>Company Calendar Holidays</h2>
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
@@ -107,15 +112,22 @@ function HolidaysPage() {
       </div>
 
       <div className="info-banner">
-        <strong>ℹ️ How it works:</strong> Fridays and custom holidays don't count toward the
-        annual leave balance — but they <strong>will still appear as ANNUAL LEAVE</strong> in the
-        roster grid (so staff can see the full leave period).
+        <strong>ℹ️ How it works:</strong>
+        <br />
+        • <strong>Fridays</strong> are company calendar holidays (staff still work — it's not a
+        weekly off day).
+        <br />
+        • When someone takes <strong>annual leave</strong> spanning a Friday or a custom holiday,
+        that day is <strong>still marked as ANNUAL LEAVE in the roster</strong> but does
+        <strong> not count</strong> against their 30-day annual balance.
+        <br />
+        • All other leave types (sick, MC, etc.) count every day, including Fridays.
       </div>
 
       {isAdmin && (
         <form className="staff-form" onSubmit={handleAdd}>
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            ➕ Add Custom Holiday (e.g., Eid, National Day, Public Holiday)
+            ➕ Add Custom Company Holiday (e.g., Eid, National Day, Public Holiday)
           </div>
           <input
             type="date"
@@ -152,7 +164,7 @@ function HolidaysPage() {
                 <td>{h.name}</td>
                 <td>
                   {h.isFriday ? (
-                    <span className="status-badge status-approved">AUTO</span>
+                    <span className="status-badge status-approved">FRIDAY (AUTO)</span>
                   ) : (
                     <span className="status-badge status-pending">CUSTOM</span>
                   )}
