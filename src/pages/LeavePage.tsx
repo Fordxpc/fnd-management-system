@@ -10,10 +10,22 @@ const LEAVE_TYPES = [
   'ANNUAL LEAVE',
   'SICK LEAVE',
   'SICK LEAVE / MC',
+  'NO PAY LEAVE',
   'PATERNITY LEAVE',
   'MATERNITY LEAVE',
   'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
+
+// Annual leave entitlement per year
+const ENTITLEMENTS: { [key: string]: number } = {
+  'ANNUAL LEAVE': 30,
+  'SICK LEAVE': 15,
+  'SICK LEAVE / MC': 15,
+  'FAMILY RESPONSIBILITY LEAVE (FRL)': 10,
+  'PATERNITY LEAVE': 0,
+  'MATERNITY LEAVE': 0,
+  'NO PAY LEAVE': 0,
+};
 
 const APPROVER_DESIGNATIONS = [
   'Airport Manager',
@@ -51,33 +63,40 @@ const isFriday = (dateStr: string): boolean => {
   return d.getDay() === 5;
 };
 
-const countDays = (start: string, end: string, leaveType: string): number => {
+// Build a list of dates in range (inclusive)
+const allDatesInRange = (start: string, end: string): string[] => {
+  const dates: string[] = [];
   const s = new Date(start + 'T00:00:00');
   const e = new Date(end + 'T00:00:00');
-  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return 0;
-
-  const skipFridays = leaveType === 'ANNUAL LEAVE';
-  let count = 0;
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return dates;
   const cur = new Date(s);
   while (cur <= e) {
-    const dStr = formatDate(cur);
-    if (!(skipFridays && isFriday(dStr))) count++;
+    dates.push(formatDate(cur));
     cur.setDate(cur.getDate() + 1);
   }
-  return count;
+  return dates;
 };
 
-const countFridaysInRange = (start: string, end: string): number => {
-  const s = new Date(start + 'T00:00:00');
-  const e = new Date(end + 'T00:00:00');
-  if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return 0;
-  let count = 0;
-  const cur = new Date(s);
-  while (cur <= e) {
-    if (cur.getDay() === 5) count++;
-    cur.setDate(cur.getDate() + 1);
+// Count annual leave days EXCLUDING Fridays and custom holidays
+const countAnnualLeaveDays = (
+  start: string,
+  end: string,
+  holidayDates: Set<string>
+): { countable: number; skippedFridays: number; skippedHolidays: number } => {
+  const dates = allDatesInRange(start, end);
+  let countable = 0;
+  let skippedFridays = 0;
+  let skippedHolidays = 0;
+  for (const d of dates) {
+    if (isFriday(d)) {
+      skippedFridays++;
+    } else if (holidayDates.has(d)) {
+      skippedHolidays++;
+    } else {
+      countable++;
+    }
   }
-  return count;
+  return { countable, skippedFridays, skippedHolidays };
 };
 
 function LeavePage() {
@@ -88,6 +107,7 @@ function LeavePage() {
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [staffList, setStaffList] = useState<any[]>([]);
+  const [holidays, setHolidays] = useState<any[]>([]);
   const [tab, setTab] = useState<string>('pending');
   const [filterDept, setFilterDept] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
@@ -116,11 +136,19 @@ function LeavePage() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'leave_requests'), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setRequests(list);
+      setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'holidays'), (snap) => {
+      setHolidays(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  const holidaySet: Set<string> = new Set(holidays.map((h: any) => h.date));
 
   const canApproveAny: boolean =
     isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
@@ -136,9 +164,7 @@ function LeavePage() {
   };
 
   const canDeleteRequest = (r: any): boolean => {
-    // Admins/Dept managers/Developer → delete anything
     if (isDeveloper || isDeptManager) return true;
-    // Staff → can only delete their own
     if (myStaff && r.staffId === myStaff.id) return true;
     return false;
   };
@@ -152,17 +178,14 @@ function LeavePage() {
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })
-    .filter((r: any): boolean => {
-      if (tab === 'all') return true;
-      return r.status === tab;
-    })
+    .filter((r: any): boolean => (tab === 'all' ? true : r.status === tab))
     .sort((a: any, b: any) =>
       (b.requestedAt || '').localeCompare(a.requestedAt || '')
     );
 
   const currentYear: number = new Date().getFullYear();
-  const balance: { [key: string]: number } = {};
-  LEAVE_TYPES.forEach((t) => { balance[t] = 0; });
+  const usedDays: { [key: string]: number } = {};
+  LEAVE_TYPES.forEach((t) => { usedDays[t] = 0; });
   if (myStaff) {
     requests
       .filter(
@@ -172,8 +195,8 @@ function LeavePage() {
           (r.startDate || '').startsWith(String(currentYear))
       )
       .forEach((r: any) => {
-        if (balance[r.leaveType] !== undefined) {
-          balance[r.leaveType] += r.days || 0;
+        if (usedDays[r.leaveType] !== undefined) {
+          usedDays[r.leaveType] += r.days || 0;
         }
       });
   }
@@ -194,9 +217,19 @@ function LeavePage() {
       return;
     }
 
-    const days = countDays(startDate, endDate, leaveType);
+    // Count days
+    let days = 0;
+    if (leaveType === 'ANNUAL LEAVE') {
+      days = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
+    } else {
+      days = allDatesInRange(startDate, endDate).length;
+    }
+
     if (days === 0) {
-      alert('This leave period contains no countable days (all Fridays for annual leave).');
+      alert(
+        'This leave period contains no countable days. ' +
+        '(For annual leave, Fridays and holidays are excluded.)'
+      );
       return;
     }
 
@@ -234,8 +267,8 @@ function LeavePage() {
 
     const ok = window.confirm(
       `Approve ${r.leaveType} for ${r.staffName}?\n` +
-      `${formatDisplay(r.startDate)} to ${formatDisplay(r.endDate)} (${r.days} days)\n\n` +
-      `This will mark these days as "${r.leaveType}" on the roster.`
+      `${formatDisplay(r.startDate)} to ${formatDisplay(r.endDate)} (${r.days} days counted)\n\n` +
+      `This will mark every day in the range as "${r.leaveType}" on the roster.`
     );
     if (!ok) return;
 
@@ -246,18 +279,8 @@ function LeavePage() {
         reviewedAt: new Date().toISOString(),
       });
 
-      // Build day list (skip Fridays for annual leave)
-      const dates: string[] = [];
-      const s = new Date(r.startDate + 'T00:00:00');
-      const e = new Date(r.endDate + 'T00:00:00');
-      const skipFridays = r.leaveType === 'ANNUAL LEAVE';
-      const cur = new Date(s);
-      while (cur <= e) {
-        const dStr = formatDate(cur);
-        if (!(skipFridays && isFriday(dStr))) dates.push(dStr);
-        cur.setDate(cur.getDate() + 1);
-      }
-
+      // Mark EVERY day in the range (including Fridays and holidays) in the roster
+      const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(
           collection(db, 'roster_entries'),
@@ -279,7 +302,7 @@ function LeavePage() {
           createdAt: new Date().toISOString(),
         });
       }
-      alert('Approved! Roster updated.');
+      alert('Approved! Roster updated for every day in the range.');
     } catch (error: any) {
       alert('Error: ' + error.message);
     }
@@ -301,7 +324,6 @@ function LeavePage() {
     }
   };
 
-  // NEW: Full delete (removes request + any associated roster entries)
   const handleDelete = async (r: any) => {
     const ok = window.confirm(
       `⚠️ DELETE this leave request permanently?\n\n` +
@@ -314,7 +336,6 @@ function LeavePage() {
     if (!ok) return;
 
     try {
-      // 1. Delete all roster entries linked to this leave request
       const q = query(
         collection(db, 'roster_entries'),
         where('leaveRequestId', '==', r.id)
@@ -323,18 +344,27 @@ function LeavePage() {
       for (const docSnap of linkedRoster.docs) {
         await deleteDoc(doc(db, 'roster_entries', docSnap.id));
       }
-
-      // 2. Delete the leave request itself
       await deleteDoc(doc(db, 'leave_requests', r.id));
-
       alert('Leave request deleted.');
     } catch (error: any) {
       alert('Error: ' + error.message);
     }
   };
 
-  const previewDays = countDays(startDate, endDate, leaveType);
-  const previewFridays = leaveType === 'ANNUAL LEAVE' ? countFridaysInRange(startDate, endDate) : 0;
+  // Preview for the form
+  let previewDays = 0;
+  let previewFridays = 0;
+  let previewHolidays = 0;
+  if (startDate && endDate && endDate >= startDate) {
+    if (leaveType === 'ANNUAL LEAVE') {
+      const r = countAnnualLeaveDays(startDate, endDate, holidaySet);
+      previewDays = r.countable;
+      previewFridays = r.skippedFridays;
+      previewHolidays = r.skippedHolidays;
+    } else {
+      previewDays = allDatesInRange(startDate, endDate).length;
+    }
+  }
 
   if (loading) {
     return <div className="page-content"><p>Loading...</p></div>;
@@ -349,16 +379,29 @@ function LeavePage() {
         </button>
       </div>
 
+      {/* Balance card */}
       {myStaff && !isDeptManager && (
         <div className="leave-balance-card">
           <h3>My Leave Balance ({currentYear})</h3>
           <div className="balance-grid">
-            {LEAVE_TYPES.map((t) => (
-              <div key={t} className="balance-item">
-                <span className="balance-label">{t}</span>
-                <span className="balance-value">{balance[t]} days used</span>
-              </div>
-            ))}
+            {LEAVE_TYPES.map((t) => {
+              const entitlement = ENTITLEMENTS[t] || 0;
+              const used = usedDays[t] || 0;
+              const remaining = entitlement > 0 ? entitlement - used : null;
+              return (
+                <div key={t} className="balance-item">
+                  <span className="balance-label">{t}</span>
+                  <span className="balance-value">
+                    {remaining !== null ? `${remaining} / ${entitlement} days` : `${used} days used`}
+                  </span>
+                  {entitlement > 0 && (
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      {used} used • {entitlement} entitled
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -414,9 +457,14 @@ function LeavePage() {
 
           <div style={{ gridColumn: 'span 2', fontSize: '13px', color: '#475569', padding: '10px 12px', background: '#f1f5f9', borderRadius: '6px' }}>
             <div><strong>Countable days:</strong> {previewDays}</div>
-            {previewFridays > 0 && (
+            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (
               <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
-                ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded (weekly off day for annual leave)
+                ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded from balance (still marked in roster)
+              </div>
+            )}
+            {leaveType === 'ANNUAL LEAVE' && previewHolidays > 0 && (
+              <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                ℹ️ {previewHolidays} holiday{previewHolidays > 1 ? 's' : ''} excluded from balance (still marked in roster)
               </div>
             )}
             {endDate < startDate && (
@@ -529,7 +577,6 @@ function LeavePage() {
                           className="delete-btn"
                           onClick={() => handleDelete(r)}
                           style={{ marginLeft: '6px' }}
-                          title="Delete permanently"
                         >
                           🗑 Delete
                         </button>

@@ -4,6 +4,7 @@ import './Dashboard.css';
 import StaffPage from './pages/StaffPage';
 import RosterPage from './pages/RosterPage';
 import LeavePage from './pages/LeavePage';
+import HolidaysPage from './pages/HolidaysPage';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
@@ -11,13 +12,14 @@ function Dashboard({ user, logout }: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
 
-  const isManagement = MANAGEMENT_ROLES.includes(profile?.role);
+  const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
 
   const pages: { [key: string]: any } = {
     dashboard: <div className="page-content"><h2>Dashboard</h2><p>Overview coming soon...</p></div>,
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
+    holidays: <HolidaysPage />,
     overtime: <div className="page-content"><h2>Overtime</h2><p>Coming soon...</p></div>,
     settings: <div className="page-content"><h2>Settings</h2><p>Coming soon...</p></div>,
   };
@@ -38,7 +40,6 @@ function Dashboard({ user, logout }: any) {
             📊 Dashboard
           </button>
 
-          {/* Staff page only visible to SMT / Manager / Developer */}
           {isManagement && (
             <button
               className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'}
@@ -54,18 +55,28 @@ function Dashboard({ user, logout }: any) {
           >
             📅 Duty Roster
           </button>
+
           <button
             className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'}
             onClick={() => setCurrentPage('leave')}
           >
             🌴 Leave
           </button>
+
+          <button
+            className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setCurrentPage('holidays')}
+          >
+            🎉 Holidays
+          </button>
+
           <button
             className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'}
             onClick={() => setCurrentPage('overtime')}
           >
             ⏰ Overtime
           </button>
+
           <button
             className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'}
             onClick={() => setCurrentPage('settings')}
