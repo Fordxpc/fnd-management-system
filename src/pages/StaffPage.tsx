@@ -4,6 +4,7 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'fireb
 
 // ===== COMPLETE FND STAFF MASTER LIST =====
 // Import skips any SN that already exists in the database.
+// Administration is NOT a roster department — those staff don't appear in the duty roster.
 const FND_ALL_STAFF = [
   // ---------- Ground Operations ----------
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -15,7 +16,6 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0733', name: 'Thoriq Mohamed', position: 'Airport Hand', department: 'Ground Operations' },
   { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer', department: 'Ground Operations' },
   { sn: 'SN-0757', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
-  { sn: 'SN-0758', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
   { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
 
   // ---------- Maintenance ----------
@@ -23,10 +23,8 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0049', name: 'Mohamed Zaki', position: 'Maintenance Agent', department: 'Maintenance' },
   { sn: 'SN-0480', name: 'Mohamed Ibrahim', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-0481', name: 'Zimla Ayyoob', position: 'Cleaning & Gardening', department: 'Maintenance' },
-  { sn: 'SN-0482', name: 'Hawwa Fulhu', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-0484', name: 'Abdul Ghanee Mohamed', position: 'Assistant Manager', department: 'Maintenance' },
   { sn: 'SN-0980', name: 'Ismail Kameel', position: 'Maintenance Agent', department: 'Maintenance' },
-  { sn: 'SN-0984', name: 'Hussain Saiman', position: 'Maintenance Agent', department: 'Maintenance' },
   { sn: 'SN-1007', name: 'Muna Abdhul Qafoor', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-1008', name: 'Aiminath Maha', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-1009', name: 'Hassan Naafis', position: 'Cleaning & Gardening', department: 'Maintenance' },
@@ -58,12 +56,13 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
   { sn: 'SN-0967', name: 'Hassan Malaz', position: 'Assistant Safety Officer', department: 'Fire & Rescue' },
 
-  // ---------- Administration / SMT ----------
-  { sn: 'SN-0753', name: 'Mohamed Maayal', position: 'Airport Manager', department: 'Ground Operations' },
-  { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Ground Operations' },
+  // ---------- Administration (NO ROSTER — office staff) ----------
+  { sn: 'SN-0753', name: 'Mohamed Maayal', position: 'Airport Manager', department: 'Administration' },
+  { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Administration' },
 ];
 
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
+// Roster departments (3 operational + Fire & Rescue). Administration is separate — no roster.
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
 const DESIGNATIONS = [
   'Airport Manager',
@@ -170,7 +169,6 @@ function StaffPage() {
     setShowForm(false);
   };
 
-  // ===== Import all FND staff =====
   const handleImportAll = async () => {
     const missing = FND_ALL_STAFF.filter((m) => !staff.some((s) => s.sn === m.sn));
 
@@ -182,7 +180,6 @@ function StaffPage() {
       return;
     }
 
-    // Group by department for the confirmation message
     const byDept: { [key: string]: number } = {};
     missing.forEach((m) => {
       byDept[m.department] = (byDept[m.department] || 0) + 1;
