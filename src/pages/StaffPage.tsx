@@ -2,30 +2,72 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
-const FND_STAFF = [
-  { sn: 'SN-0439', name: 'Hassan Sujaau', position: 'Senior Airport Officer', department: 'Ground Operations' },
-  { sn: 'SN-0729', name: 'Mohamed Fuadh', position: 'Operations Officer', department: 'Ground Operations' },
-  { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer', department: 'Ground Operations' },
+// ===== COMPLETE FND STAFF MASTER LIST =====
+// Import skips any SN that already exists in the database.
+const FND_ALL_STAFF = [
+  // ---------- Ground Operations ----------
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
-  { sn: 'SN-0038', name: 'Adam Skakir', position: 'Airport Hand', department: 'Ground Operations' },
-  { sn: 'SN-0758', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
-  { sn: 'SN-0733', name: 'Thoriq Mohamed', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0038', name: 'Adam Shakir', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0439', name: 'Hassan Shujaau', position: 'Senior Airport Officer', department: 'Ground Operations' },
   { sn: 'SN-0725', name: 'Ahmed Aseel', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0729', name: 'Mohamed Fuadhu', position: 'Operations Officer', department: 'Ground Operations' },
   { sn: 'SN-0730', name: 'Mohamed Nadheem', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0733', name: 'Thoriq Mohamed', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer', department: 'Ground Operations' },
+  { sn: 'SN-0757', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0758', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
   { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
+
+  // ---------- Maintenance ----------
+  { sn: 'SN-0042', name: 'Aiminath Moosa', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0049', name: 'Mohamed Zaki', position: 'Maintenance Agent', department: 'Maintenance' },
+  { sn: 'SN-0480', name: 'Mohamed Ibrahim', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0481', name: 'Zimla Ayyoob', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0482', name: 'Hawwa Fulhu', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0484', name: 'Abdul Ghanee Mohamed', position: 'Assistant Manager', department: 'Maintenance' },
+  { sn: 'SN-0980', name: 'Ismail Kameel', position: 'Maintenance Agent', department: 'Maintenance' },
+  { sn: 'SN-0984', name: 'Hussain Saiman', position: 'Maintenance Agent', department: 'Maintenance' },
+  { sn: 'SN-1007', name: 'Muna Abdhul Qafoor', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-1008', name: 'Aiminath Maha', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-1009', name: 'Hassan Naafis', position: 'Cleaning & Gardening', department: 'Maintenance' },
+
+  // ---------- Security ----------
+  { sn: 'SN-0034', name: 'Abdulla Adam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0035', name: 'Abdulla Aslam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0036', name: 'Abdulla Mohamed', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0044', name: 'Hassan Abdul Rahman', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0437', name: 'Aminath Shehereeza', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0726', name: 'Mohamed Karam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0727', name: 'Ahmed Jinah', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0728', name: 'Ibrahim Khalaf Ahmed', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0731', name: 'Aishath Maiha Adam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0732', name: 'Aishath Sahana', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0755', name: 'Adam Maaidh', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0995', name: 'Mohamed Vishal', position: 'Assistant Security Officer', department: 'Security' },
+
+  // ---------- Fire & Rescue ----------
+  { sn: 'SN-0039', name: 'Adam Yaeesh', position: 'Leading Fireman', department: 'Fire & Rescue' },
+  { sn: 'SN-0040', name: 'Ahmed Raushaan', position: 'Leading Fireman', department: 'Fire & Rescue' },
+  { sn: 'SN-0041', name: 'Ali Navshad', position: 'Leading Fireman', department: 'Fire & Rescue' },
+  { sn: 'SN-0047', name: 'Ismail Nifaaz Adam', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0048', name: 'Maazin Hassan', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0434', name: 'Ismail Shafeeq', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0435', name: 'Ahmed Naahee', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0959', name: 'Vishan Mohamed', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0960', name: 'Ahmed Ilham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0967', name: 'Hassan Malaz', position: 'Assistant Safety Officer', department: 'Fire & Rescue' },
+
+  // ---------- Administration / SMT ----------
+  { sn: 'SN-0753', name: 'Mohamed Maayal', position: 'Airport Manager', department: 'Ground Operations' },
+  { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Ground Operations' },
 ];
 
-// Only real departments (SMT is a STATUS, not a department)
-const DEPARTMENTS = [
-  'Ground Operations',
-  'Maintenance',
-  'Security',
-  'Fire & Rescue',
-];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
 
-// Preset designations (users can also type a custom one)
 const DESIGNATIONS = [
   'Airport Manager',
+  'Manager',
   'Assistant Manager',
   'Assistant Safety Officer',
   'Senior Airport Officer',
@@ -33,29 +75,31 @@ const DESIGNATIONS = [
   'Assistant Operations Officer',
   'Assistant Security Officer',
   'Assistant Administrative Officer',
+  'Leading Fireman',
   'Senior Fire Fighter',
   'Fire Fighter',
-  'Junior Fire Fighter',
+  'Junior Firefighter',
+  'Firefighter Trainee',
   'Airport Hand',
   'Security Agent',
   'Maintenance Agent',
-  'Cleaning and Gardening',
+  'Cleaning & Gardening',
 ];
 
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
-  const [seeding, setSeeding] = useState(false);
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [importing, setImporting] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
 
-  const [sn, setSn] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [department, setDepartment] = useState('Ground Operations');
-  const [position, setPosition] = useState('');
-  const [isSMT, setIsSMT] = useState(false);
+  const [sn, setSn] = useState<string>('');
+  const [name, setName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [department, setDepartment] = useState<string>('Ground Operations');
+  const [position, setPosition] = useState<string>('');
+  const [isSMT, setIsSMT] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'staff'), (snapshot) => {
@@ -126,38 +170,65 @@ function StaffPage() {
     setShowForm(false);
   };
 
-  const handleImportFNDStaff = async () => {
-    if (!window.confirm(
-      `This will add ${FND_STAFF.length} FND Ground Operations staff members to the database.\n\n` +
-      `Their email addresses will be placeholders — you can edit them later.\n\n` +
+  // ===== Import all FND staff =====
+  const handleImportAll = async () => {
+    const missing = FND_ALL_STAFF.filter((m) => !staff.some((s) => s.sn === m.sn));
+
+    if (missing.length === 0) {
+      alert(
+        `✅ All ${FND_ALL_STAFF.length} staff members from the master list are already in the system.\n\n` +
+        `No new records to add.`
+      );
+      return;
+    }
+
+    // Group by department for the confirmation message
+    const byDept: { [key: string]: number } = {};
+    missing.forEach((m) => {
+      byDept[m.department] = (byDept[m.department] || 0) + 1;
+    });
+    const breakdown = Object.entries(byDept)
+      .map(([dept, count]) => `  • ${dept}: ${count}`)
+      .join('\n');
+
+    const ok = window.confirm(
+      `This will add ${missing.length} new staff member(s) from the master FND list.\n\n` +
+      `Breakdown by department:\n${breakdown}\n\n` +
+      `Existing staff (matched by SN) will be skipped.\n\n` +
       `Continue?`
-    )) return;
+    );
+    if (!ok) return;
 
-    setSeeding(true);
+    setImporting(true);
     let added = 0;
+    let failed = 0;
     try {
-      for (const member of FND_STAFF) {
-        const exists = staff.some((s) => s.sn === member.sn);
-        if (exists) continue;
-
-        await addDoc(collection(db, 'staff'), {
-          sn: member.sn,
-          name: member.name,
-          email: `${member.sn.toLowerCase()}@funadhooairport.com`,
-          phone: '',
-          department: member.department,
-          position: member.position,
-          isSMT: false,
-          status: 'active',
-          createdAt: new Date().toISOString(),
-        });
-        added++;
+      for (const member of missing) {
+        try {
+          await addDoc(collection(db, 'staff'), {
+            sn: member.sn,
+            name: member.name,
+            email: `${member.sn.toLowerCase()}@funadhooairport.com`,
+            phone: '',
+            department: member.department,
+            position: member.position,
+            isSMT: false,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+          });
+          added++;
+        } catch (err) {
+          failed++;
+        }
       }
-      alert(`Successfully imported ${added} staff members!`);
+      alert(
+        `✅ Imported ${added} staff member(s).` +
+        (failed > 0 ? `\n⚠ ${failed} record(s) failed.` : '')
+      );
     } catch (error: any) {
       alert('Import failed: ' + error.message);
     }
-    setSeeding(false);
+    setImporting(false);
   };
 
   const visibleStaff = staff
@@ -170,7 +241,6 @@ function StaffPage() {
 
   return (
     <div className="page-content">
-      {/* Datalist for designation suggestions */}
       <datalist id="designation-options">
         {DESIGNATIONS.map((d) => (
           <option key={d} value={d} />
@@ -184,16 +254,14 @@ function StaffPage() {
             ({selectedDept === 'all' ? 'All Departments' : selectedDept})
           </span>
         </h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {staff.length === 0 && (
-            <button
-              className="export-btn jpg-btn"
-              onClick={handleImportFNDStaff}
-              disabled={seeding}
-            >
-              {seeding ? 'Importing...' : '📥 Import FND Ground Ops Staff'}
-            </button>
-          )}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className="export-btn jpg-btn"
+            onClick={handleImportAll}
+            disabled={importing}
+          >
+            {importing ? 'Importing...' : '📥 Import All FND Staff'}
+          </button>
           <button
             className="add-staff-btn"
             onClick={() => (showForm ? handleCancelForm() : setShowForm(true))}
@@ -203,7 +271,6 @@ function StaffPage() {
         </div>
       </div>
 
-      {/* Department tabs — SMT is shown separately */}
       <div className="dept-tabs">
         <button
           className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'}
@@ -235,7 +302,7 @@ function StaffPage() {
 
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: '600', color: '#1e293b' }}>
+          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
             {editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}
           </div>
           <input
@@ -262,7 +329,6 @@ function StaffPage() {
             onChange={(e) => setPhone(e.target.value)}
           />
 
-          {/* Designation with autocomplete suggestions */}
           <input
             list="designation-options"
             placeholder="Designation (type or pick from list)"
@@ -276,7 +342,6 @@ function StaffPage() {
             ))}
           </select>
 
-          {/* SMT member checkbox */}
           <label
             style={{
               gridColumn: 'span 2',
