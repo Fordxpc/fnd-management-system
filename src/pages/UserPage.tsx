@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
-  collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc,
-  getDocs, query, where
+  collection, onSnapshot, doc, updateDoc, deleteDoc, setDoc
 } from 'firebase/firestore';
-import {
-  createUserWithEmailAndPassword, signOut, signInWithEmailAndPassword
-} from 'firebase/auth';
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
 import { useAuth } from '../auth';
 
-// Only these roles can access this page
 const ADMIN_ROLES = ['developer', 'manager'];
 
 const ALL_ROLES = [
@@ -36,7 +32,6 @@ function UsersPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<string>('');
 
-  // Add-user form
   const [showForm, setShowForm] = useState<boolean>(false);
   const [newEmail, setNewEmail] = useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
@@ -107,7 +102,6 @@ function UsersPage() {
       return;
     }
 
-    // Check for duplicate email in users collection
     if (users.some((u) => (u.email || '').toLowerCase() === newEmail.toLowerCase())) {
       alert('A user with this email already exists.');
       return;
@@ -115,14 +109,8 @@ function UsersPage() {
 
     setAdding(true);
     try {
-      // Save current session (we'll restore it after creating the new user)
-      const currentEmail = auth.currentUser?.email || '';
-      const currentUid = auth.currentUser?.uid || '';
-
-      // Create the new user (this signs them in briefly)
       const cred = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
 
-      // Create their user profile in Firestore
       await setDoc(doc(db, 'users', cred.user.uid), {
         email: newEmail,
         role: newRole,
@@ -130,26 +118,13 @@ function UsersPage() {
         createdAt: new Date().toISOString(),
       });
 
-      // Sign the new user back out
       await signOut(auth);
 
-      // Sign the original admin back in
-      // NOTE: Firebase can't re-auth without a password.
-      // Since the admin is currently logged in and we just signed them out,
-      // we need them to sign in again. This is a Firebase limitation.
       alert(
         `✅ User ${newEmail} created!\n\n` +
         `⚠️ You've been signed out. Please log back in to continue managing users.`
       );
 
-      // Reset form and redirect to login
-      setNewEmail('');
-      setNewPassword('');
-      setNewRole('staff');
-      setNewDept('Ground Operations');
-      setShowForm(false);
-
-      // Force reload to trigger auth state change → shows login screen
       window.location.href = '/';
     } catch (err: any) {
       alert('Error creating user: ' + err.message);
@@ -169,7 +144,7 @@ function UsersPage() {
       <div className="info-banner">
         <strong>ℹ️ About roles:</strong>
         <br />
-        • <strong>Developer</strong> — you, full access to everything
+        • <strong>Developer</strong> — full access to everything
         <br />
         • <strong>Manager</strong> — Airport Manager, full access
         <br />
