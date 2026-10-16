@@ -7,6 +7,8 @@ import LeavePage from './pages/LeavePage';
 import HolidaysPage from './pages/HolidaysPage';
 import OvertimePage from './pages/OvertimePage';
 import UsersPage from './pages/UsersPage';
+import DashboardPage from './pages/DashboardPage';
+import SettingsPage from './pages/SettingsPage';
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
@@ -20,15 +22,17 @@ function Dashboard({ user, logout }: any) {
   const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
   const canManageUsers = USER_ADMIN_ROLES.includes(profile?.role || '');
 
+  const navigate = (page: string) => setCurrentPage(page);
+
   const pages: { [key: string]: any } = {
-    dashboard: <div className="page-content"><h2>Dashboard</h2><p>Overview coming soon...</p></div>,
+    dashboard: <DashboardPage onNavigate={navigate} />,
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
     overtime: <OvertimePage />,
     holidays: <HolidaysPage />,
     users: <UsersPage />,
-    settings: <div className="page-content"><h2>Settings</h2><p>Coming soon...</p></div>,
+    settings: <SettingsPage />,
   };
 
   return (
@@ -106,13 +110,13 @@ function Dashboard({ user, logout }: any) {
           <button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>
             🔐 Change Password
           </button>
-          <button className="logout-btn" onClick={logout}>Log Out</button>
+          <button className="logout-btn" onClick={logout}>
+            Log Out
+          </button>
         </div>
       </aside>
 
-      <main className="main-content">
-        {pages[currentPage]}
-      </main>
+      <main className="main-content">{pages[currentPage]}</main>
 
       {showPasswordModal && (
         <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
