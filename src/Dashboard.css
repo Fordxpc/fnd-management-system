@@ -852,3 +852,27 @@
   margin-right: 6px;
 }
 .reset-pw-btn:hover { background: #dbeafe; }
+/* ==================== DEPARTMENT BALANCE TABLE ==================== */
+.dept-balance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.dept-balance-table th,
+.dept-balance-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+.dept-balance-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.dept-balance-table tbody tr:hover {
+  background: #f8fafc;
+}

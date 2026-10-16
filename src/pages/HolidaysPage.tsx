@@ -25,6 +25,7 @@ function HolidaysPage() {
   const [date, setDate] = useState<string>(formatDate(new Date()));
   const [name, setName] = useState<string>('');
   const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [showFridays, setShowFridays] = useState<boolean>(false);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'holidays'), (snap) => {
@@ -61,7 +62,6 @@ function HolidaysPage() {
     await deleteDoc(doc(db, 'holidays', id));
   };
 
-  // All Fridays of the selected year (company calendar holidays)
   const fridaysOfYear: string[] = [];
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
@@ -75,53 +75,56 @@ function HolidaysPage() {
     .filter((h) => h.date.startsWith(String(year)))
     .sort((a: any, b: any) => a.date.localeCompare(b.date));
 
-  const allOffDays = [
-    ...fridaysOfYear.map((d) => ({
-      date: d,
-      name: 'Friday',
-      isFriday: true,
-      id: '',
-    })),
-    ...customHolidaysThisYear.map((h: any) => ({
-      date: h.date,
-      name: h.name,
-      isFriday: false,
-      id: h.id,
-    })),
-  ].sort((a, b) => a.date.localeCompare(b.date));
+  const customRows = customHolidaysThisYear.map((h: any) => ({
+    date: h.date,
+    name: h.name,
+    isFriday: false,
+    id: h.id,
+  }));
+
+  const fridayRows = fridaysOfYear.map((d) => ({
+    date: d,
+    name: 'Friday',
+    isFriday: true,
+    id: '',
+  }));
+
+  const displayedRows = showFridays
+    ? [...fridayRows, ...customRows].sort((a, b) => a.date.localeCompare(b.date))
+    : customRows;
 
   return (
     <div className="page-content">
       <div className="staff-header">
-        <h2>Company Calendar Holidays</h2>
-        <select
-          value={year}
-          onChange={(e) => setYear(Number(e.target.value))}
-          style={{
-            padding: '8px 12px',
-            borderRadius: '6px',
-            border: '1px solid #cbd5e1',
-            fontFamily: 'inherit',
-            fontSize: '14px',
-          }}
-        >
-          {[year - 1, year, year + 1, year + 2].map((y) => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="info-banner">
-        <strong>ℹ️ How it works:</strong>
-        <br />
-        • <strong>Fridays</strong> are company calendar holidays (staff still work — it's not a
-        weekly off day).
-        <br />
-        • When someone takes <strong>annual leave</strong> spanning a Friday or a custom holiday,
-        that day is <strong>still marked as ANNUAL LEAVE in the roster</strong> but does
-        <strong> not count</strong> against their 30-day annual balance.
-        <br />
-        • All other leave types (sick, MC, etc.) count every day, including Fridays.
+        <h2>
+          Company Calendar Holidays
+          <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
+            ({customHolidaysThisYear.length} custom · {fridaysOfYear.length} Fridays)
+          </span>
+        </h2>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            className={showFridays ? 'export-btn pdf-btn' : 'export-btn jpg-btn'}
+            onClick={() => setShowFridays(!showFridays)}
+          >
+            {showFridays ? '🙈 Hide Fridays' : '📅 Show Fridays'}
+          </button>
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid #cbd5e1',
+              fontFamily: 'inherit',
+              fontSize: '14px',
+            }}
+          >
+            {[year - 1, year, year + 1, year + 2].map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {isAdmin && (
@@ -146,42 +149,48 @@ function HolidaysPage() {
       )}
 
       <div className="staff-list">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Day</th>
-              <th>Name</th>
-              <th>Type</th>
-              {isAdmin && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {allOffDays.map((h: any) => (
-              <tr key={h.date + h.name}>
-                <td>{h.date}</td>
-                <td>{getDayName(h.date)}</td>
-                <td>{h.name}</td>
-                <td>
-                  {h.isFriday ? (
-                    <span className="status-badge status-approved">FRIDAY (AUTO)</span>
-                  ) : (
-                    <span className="status-badge status-pending">CUSTOM</span>
-                  )}
-                </td>
-                {isAdmin && (
+        {displayedRows.length === 0 ? (
+          <div className="empty-state">
+            <p>No custom holidays for {year}. Click "Add Holiday" to create one.</p>
+          </div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Name</th>
+                <th>Type</th>
+                {isAdmin && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {displayedRows.map((h: any) => (
+                <tr key={h.date + h.name}>
+                  <td>{h.date}</td>
+                  <td>{getDayName(h.date)}</td>
+                  <td>{h.name}</td>
                   <td>
-                    {!h.isFriday && h.id && (
-                      <button className="delete-btn" onClick={() => handleDelete(h.id)}>
-                        Delete
-                      </button>
+                    {h.isFriday ? (
+                      <span className="status-badge status-approved">FRIDAY (AUTO)</span>
+                    ) : (
+                      <span className="status-badge status-pending">CUSTOM</span>
                     )}
                   </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {isAdmin && (
+                    <td>
+                      {!h.isFriday && h.id && (
+                        <button className="delete-btn" onClick={() => handleDelete(h.id)}>
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
