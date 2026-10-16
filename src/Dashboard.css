@@ -741,3 +741,114 @@
   font-size: 13px;
   line-height: 1.5;
 }
+/* ==================== CHANGE PASSWORD BUTTON (Sidebar) ==================== */
+.change-pw-btn {
+  width: 100%;
+  padding: 8px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-family: inherit;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.change-pw-btn:hover { background-color: #1d4ed8; }
+
+/* ==================== MODAL ==================== */
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+}
+.modal-content {
+  background: #ffffff;
+  padding: 28px;
+  border-radius: 12px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+.modal-content h3 {
+  margin: 0 0 20px;
+  color: #1e293b;
+  font-size: 18px;
+}
+.modal-content .input-group {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.modal-content label {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+}
+.modal-content input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  color: #1e293b;
+  background: #ffffff;
+}
+.modal-content input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.cancel-btn {
+  padding: 10px 18px;
+  background: #e2e8f0;
+  color: #475569;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+.cancel-btn:hover { background: #cbd5e1; }
+.modal-actions .submit-btn {
+  padding: 10px 18px;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  width: auto;
+  margin: 0;
+}
+.modal-actions .submit-btn:hover { background: #1d4ed8; }
+.modal-actions .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ==================== RESET PASSWORD BUTTON (Users page) ==================== */
+.reset-pw-btn {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-right: 6px;
+}
+.reset-pw-btn:hover { background: #dbeafe; }

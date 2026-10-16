@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { db, auth } from '../firebase';
 import { useAuth } from '../auth';
 
 const ADMIN_ROLES = ['developer', 'manager'];
@@ -72,6 +73,28 @@ function UsersPage() {
     }
   };
 
+  const handleSendReset = async (email: string) => {
+    const ok = window.confirm(
+      `Send password reset email to ${email}?\n\n` +
+      `They will receive a link to reset their password.`
+    );
+    if (!ok) return;
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      alert(
+        `✅ Reset email sent to ${email}.\n\n` +
+        `They need to check that inbox (and spam folder).`
+      );
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        alert('This user is not in Firebase Authentication.\nCreate them first via Firebase Console.');
+      } else {
+        alert('Error: ' + err.message);
+      }
+    }
+  };
+
   return (
     <div className="page-content">
       <div className="staff-header">
@@ -86,6 +109,16 @@ function UsersPage() {
         2. Have them log in once to the app
         <br />
         3. Come back to this page to set their Role + Department
+        <br />
+        <br />
+        <strong>🔐 Password help:</strong>
+        <br />
+        • Users can change their own password via the sidebar
+        <br />
+        • Click <strong>📧 Reset PW</strong> to send them a reset email
+        <br />
+        • <em>Reset emails only work if the user has a real inbox — placeholder emails like
+        <code>sn-0439@funadhooairport.com</code> won't receive anything.</em>
       </div>
 
       <div className="staff-list">
@@ -100,7 +133,7 @@ function UsersPage() {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Department</th>
-                <th></th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -146,7 +179,14 @@ function UsersPage() {
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    <button
+                      className="reset-pw-btn"
+                      onClick={() => handleSendReset(u.email)}
+                      title="Send password reset email"
+                    >
+                      📧 Reset PW
+                    </button>
                     <button
                       className="delete-btn"
                       onClick={() => handleDelete(u.id, u.email)}

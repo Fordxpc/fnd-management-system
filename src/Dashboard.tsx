@@ -6,6 +6,7 @@ import RosterPage from './pages/RosterPage';
 import LeavePage from './pages/LeavePage';
 import HolidaysPage from './pages/HolidaysPage';
 import UsersPage from './pages/UsersPage';
+import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
@@ -13,6 +14,7 @@ const USER_ADMIN_ROLES = ['developer', 'manager'];
 function Dashboard({ user, logout }: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
 
   const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
   const canManageUsers = USER_ADMIN_ROLES.includes(profile?.role || '');
@@ -100,6 +102,12 @@ function Dashboard({ user, logout }: any) {
 
         <div className="sidebar-footer">
           <p className="user-email">{user?.email}</p>
+          <button
+            className="change-pw-btn"
+            onClick={() => setShowPasswordModal(true)}
+          >
+            🔐 Change Password
+          </button>
           <button className="logout-btn" onClick={logout}>Log Out</button>
         </div>
       </aside>
@@ -107,6 +115,10 @@ function Dashboard({ user, logout }: any) {
       <main className="main-content">
         {pages[currentPage]}
       </main>
+
+      {showPasswordModal && (
+        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
+      )}
     </div>
   );
 }
