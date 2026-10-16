@@ -3,8 +3,10 @@ import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 // ===== COMPLETE FND STAFF MASTER LIST =====
-// Import skips any SN that already exists in the database.
+// Import skips any SN that already exists.
 // Administration is NOT a roster department — those staff don't appear in the duty roster.
+// ⚠ Resigned staff (SN-0482 Hawwa Fulhu, SN-0984 Hussain Saiman) have been REMOVED.
+// ⚠ SN-0758 (duplicate of Mohamed Adam) has been REMOVED.
 const FND_ALL_STAFF = [
   // ---------- Ground Operations ----------
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -40,7 +42,6 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0728', name: 'Ibrahim Khalaf Ahmed', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0731', name: 'Aishath Maiha Adam', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0732', name: 'Aishath Sahana', position: 'Security Agent', department: 'Security' },
-  { sn: 'SN-0755', name: 'Adam Maaidh', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0995', name: 'Mohamed Vishal', position: 'Assistant Security Officer', department: 'Security' },
 
   // ---------- Fire & Rescue ----------
@@ -52,7 +53,6 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0434', name: 'Ismail Shafeeq', position: 'Junior Firefighter', department: 'Fire & Rescue' },
   { sn: 'SN-0435', name: 'Ahmed Naahee', position: 'Junior Firefighter', department: 'Fire & Rescue' },
   { sn: 'SN-0959', name: 'Vishan Mohamed', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
-  { sn: 'SN-0960', name: 'Ahmed Ilham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
   { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
 
   // ---------- Administration (NO ROSTER) ----------
@@ -63,7 +63,6 @@ const FND_ALL_STAFF = [
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
-// Senior Fire Fighter and Fire Fighter removed per your request
 const DESIGNATIONS = [
   'Airport Manager',
   'Assistant Manager',
@@ -156,8 +155,12 @@ function StaffPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this staff member?')) return;
+  const handleDelete = async (id: string, name: string, sn: string) => {
+    const ok = window.confirm(
+      `Delete ${name} (${sn || 'no SN'})?\n\n` +
+      `This permanently removes them from the staff list.`
+    );
+    if (!ok) return;
     await deleteDoc(doc(db, 'staff', id));
   };
 
@@ -171,8 +174,7 @@ function StaffPage() {
 
     if (missing.length === 0) {
       alert(
-        `✅ All ${FND_ALL_STAFF.length} staff members from the master list are already in the system.\n\n` +
-        `No new records to add.`
+        `✅ All ${FND_ALL_STAFF.length} staff members from the master list are already in the system.`
       );
       return;
     }
@@ -186,7 +188,7 @@ function StaffPage() {
       .join('\n');
 
     const ok = window.confirm(
-      `This will add ${missing.length} new staff member(s) from the master FND list.\n\n` +
+      `This will add ${missing.length} new staff member(s).\n\n` +
       `Breakdown by department:\n${breakdown}\n\n` +
       `Existing staff (matched by SN) will be skipped.\n\n` +
       `Continue?`
@@ -225,6 +227,9 @@ function StaffPage() {
     setImporting(false);
   };
 
+  // Auto-hide import button if staff list is not empty
+  const showImportButton = staff.length === 0;
+
   const visibleStaff = staff
     .filter((s) => {
       if (selectedDept === 'all') return true;
@@ -249,13 +254,15 @@ function StaffPage() {
           </span>
         </h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            className="export-btn jpg-btn"
-            onClick={handleImportAll}
-            disabled={importing}
-          >
-            {importing ? 'Importing...' : '📥 Import All FND Staff'}
-          </button>
+          {showImportButton && (
+            <button
+              className="export-btn jpg-btn"
+              onClick={handleImportAll}
+              disabled={importing}
+            >
+              {importing ? 'Importing...' : '📥 Import All FND Staff'}
+            </button>
+          )}
           <button
             className="add-staff-btn"
             onClick={() => (showForm ? handleCancelForm() : setShowForm(true))}
@@ -409,7 +416,10 @@ function StaffPage() {
                     >
                       Edit
                     </button>
-                    <button className="delete-btn" onClick={() => handleDelete(s.id)}>
+                    <button
+                      className="delete-btn"
+                      onClick={() => handleDelete(s.id, s.name, s.sn)}
+                    >
                       Delete
                     </button>
                   </td>
