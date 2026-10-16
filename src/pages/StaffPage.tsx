@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '../auth';
 
 const FND_ALL_STAFF = [
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -73,7 +74,13 @@ const DESIGNATIONS = [
   'Cleaning & Gardening',
 ];
 
+// Only these roles can see Notes
+const NOTES_ROLES = ['developer'];
+
 function StaffPage() {
+  const { profile } = useAuth();
+  const canSeeNotes = NOTES_ROLES.includes(profile?.role || '');
+
   const [staff, setStaff] = useState<any[]>([]);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
@@ -93,6 +100,7 @@ function StaffPage() {
   const [position, setPosition] = useState<string>('');
   const [isSMT, setIsSMT] = useState<boolean>(false);
   const [balanceVisible, setBalanceVisible] = useState<boolean>(false);
+  const [notes, setNotes] = useState<string>('');
   const [basicSalary, setBasicSalary] = useState<string>('');
   const [dailyAllowance, setDailyAllowance] = useState<string>('');
   const [holidayAllowanceRate, setHolidayAllowanceRate] = useState<string>('');
@@ -111,6 +119,7 @@ function StaffPage() {
     setNid(''); setJoinDate(''); setPhone(''); setGender('');
     setDepartment('Ground Operations'); setPosition('');
     setIsSMT(false); setBalanceVisible(false);
+    setNotes('');
     setBasicSalary(''); setDailyAllowance('');
     setHolidayAllowanceRate(''); setBankAccount('');
     setEditingId(null);
@@ -123,7 +132,7 @@ function StaffPage() {
       return;
     }
     try {
-      const payload = {
+      const payload: any = {
         sn, name, email, personalEmail, nid, joinDate, phone, gender,
         department, position, isSMT, balanceVisible,
         basicSalary: Number(basicSalary) || 0,
@@ -131,6 +140,10 @@ function StaffPage() {
         holidayAllowanceRate: Number(holidayAllowanceRate) || 0,
         bankAccount,
       };
+      // Only developer can update notes
+      if (canSeeNotes) {
+        payload.notes = notes;
+      }
       if (editingId) {
         await updateDoc(doc(db, 'staff', editingId), payload);
         alert('Staff updated successfully!');
@@ -163,6 +176,7 @@ function StaffPage() {
     setPosition(s.position || '');
     setIsSMT(!!s.isSMT);
     setBalanceVisible(!!s.balanceVisible);
+    setNotes(s.notes || '');
     setBasicSalary(s.basicSalary ? String(s.basicSalary) : '');
     setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : '');
     setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : '');
@@ -210,6 +224,7 @@ function StaffPage() {
           position: member.position,
           isSMT: false,
           balanceVisible: false,
+          notes: '',
           basicSalary: 0,
           dailyAllowance: 0,
           holidayAllowanceRate: 0,
@@ -341,6 +356,29 @@ function StaffPage() {
           <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
           <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
 
+          {canSeeNotes && (
+            <>
+              <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>
+                📝 Internal Notes <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(developer only)</span>
+              </div>
+              <textarea
+                placeholder="Internal notes about this staff member (only visible to developer)"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                style={{
+                  gridColumn: 'span 2',
+                  padding: '10px',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  fontFamily: 'inherit',
+                  fontSize: '14px',
+                  resize: 'vertical',
+                }}
+              />
+            </>
+          )}
+
           <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e', fontSize: '14px' }}>
             <input type="checkbox" checked={isSMT} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
             ⭐ Mark as SMT (Senior Management Team) member
@@ -383,6 +421,7 @@ function StaffPage() {
                       <th>Holiday Allow.</th>
                     </>
                   )}
+                  {canSeeNotes && <th>Notes</th>}
                   <th>SMT</th>
                   <th>👁</th>
                   <th></th>
@@ -409,6 +448,19 @@ function StaffPage() {
                           {s.holidayAllowanceRate ? `MVR ${Number(s.holidayAllowanceRate).toLocaleString()}` : '—'}
                         </td>
                       </>
+                    )}
+                    {canSeeNotes && (
+                      <td
+                        style={{
+                          maxWidth: '200px',
+                          fontSize: '12px',
+                          color: s.notes ? '#1e293b' : '#94a3b8',
+                          whiteSpace: 'normal',
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {s.notes || '—'}
+                      </td>
                     )}
                     <td style={{ textAlign: 'center', fontSize: '16px' }}>
                       {s.isSMT ? '⭐' : '—'}
