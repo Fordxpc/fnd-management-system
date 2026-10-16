@@ -5,6 +5,7 @@ import StaffPage from './pages/StaffPage';
 import RosterPage from './pages/RosterPage';
 import LeavePage from './pages/LeavePage';
 import HolidaysPage from './pages/HolidaysPage';
+import OvertimePage from './pages/OvertimePage';
 import UsersPage from './pages/UsersPage';
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
@@ -24,9 +25,9 @@ function Dashboard({ user, logout }: any) {
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
+    overtime: <OvertimePage />,
     holidays: <HolidaysPage />,
     users: <UsersPage />,
-    overtime: <div className="page-content"><h2>Overtime</h2><p>Coming soon...</p></div>,
     settings: <div className="page-content"><h2>Settings</h2><p>Coming soon...</p></div>,
   };
 
@@ -70,17 +71,17 @@ function Dashboard({ user, logout }: any) {
           </button>
 
           <button
-            className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('holidays')}
-          >
-            🎉 Holidays
-          </button>
-
-          <button
             className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'}
             onClick={() => setCurrentPage('overtime')}
           >
             ⏰ Overtime
+          </button>
+
+          <button
+            className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setCurrentPage('holidays')}
+          >
+            🎉 Holidays
           </button>
 
           {canManageUsers && (
@@ -102,10 +103,7 @@ function Dashboard({ user, logout }: any) {
 
         <div className="sidebar-footer">
           <p className="user-email">{user?.email}</p>
-          <button
-            className="change-pw-btn"
-            onClick={() => setShowPasswordModal(true)}
-          >
+          <button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>
             🔐 Change Password
           </button>
           <button className="logout-btn" onClick={logout}>Log Out</button>
