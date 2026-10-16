@@ -6,13 +6,15 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../auth';
 
-const LEAVE_TYPES = [
+// ===== Leave Types & Entitlements =====
+const ALL_LEAVE_TYPES = [
   'ANNUAL LEAVE',
   'SICK LEAVE',
   'SICK LEAVE / MC',
   'NO PAY LEAVE',
-  'PATERNITY LEAVE',
+  'PRE-MATERNITY LEAVE',
   'MATERNITY LEAVE',
+  'PATERNITY LEAVE',
   'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
 
@@ -21,10 +23,16 @@ const ENTITLEMENTS: { [key: string]: number } = {
   'SICK LEAVE': 15,
   'SICK LEAVE / MC': 15,
   'FAMILY RESPONSIBILITY LEAVE (FRL)': 10,
-  'PATERNITY LEAVE': 0,
-  'MATERNITY LEAVE': 0,
-  'NO PAY LEAVE': 0,
+  'PRE-MATERNITY LEAVE': 15,
+  'MATERNITY LEAVE': 180,
+  'PATERNITY LEAVE': 30,
+  'NO PAY LEAVE': 365,
 };
+
+// Female-only leave types
+const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
+// Male-only leave types
+const MALE_ONLY = ['PATERNITY LEAVE'];
 
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
@@ -126,8 +134,17 @@ const getYearsOfService = (joinDateStr: string): number => {
   return years;
 };
 
-// ====== Compute a staff member's leave usage for a given type ======
-// Returns: used count relevant to the current balance period
+// Get leave types allowed for a specific staff member based on gender
+const getLeaveTypesForStaff = (staffMember: any): string[] => {
+  const g = (staffMember?.gender || '').toLowerCase();
+  if (!g) return ALL_LEAVE_TYPES; // no gender set → show all (safe fallback)
+  return ALL_LEAVE_TYPES.filter((t) => {
+    if (g === 'female' && MALE_ONLY.includes(t)) return false;
+    if (g === 'male' && FEMALE_ONLY.includes(t)) return false;
+    return true;
+  });
+};
+
 const computeUsedDays = (
   staffId: string,
   joinDate: string,
@@ -151,11 +168,9 @@ const computeUsedDays = (
         r.leaveType === leaveType
     )
     .forEach((r: any) => {
-      // Annual leave for new hires (< 2 years): count ALL usage since join
       if (isAnnual && !renews) {
         used += r.days || 0;
       } else if (ly) {
-        // All others: only current leave year
         const lyStart = formatDate(ly.start);
         const lyEnd = formatDate(ly.end);
         if ((r.startDate || '') >= lyStart && (r.startDate || '') <= lyEnd) {
@@ -178,6 +193,9 @@ function LeavePage() {
   const [tab, setTab] = useState<string>('pending');
   const [filterDept, setFilterDept] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
+
+  const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
+  const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
@@ -223,8 +241,16 @@ function LeavePage() {
   const isDeptManager: boolean =
     canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
 
-  // SMT members + managers + developer see a department balance panel
   const canSeeDeptBalances = isDeptManager;
+
+  // ===== Balance visibility rule =====
+  // Regular staff see their own balance ONLY if admin enabled balanceVisible on their record.
+  // Management (developer, manager, admin, smt) always see it.
+  const isManagementProfile =
+    isDeptManager ||
+    ['developer', 'manager', 'admin', 'smt'].includes(profile?.role || '');
+
+  const canSeeMyBalance = isManagementProfile || myStaff?.balanceVisible === true;
 
   const canApproveRequest = (r: any): boolean => {
     if (canApproveAny) return true;
@@ -253,26 +279,25 @@ function LeavePage() {
       (b.requestedAt || '').localeCompare(a.requestedAt || '')
     );
 
-  // ====== Balance for the logged-in user ======
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
   const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
 
+  // Leave types allowed for the currently selected staff
+  const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
+  const allowedLeaveTypes = getLeaveTypesForStaff(selectedStaff || myStaff);
+
   const usedDays: { [key: string]: number } = {};
-  LEAVE_TYPES.forEach((t) => {
+  ALL_LEAVE_TYPES.forEach((t) => {
     usedDays[t] = myStaff
       ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests)
       : 0;
   });
 
-  // ====== Department balances (for SMT / Managers) ======
-  // Show staff from departments this user can see:
-  // - Developer / Manager / Global approver → all departments
-  // - SMT (dept approver) → their own department only
   const deptBalanceStaff = staffList
     .filter((s: any) => {
-      if (s.isSMT === true) return false; // hide SMT members from this list
-      if (s.department === 'Administration') return false; // hide administration
+      if (s.isSMT === true) return false;
+      if (s.department === 'Administration') return false;
       if (canApproveAny || isDeveloper) return true;
       if (myStaff?.department) return s.department === myStaff.department;
       return false;
@@ -292,6 +317,17 @@ function LeavePage() {
     const staff = staffList.find((s) => s.id === selectedStaffId);
     if (!staff) {
       alert('Staff not found');
+      return;
+    }
+
+    // Gender check
+    const g = (staff.gender || '').toLowerCase();
+    if (g === 'female' && MALE_ONLY.includes(leaveType)) {
+      alert(`${leaveType} is only available for male staff.`);
+      return;
+    }
+    if (g === 'male' && FEMALE_ONLY.includes(leaveType)) {
+      alert(`${leaveType} is only available for female staff.`);
       return;
     }
 
@@ -345,6 +381,7 @@ function LeavePage() {
         staffName: staff.name,
         staffDepartment: staff.department,
         staffSN: staff.sn || '',
+        staffGender: staff.gender || '',
         staffIsSMT: staff.isSMT === true,
         leaveType,
         startDate,
@@ -453,7 +490,6 @@ function LeavePage() {
     }
   };
 
-  // Preview
   let previewDays = 0;
   let previewFridays = 0;
   let previewHolidays = 0;
@@ -482,152 +518,185 @@ function LeavePage() {
       </div>
 
       {/* ====== My Balance ====== */}
-      {myStaff && (
-        <div className="leave-balance-card">
-          <h3>
-            My Leave Balance
-            {myLeaveYear && myIsAnnualRenewing && (
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '8px' }}>
-                ({formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))})
-              </span>
-            )}
-            {myStaff.joinDate && !myIsAnnualRenewing && (
-              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '8px' }}>
-                (New hire — {ANNUAL_LEAVE_SERVICE_YEARS - myYearsOfService} year(s) until annual renewal)
-              </span>
-            )}
-          </h3>
+      {myStaff && canSeeMyBalance && (
+        <div className="collapsible-card">
+          <button
+            className="collapsible-header"
+            onClick={() => setShowMyBalance(!showMyBalance)}
+          >
+            <span>
+              <strong>My Leave Balance</strong>
+              {myLeaveYear && myIsAnnualRenewing && (
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500, marginLeft: '10px' }}>
+                  {formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))}
+                </span>
+              )}
+              {myStaff.joinDate && !myIsAnnualRenewing && (
+                <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500, marginLeft: '10px' }}>
+                  New hire — {ANNUAL_LEAVE_SERVICE_YEARS - myYearsOfService} yr(s) until renewal
+                </span>
+              )}
+            </span>
+            <span className="collapsible-toggle">{showMyBalance ? '▼' : '▶'}</span>
+          </button>
 
-          {!myStaff.joinDate && (
-            <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', fontSize: '13px', fontWeight: 600 }}>
-              ⚠️ Your Join Date is not set. Please ask an administrator to add it.
+          {showMyBalance && (
+            <div className="collapsible-body">
+              {!myStaff.joinDate && (
+                <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', fontSize: '13px', fontWeight: 600 }}>
+                  ⚠️ Your Join Date is not set. Please ask an administrator to add it.
+                </div>
+              )}
+
+              <div className="balance-grid">
+                {getLeaveTypesForStaff(myStaff).map((t) => {
+                  const isAnnual = t === 'ANNUAL LEAVE';
+                  const entitlement = ENTITLEMENTS[t] || 0;
+                  const used = usedDays[t] || 0;
+
+                  if (isAnnual && !myIsAnnualRenewing && myStaff.joinDate) {
+                    const remaining = ANNUAL_LEAVE_TOTAL - used;
+                    return (
+                      <div key={t} className="balance-item">
+                        <span className="balance-label">{t}</span>
+                        <span className="balance-value">{remaining} / {ANNUAL_LEAVE_TOTAL} days</span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          One-time allocation
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const remaining = entitlement > 0 ? entitlement - used : null;
+                  return (
+                    <div key={t} className="balance-item">
+                      <span className="balance-label">{t}</span>
+                      <span className="balance-value">
+                        {remaining !== null ? `${remaining} / ${entitlement} days` : `${used} days used`}
+                      </span>
+                      {entitlement > 0 && (
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          {used} used • {entitlement} entitled
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
-
-          <div className="balance-grid">
-            {LEAVE_TYPES.map((t) => {
-              const isAnnual = t === 'ANNUAL LEAVE';
-              const entitlement = ENTITLEMENTS[t] || 0;
-              const used = usedDays[t] || 0;
-
-              if (isAnnual && !myIsAnnualRenewing && myStaff.joinDate) {
-                const remaining = ANNUAL_LEAVE_TOTAL - used;
-                return (
-                  <div key={t} className="balance-item">
-                    <span className="balance-label">{t}</span>
-                    <span className="balance-value">{remaining} / {ANNUAL_LEAVE_TOTAL} days</span>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      One-time allocation (until {ANNUAL_LEAVE_SERVICE_YEARS} yrs)
-                    </span>
-                  </div>
-                );
-              }
-
-              const remaining = entitlement > 0 ? entitlement - used : null;
-              return (
-                <div key={t} className="balance-item">
-                  <span className="balance-label">{t}</span>
-                  <span className="balance-value">
-                    {remaining !== null ? `${remaining} / ${entitlement} days` : `${used} days used`}
-                  </span>
-                  {entitlement > 0 && (
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      {used} used • {entitlement} entitled
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 
-      {/* ====== Department Balances (SMT / Manager / Developer) ====== */}
+      {/* Message for staff whose balance is hidden */}
+      {myStaff && !canSeeMyBalance && (
+        <div className="info-banner" style={{ background: '#fef3c7', borderLeftColor: '#f59e0b', color: '#92400e' }}>
+          🔒 <strong>Your leave balance is being reviewed.</strong> It will become visible once
+          approved by a supervisor or admin. You can still submit leave requests.
+        </div>
+      )}
+
+      {/* ====== Department Balances ====== */}
       {canSeeDeptBalances && deptBalanceStaff.length > 0 && (
-        <div className="leave-balance-card">
-          <h3>
-            {canApproveAny || isDeveloper
-              ? '👥 All Staff Leave Balances'
-              : `👥 ${myStaff?.department || ''} — Staff Leave Balances`}
-          </h3>
+        <div className="collapsible-card">
+          <button
+            className="collapsible-header"
+            onClick={() => setShowDeptBalances(!showDeptBalances)}
+          >
+            <span>
+              <strong>
+                {canApproveAny || isDeveloper
+                  ? '👥 All Staff Leave Balances'
+                  : `👥 ${myStaff?.department || ''} — Staff Leave Balances`}
+              </strong>
+              <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 500, marginLeft: '10px' }}>
+                ({deptBalanceStaff.length} staff)
+              </span>
+            </span>
+            <span className="collapsible-toggle">{showDeptBalances ? '▼' : '▶'}</span>
+          </button>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table className="dept-balance-table">
-              <thead>
-                <tr>
-                  <th>SN</th>
-                  <th>Name</th>
-                  <th>Dept</th>
-                  <th>Annual</th>
-                  <th>Sick</th>
-                  <th>MC</th>
-                  <th>FRL</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deptBalanceStaff.map((s: any) => {
-                  const annualUsed = computeUsedDays(s.id, s.joinDate || '', 'ANNUAL LEAVE', requests);
-                  const sickUsed = computeUsedDays(s.id, s.joinDate || '', 'SICK LEAVE', requests);
-                  const mcUsed = computeUsedDays(s.id, s.joinDate || '', 'SICK LEAVE / MC', requests);
-                  const frlUsed = computeUsedDays(s.id, s.joinDate || '', 'FAMILY RESPONSIBILITY LEAVE (FRL)', requests);
-
-                  const years = s.joinDate ? getYearsOfService(s.joinDate) : 0;
-                  const renews = years >= ANNUAL_LEAVE_SERVICE_YEARS;
-
-                  const annualRemaining = ANNUAL_LEAVE_TOTAL - annualUsed;
-                  const sickRemaining = 15 - sickUsed;
-                  const mcRemaining = 15 - mcUsed;
-                  const frlRemaining = 10 - frlUsed;
-
-                  const warn = (remaining: number) => remaining <= 3 && remaining >= 0;
-                  const over = (remaining: number) => remaining < 0;
-
-                  return (
-                    <tr key={s.id}>
-                      <td>{s.sn || '—'}</td>
-                      <td>
-                        <strong>{s.name}</strong>
-                        {!renews && s.joinDate && (
-                          <span style={{ fontSize: '10px', color: '#92400e', marginLeft: '6px' }}>
-                            (new hire)
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: '12px' }}>{s.department}</td>
-                      <td style={{
-                        fontWeight: 600,
-                        color: over(annualRemaining) ? '#991b1b' : warn(annualRemaining) ? '#92400e' : '#065f46',
-                      }}>
-                        {annualRemaining} / {ANNUAL_LEAVE_TOTAL}
-                      </td>
-                      <td style={{
-                        fontWeight: 600,
-                        color: over(sickRemaining) ? '#991b1b' : warn(sickRemaining) ? '#92400e' : '#065f46',
-                      }}>
-                        {sickRemaining} / 15
-                      </td>
-                      <td style={{
-                        fontWeight: 600,
-                        color: over(mcRemaining) ? '#991b1b' : warn(mcRemaining) ? '#92400e' : '#065f46',
-                      }}>
-                        {mcRemaining} / 15
-                      </td>
-                      <td style={{
-                        fontWeight: 600,
-                        color: over(frlRemaining) ? '#991b1b' : warn(frlRemaining) ? '#92400e' : '#065f46',
-                      }}>
-                        {frlRemaining} / 10
-                      </td>
+          {showDeptBalances && (
+            <div className="collapsible-body">
+              <div style={{ overflowX: 'auto' }}>
+                <table className="dept-balance-table">
+                  <thead>
+                    <tr>
+                      <th>SN</th>
+                      <th>Name</th>
+                      <th>Dept</th>
+                      <th>Annual</th>
+                      <th>Sick</th>
+                      <th>MC</th>
+                      <th>FRL</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {deptBalanceStaff.map((s: any) => {
+                      const annualUsed = computeUsedDays(s.id, s.joinDate || '', 'ANNUAL LEAVE', requests);
+                      const sickUsed = computeUsedDays(s.id, s.joinDate || '', 'SICK LEAVE', requests);
+                      const mcUsed = computeUsedDays(s.id, s.joinDate || '', 'SICK LEAVE / MC', requests);
+                      const frlUsed = computeUsedDays(s.id, s.joinDate || '', 'FAMILY RESPONSIBILITY LEAVE (FRL)', requests);
 
-          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '10px' }}>
-            <strong>Legend:</strong> Green = healthy balance · Amber = 3 days or fewer remaining · Red = overused
-          </div>
+                      const years = s.joinDate ? getYearsOfService(s.joinDate) : 0;
+                      const renews = years >= ANNUAL_LEAVE_SERVICE_YEARS;
+
+                      const annualRemaining = ANNUAL_LEAVE_TOTAL - annualUsed;
+                      const sickRemaining = 15 - sickUsed;
+                      const mcRemaining = 15 - mcUsed;
+                      const frlRemaining = 10 - frlUsed;
+
+                      const warn = (remaining: number) => remaining <= 3 && remaining >= 0;
+                      const over = (remaining: number) => remaining < 0;
+
+                      return (
+                        <tr key={s.id}>
+                          <td>{s.sn || '—'}</td>
+                          <td>
+                            <strong>{s.name}</strong>
+                            {!renews && s.joinDate && (
+                              <span style={{ fontSize: '10px', color: '#92400e', marginLeft: '6px' }}>
+                                (new hire)
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ fontSize: '12px' }}>{s.department}</td>
+                          <td style={{
+                            fontWeight: 600,
+                            color: over(annualRemaining) ? '#991b1b' : warn(annualRemaining) ? '#92400e' : '#065f46',
+                          }}>
+                            {annualRemaining} / {ANNUAL_LEAVE_TOTAL}
+                          </td>
+                          <td style={{
+                            fontWeight: 600,
+                            color: over(sickRemaining) ? '#991b1b' : warn(sickRemaining) ? '#92400e' : '#065f46',
+                          }}>
+                            {sickRemaining} / 15
+                          </td>
+                          <td style={{
+                            fontWeight: 600,
+                            color: over(mcRemaining) ? '#991b1b' : warn(mcRemaining) ? '#92400e' : '#065f46',
+                          }}>
+                            {mcRemaining} / 15
+                          </td>
+                          <td style={{
+                            fontWeight: 600,
+                            color: over(frlRemaining) ? '#991b1b' : warn(frlRemaining) ? '#92400e' : '#065f46',
+                          }}>
+                            {frlRemaining} / 10
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '10px' }}>
+                <strong>Legend:</strong> Green = healthy · Amber = 3 days or fewer remaining · Red = overused
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -658,7 +727,7 @@ function LeavePage() {
           )}
 
           <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
-            {LEAVE_TYPES.map((t) => (
+            {allowedLeaveTypes.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
@@ -682,6 +751,11 @@ function LeavePage() {
 
           <div style={{ gridColumn: 'span 2', fontSize: '13px', color: '#475569', padding: '10px 12px', background: '#f1f5f9', borderRadius: '6px' }}>
             <div><strong>Countable days:</strong> {previewDays}</div>
+            {selectedStaff && !selectedStaff.gender && (
+              <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                ⚠️ {selectedStaff.name}'s gender is not set — the leave type list may show incorrect options.
+              </div>
+            )}
             {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (
               <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
                 ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded from balance

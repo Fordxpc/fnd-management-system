@@ -3,8 +3,6 @@ import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 
 // ===== COMPLETE FND STAFF MASTER LIST =====
-// Import skips any SN that already exists.
-// Administration is NOT a roster department.
 const FND_ALL_STAFF = [
   // ---------- Ground Operations ----------
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -95,9 +93,11 @@ function StaffPage() {
   const [nid, setNid] = useState<string>('');
   const [joinDate, setJoinDate] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
+  const [gender, setGender] = useState<string>('');
   const [department, setDepartment] = useState<string>('Ground Operations');
   const [position, setPosition] = useState<string>('');
   const [isSMT, setIsSMT] = useState<boolean>(false);
+  const [balanceVisible, setBalanceVisible] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, 'staff'), (snapshot) => {
@@ -115,9 +115,11 @@ function StaffPage() {
     setNid('');
     setJoinDate('');
     setPhone('');
+    setGender('');
     setDepartment('Ground Operations');
     setPosition('');
     setIsSMT(false);
+    setBalanceVisible(false);
     setEditingId(null);
   };
 
@@ -129,7 +131,8 @@ function StaffPage() {
     }
     try {
       const payload = {
-        sn, name, email, personalEmail, nid, joinDate, phone, department, position, isSMT,
+        sn, name, email, personalEmail, nid, joinDate, phone, gender,
+        department, position, isSMT, balanceVisible,
       };
       if (editingId) {
         await updateDoc(doc(db, 'staff', editingId), payload);
@@ -158,9 +161,11 @@ function StaffPage() {
     setNid(s.nid || '');
     setJoinDate(s.joinDate || '');
     setPhone(s.phone || '');
+    setGender(s.gender || '');
     setDepartment(s.department || 'Ground Operations');
     setPosition(s.position || '');
     setIsSMT(!!s.isSMT);
+    setBalanceVisible(!!s.balanceVisible);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -184,11 +189,7 @@ function StaffPage() {
       alert(`✅ All ${FND_ALL_STAFF.length} staff members are already in the system.`);
       return;
     }
-
-    const ok = window.confirm(
-      `Add ${missing.length} new staff member(s)?\n\n` +
-      `Existing staff (matched by SN) will be skipped.`
-    );
+    const ok = window.confirm(`Add ${missing.length} new staff member(s)?`);
     if (!ok) return;
 
     setImporting(true);
@@ -203,9 +204,11 @@ function StaffPage() {
           nid: '',
           joinDate: '',
           phone: '',
+          gender: '',
           department: member.department,
           position: member.position,
           isSMT: false,
+          balanceVisible: false,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -300,9 +303,13 @@ function StaffPage() {
           <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
           <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
           <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <select value={gender} onChange={(e) => setGender(e.target.value)}>
+            <option value="">Gender — select...</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
           <input
             type="date"
-            placeholder="Join Date"
             value={joinDate}
             onChange={(e) => setJoinDate(e.target.value)}
             title="Join Date"
@@ -324,7 +331,6 @@ function StaffPage() {
             placeholder="Personal Email"
             value={personalEmail}
             onChange={(e) => setPersonalEmail(e.target.value)}
-            style={{ gridColumn: 'span 2' }}
           />
 
           {/* Job Info section */}
@@ -368,6 +374,31 @@ function StaffPage() {
             ⭐ Mark as SMT (Senior Management Team) member
           </label>
 
+          <label
+            style={{
+              gridColumn: 'span 2',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px 12px',
+              background: '#eff6ff',
+              border: '1px solid #2563eb',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 600,
+              color: '#1e40af',
+              fontSize: '14px',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={balanceVisible}
+              onChange={(e) => setBalanceVisible(e.target.checked)}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            👁 Allow this staff member to view their own leave balance
+          </label>
+
           <button type="submit">
             {editingId ? '💾 Save Changes' : 'Save Staff Member'}
           </button>
@@ -390,11 +421,11 @@ function StaffPage() {
                 <th>Name</th>
                 <th>Designation</th>
                 <th>Department</th>
+                <th>Gender</th>
                 <th>Join Date</th>
                 <th>NID</th>
-                <th>Work Email</th>
-                <th>Personal Email</th>
                 <th>SMT</th>
+                <th>👁 Balance</th>
                 <th></th>
               </tr>
             </thead>
@@ -405,12 +436,14 @@ function StaffPage() {
                   <td><strong>{s.name}</strong></td>
                   <td>{s.position || '—'}</td>
                   <td>{s.department}</td>
+                  <td>{s.gender || '—'}</td>
                   <td>{s.joinDate || '—'}</td>
                   <td>{s.nid || '—'}</td>
-                  <td style={{ fontSize: '12px' }}>{s.email}</td>
-                  <td style={{ fontSize: '12px' }}>{s.personalEmail || '—'}</td>
                   <td style={{ textAlign: 'center', fontSize: '16px' }}>
                     {s.isSMT ? '⭐' : '—'}
+                  </td>
+                  <td style={{ textAlign: 'center', fontSize: '16px' }}>
+                    {s.balanceVisible ? '👁' : '🚫'}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
