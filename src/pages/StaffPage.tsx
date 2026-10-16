@@ -4,9 +4,7 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'fireb
 
 // ===== COMPLETE FND STAFF MASTER LIST =====
 // Import skips any SN that already exists.
-// Administration is NOT a roster department — those staff don't appear in the duty roster.
-// ⚠ Resigned staff (SN-0482 Hawwa Fulhu, SN-0984 Hussain Saiman) have been REMOVED.
-// ⚠ SN-0758 (duplicate of Mohamed Adam) has been REMOVED.
+// Administration is NOT a roster department.
 const FND_ALL_STAFF = [
   // ---------- Ground Operations ----------
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -42,6 +40,7 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0728', name: 'Ibrahim Khalaf Ahmed', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0731', name: 'Aishath Maiha Adam', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0732', name: 'Aishath Sahana', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0755', name: 'Adam Maaidh', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0995', name: 'Mohamed Vishal', position: 'Assistant Security Officer', department: 'Security' },
 
   // ---------- Fire & Rescue ----------
@@ -53,6 +52,7 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0434', name: 'Ismail Shafeeq', position: 'Junior Firefighter', department: 'Fire & Rescue' },
   { sn: 'SN-0435', name: 'Ahmed Naahee', position: 'Junior Firefighter', department: 'Fire & Rescue' },
   { sn: 'SN-0959', name: 'Vishan Mohamed', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0960', name: 'Ahmed Ilham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
   { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
 
   // ---------- Administration (NO ROSTER) ----------
@@ -91,6 +91,9 @@ function StaffPage() {
   const [sn, setSn] = useState<string>('');
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
+  const [personalEmail, setPersonalEmail] = useState<string>('');
+  const [nid, setNid] = useState<string>('');
+  const [joinDate, setJoinDate] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [department, setDepartment] = useState<string>('Ground Operations');
   const [position, setPosition] = useState<string>('');
@@ -108,6 +111,9 @@ function StaffPage() {
     setSn('');
     setName('');
     setEmail('');
+    setPersonalEmail('');
+    setNid('');
+    setJoinDate('');
     setPhone('');
     setDepartment('Ground Operations');
     setPosition('');
@@ -122,14 +128,15 @@ function StaffPage() {
       return;
     }
     try {
+      const payload = {
+        sn, name, email, personalEmail, nid, joinDate, phone, department, position, isSMT,
+      };
       if (editingId) {
-        await updateDoc(doc(db, 'staff', editingId), {
-          sn, name, email, phone, department, position, isSMT,
-        });
+        await updateDoc(doc(db, 'staff', editingId), payload);
         alert('Staff updated successfully!');
       } else {
         await addDoc(collection(db, 'staff'), {
-          sn, name, email, phone, department, position, isSMT,
+          ...payload,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -147,6 +154,9 @@ function StaffPage() {
     setSn(s.sn || '');
     setName(s.name || '');
     setEmail(s.email || '');
+    setPersonalEmail(s.personalEmail || '');
+    setNid(s.nid || '');
+    setJoinDate(s.joinDate || '');
     setPhone(s.phone || '');
     setDepartment(s.department || 'Ground Operations');
     setPosition(s.position || '');
@@ -157,8 +167,7 @@ function StaffPage() {
 
   const handleDelete = async (id: string, name: string, sn: string) => {
     const ok = window.confirm(
-      `Delete ${name} (${sn || 'no SN'})?\n\n` +
-      `This permanently removes them from the staff list.`
+      `Delete ${name} (${sn || 'no SN'})?\n\nThis permanently removes them from the staff list.`
     );
     if (!ok) return;
     await deleteDoc(doc(db, 'staff', id));
@@ -171,63 +180,44 @@ function StaffPage() {
 
   const handleImportAll = async () => {
     const missing = FND_ALL_STAFF.filter((m) => !staff.some((s) => s.sn === m.sn));
-
     if (missing.length === 0) {
-      alert(
-        `✅ All ${FND_ALL_STAFF.length} staff members from the master list are already in the system.`
-      );
+      alert(`✅ All ${FND_ALL_STAFF.length} staff members are already in the system.`);
       return;
     }
 
-    const byDept: { [key: string]: number } = {};
-    missing.forEach((m) => {
-      byDept[m.department] = (byDept[m.department] || 0) + 1;
-    });
-    const breakdown = Object.entries(byDept)
-      .map(([dept, count]) => `  • ${dept}: ${count}`)
-      .join('\n');
-
     const ok = window.confirm(
-      `This will add ${missing.length} new staff member(s).\n\n` +
-      `Breakdown by department:\n${breakdown}\n\n` +
-      `Existing staff (matched by SN) will be skipped.\n\n` +
-      `Continue?`
+      `Add ${missing.length} new staff member(s)?\n\n` +
+      `Existing staff (matched by SN) will be skipped.`
     );
     if (!ok) return;
 
     setImporting(true);
     let added = 0;
-    let failed = 0;
     try {
       for (const member of missing) {
-        try {
-          await addDoc(collection(db, 'staff'), {
-            sn: member.sn,
-            name: member.name,
-            email: `${member.sn.toLowerCase()}@funadhooairport.com`,
-            phone: '',
-            department: member.department,
-            position: member.position,
-            isSMT: false,
-            status: 'active',
-            createdAt: new Date().toISOString(),
-          });
-          added++;
-        } catch (err) {
-          failed++;
-        }
+        await addDoc(collection(db, 'staff'), {
+          sn: member.sn,
+          name: member.name,
+          email: `${member.sn.toLowerCase()}@funadhooairport.com`,
+          personalEmail: '',
+          nid: '',
+          joinDate: '',
+          phone: '',
+          department: member.department,
+          position: member.position,
+          isSMT: false,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+        });
+        added++;
       }
-      alert(
-        `✅ Imported ${added} staff member(s).` +
-        (failed > 0 ? `\n⚠ ${failed} record(s) failed.` : '')
-      );
+      alert(`✅ Imported ${added} staff member(s).`);
     } catch (error: any) {
       alert('Import failed: ' + error.message);
     }
     setImporting(false);
   };
 
-  // Auto-hide import button if staff list is not empty
   const showImportButton = staff.length === 0;
 
   const visibleStaff = staff
@@ -255,11 +245,7 @@ function StaffPage() {
         </h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {showImportButton && (
-            <button
-              className="export-btn jpg-btn"
-              onClick={handleImportAll}
-              disabled={importing}
-            >
+            <button className="export-btn jpg-btn" onClick={handleImportAll} disabled={importing}>
               {importing ? 'Importing...' : '📥 Import All FND Staff'}
             </button>
           )}
@@ -306,37 +292,51 @@ function StaffPage() {
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
             {editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}
           </div>
+
+          {/* Personal Info section */}
+          <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '4px' }}>
+            👤 Personal Information
+          </div>
+          <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
+          <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
+          <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <input
-            placeholder="SN Number (e.g. SN-0439)"
-            value={sn}
-            onChange={(e) => setSn(e.target.value)}
+            type="date"
+            placeholder="Join Date"
+            value={joinDate}
+            onChange={(e) => setJoinDate(e.target.value)}
+            title="Join Date"
           />
           <input
-            placeholder="Full Name *"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
+            placeholder="NID (National ID)"
+            value={nid}
+            onChange={(e) => setNid(e.target.value)}
           />
           <input
             type="email"
-            placeholder="Email *"
+            placeholder="Work Email *"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
           <input
-            placeholder="Phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            type="email"
+            placeholder="Personal Email"
+            value={personalEmail}
+            onChange={(e) => setPersonalEmail(e.target.value)}
+            style={{ gridColumn: 'span 2' }}
           />
 
+          {/* Job Info section */}
+          <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '8px' }}>
+            💼 Job Information
+          </div>
           <input
             list="designation-options"
             placeholder="Designation (type or pick from list)"
             value={position}
             onChange={(e) => setPosition(e.target.value)}
           />
-
           <select value={department} onChange={(e) => setDepartment(e.target.value)}>
             {DEPARTMENTS.map((d) => (
               <option key={d} value={d}>{d}</option>
@@ -388,10 +388,12 @@ function StaffPage() {
               <tr>
                 <th>SN</th>
                 <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
                 <th>Designation</th>
                 <th>Department</th>
+                <th>Join Date</th>
+                <th>NID</th>
+                <th>Work Email</th>
+                <th>Personal Email</th>
                 <th>SMT</th>
                 <th></th>
               </tr>
@@ -401,25 +403,20 @@ function StaffPage() {
                 <tr key={s.id}>
                   <td>{s.sn || '—'}</td>
                   <td><strong>{s.name}</strong></td>
-                  <td>{s.email}</td>
-                  <td>{s.phone || '—'}</td>
                   <td>{s.position || '—'}</td>
                   <td>{s.department}</td>
+                  <td>{s.joinDate || '—'}</td>
+                  <td>{s.nid || '—'}</td>
+                  <td style={{ fontSize: '12px' }}>{s.email}</td>
+                  <td style={{ fontSize: '12px' }}>{s.personalEmail || '—'}</td>
                   <td style={{ textAlign: 'center', fontSize: '16px' }}>
                     {s.isSMT ? '⭐' : '—'}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }}>
-                    <button
-                      className="edit-btn"
-                      onClick={() => handleEdit(s)}
-                      style={{ marginRight: '6px' }}
-                    >
+                    <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
                       Edit
                     </button>
-                    <button
-                      className="delete-btn"
-                      onClick={() => handleDelete(s.id, s.name, s.sn)}
-                    >
+                    <button className="delete-btn" onClick={() => handleDelete(s.id, s.name, s.sn)}>
                       Delete
                     </button>
                   </td>

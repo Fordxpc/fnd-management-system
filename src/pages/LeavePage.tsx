@@ -16,7 +16,6 @@ const LEAVE_TYPES = [
   'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
 
-// Annual leave entitlement per year
 const ENTITLEMENTS: { [key: string]: number } = {
   'ANNUAL LEAVE': 30,
   'SICK LEAVE': 15,
@@ -27,6 +26,9 @@ const ENTITLEMENTS: { [key: string]: number } = {
   'NO PAY LEAVE': 0,
 };
 
+// Years of service required before annual leave becomes available
+const ANNUAL_LEAVE_SERVICE_YEARS = 2;
+
 const APPROVER_DESIGNATIONS = [
   'Airport Manager',
   'Assistant Manager',
@@ -36,7 +38,7 @@ const APPROVER_DESIGNATIONS = [
   'Assistant Operations Officer',
   'Assistant Security Officer',
   'Assistant Administrative Officer',
-  'Senior Fire Fighter',
+  'Leading Fireman',
 ];
 
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
@@ -63,7 +65,6 @@ const isFriday = (dateStr: string): boolean => {
   return d.getDay() === 5;
 };
 
-// Build a list of dates in range (inclusive)
 const allDatesInRange = (start: string, end: string): string[] => {
   const dates: string[] = [];
   const s = new Date(start + 'T00:00:00');
@@ -77,7 +78,6 @@ const allDatesInRange = (start: string, end: string): string[] => {
   return dates;
 };
 
-// Count annual leave days EXCLUDING Fridays and custom holidays
 const countAnnualLeaveDays = (
   start: string,
   end: string,
@@ -88,15 +88,46 @@ const countAnnualLeaveDays = (
   let skippedFridays = 0;
   let skippedHolidays = 0;
   for (const d of dates) {
-    if (isFriday(d)) {
-      skippedFridays++;
-    } else if (holidayDates.has(d)) {
-      skippedHolidays++;
-    } else {
-      countable++;
-    }
+    if (isFriday(d)) skippedFridays++;
+    else if (holidayDates.has(d)) skippedHolidays++;
+    else countable++;
   }
   return { countable, skippedFridays, skippedHolidays };
+};
+
+// ====== Leave year based on join date anniversary ======
+// Returns the start and end dates of the CURRENT leave year for a given join date.
+// Example: joined 15 Mar 2020, today = 16 Oct 2026 → leave year: 15 Mar 2026 → 14 Mar 2027
+const getCurrentLeaveYear = (joinDateStr: string): { start: Date; end: Date } | null => {
+  if (!joinDateStr) return null;
+  const jd = new Date(joinDateStr + 'T00:00:00');
+  if (isNaN(jd.getTime())) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let startYear = today.getFullYear();
+  let anniversary = new Date(startYear, jd.getMonth(), jd.getDate());
+  if (today < anniversary) {
+    startYear -= 1;
+    anniversary = new Date(startYear, jd.getMonth(), jd.getDate());
+  }
+  const start = anniversary;
+  const end = new Date(startYear + 1, jd.getMonth(), jd.getDate());
+  end.setDate(end.getDate() - 1);
+  return { start, end };
+};
+
+// Years of service (full years)
+const getYearsOfService = (joinDateStr: string): number => {
+  if (!joinDateStr) return 0;
+  const jd = new Date(joinDateStr + 'T00:00:00');
+  if (isNaN(jd.getTime())) return 0;
+  const today = new Date();
+  let years = today.getFullYear() - jd.getFullYear();
+  const m = today.getMonth() - jd.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < jd.getDate())) years -= 1;
+  return years;
 };
 
 function LeavePage() {
@@ -183,16 +214,24 @@ function LeavePage() {
       (b.requestedAt || '').localeCompare(a.requestedAt || '')
     );
 
-  const currentYear: number = new Date().getFullYear();
+  // ====== Balance based on leave year (join-date anniversary) ======
+  const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
+  const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
+  const isEligibleForAnnual = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
+
   const usedDays: { [key: string]: number } = {};
   LEAVE_TYPES.forEach((t) => { usedDays[t] = 0; });
-  if (myStaff) {
+
+  if (myStaff && myLeaveYear) {
+    const lyStart = formatDate(myLeaveYear.start);
+    const lyEnd = formatDate(myLeaveYear.end);
     requests
       .filter(
         (r: any) =>
           r.staffId === myStaff.id &&
           r.status === 'approved' &&
-          (r.startDate || '').startsWith(String(currentYear))
+          (r.startDate || '') >= lyStart &&
+          (r.startDate || '') <= lyEnd
       )
       .forEach((r: any) => {
         if (usedDays[r.leaveType] !== undefined) {
@@ -217,7 +256,26 @@ function LeavePage() {
       return;
     }
 
-    // Count days
+    // Enforce annual leave eligibility
+    if (leaveType === 'ANNUAL LEAVE') {
+      const years = staff.joinDate ? getYearsOfService(staff.joinDate) : 0;
+      if (!staff.joinDate) {
+        alert(
+          `${staff.name} does not have a Join Date set.\n\n` +
+          `Please add their Join Date in the Staff page before requesting annual leave.`
+        );
+        return;
+      }
+      if (years < ANNUAL_LEAVE_SERVICE_YEARS) {
+        alert(
+          `${staff.name} is not eligible for annual leave yet.\n\n` +
+          `Annual leave becomes available after ${ANNUAL_LEAVE_SERVICE_YEARS} years of service.\n` +
+          `Current service: ${years} year(s).`
+        );
+        return;
+      }
+    }
+
     let days = 0;
     if (leaveType === 'ANNUAL LEAVE') {
       days = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
@@ -279,7 +337,6 @@ function LeavePage() {
         reviewedAt: new Date().toISOString(),
       });
 
-      // Mark EVERY day in the range (including Fridays and holidays) in the roster
       const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(
@@ -328,10 +385,8 @@ function LeavePage() {
     const ok = window.confirm(
       `⚠️ DELETE this leave request permanently?\n\n` +
       `${r.staffName} — ${r.leaveType}\n` +
-      `${formatDisplay(r.startDate)} to ${formatDisplay(r.endDate)}\n` +
-      `Status: ${String(r.status).toUpperCase()}\n\n` +
-      `This will also remove any roster entries created by this leave.\n` +
-      `This cannot be undone.`
+      `${formatDisplay(r.startDate)} to ${formatDisplay(r.endDate)}\n\n` +
+      `Roster entries created by this leave will also be removed.`
     );
     if (!ok) return;
 
@@ -351,7 +406,7 @@ function LeavePage() {
     }
   };
 
-  // Preview for the form
+  // Preview
   let previewDays = 0;
   let previewFridays = 0;
   let previewHolidays = 0;
@@ -382,19 +437,45 @@ function LeavePage() {
       {/* Balance card */}
       {myStaff && !isDeptManager && (
         <div className="leave-balance-card">
-          <h3>My Leave Balance ({currentYear})</h3>
+          <h3>
+            My Leave Balance
+            {myLeaveYear && (
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '8px' }}>
+                ({formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))})
+              </span>
+            )}
+          </h3>
+
+          {!isEligibleForAnnual && (
+            <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', fontSize: '13px', fontWeight: 600 }}>
+              ⚠️ Annual leave not available yet. Requires {ANNUAL_LEAVE_SERVICE_YEARS} years of service.
+              {myStaff.joinDate && (
+                <> Current service: <strong>{myYearsOfService} year(s)</strong>. </>
+              )}
+              {!myStaff.joinDate && (
+                <> Ask an administrator to set your Join Date. </>
+              )}
+            </div>
+          )}
+
           <div className="balance-grid">
             {LEAVE_TYPES.map((t) => {
               const entitlement = ENTITLEMENTS[t] || 0;
               const used = usedDays[t] || 0;
-              const remaining = entitlement > 0 ? entitlement - used : null;
+              const isAnnual = t === 'ANNUAL LEAVE';
+              const showEntitlement = entitlement > 0 && (!isAnnual || isEligibleForAnnual);
+              const remaining = showEntitlement ? entitlement - used : null;
               return (
                 <div key={t} className="balance-item">
                   <span className="balance-label">{t}</span>
                   <span className="balance-value">
-                    {remaining !== null ? `${remaining} / ${entitlement} days` : `${used} days used`}
+                    {remaining !== null
+                      ? `${remaining} / ${entitlement} days`
+                      : isAnnual && !isEligibleForAnnual
+                        ? 'Not eligible'
+                        : `${used} days used`}
                   </span>
-                  {entitlement > 0 && (
+                  {entitlement > 0 && isAnnual && isEligibleForAnnual && (
                     <span style={{ fontSize: '11px', color: '#64748b' }}>
                       {used} used • {entitlement} entitled
                     </span>
@@ -459,19 +540,16 @@ function LeavePage() {
             <div><strong>Countable days:</strong> {previewDays}</div>
             {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (
               <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
-                ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded from balance (still marked in roster)
+                ℹ️ {previewFridays} Friday{previewFridays > 1 ? 's' : ''} excluded from balance
               </div>
             )}
             {leaveType === 'ANNUAL LEAVE' && previewHolidays > 0 && (
               <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
-                ℹ️ {previewHolidays} holiday{previewHolidays > 1 ? 's' : ''} excluded from balance (still marked in roster)
+                ℹ️ {previewHolidays} holiday{previewHolidays > 1 ? 's' : ''} excluded from balance
               </div>
             )}
             {endDate < startDate && (
               <div style={{ color: '#dc2626', marginTop: '4px' }}>⚠ End date is before start date</div>
-            )}
-            {previewDays === 0 && endDate >= startDate && (
-              <div style={{ color: '#dc2626', marginTop: '4px' }}>⚠ No countable days in this range</div>
             )}
           </div>
 
@@ -540,20 +618,14 @@ function LeavePage() {
             <tbody>
               {visibleRequests.map((r: any) => {
                 const canApprove =
-                  canApproveRequest(r) &&
-                  r.status === 'pending' &&
-                  r.staffId !== myStaff?.id;
+                  canApproveRequest(r) && r.status === 'pending' && r.staffId !== myStaff?.id;
                 const canDelete = canDeleteRequest(r);
                 return (
                   <tr key={r.id}>
                     <td>
                       <strong>{r.staffName}</strong>
-                      {r.staffIsSMT && (
-                        <span style={{ marginLeft: '6px' }} title="SMT Member">⭐</span>
-                      )}
-                      {r.staffSN && (
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>{r.staffSN}</div>
-                      )}
+                      {r.staffIsSMT && <span style={{ marginLeft: '6px' }} title="SMT Member">⭐</span>}
+                      {r.staffSN && <div style={{ fontSize: '11px', color: '#64748b' }}>{r.staffSN}</div>}
                     </td>
                     <td>{r.staffDepartment || '—'}</td>
                     <td><span className="leave-type-badge">{r.leaveType}</span></td>
