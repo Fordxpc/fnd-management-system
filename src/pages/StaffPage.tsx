@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { firebaseConfig } from '../firebase';
+
+const DEFAULT_PASSWORD = 'Fnd@2026';
 
 const FND_ALL_STAFF = [
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -73,13 +78,30 @@ const DESIGNATIONS = [
   'Cleaning & Gardening',
 ];
 
+// Create a new Firebase Auth user without signing the admin out (uses secondary app)
+const createAuthUser = async (email: string, password: string): Promise<string> => {
+  const secondaryApp = initializeApp(firebaseConfig, 'SecondaryCreate');
+  const secondaryAuth = getAuth(secondaryApp);
+  try {
+    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const uid = cred.user.uid;
+    await deleteApp(secondaryApp);
+    return uid;
+  } catch (err) {
+    await deleteApp(secondaryApp);
+    throw err;
+  }
+};
+
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
+  const [bulkCreating, setBulkCreating] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
+  const [creatingLoginFor, setCreatingLoginFor] = useState<string>('');
 
   const [sn, setSn] = useState<string>('');
   const [name, setName] = useState<string>('');
@@ -93,8 +115,6 @@ function StaffPage() {
   const [position, setPosition] = useState<string>('');
   const [isSMT, setIsSMT] = useState<boolean>(false);
   const [balanceVisible, setBalanceVisible] = useState<boolean>(false);
-
-  // Financial fields
   const [basicSalary, setBasicSalary] = useState<string>('');
   const [dailyAllowance, setDailyAllowance] = useState<string>('');
   const [holidayAllowanceRate, setHolidayAllowanceRate] = useState<string>('');
@@ -109,22 +129,12 @@ function StaffPage() {
   }, []);
 
   const resetForm = () => {
-    setSn('');
-    setName('');
-    setEmail('');
-    setPersonalEmail('');
-    setNid('');
-    setJoinDate('');
-    setPhone('');
-    setGender('');
-    setDepartment('Ground Operations');
-    setPosition('');
-    setIsSMT(false);
-    setBalanceVisible(false);
-    setBasicSalary('');
-    setDailyAllowance('');
-    setHolidayAllowanceRate('');
-    setBankAccount('');
+    setSn(''); setName(''); setEmail(''); setPersonalEmail('');
+    setNid(''); setJoinDate(''); setPhone(''); setGender('');
+    setDepartment('Ground Operations'); setPosition('');
+    setIsSMT(false); setBalanceVisible(false);
+    setBasicSalary(''); setDailyAllowance('');
+    setHolidayAllowanceRate(''); setBankAccount('');
     setEditingId(null);
   };
 
@@ -149,6 +159,7 @@ function StaffPage() {
       } else {
         await addDoc(collection(db, 'staff'), {
           ...payload,
+          hasLogin: false,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -185,7 +196,7 @@ function StaffPage() {
 
   const handleDelete = async (id: string, name: string, sn: string) => {
     const ok = window.confirm(
-      `Delete ${name} (${sn || 'no SN'})?\n\nThis permanently removes them from the staff list.`
+      `Delete ${name} (${sn || 'no SN'})?\n\nThis removes them from the staff list only. Their Firebase login (if any) must be deleted separately in Firebase Console.`
     );
     if (!ok) return;
     await deleteDoc(doc(db, 'staff', id));
@@ -226,6 +237,7 @@ function StaffPage() {
           dailyAllowance: 0,
           holidayAllowanceRate: 0,
           bankAccount: '',
+          hasLogin: false,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -238,7 +250,131 @@ function StaffPage() {
     setImporting(false);
   };
 
+  // ===== Create one login for a specific staff member =====
+  const handleCreateLogin = async (s: any) => {
+    const emailToUse = (s.email || '').trim();
+    if (!emailToUse) {
+      alert('This staff member has no email. Please edit them and set an email first.');
+      return;
+    }
+
+    const customPw = window.prompt(
+      `Create login for ${s.name}\n\nEmail: ${emailToUse}\n\nEnter temporary password (or leave blank for "${DEFAULT_PASSWORD}"):`,
+      DEFAULT_PASSWORD
+    );
+    if (customPw === null) return;
+    const password = customPw.trim() || DEFAULT_PASSWORD;
+    if (password.length < 6) {
+      alert('Password must be at least 6 characters.');
+      return;
+    }
+
+    setCreatingLoginFor(s.id);
+    try {
+      const uid = await createAuthUser(emailToUse, password);
+
+      // Create the users doc so they get default role right away
+      await addDoc(collection(db, 'users'), {
+        email: emailToUse,
+        role: 'staff',
+        department: s.department || 'Ground Operations',
+        createdAt: new Date().toISOString(),
+      });
+
+      // Mark staff doc as having a login
+      await updateDoc(doc(db, 'staff', s.id), {
+        hasLogin: true,
+      });
+
+      alert(
+        `✅ Login created!\n\nEmail: ${emailToUse}\nPassword: ${password}\n\n` +
+        `They can now sign in on the EMPLOYEE tab.`
+      );
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') {
+        // Email exists — mark as hasLogin and continue
+        await updateDoc(doc(db, 'staff', s.id), { hasLogin: true });
+        alert(
+          `ℹ️ A login with this email already exists.\n\nMarked ${s.name} as having a login.`
+        );
+      } else {
+        alert('Error: ' + (err.message || 'Unknown error'));
+      }
+    }
+    setCreatingLoginFor('');
+  };
+
+  // ===== Bulk create logins for all staff without one =====
+  const handleBulkCreateLogins = async () => {
+    const withoutLogin = staff.filter((s) => !s.hasLogin && s.email);
+
+    if (withoutLogin.length === 0) {
+      alert('✅ All staff already have logins, or no one has an email set.');
+      return;
+    }
+
+    const ok = window.confirm(
+      `Create Firebase logins for ${withoutLogin.length} staff member(s)?\n\n` +
+      `Default password: ${DEFAULT_PASSWORD}\n\n` +
+      `They can change their password later using the "Change Password" feature.\n\n` +
+      `Continue?`
+    );
+    if (!ok) return;
+
+    setBulkCreating(true);
+    let created = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    try {
+      for (const s of withoutLogin) {
+        const emailToUse = (s.email || '').trim();
+        if (!emailToUse) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          await createAuthUser(emailToUse, DEFAULT_PASSWORD);
+
+          await addDoc(collection(db, 'users'), {
+            email: emailToUse,
+            role: 'staff',
+            department: s.department || 'Ground Operations',
+            createdAt: new Date().toISOString(),
+          });
+
+          await updateDoc(doc(db, 'staff', s.id), { hasLogin: true });
+          created++;
+
+          // Small delay to be gentle on Firebase Auth rate limits
+          await new Promise((r) => setTimeout(r, 250));
+        } catch (err: any) {
+          if (err.code === 'auth/email-already-in-use') {
+            await updateDoc(doc(db, 'staff', s.id), { hasLogin: true });
+            skipped++;
+          } else {
+            console.error('Failed for', emailToUse, err);
+            failed++;
+          }
+        }
+      }
+
+      alert(
+        `✅ Bulk login creation complete!\n\n` +
+        `Created: ${created}\n` +
+        `Already existed / skipped: ${skipped}\n` +
+        `Failed: ${failed}\n\n` +
+        `All new logins use password: ${DEFAULT_PASSWORD}`
+      );
+    } catch (error: any) {
+      alert('Bulk create failed: ' + error.message);
+    }
+    setBulkCreating(false);
+  };
+
   const showImportButton = staff.length === 0;
+  const staffWithoutLogin = staff.filter((s) => !s.hasLogin && s.email).length;
 
   const visibleStaff = staff
     .filter((s) => {
@@ -270,6 +406,17 @@ function StaffPage() {
           >
             {showFinancials ? '🙈 Hide Financials' : '💰 Show Financials'}
           </button>
+          {staffWithoutLogin > 0 && (
+            <button
+              className="export-btn bulk-btn"
+              onClick={handleBulkCreateLogins}
+              disabled={bulkCreating}
+            >
+              {bulkCreating
+                ? 'Creating logins...'
+                : `🔑 Create ${staffWithoutLogin} Login${staffWithoutLogin > 1 ? 's' : ''}`}
+            </button>
+          )}
           {showImportButton && (
             <button className="export-btn jpg-btn" onClick={handleImportAll} disabled={importing}>
               {importing ? 'Importing...' : '📥 Import All FND Staff'}
@@ -348,83 +495,18 @@ function StaffPage() {
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#16a34a', marginTop: '8px' }}>
             💰 Salary & Allowances
           </div>
-          <input
-            type="number"
-            placeholder="Basic Salary (MVR)"
-            value={basicSalary}
-            onChange={(e) => setBasicSalary(e.target.value)}
-            step="0.01"
-            min="0"
-          />
-          <input
-            type="number"
-            placeholder="Daily Allowance (MVR)"
-            value={dailyAllowance}
-            onChange={(e) => setDailyAllowance(e.target.value)}
-            step="0.01"
-            min="0"
-          />
-          <input
-            type="number"
-            placeholder="Holiday Allowance Rate (MVR per Friday/holiday worked)"
-            value={holidayAllowanceRate}
-            onChange={(e) => setHolidayAllowanceRate(e.target.value)}
-            step="0.01"
-            min="0"
-          />
-          <input
-            placeholder="Bank Account Number"
-            value={bankAccount}
-            onChange={(e) => setBankAccount(e.target.value)}
-          />
+          <input type="number" placeholder="Basic Salary (MVR)" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} step="0.01" min="0" />
+          <input type="number" placeholder="Daily Allowance (MVR)" value={dailyAllowance} onChange={(e) => setDailyAllowance(e.target.value)} step="0.01" min="0" />
+          <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
+          <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
 
-          <label
-            style={{
-              gridColumn: 'span 2',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '10px 12px',
-              background: '#fef3c7',
-              border: '1px solid #f59e0b',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              color: '#92400e',
-              fontSize: '14px',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={isSMT}
-              onChange={(e) => setIsSMT(e.target.checked)}
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-            />
+          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e', fontSize: '14px' }}>
+            <input type="checkbox" checked={isSMT} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
             ⭐ Mark as SMT (Senior Management Team) member
           </label>
 
-          <label
-            style={{
-              gridColumn: 'span 2',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '10px 12px',
-              background: '#eff6ff',
-              border: '1px solid #2563eb',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              color: '#1e40af',
-              fontSize: '14px',
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={balanceVisible}
-              onChange={(e) => setBalanceVisible(e.target.checked)}
-              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-            />
+          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#eff6ff', border: '1px solid #2563eb', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#1e40af', fontSize: '14px' }}>
+            <input type="checkbox" checked={balanceVisible} onChange={(e) => setBalanceVisible(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
             👁 Allow this staff member to view their own leave balance
           </label>
 
@@ -453,17 +535,16 @@ function StaffPage() {
                   <th>Dept</th>
                   <th>Gender</th>
                   <th>Join Date</th>
-                  <th>NID</th>
                   {showFinancials && (
                     <>
                       <th>Basic Salary</th>
                       <th>Daily Allow.</th>
                       <th>Holiday Allow.</th>
-                      <th>Bank Acc.</th>
                     </>
                   )}
                   <th>SMT</th>
                   <th>👁</th>
+                  <th>Login</th>
                   <th></th>
                 </tr>
               </thead>
@@ -476,7 +557,6 @@ function StaffPage() {
                     <td style={{ fontSize: '12px' }}>{s.department}</td>
                     <td>{s.gender || '—'}</td>
                     <td>{s.joinDate || '—'}</td>
-                    <td>{s.nid || '—'}</td>
                     {showFinancials && (
                       <>
                         <td style={{ textAlign: 'right', fontWeight: 600 }}>
@@ -488,7 +568,6 @@ function StaffPage() {
                         <td style={{ textAlign: 'right' }}>
                           {s.holidayAllowanceRate ? `MVR ${Number(s.holidayAllowanceRate).toLocaleString()}` : '—'}
                         </td>
-                        <td style={{ fontSize: '12px' }}>{s.bankAccount || '—'}</td>
                       </>
                     )}
                     <td style={{ textAlign: 'center', fontSize: '16px' }}>
@@ -497,7 +576,24 @@ function StaffPage() {
                     <td style={{ textAlign: 'center', fontSize: '16px' }}>
                       {s.balanceVisible ? '👁' : '🚫'}
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {s.hasLogin ? (
+                        <span style={{ fontSize: '11px', color: '#065f46', fontWeight: 700 }}>✅ Yes</span>
+                      ) : (
+                        <span style={{ fontSize: '11px', color: '#92400e', fontWeight: 700 }}>❌ No</span>
+                      )}
+                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
+                      {!s.hasLogin && s.email && (
+                        <button
+                          className="reset-pw-btn"
+                          onClick={() => handleCreateLogin(s)}
+                          disabled={creatingLoginFor === s.id || bulkCreating}
+                          style={{ marginRight: '6px' }}
+                        >
+                          {creatingLoginFor === s.id ? '...' : '🔑 Login'}
+                        </button>
+                      )}
                       <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
                         Edit
                       </button>
