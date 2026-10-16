@@ -5,14 +5,17 @@ import StaffPage from './pages/StaffPage';
 import RosterPage from './pages/RosterPage';
 import LeavePage from './pages/LeavePage';
 import HolidaysPage from './pages/HolidaysPage';
+import UsersPage from './pages/UsersPage';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
+const USER_ADMIN_ROLES = ['developer', 'manager'];
 
 function Dashboard({ user, logout }: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
+  const canManageUsers = USER_ADMIN_ROLES.includes(profile?.role || '');
 
   const pages: { [key: string]: any } = {
     dashboard: <div className="page-content"><h2>Dashboard</h2><p>Overview coming soon...</p></div>,
@@ -20,6 +23,7 @@ function Dashboard({ user, logout }: any) {
     roster: <RosterPage />,
     leave: <LeavePage />,
     holidays: <HolidaysPage />,
+    users: <UsersPage />,
     overtime: <div className="page-content"><h2>Overtime</h2><p>Coming soon...</p></div>,
     settings: <div className="page-content"><h2>Settings</h2><p>Coming soon...</p></div>,
   };
@@ -76,6 +80,15 @@ function Dashboard({ user, logout }: any) {
           >
             ⏰ Overtime
           </button>
+
+          {canManageUsers && (
+            <button
+              className={currentPage === 'users' ? 'nav-item active' : 'nav-item'}
+              onClick={() => setCurrentPage('users')}
+            >
+              🔑 Users
+            </button>
+          )}
 
           <button
             className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'}
