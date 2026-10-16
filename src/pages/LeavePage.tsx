@@ -26,8 +26,10 @@ const ENTITLEMENTS: { [key: string]: number } = {
   'NO PAY LEAVE': 0,
 };
 
-// Years of service required before annual leave becomes available
+// After this many years of service, annual leave renews yearly.
+// Before this, new hires get a ONE-TIME 30-day allocation for the whole 2-year period.
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
+const ANNUAL_LEAVE_TOTAL = 30;
 
 const APPROVER_DESIGNATIONS = [
   'Airport Manager',
@@ -96,8 +98,6 @@ const countAnnualLeaveDays = (
 };
 
 // ====== Leave year based on join date anniversary ======
-// Returns the start and end dates of the CURRENT leave year for a given join date.
-// Example: joined 15 Mar 2020, today = 16 Oct 2026 → leave year: 15 Mar 2026 → 14 Mar 2027
 const getCurrentLeaveYear = (joinDateStr: string): { start: Date; end: Date } | null => {
   if (!joinDateStr) return null;
   const jd = new Date(joinDateStr + 'T00:00:00');
@@ -118,7 +118,6 @@ const getCurrentLeaveYear = (joinDateStr: string): { start: Date; end: Date } | 
   return { start, end };
 };
 
-// Years of service (full years)
 const getYearsOfService = (joinDateStr: string): number => {
   if (!joinDateStr) return 0;
   const jd = new Date(joinDateStr + 'T00:00:00');
@@ -214,10 +213,10 @@ function LeavePage() {
       (b.requestedAt || '').localeCompare(a.requestedAt || '')
     );
 
-  // ====== Balance based on leave year (join-date anniversary) ======
-  const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
+  // ====== Compute usage ======
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
-  const isEligibleForAnnual = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
+  const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
+  const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
 
   const usedDays: { [key: string]: number } = {};
   LEAVE_TYPES.forEach((t) => { usedDays[t] = 0; });
@@ -225,20 +224,50 @@ function LeavePage() {
   if (myStaff && myLeaveYear) {
     const lyStart = formatDate(myLeaveYear.start);
     const lyEnd = formatDate(myLeaveYear.end);
+
     requests
-      .filter(
-        (r: any) =>
-          r.staffId === myStaff.id &&
-          r.status === 'approved' &&
-          (r.startDate || '') >= lyStart &&
-          (r.startDate || '') <= lyEnd
-      )
+      .filter((r: any) => r.staffId === myStaff.id && r.status === 'approved')
       .forEach((r: any) => {
-        if (usedDays[r.leaveType] !== undefined) {
+        if (usedDays[r.leaveType] === undefined) return;
+
+        // Annual leave for new hires: count ALL usage since join date
+        if (r.leaveType === 'ANNUAL LEAVE' && !myIsAnnualRenewing) {
+          usedDays[r.leaveType] += r.days || 0;
+        }
+        // All other cases: only count within current leave year
+        else if ((r.startDate || '') >= lyStart && (r.startDate || '') <= lyEnd) {
           usedDays[r.leaveType] += r.days || 0;
         }
       });
   }
+
+  // Helper: compute used annual days for a given staff member
+  const computeUsedAnnual = (staffId: string, joinDate: string): number => {
+    const years = getYearsOfService(joinDate);
+    const renews = years >= ANNUAL_LEAVE_SERVICE_YEARS;
+    const ly = getCurrentLeaveYear(joinDate);
+    let used = 0;
+
+    requests
+      .filter(
+        (r: any) =>
+          r.staffId === staffId &&
+          r.status === 'approved' &&
+          r.leaveType === 'ANNUAL LEAVE'
+      )
+      .forEach((r: any) => {
+        if (!renews) {
+          used += r.days || 0;
+        } else if (ly) {
+          const lyStart = formatDate(ly.start);
+          const lyEnd = formatDate(ly.end);
+          if ((r.startDate || '') >= lyStart && (r.startDate || '') <= lyEnd) {
+            used += r.days || 0;
+          }
+        }
+      });
+    return used;
+  };
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
@@ -256,21 +285,30 @@ function LeavePage() {
       return;
     }
 
-    // Enforce annual leave eligibility
+    // Annual leave eligibility & cap check
     if (leaveType === 'ANNUAL LEAVE') {
-      const years = staff.joinDate ? getYearsOfService(staff.joinDate) : 0;
       if (!staff.joinDate) {
         alert(
           `${staff.name} does not have a Join Date set.\n\n` +
-          `Please add their Join Date in the Staff page before requesting annual leave.`
+          `Please add their Join Date on the Staff page first.`
         );
         return;
       }
-      if (years < ANNUAL_LEAVE_SERVICE_YEARS) {
+      const daysForRequest = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
+      const usedAnnual = computeUsedAnnual(staff.id, staff.joinDate);
+      const years = getYearsOfService(staff.joinDate);
+      const renews = years >= ANNUAL_LEAVE_SERVICE_YEARS;
+
+      if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) {
+        const rule = renews
+          ? `Annual leave renews every year on ${staff.name}'s join-date anniversary.`
+          : `New hires have a one-time ${ANNUAL_LEAVE_TOTAL}-day allocation for their first ${ANNUAL_LEAVE_SERVICE_YEARS} years.`;
         alert(
-          `${staff.name} is not eligible for annual leave yet.\n\n` +
-          `Annual leave becomes available after ${ANNUAL_LEAVE_SERVICE_YEARS} years of service.\n` +
-          `Current service: ${years} year(s).`
+          `⛔ Cannot submit — exceeds annual leave entitlement.\n\n` +
+          `Used so far: ${usedAnnual} days\n` +
+          `This request: ${daysForRequest} days\n` +
+          `Total: ${usedAnnual + daysForRequest} / ${ANNUAL_LEAVE_TOTAL} days\n\n` +
+          rule
         );
         return;
       }
@@ -434,48 +472,58 @@ function LeavePage() {
         </button>
       </div>
 
-      {/* Balance card */}
-      {myStaff && !isDeptManager && (
+      {/* Balance card — visible to EVERY logged-in staff member */}
+      {myStaff && (
         <div className="leave-balance-card">
           <h3>
             My Leave Balance
-            {myLeaveYear && (
+            {myLeaveYear && myIsAnnualRenewing && (
               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '8px' }}>
                 ({formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))})
               </span>
             )}
+            {myStaff.joinDate && !myIsAnnualRenewing && (
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '8px' }}>
+                (New hire — {ANNUAL_LEAVE_SERVICE_YEARS - myYearsOfService} year(s) until annual renewal)
+              </span>
+            )}
           </h3>
 
-          {!isEligibleForAnnual && (
+          {!myStaff.joinDate && (
             <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', marginBottom: '14px', fontSize: '13px', fontWeight: 600 }}>
-              ⚠️ Annual leave not available yet. Requires {ANNUAL_LEAVE_SERVICE_YEARS} years of service.
-              {myStaff.joinDate && (
-                <> Current service: <strong>{myYearsOfService} year(s)</strong>. </>
-              )}
-              {!myStaff.joinDate && (
-                <> Ask an administrator to set your Join Date. </>
-              )}
+              ⚠️ Your Join Date is not set. Please ask an administrator to add it.
             </div>
           )}
 
           <div className="balance-grid">
             {LEAVE_TYPES.map((t) => {
+              const isAnnual = t === 'ANNUAL LEAVE';
               const entitlement = ENTITLEMENTS[t] || 0;
               const used = usedDays[t] || 0;
-              const isAnnual = t === 'ANNUAL LEAVE';
-              const showEntitlement = entitlement > 0 && (!isAnnual || isEligibleForAnnual);
-              const remaining = showEntitlement ? entitlement - used : null;
+
+              // Annual leave for new hires — one-time 30-day allocation
+              if (isAnnual && !myIsAnnualRenewing && myStaff.joinDate) {
+                const remaining = ANNUAL_LEAVE_TOTAL - used;
+                return (
+                  <div key={t} className="balance-item">
+                    <span className="balance-label">{t}</span>
+                    <span className="balance-value">{remaining} / {ANNUAL_LEAVE_TOTAL} days</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                      One-time allocation (until {ANNUAL_LEAVE_SERVICE_YEARS} yrs of service)
+                    </span>
+                  </div>
+                );
+              }
+
+              // Standard display for renewing leaves
+              const remaining = entitlement > 0 ? entitlement - used : null;
               return (
                 <div key={t} className="balance-item">
                   <span className="balance-label">{t}</span>
                   <span className="balance-value">
-                    {remaining !== null
-                      ? `${remaining} / ${entitlement} days`
-                      : isAnnual && !isEligibleForAnnual
-                        ? 'Not eligible'
-                        : `${used} days used`}
+                    {remaining !== null ? `${remaining} / ${entitlement} days` : `${used} days used`}
                   </span>
-                  {entitlement > 0 && isAnnual && isEligibleForAnnual && (
+                  {entitlement > 0 && (
                     <span style={{ fontSize: '11px', color: '#64748b' }}>
                       {used} used • {entitlement} entitled
                     </span>
