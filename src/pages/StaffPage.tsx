@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
-import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import { firebaseConfig } from '../firebase';
-
-const DEFAULT_PASSWORD = 'Fnd@2026';
 
 const FND_ALL_STAFF = [
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -78,30 +73,13 @@ const DESIGNATIONS = [
   'Cleaning & Gardening',
 ];
 
-// Create a new Firebase Auth user without signing the admin out (uses secondary app)
-const createAuthUser = async (email: string, password: string): Promise<string> => {
-  const secondaryApp = initializeApp(firebaseConfig, 'SecondaryCreate');
-  const secondaryAuth = getAuth(secondaryApp);
-  try {
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-    const uid = cred.user.uid;
-    await deleteApp(secondaryApp);
-    return uid;
-  } catch (err) {
-    await deleteApp(secondaryApp);
-    throw err;
-  }
-};
-
 function StaffPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
-  const [bulkCreating, setBulkCreating] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
-  const [creatingLoginFor, setCreatingLoginFor] = useState<string>('');
 
   const [sn, setSn] = useState<string>('');
   const [name, setName] = useState<string>('');
@@ -159,7 +137,6 @@ function StaffPage() {
       } else {
         await addDoc(collection(db, 'staff'), {
           ...payload,
-          hasLogin: false,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -196,7 +173,7 @@ function StaffPage() {
 
   const handleDelete = async (id: string, name: string, sn: string) => {
     const ok = window.confirm(
-      `Delete ${name} (${sn || 'no SN'})?\n\nThis removes them from the staff list only. Their Firebase login (if any) must be deleted separately in Firebase Console.`
+      `Delete ${name} (${sn || 'no SN'})?\n\nThis removes them from the staff list only.`
     );
     if (!ok) return;
     await deleteDoc(doc(db, 'staff', id));
@@ -237,7 +214,6 @@ function StaffPage() {
           dailyAllowance: 0,
           holidayAllowanceRate: 0,
           bankAccount: '',
-          hasLogin: false,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
@@ -250,131 +226,7 @@ function StaffPage() {
     setImporting(false);
   };
 
-  // ===== Create one login for a specific staff member =====
-  const handleCreateLogin = async (s: any) => {
-    const emailToUse = (s.email || '').trim();
-    if (!emailToUse) {
-      alert('This staff member has no email. Please edit them and set an email first.');
-      return;
-    }
-
-    const customPw = window.prompt(
-      `Create login for ${s.name}\n\nEmail: ${emailToUse}\n\nEnter temporary password (or leave blank for "${DEFAULT_PASSWORD}"):`,
-      DEFAULT_PASSWORD
-    );
-    if (customPw === null) return;
-    const password = customPw.trim() || DEFAULT_PASSWORD;
-    if (password.length < 6) {
-      alert('Password must be at least 6 characters.');
-      return;
-    }
-
-    setCreatingLoginFor(s.id);
-    try {
-      const uid = await createAuthUser(emailToUse, password);
-
-      // Create the users doc so they get default role right away
-      await addDoc(collection(db, 'users'), {
-        email: emailToUse,
-        role: 'staff',
-        department: s.department || 'Ground Operations',
-        createdAt: new Date().toISOString(),
-      });
-
-      // Mark staff doc as having a login
-      await updateDoc(doc(db, 'staff', s.id), {
-        hasLogin: true,
-      });
-
-      alert(
-        `✅ Login created!\n\nEmail: ${emailToUse}\nPassword: ${password}\n\n` +
-        `They can now sign in on the EMPLOYEE tab.`
-      );
-    } catch (err: any) {
-      if (err.code === 'auth/email-already-in-use') {
-        // Email exists — mark as hasLogin and continue
-        await updateDoc(doc(db, 'staff', s.id), { hasLogin: true });
-        alert(
-          `ℹ️ A login with this email already exists.\n\nMarked ${s.name} as having a login.`
-        );
-      } else {
-        alert('Error: ' + (err.message || 'Unknown error'));
-      }
-    }
-    setCreatingLoginFor('');
-  };
-
-  // ===== Bulk create logins for all staff without one =====
-  const handleBulkCreateLogins = async () => {
-    const withoutLogin = staff.filter((s) => !s.hasLogin && s.email);
-
-    if (withoutLogin.length === 0) {
-      alert('✅ All staff already have logins, or no one has an email set.');
-      return;
-    }
-
-    const ok = window.confirm(
-      `Create Firebase logins for ${withoutLogin.length} staff member(s)?\n\n` +
-      `Default password: ${DEFAULT_PASSWORD}\n\n` +
-      `They can change their password later using the "Change Password" feature.\n\n` +
-      `Continue?`
-    );
-    if (!ok) return;
-
-    setBulkCreating(true);
-    let created = 0;
-    let skipped = 0;
-    let failed = 0;
-
-    try {
-      for (const s of withoutLogin) {
-        const emailToUse = (s.email || '').trim();
-        if (!emailToUse) {
-          skipped++;
-          continue;
-        }
-
-        try {
-          await createAuthUser(emailToUse, DEFAULT_PASSWORD);
-
-          await addDoc(collection(db, 'users'), {
-            email: emailToUse,
-            role: 'staff',
-            department: s.department || 'Ground Operations',
-            createdAt: new Date().toISOString(),
-          });
-
-          await updateDoc(doc(db, 'staff', s.id), { hasLogin: true });
-          created++;
-
-          // Small delay to be gentle on Firebase Auth rate limits
-          await new Promise((r) => setTimeout(r, 250));
-        } catch (err: any) {
-          if (err.code === 'auth/email-already-in-use') {
-            await updateDoc(doc(db, 'staff', s.id), { hasLogin: true });
-            skipped++;
-          } else {
-            console.error('Failed for', emailToUse, err);
-            failed++;
-          }
-        }
-      }
-
-      alert(
-        `✅ Bulk login creation complete!\n\n` +
-        `Created: ${created}\n` +
-        `Already existed / skipped: ${skipped}\n` +
-        `Failed: ${failed}\n\n` +
-        `All new logins use password: ${DEFAULT_PASSWORD}`
-      );
-    } catch (error: any) {
-      alert('Bulk create failed: ' + error.message);
-    }
-    setBulkCreating(false);
-  };
-
   const showImportButton = staff.length === 0;
-  const staffWithoutLogin = staff.filter((s) => !s.hasLogin && s.email).length;
 
   const visibleStaff = staff
     .filter((s) => {
@@ -406,17 +258,6 @@ function StaffPage() {
           >
             {showFinancials ? '🙈 Hide Financials' : '💰 Show Financials'}
           </button>
-          {staffWithoutLogin > 0 && (
-            <button
-              className="export-btn bulk-btn"
-              onClick={handleBulkCreateLogins}
-              disabled={bulkCreating}
-            >
-              {bulkCreating
-                ? 'Creating logins...'
-                : `🔑 Create ${staffWithoutLogin} Login${staffWithoutLogin > 1 ? 's' : ''}`}
-            </button>
-          )}
           {showImportButton && (
             <button className="export-btn jpg-btn" onClick={handleImportAll} disabled={importing}>
               {importing ? 'Importing...' : '📥 Import All FND Staff'}
@@ -544,7 +385,6 @@ function StaffPage() {
                   )}
                   <th>SMT</th>
                   <th>👁</th>
-                  <th>Login</th>
                   <th></th>
                 </tr>
               </thead>
@@ -576,24 +416,7 @@ function StaffPage() {
                     <td style={{ textAlign: 'center', fontSize: '16px' }}>
                       {s.balanceVisible ? '👁' : '🚫'}
                     </td>
-                    <td style={{ textAlign: 'center' }}>
-                      {s.hasLogin ? (
-                        <span style={{ fontSize: '11px', color: '#065f46', fontWeight: 700 }}>✅ Yes</span>
-                      ) : (
-                        <span style={{ fontSize: '11px', color: '#92400e', fontWeight: 700 }}>❌ No</span>
-                      )}
-                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {!s.hasLogin && s.email && (
-                        <button
-                          className="reset-pw-btn"
-                          onClick={() => handleCreateLogin(s)}
-                          disabled={creatingLoginFor === s.id || bulkCreating}
-                          style={{ marginRight: '6px' }}
-                        >
-                          {creatingLoginFor === s.id ? '...' : '🔑 Login'}
-                        </button>
-                      )}
                       <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
                         Edit
                       </button>
