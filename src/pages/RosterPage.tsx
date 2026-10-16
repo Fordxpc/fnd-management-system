@@ -82,9 +82,9 @@ const LEAVE_OPTIONS = [
   'ANNUAL LEAVE',
   'SICK LEAVE',
   'SICK LEAVE / MC',
+  'NO PAY LEAVE',
   'PATERNITY LEAVE',
   'MATERNITY LEAVE',
-  'NO PAY LEAVE',
   'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
 
@@ -108,7 +108,6 @@ function RosterPage() {
   const [reorderMode, setReorderMode] = useState<boolean>(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Single-assign state
   const [showForm, setShowForm] = useState<boolean>(false);
   const [staffId, setStaffId] = useState<string>('');
   const [date, setDate] = useState<string>(formatDate(new Date()));
@@ -116,7 +115,6 @@ function RosterPage() {
   const [customShift, setCustomShift] = useState<string>('');
   const [status, setStatus] = useState<string>('scheduled');
 
-  // Bulk-assign state
   const [showBulkForm, setShowBulkForm] = useState<boolean>(false);
   const [bulkStaffId, setBulkStaffId] = useState<string>('');
   const [bulkStartDate, setBulkStartDate] = useState<string>('');
@@ -131,14 +129,10 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-    // Roster grid only shows operational departments. Administration staff are excluded always.
-  const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
-
+  // Roster grid only shows operational departments. Administration staff are excluded always.
   const visibleStaff = [...staff]
     .filter((s) => {
-      // Never show non-roster departments (e.g., Administration) in the roster
       if (!ROSTER_DEPARTMENTS.includes(s.department)) return false;
-
       if (isAdmin) {
         if (selectedDept === 'all') return true;
         return s.department === selectedDept;
@@ -157,13 +151,11 @@ function RosterPage() {
     return () => { unsubStaff(); unsubRoster(); };
   }, []);
 
-  // When period changes, reset bulk dates to the period
   useEffect(() => {
     setBulkStartDate(formatDate(periodStart));
     setBulkEndDate(formatDate(periodEnd));
   }, [periodStart]);
 
-  // ====== SINGLE ASSIGN ======
   const handleAdd = async (e: any) => {
     e.preventDefault();
     if (!staffId) { alert('Please select a staff member'); return; }
@@ -176,7 +168,6 @@ function RosterPage() {
     }
 
     try {
-      // Remove any existing entry for that staff + date
       const q = query(
         collection(db, 'roster_entries'),
         where('staffId', '==', staffId),
@@ -202,7 +193,6 @@ function RosterPage() {
     } catch (error: any) { alert('Error: ' + error.message); }
   };
 
-  // ====== BULK ASSIGN ======
   const previewBulkDates = (): string[] => {
     const dates: string[] = [];
     if (!bulkStartDate || !bulkEndDate) return dates;
@@ -251,7 +241,6 @@ function RosterPage() {
 
     setBulkSubmitting(true);
     try {
-      // Delete existing entries for those dates
       for (const d of dates) {
         const q = query(
           collection(db, 'roster_entries'),
@@ -264,7 +253,6 @@ function RosterPage() {
         }
       }
 
-      // Create new entries
       let created = 0;
       for (const d of dates) {
         await addDoc(collection(db, 'roster_entries'), {
@@ -286,7 +274,6 @@ function RosterPage() {
     setBulkSubmitting(false);
   };
 
-  // ====== COPY PREVIOUS PERIOD ======
   const handleCopyPreviousPeriod = async () => {
     const prevStart = new Date(periodStart);
     prevStart.setMonth(prevStart.getMonth() - 1);
@@ -315,13 +302,11 @@ function RosterPage() {
 
     setCopying(true);
     try {
-      // Delete all current-period entries
       const current = entries.filter((e) => e.date >= curStartStr && e.date <= curEndStr);
       for (const e of current) {
         await deleteDoc(doc(db, 'roster_entries', e.id));
       }
 
-      // Copy previous period entries forward one month
       let created = 0;
       for (const e of prevEntries) {
         const oldDate = new Date(e.date + 'T00:00:00');
@@ -347,7 +332,6 @@ function RosterPage() {
     setCopying(false);
   };
 
-  // ====== OTHER HANDLERS ======
   const changePeriod = (direction: number) => {
     const newDate = new Date(periodStart);
     newDate.setMonth(newDate.getMonth() + direction);
@@ -497,7 +481,6 @@ function RosterPage() {
             className="export-btn copy-btn"
             onClick={handleCopyPreviousPeriod}
             disabled={copying}
-            title="Copy last month's roster into this month"
           >
             {copying ? 'Copying...' : '📋 Copy Last Month'}
           </button>
@@ -542,7 +525,6 @@ function RosterPage() {
         </div>
       )}
 
-      {/* ===== SINGLE ASSIGN FORM ===== */}
       {showForm && (
         <form className="staff-form" onSubmit={handleAdd}>
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
@@ -578,7 +560,6 @@ function RosterPage() {
         </form>
       )}
 
-      {/* ===== BULK ASSIGN FORM ===== */}
       {showBulkForm && (
         <div className="bulk-form">
           <div className="bulk-form-title">
@@ -664,7 +645,7 @@ function RosterPage() {
             <strong>{bulkDatesCount}</strong> entr{bulkDatesCount === 1 ? 'y' : 'ies'} will be created
             {bulkStartDate && bulkEndDate && (
               <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '8px' }}>
-                ({formatDate(new Date(bulkStartDate + 'T00:00:00'))} → {formatDate(new Date(bulkEndDate + 'T00:00:00'))})
+                ({bulkStartDate} → {bulkEndDate})
               </span>
             )}
           </div>
