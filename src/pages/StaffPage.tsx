@@ -41,7 +41,7 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0731', name: 'Aishath Maiha Adam', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0732', name: 'Aishath Sahana', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0995', name: 'Mohamed Vishal', position: 'Assistant Security Officer', department: 'Security' },
-  { sn: 'SN-0967', name: 'Hassan Malaz', position: 'Assistant Safety Officer', department: 'Security' },
+  
 
   // ---------- Fire & Rescue ----------
   { sn: 'SN-0039', name: 'Adam Yaeesh', position: 'Leading Fireman', department: 'Fire & Rescue' },
@@ -53,11 +53,11 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0435', name: 'Ahmed Naahee', position: 'Junior Firefighter', department: 'Fire & Rescue' },
   { sn: 'SN-0959', name: 'Vishan Mohamed', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
   { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
-  
 
   // ---------- Administration (NO ROSTER — office staff) ----------
   { sn: 'SN-0753', name: 'Mohamed Maayal', position: 'Airport Manager', department: 'Administration' },
   { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Administration' },
+  { sn: 'SN-0967', name: 'Hassan Malaz', position: 'Assistant Safety Officer', department: 'Security' },
 ];
 
 // Roster departments (3 operational + Fire & Rescue). Administration is separate — no roster.
@@ -65,7 +65,6 @@ const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Res
 
 const DESIGNATIONS = [
   'Airport Manager',
-  'Manager',
   'Assistant Manager',
   'Assistant Safety Officer',
   'Senior Airport Officer',
@@ -74,8 +73,6 @@ const DESIGNATIONS = [
   'Assistant Security Officer',
   'Assistant Administrative Officer',
   'Leading Fireman',
-  'Senior Fire Fighter',
-  'Fire Fighter',
   'Junior Firefighter',
   'Firefighter Trainee',
   'Airport Hand',

@@ -84,6 +84,7 @@ const LEAVE_OPTIONS = [
   'SICK LEAVE / MC',
   'PATERNITY LEAVE',
   'MATERNITY LEAVE',
+  'NO PAY LEAVE',
   'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
 
@@ -130,8 +131,14 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
+    // Roster grid only shows operational departments. Administration staff are excluded always.
+  const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
+
   const visibleStaff = [...staff]
     .filter((s) => {
+      // Never show non-roster departments (e.g., Administration) in the roster
+      if (!ROSTER_DEPARTMENTS.includes(s.department)) return false;
+
       if (isAdmin) {
         if (selectedDept === 'all') return true;
         return s.department === selectedDept;
