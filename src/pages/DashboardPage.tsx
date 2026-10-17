@@ -23,6 +23,10 @@ function DashboardPage({ onNavigate }: Props) {
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [otEntries, setOtEntries] = useState<any[]>([]);
 
+  // Track which department accordions are open (default to open)
+  const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
+  const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
+
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'staff'), (s) => setStaff(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u2 = onSnapshot(collection(db, 'roster_entries'), (s) => setRoster(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
@@ -31,10 +35,18 @@ function DashboardPage({ onNavigate }: Props) {
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
+  const toggleDept = (dept: string) => {
+    setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
+  };
+
+  const toggleLeaveDept = (dept: string) => {
+    setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
+  };
+
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   const todayStr = formatDate(new Date());
-  const thisMonth = todayStr.slice(0, 7);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+  const dayOfWeek = new Date().getDay(); // 0=Sun, 1=Mon, ..., 4=Thu
 
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
 
@@ -43,7 +55,45 @@ function DashboardPage({ onNavigate }: Props) {
   const todayLeave = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
 
-  // Department stats for charts
+  // 1. Group Operational Staff from Roster
+  const dutyByDept: { [key: string]: any[] } = {};
+  todayShifts.forEach(r => {
+    const d = r.staffDepartment || 'Unknown';
+    if (!dutyByDept[d]) dutyByDept[d] = [];
+    dutyByDept[d].push(r);
+  });
+
+  // 2. Inject Administration & Managers (Sun-Thu only)
+  const isAdminWorkDay = dayOfWeek >= 0 && dayOfWeek <= 4;
+  if (isAdminWorkDay) {
+    const onLeaveIds = new Set(todayLeave.map(r => r.staffId));
+    const adminStaff = activeStaff.filter(s => s.department === 'Administration' && !onLeaveIds.has(s.id));
+    
+    if (adminStaff.length > 0) {
+      if (!dutyByDept['Administration']) dutyByDept['Administration'] = [];
+      adminStaff.forEach(s => {
+        // Safety Officer is OFF on Monday (dayOfWeek 1)
+        if (s.position === 'Assistant Safety Officer' && dayOfWeek === 1) return;
+        
+        dutyByDept['Administration'].push({
+          id: s.id,
+          staffName: s.name,
+          shiftTime: '08:00 - 16:00',
+          status: 'scheduled',
+          isAdmin: true
+        });
+      });
+    }
+  }
+
+  // Group Leave by Dept
+  const leaveByDept: { [key: string]: any[] } = {};
+  todayLeave.forEach(r => {
+    const d = r.staffDepartment || 'Unknown';
+    if (!leaveByDept[d]) leaveByDept[d] = [];
+    leaveByDept[d].push(r);
+  });
+
   const staffDeptData = DEPARTMENTS.map(dept => ({
     name: dept.replace(' Operations', '').replace(' & Rescue', ''),
     count: activeStaff.filter(s => s.department === dept).length
@@ -56,22 +106,6 @@ function DashboardPage({ onNavigate }: Props) {
     }, {})
   ).map(([name, value]) => ({ name, value }));
 
-  // Today's duty grouped by dept
-  const dutyByDept: { [key: string]: any[] } = {};
-  todayShifts.forEach(r => {
-    const d = r.staffDepartment || 'Unknown';
-    if (!dutyByDept[d]) dutyByDept[d] = [];
-    dutyByDept[d].push(r);
-  });
-
-  // On leave grouped by dept
-  const leaveByDept: { [key: string]: any[] } = {};
-  todayLeave.forEach(r => {
-    const d = r.staffDepartment || 'Unknown';
-    if (!leaveByDept[d]) leaveByDept[d] = [];
-    leaveByDept[d].push(r);
-  });
-
   return (
     <div className="page-content">
       <div className="dash-welcome">
@@ -79,40 +113,37 @@ function DashboardPage({ onNavigate }: Props) {
         <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department}</p>
       </div>
 
-      {/* Stat Cards */}
       <div className="dash-stats">
         <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>
-          <div className="stat-icon bg-blue-100 text-blue-800">👥</div>
+          <div className="stat-icon" style={{ background: '#dbeafe', color: '#1e40af' }}>👥</div>
           <div><div className="stat-value">{activeStaff.length}</div><div className="stat-label">Active Staff</div></div>
         </div>
         <div className="stat-card" onClick={() => onNavigate && onNavigate('leave')}>
-          <div className="stat-icon bg-amber-100 text-amber-800">🌴</div>
+          <div className="stat-icon" style={{ background: '#fef3c7', color: '#92400e' }}>🌴</div>
           <div><div className="stat-value">{pendingLeave.length}</div><div className="stat-label">Pending Leave</div></div>
         </div>
         <div className="stat-card" onClick={() => onNavigate && onNavigate('roster')}>
-          <div className="stat-icon bg-green-100 text-green-800">📅</div>
+          <div className="stat-icon" style={{ background: '#dcfce7', color: '#065f46' }}>📅</div>
           <div><div className="stat-value">{todayShifts.length}</div><div className="stat-label">On Duty Today</div></div>
         </div>
       </div>
 
-      {/* Awaiting Approvals Widget */}
       {isManager && pendingLeave.length > 0 && (
-        <div className="dash-card mb-4 border-l-4 border-amber-500">
+        <div className="dash-card" style={{ marginBottom: '20px', borderLeft: '4px solid #f59e0b' }}>
           <h3>⚠️ Awaiting Approvals ({pendingLeave.length})</h3>
-          <div className="flex gap-2 flex-wrap">
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
             {pendingLeave.slice(0, 5).map(r => (
-              <div key={r.id} className="p-2 bg-slate-50 rounded border text-xs">
+              <div key={r.id} style={{ padding: '8px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }}>
                 <strong>{r.staffName}</strong> requested {r.leaveType} ({r.days} days)
               </div>
             ))}
-            {pendingLeave.length > 5 && <span className="text-xs self-center">+{pendingLeave.length - 5} more...</span>}
+            {pendingLeave.length > 5 && <span style={{ fontSize: '12px', alignSelf: 'center', color: '#64748b' }}>+{pendingLeave.length - 5} more...</span>}
           </div>
-          <button className="quick-btn mt-3" onClick={() => onNavigate && onNavigate('leave')}>Review Now</button>
+          <button className="quick-btn" onClick={() => onNavigate && onNavigate('leave')}>Review Now</button>
         </div>
       )}
 
-      <div className="dash-grid mb-4">
-        {/* Department Stats Chart */}
+      <div className="dash-grid" style={{ marginBottom: '20px' }}>
         <div className="dash-card">
           <h3>🏢 Staff by Department</h3>
           <div style={{ width: '100%', height: 200 }}>
@@ -127,11 +158,10 @@ function DashboardPage({ onNavigate }: Props) {
           </div>
         </div>
 
-        {/* Leave Types Chart */}
         <div className="dash-card">
           <h3>🌴 Approved Leave Types</h3>
           <div style={{ width: '100%', height: 200 }}>
-            {leaveTypeData.length === 0 ? <p className="text-center text-slate-400 mt-10">No approved leaves yet.</p> : (
+            {leaveTypeData.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}>No approved leaves yet.</p> : (
               <ResponsiveContainer>
                 <PieChart>
                   <Pie data={leaveTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
@@ -146,32 +176,75 @@ function DashboardPage({ onNavigate }: Props) {
       </div>
 
       <div className="dash-grid">
-        {/* Today's Duty by Dept */}
+        {/* TODAY'S DUTY */}
         <div className="dash-card">
           <h3>📅 Today's Duty (By Dept)</h3>
-          {Object.keys(dutyByDept).length === 0 ? <p className="text-sm text-slate-500">No scheduled shifts today.</p> : (
-            <div className="space-y-3">
-              {Object.entries(dutyByDept).map(([dept, entries]) => (
-                <div key={dept}>
-                  <div className="text-xs font-bold text-slate-500 border-b pb-1 mb-1">{dept} ({entries.length})</div>
-                  <div className="text-xs text-slate-700">{entries.map((e: any) => e.staffName).join(', ')}</div>
-                </div>
-              ))}
+          {Object.keys(dutyByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No scheduled shifts today.</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {Object.entries(dutyByDept).map(([dept, entries]) => {
+                const isOpen = openDepts[dept] !== false; // Default open
+                return (
+                  <div key={dept} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                    <button
+                      onClick={() => toggleDept(dept)}
+                      style={{
+                        width: '100%', display: 'flex', justifyContent: 'space-between',
+                        padding: '8px 12px', backgroundColor: '#f8fafc', border: 'none',
+                        fontWeight: 700, fontSize: '12px', color: '#475569', cursor: 'pointer', textAlign: 'left'
+                      }}
+                    >
+                      <span>{dept} <span style={{ color: '#94a3b8', fontWeight: 500 }}>({entries.length})</span></span>
+                      <span>{isOpen ? '▼' : '▶'}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{ padding: '8px 12px', fontSize: '13px', color: '#1e293b' }}>
+                        {entries.map((e: any, idx: number) => (
+                          <div key={idx} style={{ marginBottom: '2px' }}>
+                            {e.staffName} {e.isAdmin && <span style={{ fontSize: '10px', color: '#2563eb', background: '#eff6ff', padding: '2px 4px', borderRadius: '4px', marginLeft: '4px' }}>08:00-16:00</span>}
+                            {!e.isAdmin && e.shiftTime && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>({e.shiftTime})</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* On Leave by Dept */}
+        {/* ON LEAVE TODAY */}
         <div className="dash-card">
           <h3>🌴 On Leave Today (By Dept)</h3>
-          {Object.keys(leaveByDept).length === 0 ? <p className="text-sm text-slate-500">No one is on leave today.</p> : (
-            <div className="space-y-3">
-              {Object.entries(leaveByDept).map(([dept, entries]) => (
-                <div key={dept}>
-                  <div className="text-xs font-bold text-red-500 border-b pb-1 mb-1">{dept} ({entries.length})</div>
-                  <div className="text-xs text-slate-700">{entries.map((e: any) => `${e.staffName} (${e.status})`).join(', ')}</div>
-                </div>
-              ))}
+          {Object.keys(leaveByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No one is on leave today.</p> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {Object.entries(leaveByDept).map(([dept, entries]) => {
+                const isOpen = openLeaveDepts[dept] !== false;
+                return (
+                  <div key={dept} style={{ border: '1px solid #fecaca', borderRadius: '6px', overflow: 'hidden' }}>
+                    <button
+                      onClick={() => toggleLeaveDept(dept)}
+                      style={{
+                        width: '100%', display: 'flex', justifyContent: 'space-between',
+                        padding: '8px 12px', backgroundColor: '#fef2f2', border: 'none',
+                        fontWeight: 700, fontSize: '12px', color: '#991b1b', cursor: 'pointer', textAlign: 'left'
+                      }}
+                    >
+                      <span>{dept} <span style={{ color: '#f87171', fontWeight: 500 }}>({entries.length})</span></span>
+                      <span>{isOpen ? '▼' : '▶'}</span>
+                    </button>
+                    {isOpen && (
+                      <div style={{ padding: '8px 12px', fontSize: '13px', color: '#1e293b' }}>
+                        {entries.map((e: any, idx: number) => (
+                          <div key={idx} style={{ marginBottom: '2px' }}>
+                            {e.staffName} <span style={{ fontSize: '11px', color: '#dc2626', marginLeft: '4px' }}>({e.status})</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
