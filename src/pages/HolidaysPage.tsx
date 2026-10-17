@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
+import { MALDIVES_HOLIDAYS_2026 } from '../data/maldivesHolidays';
 
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
@@ -36,10 +37,7 @@ function HolidaysPage() {
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
-    if (!date || !name) {
-      alert('Please enter date and name');
-      return;
-    }
+    if (!date || !name) { alert('Please enter date and name'); return; }
     if (holidays.some((h) => h.date === date)) {
       alert('A holiday already exists on that date.');
       return;
@@ -52,9 +50,7 @@ function HolidaysPage() {
       });
       setName('');
       alert('Holiday added!');
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+    } catch (err: any) { alert('Error: ' + err.message); }
   };
 
   const handleDelete = async (id: string) => {
@@ -62,6 +58,36 @@ function HolidaysPage() {
     await deleteDoc(doc(db, 'holidays', id));
   };
 
+  // NEW: Bulk import Maldives holidays
+  const handleImportMaldives = async () => {
+    if (year !== 2026) {
+      alert('The Maldives public holiday list is currently only available for 2026. You can add other years manually.');
+      return;
+    }
+    const toImport = MALDIVES_HOLIDAYS_2026;
+    const existingDates = new Set(holidays.map((h: any) => h.date));
+    const missing = toImport.filter((h) => !existingDates.has(h.date));
+
+    if (missing.length === 0) {
+      alert('✅ All Maldives 2026 holidays are already in your list.');
+      return;
+    }
+
+    if (!window.confirm(`Import ${missing.length} Maldives public holidays for 2026?`)) return;
+
+    try {
+      for (const h of missing) {
+        await addDoc(collection(db, 'holidays'), {
+          date: h.date,
+          name: `🇲🇻 ${h.name}`,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      alert(`✅ Imported ${missing.length} Maldives public holidays!`);
+    } catch (err: any) { alert('Error: ' + err.message); }
+  };
+
+  // Friday generation logic...
   const fridaysOfYear: string[] = [];
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
@@ -103,6 +129,11 @@ function HolidaysPage() {
           </span>
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {isAdmin && (
+            <button className="export-btn jpg-btn" onClick={handleImportMaldives}>
+              🇲🇻 Import Maldives 2026 Holidays
+            </button>
+          )}
           <button
             className={showFridays ? 'export-btn pdf-btn' : 'export-btn jpg-btn'}
             onClick={() => setShowFridays(!showFridays)}
@@ -112,13 +143,7 @@ function HolidaysPage() {
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              fontFamily: 'inherit',
-              fontSize: '14px',
-            }}
+            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit', fontSize: '14px' }}
           >
             {[year - 1, year, year + 1, year + 2].map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -130,39 +155,21 @@ function HolidaysPage() {
       {isAdmin && (
         <form className="staff-form" onSubmit={handleAdd}>
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            ➕ Add Custom Company Holiday (e.g., Eid, National Day, Public Holiday)
+            ➕ Add Custom Holiday
           </div>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            required
-          />
-          <input
-            placeholder="Holiday name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+          <input placeholder="Holiday name" value={name} onChange={(e) => setName(e.target.value)} required />
           <button type="submit">Add Holiday</button>
         </form>
       )}
 
       <div className="staff-list">
         {displayedRows.length === 0 ? (
-          <div className="empty-state">
-            <p>No custom holidays for {year}. Click "Add Holiday" to create one.</p>
-          </div>
+          <div className="empty-state"><p>No holidays for {year}.</p></div>
         ) : (
           <table>
             <thead>
-              <tr>
-                <th>Date</th>
-                <th>Day</th>
-                <th>Name</th>
-                <th>Type</th>
-                {isAdmin && <th></th>}
-              </tr>
+              <tr><th>Date</th><th>Day</th><th>Name</th><th>Type</th>{isAdmin && <th></th>}</tr>
             </thead>
             <tbody>
               {displayedRows.map((h: any) => (
@@ -180,9 +187,7 @@ function HolidaysPage() {
                   {isAdmin && (
                     <td>
                       {!h.isFriday && h.id && (
-                        <button className="delete-btn" onClick={() => handleDelete(h.id)}>
-                          Delete
-                        </button>
+                        <button className="delete-btn" onClick={() => handleDelete(h.id)}>Delete</button>
                       )}
                     </td>
                   )}
