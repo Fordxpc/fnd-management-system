@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
-import { getMaldivesHolidays } from '../data/maldivesHolidays';
 
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
@@ -27,6 +26,9 @@ function HolidaysPage() {
   const [name, setName] = useState<string>('');
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [showFridays, setShowFridays] = useState<boolean>(false);
+  
+  // New state for syncing
+  const [syncing, setSyncing] = useState<boolean>(false);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'holidays'), (snap) => {
@@ -58,35 +60,46 @@ function HolidaysPage() {
     await deleteDoc(doc(db, 'holidays', id));
   };
 
-  const handleImportMaldives = async () => {
-    const officialHolidays = getMaldivesHolidays(year);
-    if (officialHolidays.length === 0) {
-      alert(`The official Maldives holiday list for ${year} is not yet available in the app. Please add them manually.`);
-      return;
-    }
-
-    const existingDates = new Set(holidays.map((h: any) => h.date));
-    const missing = officialHolidays.filter((h) => !existingDates.has(h.date));
-
-    if (missing.length === 0) {
-      alert(`✅ All Maldives ${year} holidays are already in your list.`);
-      return;
-    }
-
-    if (!window.confirm(`Import ${missing.length} Maldives public holidays for ${year}?`)) return;
-
+  // NEW: Auto-Sync from Nager.Date API
+  const handleSyncFromAPI = async () => {
+    setSyncing(true);
     try {
-      for (const h of missing) {
-        await addDoc(collection(db, 'holidays'), {
-          date: h.date,
-          name: `🇲🇻 ${h.name}`,
-          createdAt: new Date().toISOString(),
-        });
+      // Nager.Date API for Maldives (MV)
+      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/MV`);
+      if (!res.ok) throw new Error('Failed to fetch holidays from API');
+      
+      const apiHolidays: any[] = await res.json();
+      
+      if (!apiHolidays || apiHolidays.length === 0) {
+        alert(`No holidays found for ${year} in the API.`);
+        setSyncing(false);
+        return;
       }
-      alert(`✅ Imported ${missing.length} Maldives public holidays for ${year}!`);
-    } catch (err: any) { alert('Error: ' + err.message); }
+
+      const existingDates = new Set(holidays.map((h: any) => h.date));
+      let addedCount = 0;
+
+      for (const h of apiHolidays) {
+        // API returns date as "YYYY-MM-DD"
+        const holidayDate = h.date;
+        if (!existingDates.has(holidayDate)) {
+          await addDoc(collection(db, 'holidays'), {
+            date: holidayDate,
+            name: `🌐 ${h.localName || h.name}`,
+            createdAt: new Date().toISOString(),
+          });
+          addedCount++;
+        }
+      }
+
+      alert(`✅ Sync complete! Added ${addedCount} new holidays for ${year}.`);
+    } catch (err: any) {
+      alert('Sync failed: ' + err.message);
+    }
+    setSyncing(false);
   };
 
+  // Friday generation logic...
   const fridaysOfYear: string[] = [];
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
@@ -128,17 +141,25 @@ function HolidaysPage() {
           </span>
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          
           {isAdmin && (
-            <button className="export-btn jpg-btn" onClick={handleImportMaldives}>
-              🇲🇻 Import Maldives {year} Holidays
+            <button 
+              className="export-btn" 
+              onClick={handleSyncFromAPI} 
+              disabled={syncing}
+              style={{ backgroundColor: '#8b5cf6', color: 'white' }}
+            >
+              {syncing ? '⏳ Syncing...' : '🌐 Sync from API'}
             </button>
           )}
+
           <button
             className={showFridays ? 'export-btn pdf-btn' : 'export-btn jpg-btn'}
             onClick={() => setShowFridays(!showFridays)}
           >
             {showFridays ? '🙈 Hide Fridays' : '📅 Show Fridays'}
           </button>
+          
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
