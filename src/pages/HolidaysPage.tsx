@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
-import holidayData from '../data/maldivesHolidays.json';
 
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
+const CALENDARIFIC_KEY = import.meta.env.VITE_CALENDARIFIC_KEY;
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -59,15 +59,26 @@ function HolidaysPage() {
     await deleteDoc(doc(db, 'holidays', id));
   };
 
-  // NEW: Sync from local JSON file
-  const handleSyncMaldives = async () => {
+  // NEW: Automatic sync from Calendarific API
+  const handleAutoSync = async () => {
+    if (!CALENDARIFIC_KEY) {
+      alert('API key not found. Please add VITE_CALENDARIFIC_KEY to your Cloudflare Build Variables and redeploy.');
+      return;
+    }
+
     setSyncing(true);
     try {
-      // @ts-ignore - TypeScript might not recognise the year key directly
-      const officialHolidays = holidayData[String(year)] || [];
+      const res = await fetch(
+        `https://calendarific.com/api/v2/holidays?api_key=${CALENDARIFIC_KEY}&country=MV&year=${year}`
+      );
+      
+      if (!res.ok) throw new Error('Failed to fetch from Calendarific API');
+      
+      const data = await res.json();
+      const apiHolidays = data.response?.holidays || [];
 
-      if (officialHolidays.length === 0) {
-        alert(`The official holiday list for ${year} is not yet available in the app.`);
+      if (apiHolidays.length === 0) {
+        alert(`No holidays found for ${year}.`);
         setSyncing(false);
         return;
       }
@@ -75,11 +86,12 @@ function HolidaysPage() {
       const existingDates = new Set(holidays.map((h: any) => h.date));
       let addedCount = 0;
 
-      for (const h of officialHolidays) {
-        if (!existingDates.has(h.date)) {
+      for (const h of apiHolidays) {
+        const holidayDate = h.date.iso;
+        if (!existingDates.has(holidayDate)) {
           await addDoc(collection(db, 'holidays'), {
-            date: h.date,
-            name: `🇲🇻 ${h.name}`,
+            date: holidayDate,
+            name: `🌐 ${h.name}`,
             createdAt: new Date().toISOString(),
           });
           addedCount++;
@@ -138,11 +150,11 @@ function HolidaysPage() {
           {isAdmin && (
             <button 
               className="export-btn" 
-              onClick={handleSyncMaldives} 
+              onClick={handleAutoSync} 
               disabled={syncing}
               style={{ backgroundColor: '#8b5cf6', color: 'white' }}
             >
-              {syncing ? '⏳ Syncing...' : `🌐 Sync Maldives ${year}`}
+              {syncing ? '⏳ Syncing...' : `🌐 Auto-Sync Maldives ${year}`}
             </button>
           )}
 
@@ -158,7 +170,7 @@ function HolidaysPage() {
             onChange={(e) => setYear(Number(e.target.value))}
             style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit', fontSize: '14px' }}
           >
-            {[2026, 2027].map((y) => (
+            {[year - 1, year, year + 1, year + 2, year + 3].map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
