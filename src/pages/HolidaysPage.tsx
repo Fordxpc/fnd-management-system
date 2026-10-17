@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
+import holidayData from '../data/maldivesHolidays.json';
 
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
@@ -26,8 +27,6 @@ function HolidaysPage() {
   const [name, setName] = useState<string>('');
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [showFridays, setShowFridays] = useState<boolean>(false);
-  
-  // New state for syncing
   const [syncing, setSyncing] = useState<boolean>(false);
 
   useEffect(() => {
@@ -60,18 +59,15 @@ function HolidaysPage() {
     await deleteDoc(doc(db, 'holidays', id));
   };
 
-  // NEW: Auto-Sync from Nager.Date API
-  const handleSyncFromAPI = async () => {
+  // NEW: Sync from local JSON file
+  const handleSyncMaldives = async () => {
     setSyncing(true);
     try {
-      // Nager.Date API for Maldives (MV)
-      const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/MV`);
-      if (!res.ok) throw new Error('Failed to fetch holidays from API');
-      
-      const apiHolidays: any[] = await res.json();
-      
-      if (!apiHolidays || apiHolidays.length === 0) {
-        alert(`No holidays found for ${year} in the API.`);
+      // @ts-ignore - TypeScript might not recognise the year key directly
+      const officialHolidays = holidayData[String(year)] || [];
+
+      if (officialHolidays.length === 0) {
+        alert(`The official holiday list for ${year} is not yet available in the app.`);
         setSyncing(false);
         return;
       }
@@ -79,13 +75,11 @@ function HolidaysPage() {
       const existingDates = new Set(holidays.map((h: any) => h.date));
       let addedCount = 0;
 
-      for (const h of apiHolidays) {
-        // API returns date as "YYYY-MM-DD"
-        const holidayDate = h.date;
-        if (!existingDates.has(holidayDate)) {
+      for (const h of officialHolidays) {
+        if (!existingDates.has(h.date)) {
           await addDoc(collection(db, 'holidays'), {
-            date: holidayDate,
-            name: `🌐 ${h.localName || h.name}`,
+            date: h.date,
+            name: `🇲🇻 ${h.name}`,
             createdAt: new Date().toISOString(),
           });
           addedCount++;
@@ -99,7 +93,6 @@ function HolidaysPage() {
     setSyncing(false);
   };
 
-  // Friday generation logic...
   const fridaysOfYear: string[] = [];
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
@@ -145,11 +138,11 @@ function HolidaysPage() {
           {isAdmin && (
             <button 
               className="export-btn" 
-              onClick={handleSyncFromAPI} 
+              onClick={handleSyncMaldives} 
               disabled={syncing}
               style={{ backgroundColor: '#8b5cf6', color: 'white' }}
             >
-              {syncing ? '⏳ Syncing...' : '🌐 Sync from API'}
+              {syncing ? '⏳ Syncing...' : `🌐 Sync Maldives ${year}`}
             </button>
           )}
 
@@ -165,7 +158,7 @@ function HolidaysPage() {
             onChange={(e) => setYear(Number(e.target.value))}
             style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit', fontSize: '14px' }}
           >
-            {[year - 1, year, year + 1, year + 2].map((y) => (
+            {[2026, 2027].map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
