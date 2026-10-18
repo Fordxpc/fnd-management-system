@@ -7,32 +7,19 @@ import { db } from '../firebase';
 import { useAuth } from '../auth';
 
 const LEAVE_TYPES = [
-  'ANNUAL LEAVE',
-  'SICK LEAVE',
-  'SICK LEAVE / MC',
-  'NO PAY LEAVE',
-  'PATERNITY LEAVE',
-  'MATERNITY LEAVE',
-  'PRE-MATERNITY LEAVE',
-  'FAMILY RESPONSIBILITY LEAVE (FRL)',
-  'DUTY TRAVEL', // NEW
+  'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
+  'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE',
+  'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL',
 ];
 
 const ENTITLEMENTS: { [key: string]: number } = {
-  'ANNUAL LEAVE': 30,
-  'SICK LEAVE': 15,
-  'SICK LEAVE / MC': 15,
-  'FAMILY RESPONSIBILITY LEAVE (FRL)': 10,
-  'PRE-MATERNITY LEAVE': 15,
-  'MATERNITY LEAVE': 180,
-  'PATERNITY LEAVE': 30,
-  'NO PAY LEAVE': 365,
-  'DUTY TRAVEL': 0, // No limit
+  'ANNUAL LEAVE': 30, 'SICK LEAVE': 15, 'SICK LEAVE / MC': 15,
+  'FAMILY RESPONSIBILITY LEAVE (FRL)': 10, 'PRE-MATERNITY LEAVE': 15,
+  'MATERNITY LEAVE': 180, 'PATERNITY LEAVE': 30, 'NO PAY LEAVE': 365, 'DUTY TRAVEL': 0,
 };
 
 const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
 const MALE_ONLY = ['PATERNITY LEAVE'];
-
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
 
@@ -41,10 +28,11 @@ const APPROVER_DESIGNATIONS = [
   'Senior Airport Officer', 'Operations Officer', 'Assistant Operations Officer',
   'Assistant Security Officer', 'Assistant Administrative Officer', 'Leading Fireman',
 ];
-
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 const DEVELOPER_ROLES = ['developer'];
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
+
+// Added Administration for leave requests
+const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -56,14 +44,10 @@ const formatDate = (date: Date): string => {
 const formatDisplay = (dateStr: string): string => {
   if (!dateStr) return '';
   const parts = dateStr.split('-');
-  if (parts.length !== 3) return dateStr;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
 };
 
-const isFriday = (dateStr: string): boolean => {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.getDay() === 5;
-};
+const isFriday = (dateStr: string): boolean => new Date(dateStr + 'T00:00:00').getDay() === 5;
 
 const allDatesInRange = (start: string, end: string): string[] => {
   const dates: string[] = [];
@@ -78,9 +62,7 @@ const allDatesInRange = (start: string, end: string): string[] => {
   return dates;
 };
 
-const countAnnualLeaveDays = (
-  start: string, end: string, holidayDates: Set<string>
-): { countable: number; skippedFridays: number; skippedHolidays: number } => {
+const countAnnualLeaveDays = (start: string, end: string, holidayDates: Set<string>) => {
   const dates = allDatesInRange(start, end);
   let countable = 0, skippedFridays = 0, skippedHolidays = 0;
   for (const d of dates) {
@@ -91,21 +73,16 @@ const countAnnualLeaveDays = (
   return { countable, skippedFridays, skippedHolidays };
 };
 
-const getCurrentLeaveYear = (joinDateStr: string): { start: Date; end: Date } | null => {
+const getCurrentLeaveYear = (joinDateStr: string) => {
   if (!joinDateStr) return null;
   const jd = new Date(joinDateStr + 'T00:00:00');
   if (isNaN(jd.getTime())) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
   let startYear = today.getFullYear();
   let anniversary = new Date(startYear, jd.getMonth(), jd.getDate());
-  if (today < anniversary) {
-    startYear -= 1;
-    anniversary = new Date(startYear, jd.getMonth(), jd.getDate());
-  }
+  if (today < anniversary) { startYear -= 1; anniversary = new Date(startYear, jd.getMonth(), jd.getDate()); }
   const start = anniversary;
-  const end = new Date(startYear + 1, jd.getMonth(), jd.getDate());
-  end.setDate(end.getDate() - 1);
+  const end = new Date(startYear + 1, jd.getMonth(), jd.getDate()); end.setDate(end.getDate() - 1);
   return { start, end };
 };
 
@@ -152,7 +129,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 
 function LeavePage() {
   const { profile, user } = useAuth();
-  const isDeveloper: boolean = DEVELOPER_ROLES.includes(profile?.role || '');
+  const isDeveloper = DEVELOPER_ROLES.includes(profile?.role || '');
 
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
@@ -166,6 +143,7 @@ function LeavePage() {
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
+  const [selectedFormDept, setSelectedFormDept] = useState<string>('');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [leaveType, setLeaveType] = useState<string>('ANNUAL LEAVE');
   const [startDate, setStartDate] = useState<string>(formatDate(new Date()));
@@ -179,7 +157,12 @@ function LeavePage() {
       setStaffList(list);
       const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
-      if (mine) setSelectedStaffId(mine.id);
+      if (mine) {
+        setSelectedStaffId(mine.id);
+        setSelectedFormDept(mine.department || 'Ground Operations');
+      } else {
+        setSelectedFormDept('Ground Operations');
+      }
       setLoading(false);
     });
     return () => unsub();
@@ -199,29 +182,26 @@ function LeavePage() {
     return () => unsub();
   }, []);
 
-  const holidaySet: Set<string> = new Set(holidays.map((h: any) => h.date));
-  const canApproveAny: boolean = isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
-  const isDeptManager: boolean = canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
+  const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
+  const canApproveAny = isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
+  const isDeptManager = canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   const canSeeDeptBalances = isDeptManager;
-
   const isManagementProfile = isDeptManager || ['developer', 'manager', 'admin', 'smt'].includes(profile?.role || '');
   const canSeeMyBalance = isManagementProfile || myStaff?.balanceVisible === true;
 
   const canApproveRequest = (r: any): boolean => {
     if (canApproveAny) return true;
     if (!APPROVER_DESIGNATIONS.includes(myStaff?.position || '')) return false;
-    if (myStaff?.department === r.staffDepartment) return true;
-    return false;
+    return myStaff?.department === r.staffDepartment;
   };
 
   const canDeleteRequest = (r: any): boolean => {
     if (isDeveloper || isDeptManager) return true;
-    if (myStaff && r.staffId === myStaff.id) return true;
-    return false;
+    return myStaff && r.staffId === myStaff.id;
   };
 
-  const visibleRequests: any[] = requests
-    .filter((r: any): boolean => {
+  const visibleRequests = requests
+    .filter((r: any) => {
       if (!isDeptManager) {
         if (!myStaff) return false;
         return r.staffId === myStaff.id;
@@ -229,12 +209,15 @@ function LeavePage() {
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })
-    .filter((r: any): boolean => (tab === 'all' ? true : r.status === tab))
+    .filter((r: any) => (tab === 'all' ? true : r.status === tab))
     .sort((a: any, b: any) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
   const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
+
+  // Filter staff list for the form based on selected department
+  const formStaffOptions = staffList.filter(s => s.department === selectedFormDept);
 
   const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
   const allowedLeaveTypes = getLeaveTypesForStaff(selectedStaff || myStaff);
@@ -246,11 +229,9 @@ function LeavePage() {
 
   const deptBalanceStaff = staffList
     .filter((s: any) => {
-      if (s.isSMT === true) return false;
-      if (s.department === 'Administration') return false;
+      if (s.isSMT === true || s.department === 'Administration') return false;
       if (canApproveAny || isDeveloper) return true;
-      if (myStaff?.department) return s.department === myStaff.department;
-      return false;
+      return myStaff?.department ? s.department === myStaff.department : false;
     })
     .sort((a: any, b: any) => (a.sn || '').localeCompare(b.sn || ''));
 
@@ -269,7 +250,6 @@ function LeavePage() {
       if (!staff.joinDate) { alert(`${staff.name} does not have a Join Date set.`); return; }
       const daysForRequest = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
       const usedAnnual = computeUsedDays(staff.id, staff.joinDate, 'ANNUAL LEAVE', requests);
-      
       if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) {
         alert(`⛔ Exceeds annual leave entitlement.\nUsed: ${usedAnnual}\nRequesting: ${daysForRequest}\nTotal: ${usedAnnual + daysForRequest}/30`);
         return;
@@ -299,17 +279,13 @@ function LeavePage() {
   const handleApprove = async (r: any) => {
     if (myStaff && r.staffId === myStaff.id) { alert('You cannot approve your own leave.'); return; }
     if (!window.confirm(`Approve ${r.leaveType} for ${r.staffName}?`)) return;
-
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), {
-        status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(),
-      });
+      await updateDoc(doc(db, 'leave_requests', r.id), { status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString() });
       const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(collection(db, 'roster_entries'), where('staffId', '==', r.staffId), where('date', '==', d));
         const existing = await getDocs(q);
         for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-        
         await addDoc(collection(db, 'roster_entries'), {
           staffId: r.staffId, staffName: r.staffName, staffDepartment: r.staffDepartment,
           date: d, shiftTime: '', status: r.leaveType, leaveRequestId: r.id, createdAt: new Date().toISOString(),
@@ -323,9 +299,7 @@ function LeavePage() {
     const note = window.prompt('Reason for rejection (optional):');
     if (note === null) return;
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), {
-        status: 'rejected', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(), reviewNotes: note || '',
-      });
+      await updateDoc(doc(db, 'leave_requests', r.id), { status: 'rejected', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(), reviewNotes: note || '' });
       alert('Rejected.');
     } catch (error: any) { alert('Error: ' + error.message); }
   };
@@ -367,7 +341,7 @@ function LeavePage() {
           <button className="collapsible-header" onClick={() => setShowMyBalance(!showMyBalance)}>
             <span>
               <strong>My Leave Balance</strong>
-              {myLeaveYear && myIsAnnualRenewing && <span className="text-xs text-slate-400 ml-2">{formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))}</span>}
+              {myLeaveYear && myIsAnnualRenewing && <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: '8px' }}>{formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))}</span>}
             </span>
             <span className="collapsible-toggle">{showMyBalance ? '▼' : '▶'}</span>
           </button>
@@ -383,7 +357,7 @@ function LeavePage() {
                       <div key={t} className="balance-item">
                         <span className="balance-label">{t}</span>
                         <span className="balance-value">{ANNUAL_LEAVE_TOTAL - used} / {ANNUAL_LEAVE_TOTAL} days</span>
-                        <span className="text-[11px] text-slate-500">One-time allocation</span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>One-time allocation</span>
                       </div>
                     );
                   }
@@ -412,9 +386,7 @@ function LeavePage() {
           {showDeptBalances && (
             <div className="collapsible-body">
               <table className="dept-balance-table">
-                <thead>
-                  <tr><th>SN</th><th>Name</th><th>Dept</th><th>Annual</th><th>Sick</th><th>FRL</th></tr>
-                </thead>
+                <thead><tr><th>SN</th><th>Name</th><th>Dept</th><th>Annual</th><th>Sick</th><th>FRL</th></tr></thead>
                 <tbody>
                   {deptBalanceStaff.map((s: any) => {
                     const aUsed = computeUsedDays(s.id, s.joinDate || '', 'ANNUAL LEAVE', requests);
@@ -424,10 +396,10 @@ function LeavePage() {
                       <tr key={s.id}>
                         <td>{s.sn || '—'}</td>
                         <td><strong>{s.name}</strong></td>
-                        <td className="text-xs">{s.department}</td>
-                        <td className="font-bold">{ANNUAL_LEAVE_TOTAL - aUsed} / 30</td>
-                        <td className="font-bold">{15 - sUsed} / 15</td>
-                        <td className="font-bold">{10 - fUsed} / 10</td>
+                        <td style={{ fontSize: '12px' }}>{s.department}</td>
+                        <td style={{ fontWeight: 600 }}>{ANNUAL_LEAVE_TOTAL - aUsed} / 30</td>
+                        <td style={{ fontWeight: 600 }}>{15 - sUsed} / 15</td>
+                        <td style={{ fontWeight: 600 }}>{10 - fUsed} / 10</td>
                       </tr>
                     );
                   })}
@@ -440,32 +412,46 @@ function LeavePage() {
 
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
-          <div className="col-span-2 font-bold text-slate-800 mb-1">📝 New Leave Request</div>
+          <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
+          
+          {isDeptManager && (
+            <select 
+              value={selectedFormDept} 
+              onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} 
+              required
+            >
+              {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+
           {isDeptManager ? (
             <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required>
               <option value="">Select Staff Member...</option>
-              {staffList.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn}) — {s.department}</option>)}
+              {formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
             </select>
           ) : (
             <input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />
           )}
+
           <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
             {allowedLeaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold">Start Date</label>
+          <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Start Date</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
           </div>
-          <div>
-            <label className="text-xs text-slate-500 font-semibold">End Date</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>End Date</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
           </div>
-          <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} className="col-span-2" />
-          <div className="col-span-2 bg-slate-50 p-3 rounded text-sm text-slate-600">
+
+          <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#475569' }}>
             <strong>Countable days:</strong> {previewDays}
-            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && <div className="text-[11px] text-amber-600 mt-1">ℹ️ {previewFridays} Friday(s) excluded</div>}
+            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>ℹ️ {previewFridays} Friday(s) excluded</div>}
           </div>
-          <button type="submit" disabled={submitting || previewDays === 0} className="col-span-2">
+          <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>
             {submitting ? 'Submitting...' : 'Submit Leave Request'}
           </button>
         </form>
@@ -478,34 +464,32 @@ function LeavePage() {
         <button className={tab === 'all' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('all')}>All</button>
       </div>
 
-      <div className="staff-list mt-4">
+      <div className="staff-list" style={{ marginTop: '16px' }}>
         {visibleRequests.length === 0 ? (
           <div className="empty-state"><p>No {tab} requests.</p></div>
         ) : (
           <table>
-            <thead>
-              <tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr>
-            </thead>
+            <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleRequests.map((r: any) => {
                 const canApprove = canApproveRequest(r) && r.status === 'pending' && r.staffId !== myStaff?.id;
                 return (
                   <tr key={r.id}>
                     <td><strong>{r.staffName}</strong></td>
-                    <td className="text-xs">{r.staffDepartment}</td>
+                    <td style={{ fontSize: '12px' }}>{r.staffDepartment}</td>
                     <td><span className="leave-type-badge">{r.leaveType}</span></td>
                     <td>{formatDisplay(r.startDate)}</td>
                     <td>{formatDisplay(r.endDate)}</td>
-                    <td className="text-center font-bold">{r.days}</td>
+                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
                     <td><span className={`status-badge status-${r.status}`}>{r.status.toUpperCase()}</span></td>
-                    <td className="whitespace-nowrap">
+                    <td style={{ whiteSpace: 'nowrap' }}>
                       {canApprove && (
                         <>
                           <button className="approve-btn" onClick={() => handleApprove(r)}>✓</button>
                           <button className="reject-btn" onClick={() => handleReject(r)}>✕</button>
                         </>
                       )}
-                      {canDeleteRequest(r) && <button className="delete-btn ml-2" onClick={() => handleDelete(r)}>🗑</button>}
+                      {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
                     </td>
                   </tr>
                 );

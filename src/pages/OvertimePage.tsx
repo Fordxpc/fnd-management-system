@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from '../auth';
 
 const WEEKLY_THRESHOLD = 48;
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -60,6 +60,8 @@ function OvertimePage() {
   const [filterStaff, setFilterStaff] = useState<string>('all');
   const [showForm, setShowForm] = useState<boolean>(false);
 
+  // Form state
+  const [formDept, setFormDept] = useState<string>('Ground Operations');
   const [formStaffId, setFormStaffId] = useState<string>('');
   const [formDate, setFormDate] = useState<string>(formatDate(new Date()));
   const [formStart, setFormStart] = useState<string>('14:00');
@@ -76,6 +78,7 @@ function OvertimePage() {
       if (mine) {
         setFormStaffId(mine.id);
         setFilterDept(mine.department);
+        setFormDept(mine.department);
       }
       setLoading(false);
     });
@@ -115,6 +118,9 @@ function OvertimePage() {
   const myMonthEntries = myStaff ? entries.filter((e) => e.staffId === myStaff.id && (e.date || '').startsWith(monthFilter)) : [];
   const myMonthHours = myMonthEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
 
+  // Filter staff options for the form
+  const formStaffOptions = staff.filter(s => s.department === formDept);
+
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!formStaffId) { alert('Please select a staff member'); return; }
@@ -148,25 +154,25 @@ function OvertimePage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>Overtime Sheet</h2>
-        <div className="flex gap-2 flex-wrap items-center">
-          <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="p-2 border rounded" />
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
           <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Log OT'}</button>
         </div>
       </div>
 
       {isManager && (
-        <div className="leave-tabs mb-4">
+        <div className="leave-tabs" style={{ marginBottom: '16px' }}>
           <button className={viewMode === 'individual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('individual')}>👤 My Individual OT</button>
           <button className={viewMode === 'department' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('department')}>🏢 Department OT</button>
         </div>
       )}
 
       {isManager && viewMode === 'department' && (
-        <div className="flex gap-2 mb-4">
-          <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} className="p-2 border rounded">
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+          <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
             {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="p-2 border rounded">
+          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
             <option value="all">All Staff in {filterDept}</option>
             {staff.filter(s => s.department === filterDept).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -174,8 +180,8 @@ function OvertimePage() {
       )}
 
       {myStaff && (
-        <div className="collapsible-card mb-4">
-          <div className="collapsible-body pt-4">
+        <div className="collapsible-card" style={{ marginBottom: '16px' }}>
+          <div className="collapsible-body" style={{ paddingTop: '16px' }}>
             <div className="balance-grid">
               <div className="balance-item"><span className="balance-label">My OT hours ({monthFilter})</span><span className="balance-value">{myMonthHours.toFixed(2)} hrs</span></div>
             </div>
@@ -185,20 +191,37 @@ function OvertimePage() {
 
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
-          <div className="col-span-2 font-bold text-slate-800 mb-1">⏰ Log Overtime</div>
+          <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>⏰ Log Overtime</div>
+          
+          {isManager && (
+            <select value={formDept} onChange={(e) => { setFormDept(e.target.value); setFormStaffId(''); }} required>
+              {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
+
           {isManager ? (
             <select value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} required>
               <option value="">Select Staff...</option>
-              {staff.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.department}</option>)}
+              {formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
             </select>
           ) : (
             <input value={myStaff ? `${myStaff.name}` : 'Not linked'} disabled />
           )}
-          <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} required />
-          <input type="time" value={formStart} onChange={(e) => setFormStart(e.target.value)} required />
-          <input type="time" value={formEnd} onChange={(e) => setFormEnd(e.target.value)} required />
-          <input placeholder="Notes (optional)" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} className="col-span-2" />
-          <button type="submit" disabled={submitting} className="col-span-2">{submitting ? 'Saving...' : 'Save Entry'}</button>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Date</label>
+            <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} required />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+             <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Start / End Time</label>
+             <div style={{ display: 'flex', gap: '4px' }}>
+               <input type="time" value={formStart} onChange={(e) => setFormStart(e.target.value)} required style={{ flex: 1 }} />
+               <input type="time" value={formEnd} onChange={(e) => setFormEnd(e.target.value)} required style={{ flex: 1 }} />
+             </div>
+          </div>
+          
+          <input placeholder="Notes (optional)" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} style={{ gridColumn: 'span 2' }} />
+          <button type="submit" disabled={submitting} style={{ gridColumn: 'span 2' }}>{submitting ? 'Saving...' : 'Save Entry'}</button>
         </form>
       )}
 
@@ -211,22 +234,22 @@ function OvertimePage() {
           const isOver = weekTotal >= WEEKLY_THRESHOLD;
           const eligible = Math.max(0, weekTotal - WEEKLY_THRESHOLD);
           return (
-            <div key={weekKey} className="mb-5">
-              <div className={`p-3 rounded-t-lg font-bold text-sm flex justify-between ${isOver ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'}`}>
+            <div key={weekKey} style={{ marginBottom: '20px' }}>
+              <div style={{ padding: '12px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', fontWeight: 700, fontSize: '13px', display: 'flex', justifyContent: 'space-between', backgroundColor: isOver ? '#dcfce7' : '#f1f5f9', color: isOver ? '#065f46' : '#475569' }}>
                 <span>Week: {formatDisplay(weekKey)} – {formatDisplay(getWeekEnd(weekKey))}</span>
                 <span>Total: {weekTotal.toFixed(2)} hrs {isOver ? `· ✅ Eligible (${eligible.toFixed(2)} OT)` : `· ${(WEEKLY_THRESHOLD - weekTotal).toFixed(2)} hrs to 48`}</span>
               </div>
-              <div className="staff-list rounded-t-none">
+              <div className="staff-list" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <table>
-                  <thead><tr><th>Date</th><th>Day</th>{isManager && <th>Staff</th>}<th>Time</th><th>Hours</th><th></th></tr></thead>
+                  <thead><tr><th>Date</th><th>Day</th>{isManager && viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th></th></tr></thead>
                   <tbody>
                     {weekEntries.map((e) => (
                       <tr key={e.id}>
                         <td>{formatDisplay(e.date)}</td>
                         <td>{getDayShort(e.date)}</td>
-                        {isManager && <td><strong>{e.staffName}</strong></td>}
-                        <td className="text-xs">{e.startTime} – {e.endTime}</td>
-                        <td className="text-center font-bold">{e.hours}</td>
+                        {isManager && viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
+                        <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
+                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
                         <td><button className="delete-btn" onClick={() => handleDelete(e.id)}>Delete</button></td>
                       </tr>
                     ))}
