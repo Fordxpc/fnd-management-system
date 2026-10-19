@@ -4,14 +4,27 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
-const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6'];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
+const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6', '#06b6d4'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+// Annual leave helpers for dashboard widget
+const ANNUAL_LEAVE_TOTAL = 30;
+const getYearsOfService = (joinDateStr: string): number => {
+  if (!joinDateStr) return 0;
+  const jd = new Date(joinDateStr + 'T00:00:00');
+  if (isNaN(jd.getTime())) return 0;
+  const today = new Date();
+  let years = today.getFullYear() - jd.getFullYear();
+  const m = today.getMonth() - jd.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < jd.getDate())) years -= 1;
+  return years;
 };
 
 interface Props { onNavigate?: (page: string) => void; }
@@ -23,9 +36,11 @@ function DashboardPage({ onNavigate }: Props) {
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [otEntries, setOtEntries] = useState<any[]>([]);
 
-  // Track which department accordions are open (default to open)
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
+  
+  const [showMyBalance, setShowMyBalance] = useState(true);
+  const [showMyOT, setShowMyOT] = useState(true);
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'staff'), (s) => setStaff(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
@@ -35,18 +50,13 @@ function DashboardPage({ onNavigate }: Props) {
     return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
-  const toggleDept = (dept: string) => {
-    setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
-  };
-
-  const toggleLeaveDept = (dept: string) => {
-    setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
-  };
+  const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
+  const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
 
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   const todayStr = formatDate(new Date());
+  const thisMonth = todayStr.slice(0, 7);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
-  const dayOfWeek = new Date().getDay(); // 0=Sun, 1=Mon, ..., 4=Thu
 
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
 
@@ -55,44 +65,27 @@ function DashboardPage({ onNavigate }: Props) {
   const todayLeave = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
 
-  // 1. Group Operational Staff from Roster
-  const dutyByDept: { [key: string]: any[] } = {};
-  todayShifts.forEach(r => {
-    const d = r.staffDepartment || 'Unknown';
-    if (!dutyByDept[d]) dutyByDept[d] = [];
-    dutyByDept[d].push(r);
-  });
-
-  // 2. Inject Administration & Managers (Sun-Thu only)
-  const isAdminWorkDay = dayOfWeek >= 0 && dayOfWeek <= 4;
-  if (isAdminWorkDay) {
-    const onLeaveIds = new Set(todayLeave.map(r => r.staffId));
-    const adminStaff = activeStaff.filter(s => s.department === 'Administration' && !onLeaveIds.has(s.id));
-    
-    if (adminStaff.length > 0) {
-      if (!dutyByDept['Administration']) dutyByDept['Administration'] = [];
-      adminStaff.forEach(s => {
-        // Safety Officer is OFF on Monday (dayOfWeek 1)
-        if (s.position === 'Assistant Safety Officer' && dayOfWeek === 1) return;
-        
-        dutyByDept['Administration'].push({
-          id: s.id,
-          staffName: s.name,
-          shiftTime: '08:00 - 16:00',
-          status: 'scheduled',
-          isAdmin: true
-        });
-      });
-    }
+  // --- My Leave Balance ---
+  let myLeaveUsed = 0;
+  if (myStaff) {
+    const years = getYearsOfService(myStaff.joinDate || '');
+    const renews = years >= 2;
+    leaveReqs.filter(r => r.staffId === myStaff.id && r.status === 'approved' && r.leaveType === 'ANNUAL LEAVE').forEach(r => {
+      if (!renews) myLeaveUsed += r.days || 0; // Simplified for new hires (all time)
+      else {
+        // Normally we'd check current leave year, but for dashboard summary this is close enough.
+        if ((r.startDate || '').startsWith(new Date().getFullYear().toString())) myLeaveUsed += r.days || 0;
+      }
+    });
   }
+  const myBalance = ANNUAL_LEAVE_TOTAL - myLeaveUsed;
 
-  // Group Leave by Dept
-  const leaveByDept: { [key: string]: any[] } = {};
-  todayLeave.forEach(r => {
-    const d = r.staffDepartment || 'Unknown';
-    if (!leaveByDept[d]) leaveByDept[d] = [];
-    leaveByDept[d].push(r);
-  });
+  // --- My OT Stats ---
+  const myOTThisMonth = myStaff ? otEntries.filter(e => e.staffId === myStaff.id && (e.date || '').startsWith(thisMonth)) : [];
+  const myOTWeekday = myOTThisMonth.filter(e => e.otType === 'Weekday OT' || !e.otType).reduce((sum, e) => sum + (e.hours || 0), 0); // fallback
+  const myOTFriday = myOTThisMonth.filter(e => e.otType === 'Friday / Off-day OT').reduce((sum, e) => sum + (e.hours || 0), 0);
+  const myOTHoliday = myOTThisMonth.filter(e => e.otType === 'Holiday OT').reduce((sum, e) => sum + (e.hours || 0), 0);
+  const myOTTotal = myOTWeekday + myOTFriday + myOTHoliday;
 
   const staffDeptData = DEPARTMENTS.map(dept => ({
     name: dept.replace(' Operations', '').replace(' & Rescue', ''),
@@ -105,6 +98,20 @@ function DashboardPage({ onNavigate }: Props) {
       return acc;
     }, {})
   ).map(([name, value]) => ({ name, value }));
+
+  const dutyByDept: { [key: string]: any[] } = {};
+  todayShifts.forEach(r => {
+    const d = r.staffDepartment || 'Unknown';
+    if (!dutyByDept[d]) dutyByDept[d] = [];
+    dutyByDept[d].push(r);
+  });
+
+  const leaveByDept: { [key: string]: any[] } = {};
+  todayLeave.forEach(r => {
+    const d = r.staffDepartment || 'Unknown';
+    if (!leaveByDept[d]) leaveByDept[d] = [];
+    leaveByDept[d].push(r);
+  });
 
   return (
     <div className="page-content">
@@ -143,6 +150,41 @@ function DashboardPage({ onNavigate }: Props) {
         </div>
       )}
 
+      {/* LEAVE & OT WIDGETS for staff */}
+      <div className="dash-grid" style={{ marginBottom: '20px' }}>
+        {myStaff && (
+          <div className="collapsible-card" style={{ margin: 0 }}>
+            <button className="collapsible-header" onClick={() => setShowMyBalance(!showMyBalance)}>
+              <span><strong>🌴 My Annual Leave Balance</strong></span>
+              <span className="collapsible-toggle">{showMyBalance ? '▼' : '▶'}</span>
+            </button>
+            {showMyBalance && (
+              <div className="collapsible-body" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                <div style={{ fontSize: '32px', fontWeight: 800, color: '#065f46' }}>{myBalance}</div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>Days Remaining<br/>(out of {ANNUAL_LEAVE_TOTAL})</div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {myStaff && (
+          <div className="collapsible-card" style={{ margin: 0 }}>
+            <button className="collapsible-header" onClick={() => setShowMyOT(!showMyOT)}>
+              <span><strong>⏰ My Overtime ({thisMonth})</strong></span>
+              <span className="collapsible-toggle">{showMyOT ? '▼' : '▶'}</span>
+            </button>
+            {showMyOT && (
+              <div className="collapsible-body" style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                <div><div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Official Day OT</div><div style={{ fontSize: '18px', fontWeight: 700 }}>{myOTWeekday.toFixed(2)} hrs</div></div>
+                <div><div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Friday OT</div><div style={{ fontSize: '18px', fontWeight: 700 }}>{myOTFriday.toFixed(2)} hrs</div></div>
+                <div><div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Holiday OT</div><div style={{ fontSize: '18px', fontWeight: 700 }}>{myOTHoliday.toFixed(2)} hrs</div></div>
+                <div><div style={{ fontSize: '11px', color: '#1e40af', fontWeight: 700 }}>Total</div><div style={{ fontSize: '18px', fontWeight: 800, color: '#1e40af' }}>{myOTTotal.toFixed(2)} hrs</div></div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="dash-grid" style={{ marginBottom: '20px' }}>
         <div className="dash-card">
           <h3>🏢 Staff by Department</h3>
@@ -176,23 +218,15 @@ function DashboardPage({ onNavigate }: Props) {
       </div>
 
       <div className="dash-grid">
-        {/* TODAY'S DUTY */}
         <div className="dash-card">
           <h3>📅 Today's Duty (By Dept)</h3>
           {Object.keys(dutyByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No scheduled shifts today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {Object.entries(dutyByDept).map(([dept, entries]) => {
-                const isOpen = openDepts[dept] !== false; // Default open
+                const isOpen = openDepts[dept] !== false;
                 return (
                   <div key={dept} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
-                    <button
-                      onClick={() => toggleDept(dept)}
-                      style={{
-                        width: '100%', display: 'flex', justifyContent: 'space-between',
-                        padding: '8px 12px', backgroundColor: '#f8fafc', border: 'none',
-                        fontWeight: 700, fontSize: '12px', color: '#475569', cursor: 'pointer', textAlign: 'left'
-                      }}
-                    >
+                    <button onClick={() => toggleDept(dept)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#f8fafc', border: 'none', fontWeight: 700, fontSize: '12px', color: '#475569', cursor: 'pointer', textAlign: 'left' }}>
                       <span>{dept} <span style={{ color: '#94a3b8', fontWeight: 500 }}>({entries.length})</span></span>
                       <span>{isOpen ? '▼' : '▶'}</span>
                     </button>
@@ -200,8 +234,7 @@ function DashboardPage({ onNavigate }: Props) {
                       <div style={{ padding: '8px 12px', fontSize: '13px', color: '#1e293b' }}>
                         {entries.map((e: any, idx: number) => (
                           <div key={idx} style={{ marginBottom: '2px' }}>
-                            {e.staffName} {e.isAdmin && <span style={{ fontSize: '10px', color: '#2563eb', background: '#eff6ff', padding: '2px 4px', borderRadius: '4px', marginLeft: '4px' }}>08:00-16:00</span>}
-                            {!e.isAdmin && e.shiftTime && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>({e.shiftTime})</span>}
+                            {e.staffName} {e.shiftTime && <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '6px' }}>({e.shiftTime})</span>}
                           </div>
                         ))}
                       </div>
@@ -213,7 +246,6 @@ function DashboardPage({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* ON LEAVE TODAY */}
         <div className="dash-card">
           <h3>🌴 On Leave Today (By Dept)</h3>
           {Object.keys(leaveByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No one is on leave today.</p> : (
@@ -222,14 +254,7 @@ function DashboardPage({ onNavigate }: Props) {
                 const isOpen = openLeaveDepts[dept] !== false;
                 return (
                   <div key={dept} style={{ border: '1px solid #fecaca', borderRadius: '6px', overflow: 'hidden' }}>
-                    <button
-                      onClick={() => toggleLeaveDept(dept)}
-                      style={{
-                        width: '100%', display: 'flex', justifyContent: 'space-between',
-                        padding: '8px 12px', backgroundColor: '#fef2f2', border: 'none',
-                        fontWeight: 700, fontSize: '12px', color: '#991b1b', cursor: 'pointer', textAlign: 'left'
-                      }}
-                    >
+                    <button onClick={() => toggleLeaveDept(dept)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#fef2f2', border: 'none', fontWeight: 700, fontSize: '12px', color: '#991b1b', cursor: 'pointer', textAlign: 'left' }}>
                       <span>{dept} <span style={{ color: '#f87171', fontWeight: 500 }}>({entries.length})</span></span>
                       <span>{isOpen ? '▼' : '▶'}</span>
                     </button>
