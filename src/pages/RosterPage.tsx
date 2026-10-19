@@ -8,10 +8,9 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 
-const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue'];
-
+// Added Administration and Safety
+const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-const FULL_ACCESS_DEPARTMENTS = ['Administration', 'Airport Manager'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -48,8 +47,7 @@ const getPeriodEnd = (start: Date): Date => {
 const getSaturdayOnOrBefore = (date: Date): Date => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = (day + 1) % 7;
+  const diff = (d.getDay() + 1) % 7;
   d.setDate(d.getDate() - diff);
   return d;
 };
@@ -76,31 +74,17 @@ const sortStaff = (a: any, b: any): number => {
 };
 
 const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
-
-const LEAVE_OPTIONS = [
-  'OFF DAY',
-  'ANNUAL LEAVE',
-  'SICK LEAVE',
-  'SICK LEAVE / MC',
-  'NO PAY LEAVE',
-  'PATERNITY LEAVE',
-  'MATERNITY LEAVE',
-  'FAMILY RESPONSIBILITY LEAVE (FRL)',
-];
-
+const LEAVE_OPTIONS = ['OFF DAY','ANNUAL LEAVE','SICK LEAVE','SICK LEAVE / MC','NO PAY LEAVE','PATERNITY LEAVE','MATERNITY LEAVE','FAMILY RESPONSIBILITY LEAVE (FRL)'];
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function RosterPage() {
   const { profile } = useAuth();
-
-  const isAdmin =
-    FULL_ACCESS_ROLES.includes(profile?.role || '') ||
-    FULL_ACCESS_DEPARTMENTS.includes(profile?.department || '');
+  const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
+  const isStaff = profile?.role === 'staff'; // Staff cannot edit
 
   const userDepartment = profile?.department;
 
   const [selectedDept, setSelectedDept] = useState<string>('all');
-
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [periodStart, setPeriodStart] = useState<Date>(getPeriodStart(new Date()));
@@ -129,7 +113,6 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-  // Roster grid only shows operational departments. Administration staff are excluded always.
   const visibleStaff = [...staff]
     .filter((s) => {
       if (!ROSTER_DEPARTMENTS.includes(s.department)) return false;
@@ -168,28 +151,16 @@ function RosterPage() {
     }
 
     try {
-      const q = query(
-        collection(db, 'roster_entries'),
-        where('staffId', '==', staffId),
-        where('date', '==', date)
-      );
+      const q = query(collection(db, 'roster_entries'), where('staffId', '==', staffId), where('date', '==', date));
       const existing = await getDocs(q);
-      for (const docSnap of existing.docs) {
-        await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-      }
+      for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
 
       await addDoc(collection(db, 'roster_entries'), {
-        staffId,
-        staffName: staffMember?.name || 'Unknown',
-        staffDepartment: staffMember?.department || '',
-        date,
-        shiftTime: finalShiftTime,
-        status: status === 'scheduled' ? 'scheduled' : status,
+        staffId, staffName: staffMember?.name || 'Unknown', staffDepartment: staffMember?.department || '',
+        date, shiftTime: finalShiftTime, status: status === 'scheduled' ? 'scheduled' : status,
         createdAt: new Date().toISOString(),
       });
-      setShowForm(false);
-      setCustomShift('');
-      alert('Roster entry added!');
+      setShowForm(false); setCustomShift(''); alert('Roster entry added!');
     } catch (error: any) { alert('Error: ' + error.message); }
   };
 
@@ -201,28 +172,21 @@ function RosterPage() {
     if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return dates;
     const cur = new Date(s);
     while (cur <= e) {
-      if (bulkDaysOfWeek.includes(cur.getDay())) {
-        dates.push(formatDate(cur));
-      }
+      if (bulkDaysOfWeek.includes(cur.getDay())) dates.push(formatDate(cur));
       cur.setDate(cur.getDate() + 1);
     }
     return dates;
   };
 
   const toggleBulkDay = (day: number) => {
-    setBulkDaysOfWeek((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort()
-    );
+    setBulkDaysOfWeek((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort());
   };
 
   const handleBulkAssign = async () => {
     if (!bulkStaffId) { alert('Please select a staff member'); return; }
     const dates = previewBulkDates();
     if (dates.length === 0) { alert('No dates match the selected days'); return; }
-    if (dates.length > 90) {
-      alert(`Too many dates (${dates.length}). Limit is 90.`);
-      return;
-    }
+    if (dates.length > 90) { alert(`Too many dates (${dates.length}). Limit is 90.`); return; }
 
     const staffMember = staff.find((s) => s.id === bulkStaffId);
     if (!staffMember) return;
@@ -233,52 +197,35 @@ function RosterPage() {
       if (!finalShiftTime) { alert('Please enter the custom shift time'); return; }
     }
 
-    const ok = window.confirm(
-      `Create ${dates.length} roster entries for ${staffMember.name}?\n\n` +
-      `Any existing entries for those days will be overwritten.`
-    );
+    const ok = window.confirm(`Create ${dates.length} roster entries for ${staffMember.name}?\n\nAny existing entries for those days will be overwritten.`);
     if (!ok) return;
 
     setBulkSubmitting(true);
     try {
       for (const d of dates) {
-        const q = query(
-          collection(db, 'roster_entries'),
-          where('staffId', '==', bulkStaffId),
-          where('date', '==', d)
-        );
+        const q = query(collection(db, 'roster_entries'), where('staffId', '==', bulkStaffId), where('date', '==', d));
         const existing = await getDocs(q);
-        for (const docSnap of existing.docs) {
-          await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-        }
+        for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
       }
 
       let created = 0;
       for (const d of dates) {
         await addDoc(collection(db, 'roster_entries'), {
-          staffId: bulkStaffId,
-          staffName: staffMember.name,
-          staffDepartment: staffMember.department,
-          date: d,
-          shiftTime: finalShiftTime,
-          status: bulkType === 'scheduled' ? 'scheduled' : bulkType,
+          staffId: bulkStaffId, staffName: staffMember.name, staffDepartment: staffMember.department,
+          date: d, shiftTime: finalShiftTime, status: bulkType === 'scheduled' ? 'scheduled' : bulkType,
           createdAt: new Date().toISOString(),
         });
         created++;
       }
       alert(`✅ Created ${created} roster entries!`);
       setShowBulkForm(false);
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+    } catch (err: any) { alert('Error: ' + err.message); }
     setBulkSubmitting(false);
   };
 
   const handleCopyPreviousPeriod = async () => {
-    const prevStart = new Date(periodStart);
-    prevStart.setMonth(prevStart.getMonth() - 1);
-    const prevEnd = new Date(periodEnd);
-    prevEnd.setMonth(prevEnd.getMonth() - 1);
+    const prevStart = new Date(periodStart); prevStart.setMonth(prevStart.getMonth() - 1);
+    const prevEnd = new Date(periodEnd); prevEnd.setMonth(prevEnd.getMonth() - 1);
 
     const prevStartStr = formatDate(prevStart);
     const prevEndStr = formatDate(prevEnd);
@@ -286,49 +233,31 @@ function RosterPage() {
     const curEndStr = formatDate(periodEnd);
 
     const prevEntries = entries.filter((e) => e.date >= prevStartStr && e.date <= prevEndStr);
-    if (prevEntries.length === 0) {
-      alert('No entries found in the previous period to copy.');
-      return;
-    }
+    if (prevEntries.length === 0) { alert('No entries found in the previous period to copy.'); return; }
 
-    const ok = window.confirm(
-      `📋 Copy ${prevEntries.length} entries from the previous period?\n\n` +
-      `From: ${formatLongDate(prevStart)} – ${formatLongDate(prevEnd)}\n` +
-      `To:   ${formatLongDate(periodStart)} – ${formatLongDate(periodEnd)}\n\n` +
-      `⚠ Existing entries in the current period will be OVERWRITTEN.\n\n` +
-      `Continue?`
-    );
+    const ok = window.confirm(`📋 Copy ${prevEntries.length} entries from the previous period?\n\n⚠ Existing entries in the current period will be OVERWRITTEN.`);
     if (!ok) return;
 
     setCopying(true);
     try {
       const current = entries.filter((e) => e.date >= curStartStr && e.date <= curEndStr);
-      for (const e of current) {
-        await deleteDoc(doc(db, 'roster_entries', e.id));
-      }
+      for (const e of current) await deleteDoc(doc(db, 'roster_entries', e.id));
 
       let created = 0;
       for (const e of prevEntries) {
         const oldDate = new Date(e.date + 'T00:00:00');
-        const newDate = new Date(oldDate);
-        newDate.setMonth(newDate.getMonth() + 1);
+        const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
         const newDateStr = formatDate(newDate);
 
         await addDoc(collection(db, 'roster_entries'), {
-          staffId: e.staffId,
-          staffName: e.staffName,
-          staffDepartment: e.staffDepartment,
-          date: newDateStr,
-          shiftTime: e.shiftTime || '',
-          status: e.status || 'scheduled',
+          staffId: e.staffId, staffName: e.staffName, staffDepartment: e.staffDepartment,
+          date: newDateStr, shiftTime: e.shiftTime || '', status: e.status || 'scheduled',
           createdAt: new Date().toISOString(),
         });
         created++;
       }
       alert(`✅ Copied ${created} entries!`);
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+    } catch (err: any) { alert('Error: ' + err.message); }
     setCopying(false);
   };
 
@@ -358,60 +287,31 @@ function RosterPage() {
 
     const wrapper = document.createElement('div');
     Object.assign(wrapper.style, {
-      position: 'absolute',
-      left: '-10000px',
-      top: '0',
-      width: '1600px',
-      background: '#ffffff',
-      padding: '16px',
-      fontFamily: 'Arial, Helvetica, sans-serif',
-      zIndex: '1',
+      position: 'absolute', left: '-10000px', top: '0', width: '1600px',
+      background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1',
     });
 
     const clone = original.cloneNode(true) as HTMLElement;
-    clone.style.width = '100%';
-    clone.style.background = '#ffffff';
-    clone.style.padding = '0';
-    clone.style.borderRadius = '0';
-    clone.style.boxShadow = 'none';
+    clone.style.width = '100%'; clone.style.background = '#ffffff'; clone.style.padding = '0';
+    clone.style.borderRadius = '0'; clone.style.boxShadow = 'none';
 
-    clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => {
-      (el as HTMLElement).style.position = 'static';
-    });
+    clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => { (el as HTMLElement).style.position = 'static'; });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
 
-    wrapper.appendChild(clone);
-    document.body.appendChild(wrapper);
-
+    wrapper.appendChild(clone); document.body.appendChild(wrapper);
     try {
       await new Promise((resolve) => setTimeout(resolve, 200));
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        width: wrapper.scrollWidth,
-        height: wrapper.scrollHeight,
-        windowWidth: wrapper.scrollWidth,
-        windowHeight: wrapper.scrollHeight,
-      });
-      document.body.removeChild(wrapper);
-      return canvas;
-    } catch (err) {
-      document.body.removeChild(wrapper);
-      throw err;
-    }
+      const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false, width: wrapper.scrollWidth, height: wrapper.scrollHeight, windowWidth: wrapper.scrollWidth, windowHeight: wrapper.scrollHeight });
+      document.body.removeChild(wrapper); return canvas;
+    } catch (err) { document.body.removeChild(wrapper); throw err; }
   };
 
   const exportToJPG = async () => {
     setExporting(true);
     try {
-      const canvas = await captureCanvas();
-      if (!canvas) return;
-      const link = document.createElement('a');
-      link.download = `FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.95);
-      link.click();
+      const canvas = await captureCanvas(); if (!canvas) return;
+      const link = document.createElement('a'); link.download = `FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.95); link.click();
     } catch (err: any) { alert('Export failed: ' + err.message); }
     setExporting(false);
   };
@@ -419,20 +319,14 @@ function RosterPage() {
   const exportToPDF = async () => {
     setExporting(true);
     try {
-      const canvas = await captureCanvas();
-      if (!canvas) return;
+      const canvas = await captureCanvas(); if (!canvas) return;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 8;
-      const availWidth = pageWidth - margin * 2;
-      const availHeight = pageHeight - margin * 2;
+      const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8; const availWidth = pageWidth - margin * 2; const availHeight = pageHeight - margin * 2;
       const ratio = Math.min(availWidth / canvas.width, availHeight / canvas.height);
-      const imgW = canvas.width * ratio;
-      const imgH = canvas.height * ratio;
-      const imgX = (pageWidth - imgW) / 2;
-      const imgY = (pageHeight - imgH) / 2;
+      const imgW = canvas.width * ratio; const imgH = canvas.height * ratio;
+      const imgX = (pageWidth - imgW) / 2; const imgY = (pageHeight - imgH) / 2;
       pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
       pdf.save(`FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.pdf`);
     } catch (err: any) { alert('Export failed: ' + err.message); }
@@ -441,16 +335,10 @@ function RosterPage() {
 
   const handlePrint = () => {
     document.body.classList.add('printing-roster');
-    setTimeout(() => {
-      window.print();
-      document.body.classList.remove('printing-roster');
-    }, 100);
+    setTimeout(() => { window.print(); document.body.classList.remove('printing-roster'); }, 100);
   };
 
-  const titleDept = isAdmin
-    ? (selectedDept === 'all' ? 'ALL DEPARTMENTS' : selectedDept.toUpperCase())
-    : (userDepartment || '').toUpperCase();
-
+  const titleDept = isAdmin ? (selectedDept === 'all' ? 'ALL DEPARTMENTS' : selectedDept.toUpperCase()) : (userDepartment || '').toUpperCase();
   const titleDeptSafe = titleDept.replace(/\s+/g, '-');
   const bulkDatesCount = previewBulkDates().length;
 
@@ -463,144 +351,84 @@ function RosterPage() {
             ({isAdmin ? (selectedDept === 'all' ? 'All Departments' : selectedDept) : userDepartment})
           </span>
         </h2>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            className={`export-btn ${reorderMode ? 'pdf-btn' : 'jpg-btn'}`}
-            onClick={() => setReorderMode(!reorderMode)}
-          >
-            {reorderMode ? '✅ Done' : '↕️ Reorder'}
-          </button>
-          <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>
-            {exporting ? '...' : '📷 JPG'}
-          </button>
-          <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>
-            {exporting ? '...' : '📄 PDF'}
-          </button>
-          <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
-          <button
-            className="export-btn copy-btn"
-            onClick={handleCopyPreviousPeriod}
-            disabled={copying}
-          >
-            {copying ? 'Copying...' : '📋 Copy Last Month'}
-          </button>
-          <button
-            className="export-btn bulk-btn"
-            onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}
-          >
-            {showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}
-          </button>
-          <button
-            className="add-staff-btn"
-            onClick={() => { setShowForm(!showForm); setShowBulkForm(false); }}
-          >
-            {showForm ? 'Cancel' : '+ Single'}
-          </button>
-        </div>
+        
+        {/* Hide edit buttons for staff */}
+        {!isStaff && (
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button className={`export-btn ${reorderMode ? 'pdf-btn' : 'jpg-btn'}`} onClick={() => setReorderMode(!reorderMode)}>
+              {reorderMode ? '✅ Done' : '↕️ Reorder'}
+            </button>
+            <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>{exporting ? '...' : '📷 JPG'}</button>
+            <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF'}</button>
+            <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
+            <button className="export-btn copy-btn" onClick={handleCopyPreviousPeriod} disabled={copying}>{copying ? '...' : '📋 Copy Last Month'}</button>
+            <button className="export-btn bulk-btn" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}</button>
+            <button className="add-staff-btn" onClick={() => { setShowForm(!showForm); setShowBulkForm(false); }}>{showForm ? 'Cancel' : '+ Single'}</button>
+          </div>
+        )}
+        {isStaff && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>{exporting ? '...' : '📷 JPG'}</button>
+            <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF'}</button>
+          </div>
+        )}
       </div>
 
       {isAdmin && (
         <div className="dept-tabs">
-          <button
-            className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'}
-            onClick={() => setSelectedDept('all')}
-          >
-            All Departments
-          </button>
+          <button className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('all')}>All Departments</button>
           {ROSTER_DEPARTMENTS.map((d) => (
-            <button
-              key={d}
-              className={selectedDept === d ? 'dept-tab active' : 'dept-tab'}
-              onClick={() => setSelectedDept(d)}
-            >
-              {d}
-            </button>
+            <button key={d} className={selectedDept === d ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept(d)}>{d}</button>
           ))}
         </div>
       )}
 
       {reorderMode && (
-        <div className="reorder-banner">
-          ↕️ <strong>Reorder Mode:</strong> Use the ▲ ▼ arrows to arrange staff. Changes save automatically.
-        </div>
+        <div className="reorder-banner">↕️ <strong>Reorder Mode:</strong> Use the ▲ ▼ arrows to arrange staff. Changes save automatically.</div>
       )}
 
-      {showForm && (
+      {showForm && !isStaff && (
         <form className="staff-form" onSubmit={handleAdd}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            ➕ Single Day Assignment
-          </div>
+          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>➕ Single Day Assignment</div>
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
-            {visibleStaff.map((s) => (
-              <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>
-            ))}
+            {visibleStaff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>)}
           </select>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="scheduled">Scheduled Shift</option>
-            {LEAVE_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+            {LEAVE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
           </select>
           {status === 'scheduled' && (
             <>
               <select value={shiftTime} onChange={(e) => setShiftTime(e.target.value)}>
-                {SHIFT_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                {SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
               </select>
-              {shiftTime === 'CUSTOM' && (
-                <input
-                  placeholder="Custom time (e.g. 07:00 - 15:00)"
-                  value={customShift}
-                  onChange={(e) => setCustomShift(e.target.value)}
-                  required
-                />
-              )}
+              {shiftTime === 'CUSTOM' && <input placeholder="Custom time (e.g. 07:00 - 15:00)" value={customShift} onChange={(e) => setCustomShift(e.target.value)} required />}
             </>
           )}
           <button type="submit">Save Entry</button>
         </form>
       )}
 
-      {showBulkForm && (
+      {showBulkForm && !isStaff && (
         <div className="bulk-form">
-          <div className="bulk-form-title">
-            ⚡ Bulk Assign — Create many shifts at once
-          </div>
-
+          <div className="bulk-form-title">⚡ Bulk Assign — Create many shifts at once</div>
           <div className="bulk-form-grid">
             <div className="bulk-field bulk-field-full">
               <label>Staff Member</label>
               <select value={bulkStaffId} onChange={(e) => setBulkStaffId(e.target.value)}>
                 <option value="">Select Staff...</option>
-                {visibleStaff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.sn || 'No SN'}) — {s.department}
-                  </option>
-                ))}
+                {visibleStaff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'}) — {s.department}</option>)}
               </select>
             </div>
-
-            <div className="bulk-field">
-              <label>Start Date</label>
-              <input type="date" value={bulkStartDate} onChange={(e) => setBulkStartDate(e.target.value)} />
-            </div>
-
-            <div className="bulk-field">
-              <label>End Date</label>
-              <input type="date" value={bulkEndDate} onChange={(e) => setBulkEndDate(e.target.value)} />
-            </div>
-
+            <div className="bulk-field"><label>Start Date</label><input type="date" value={bulkStartDate} onChange={(e) => setBulkStartDate(e.target.value)} /></div>
+            <div className="bulk-field"><label>End Date</label><input type="date" value={bulkEndDate} onChange={(e) => setBulkEndDate(e.target.value)} /></div>
             <div className="bulk-field bulk-field-full">
               <label>Days of Week</label>
               <div className="bulk-day-buttons">
                 {DAY_LABELS.map((label, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className={bulkDaysOfWeek.includes(i) ? 'day-btn active' : 'day-btn'}
-                    onClick={() => toggleBulkDay(i)}
-                  >
-                    {label}
-                  </button>
+                  <button key={i} type="button" className={bulkDaysOfWeek.includes(i) ? 'day-btn active' : 'day-btn'} onClick={() => toggleBulkDay(i)}>{label}</button>
                 ))}
                 <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([0,1,2,3,4,5,6])}>All</button>
                 <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([0,1,2,3,4,6])}>No Fri</button>
@@ -608,56 +436,32 @@ function RosterPage() {
                 <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([])}>Clear</button>
               </div>
             </div>
-
             <div className="bulk-field">
               <label>Type</label>
               <select value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
                 <option value="scheduled">Scheduled Shift</option>
-                {LEAVE_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                {LEAVE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
               </select>
             </div>
-
             <div className="bulk-field">
               <label>Shift Time</label>
               {bulkType === 'scheduled' ? (
                 <>
                   <select value={bulkShift} onChange={(e) => setBulkShift(e.target.value)}>
-                    {SHIFT_OPTIONS.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                    {SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                   </select>
-                  {bulkShift === 'CUSTOM' && (
-                    <input
-                      placeholder="e.g. 07:00 - 15:00"
-                      value={bulkCustomShift}
-                      onChange={(e) => setBulkCustomShift(e.target.value)}
-                      style={{ marginTop: '6px' }}
-                    />
-                  )}
+                  {bulkShift === 'CUSTOM' && <input placeholder="e.g. 07:00 - 15:00" value={bulkCustomShift} onChange={(e) => setBulkCustomShift(e.target.value)} style={{ marginTop: '6px' }} />}
                 </>
               ) : (
-                <div style={{ padding: '10px', background: '#f1f5f9', borderRadius: '6px', fontSize: '12px', color: '#64748b' }}>
-                  Not applicable for {bulkType}
-                </div>
+                <div style={{ padding: '10px', background: '#f1f5f9', borderRadius: '6px', fontSize: '12px', color: '#64748b' }}>Not applicable</div>
               )}
             </div>
           </div>
-
           <div className="bulk-preview">
             <strong>{bulkDatesCount}</strong> entr{bulkDatesCount === 1 ? 'y' : 'ies'} will be created
-            {bulkStartDate && bulkEndDate && (
-              <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '8px' }}>
-                ({bulkStartDate} → {bulkEndDate})
-              </span>
-            )}
           </div>
-
-          <button
-            className="bulk-submit-btn"
-            onClick={handleBulkAssign}
-            disabled={bulkSubmitting || bulkDatesCount === 0}
-          >
-            {bulkSubmitting
-              ? 'Creating...'
-              : `⚡ Create ${bulkDatesCount} Entr${bulkDatesCount === 1 ? 'y' : 'ies'}`}
+          <button className="bulk-submit-btn" onClick={handleBulkAssign} disabled={bulkSubmitting || bulkDatesCount === 0}>
+            {bulkSubmitting ? 'Creating...' : `⚡ Create ${bulkDatesCount} Entr${bulkDatesCount === 1 ? 'y' : 'ies'}`}
           </button>
         </div>
       )}
@@ -672,7 +476,6 @@ function RosterPage() {
         <div className="roster-title">
           <h1>FND {titleDept} DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
         </div>
-
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="roster-week-section">
             <div className="week-label">WEEK {weekIndex + 1}</div>
@@ -682,71 +485,37 @@ function RosterPage() {
                   {reorderMode && <th className="reorder-col" style={{ width: '50px' }}>↕️</th>}
                   <th className="col-sn">SN No.</th>
                   <th className="col-name">NAME</th>
-                  {week.map((d) => (
-                    <th key={formatDate(d)} className="col-date">
-                      {formatHeaderDate(d)}
-                    </th>
-                  ))}
+                  {week.map((d) => <th key={formatDate(d)} className="col-date">{formatHeaderDate(d)}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {visibleStaff.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={week.length + (reorderMode ? 3 : 2)}
-                      style={{ textAlign: 'center', padding: '15px' }}
-                    >
-                      No staff members found.
-                    </td>
-                  </tr>
+                  <tr><td colSpan={week.length + (reorderMode ? 3 : 2)} style={{ textAlign: 'center', padding: '15px' }}>No staff members found.</td></tr>
                 ) : (
                   visibleStaff.map((s, staffIndex) => (
                     <tr key={s.id}>
                       {reorderMode && (
                         <td className="reorder-col" style={{ padding: '2px' }}>
-                          <button
-                            className="reorder-btn"
-                            onClick={() => moveStaff(s.id, 'up')}
-                            disabled={staffIndex === 0}
-                          >
-                            ▲
-                          </button>
-                          <button
-                            className="reorder-btn"
-                            onClick={() => moveStaff(s.id, 'down')}
-                            disabled={staffIndex === visibleStaff.length - 1}
-                          >
-                            ▼
-                          </button>
+                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')} disabled={staffIndex === 0}>▲</button>
+                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')} disabled={staffIndex === visibleStaff.length - 1}>▼</button>
                         </td>
                       )}
                       <td className="col-sn">{s.sn || '—'}</td>
                       <td className="col-name">{s.name}</td>
                       {week.map((d) => {
                         const dStr = formatDate(d);
-                        const isInPeriod =
-                          dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
-
-                        if (!isInPeriod) {
-                          return (
-                            <td key={dStr} className="out-of-period-cell">&nbsp;</td>
-                          );
-                        }
+                        const isInPeriod = dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
+                        if (!isInPeriod) return <td key={dStr} className="out-of-period-cell">&nbsp;</td>;
 
                         const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
-                        let displayValue = '';
-                        let cellClass = 'empty-cell';
+                        let displayValue = ''; let cellClass = 'empty-cell';
                         if (entry) {
                           displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.status;
                           if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
                           else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
                           else cellClass = 'shift-cell';
                         }
-                        return (
-                          <td key={dStr} className={cellClass}>
-                            {displayValue}
-                          </td>
-                        );
+                        return <td key={dStr} className={cellClass}>{displayValue}</td>;
                       })}
                     </tr>
                   ))

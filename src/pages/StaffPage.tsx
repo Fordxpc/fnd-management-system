@@ -56,7 +56,7 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Administration' },
 ];
 
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration','safety'];
 
 const DESIGNATIONS = [
   'Airport Manager', 'Assistant Manager', 'Assistant Safety Officer',

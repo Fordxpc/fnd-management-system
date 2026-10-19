@@ -33,8 +33,7 @@ const APPROVER_DESIGNATIONS = [
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 const DEVELOPER_ROLES = ['developer'];
 
-// Departments available in the Leave Request form
-const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
+const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -58,8 +57,7 @@ const allDatesInRange = (start: string, end: string): string[] => {
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return dates;
   const cur = new Date(s);
   while (cur <= e) {
-    dates.push(formatDate(cur));
-    cur.setDate(cur.getDate() + 1);
+    dates.push(formatDate(cur)); cur.setDate(cur.getDate() + 1);
   }
   return dates;
 };
@@ -121,8 +119,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
     .forEach((r: any) => {
       if (isAnnual && !renews) used += r.days || 0;
       else if (ly) {
-        const lyStart = formatDate(ly.start);
-        const lyEnd = formatDate(ly.end);
+        const lyStart = formatDate(ly.start); const lyEnd = formatDate(ly.end);
         if ((r.startDate || '') >= lyStart && (r.startDate || '') <= lyEnd) used += r.days || 0;
       }
     });
@@ -132,6 +129,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 function LeavePage() {
   const { profile, user } = useAuth();
   const isDeveloper = DEVELOPER_ROLES.includes(profile?.role || '');
+  const isStaff = profile?.role === 'staff'; // Staff restrictions
 
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
@@ -141,11 +139,9 @@ function LeavePage() {
   const [filterDept, setFilterDept] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Collapsible state
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
-  // Form State
   const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedFormDept, setSelectedFormDept] = useState<string>('');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
@@ -155,7 +151,6 @@ function LeavePage() {
   const [reason, setReason] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  // Modal State
   const [approveTarget, setApproveTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
 
@@ -165,12 +160,8 @@ function LeavePage() {
       setStaffList(list);
       const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
-      if (mine) {
-        setSelectedStaffId(mine.id);
-        setSelectedFormDept(mine.department || 'Ground Operations');
-      } else {
-        setSelectedFormDept('Ground Operations');
-      }
+      if (mine) { setSelectedStaffId(mine.id); setSelectedFormDept(mine.department || 'Ground Operations'); }
+      else setSelectedFormDept('Ground Operations');
       setLoading(false);
     });
     return () => unsub();
@@ -193,7 +184,7 @@ function LeavePage() {
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
   const canApproveAny = isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
-  const canSeeDeptBalances = isDeptManager;
+  const canSeeDeptBalances = isDeptManager && !isStaff;
   
   const isManagementProfile = isDeptManager || ['developer', 'manager', 'admin', 'smt'].includes(profile?.role || '');
   const canSeeMyBalance = isManagementProfile || myStaff?.balanceVisible === true;
@@ -211,6 +202,9 @@ function LeavePage() {
 
   const visibleRequests = requests
     .filter((r: any) => {
+      if (isStaff) {
+        return myStaff && r.staffId === myStaff.id && r.status === 'pending';
+      }
       if (!isDeptManager) {
         if (!myStaff) return false;
         return r.staffId === myStaff.id;
@@ -218,27 +212,23 @@ function LeavePage() {
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })
-    .filter((r: any) => (tab === 'all' ? true : r.status === tab))
+    .filter((r: any) => (isStaff ? true : (tab === 'all' ? true : r.status === tab)))
     .sort((a: any, b: any) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
   const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
 
-  // Filter staff list for the form based on selected department
   const formStaffOptions = staffList.filter(s => s.department === selectedFormDept);
-
   const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
   const allowedLeaveTypes = getLeaveTypesForStaff(selectedStaff || myStaff);
 
   const usedDays: { [key: string]: number } = {};
-  LEAVE_TYPES.forEach((t) => {
-    usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0;
-  });
+  LEAVE_TYPES.forEach((t) => { usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0; });
 
   const deptBalanceStaff = staffList
     .filter((s: any) => {
-      if (s.isSMT === true || s.department === 'Administration') return false;
+      if (s.isSMT === true || s.department === 'Administration' || s.department === 'Safety') return false;
       if (canApproveAny || isDeveloper) return true;
       return myStaff?.department ? s.department === myStaff.department : false;
     })
@@ -259,16 +249,10 @@ function LeavePage() {
       if (!staff.joinDate) { toast.error(`${staff.name} does not have a Join Date set.`); return; }
       const daysForRequest = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
       const usedAnnual = computeUsedDays(staff.id, staff.joinDate, 'ANNUAL LEAVE', requests);
-      if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) {
-        toast.error(`Exceeds annual leave limit (${usedAnnual + daysForRequest}/30 used).`);
-        return;
-      }
+      if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) { toast.error(`Exceeds annual leave limit (${usedAnnual + daysForRequest}/30 used).`); return; }
     }
 
-    let days = leaveType === 'ANNUAL LEAVE' 
-      ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable
-      : allDatesInRange(startDate, endDate).length;
-
+    let days = leaveType === 'ANNUAL LEAVE' ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable : allDatesInRange(startDate, endDate).length;
     if (days === 0) { toast.error('No countable days in this range.'); return; }
 
     setSubmitting(true);
@@ -289,18 +273,12 @@ function LeavePage() {
     if (!approveTarget) return;
     const r = approveTarget;
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), { 
-        status: 'approved', 
-        reviewedBy: user?.email || '', 
-        reviewedAt: new Date().toISOString() 
-      });
-      
+      await updateDoc(doc(db, 'leave_requests', r.id), { status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString() });
       const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(collection(db, 'roster_entries'), where('staffId', '==', r.staffId), where('date', '==', d));
         const existing = await getDocs(q);
         for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-        
         await addDoc(collection(db, 'roster_entries'), {
           staffId: r.staffId, staffName: r.staffName, staffDepartment: r.staffDepartment,
           date: d, shiftTime: '', status: r.leaveType, leaveRequestId: r.id, createdAt: new Date().toISOString(),
@@ -314,12 +292,7 @@ function LeavePage() {
   const confirmReject = async (note: string) => {
     if (!rejectTarget) return;
     try {
-      await updateDoc(doc(db, 'leave_requests', rejectTarget.id), { 
-        status: 'rejected', 
-        reviewedBy: user?.email || '', 
-        reviewedAt: new Date().toISOString(), 
-        reviewNotes: note || '' 
-      });
+      await updateDoc(doc(db, 'leave_requests', rejectTarget.id), { status: 'rejected', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(), reviewNotes: note || '' });
       toast.success('Leave rejected.');
       setRejectTarget(null);
     } catch (error: any) { toast.error('Error: ' + error.message); }
@@ -341,9 +314,7 @@ function LeavePage() {
     if (leaveType === 'ANNUAL LEAVE') {
       const r = countAnnualLeaveDays(startDate, endDate, holidaySet);
       previewDays = r.countable; previewFridays = r.skippedFridays; previewHolidays = r.skippedHolidays;
-    } else {
-      previewDays = allDatesInRange(startDate, endDate).length;
-    }
+    } else { previewDays = allDatesInRange(startDate, endDate).length; }
   }
 
   if (loading) return <div className="page-content"><p>Loading...</p></div>;
@@ -352,9 +323,7 @@ function LeavePage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>Leave Management</h2>
-        <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : '+ Request Leave'}
-        </button>
+        {!isStaff && <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Request Leave'}</button>}
       </div>
 
       {myStaff && canSeeMyBalance && (
@@ -431,16 +400,12 @@ function LeavePage() {
         </div>
       )}
 
-      {showForm && (
+      {showForm && !isStaff && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
           
           {isDeptManager && (
-            <select 
-              value={selectedFormDept} 
-              onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} 
-              required
-            >
+            <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required>
               {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
@@ -478,16 +443,24 @@ function LeavePage() {
         </form>
       )}
 
-      <div className="leave-tabs">
-        <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>Pending</button>
-        <button className={tab === 'approved' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('approved')}>Approved</button>
-        <button className={tab === 'rejected' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('rejected')}>Rejected</button>
-        <button className={tab === 'all' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('all')}>All</button>
-      </div>
+      {/* Hide Tab Filters for Staff, they only see their pending */}
+      {!isStaff && (
+        <div className="leave-tabs">
+          <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>Pending</button>
+          <button className={tab === 'approved' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('approved')}>Approved</button>
+          <button className={tab === 'rejected' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('rejected')}>Rejected</button>
+          <button className={tab === 'all' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('all')}>All</button>
+        </div>
+      )}
+      {isStaff && (
+        <div className="leave-tabs">
+          <div style={{ padding: '12px 0', fontWeight: 600, color: '#475569' }}>My Pending Leave Requests</div>
+        </div>
+      )}
 
       <div className="staff-list" style={{ marginTop: '16px' }}>
         {visibleRequests.length === 0 ? (
-          <div className="empty-state"><p>No {tab} requests.</p></div>
+          <div className="empty-state"><p>No requests.</p></div>
         ) : (
           <table>
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
@@ -510,7 +483,7 @@ function LeavePage() {
                           <button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button>
                         </>
                       )}
-                      {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
+                      {canDeleteRequest(r) && !isStaff && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
                     </td>
                   </tr>
                 );
@@ -520,7 +493,6 @@ function LeavePage() {
         )}
       </div>
 
-      {/* PROFESSIONAL DIALOGS */}
       <ConfirmDialog
         isOpen={!!approveTarget}
         title="Approve Leave?"
@@ -530,7 +502,6 @@ function LeavePage() {
         onConfirm={confirmApprove}
         onCancel={() => setApproveTarget(null)}
       />
-
       <PromptDialog
         isOpen={!!rejectTarget}
         title="Reject Leave?"
@@ -539,7 +510,6 @@ function LeavePage() {
         onSubmit={confirmReject}
         onCancel={() => setRejectTarget(null)}
       />
-
     </div>
   );
 }

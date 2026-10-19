@@ -6,20 +6,19 @@ import { useAuth } from '../auth';
 function SettingsPage() {
   const { profile, user } = useAuth();
   const isDeveloper = profile?.role === 'developer';
+  const isManagement = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
 
   const [otRates, setOtRates] = useState({ weekday: 1.25, friday: 1.5, holiday: 1.5 });
   const [savingRates, setSavingRates] = useState(false);
   const [counts, setCounts] = useState({ staff: 0, rosterEntries: 0, leaveRequests: 0, users: 0 });
 
   useEffect(() => {
-    // Load settings
     const loadSettings = async () => {
       const snap = await getDoc(doc(db, 'settings', 'ot_rates'));
       if (snap.exists()) setOtRates(snap.data() as any);
     };
     loadSettings();
 
-    // Load counts
     const unsubs = [
       onSnapshot(collection(db, 'staff'), (s) => setCounts(c => ({ ...c, staff: s.size }))),
       onSnapshot(collection(db, 'roster_entries'), (s) => setCounts(c => ({ ...c, rosterEntries: s.size }))),
@@ -64,17 +63,20 @@ function SettingsPage() {
         </div>
       )}
 
-      <div className="dash-card mb-4">
-        <h3>🕒 Standard Shift Schedules</h3>
-        <table className="mini-table">
-          <thead><tr><th>Role</th><th>Shift Time</th><th>Days</th><th>Notes</th></tr></thead>
-          <tbody>
-            <tr><td><strong>Manager / Admin Officer</strong></td><td>08:00 - 16:00</td><td>Sun - Thu</td><td>Calendar holidays (Fri/Sat) are off.</td></tr>
-            <tr><td><strong>Safety Officer</strong></td><td>08:00 - 16:00</td><td>Tue - Sun</td><td>Monday OFF. May change due to flight ops.</td></tr>
-            <tr><td><strong>Ground Ops / Security</strong></td><td>06:00 - 14:00 / 08:00 - 16:00</td><td>Rotating</td><td>Refer to Duty Roster.</td></tr>
-          </tbody>
-        </table>
-      </div>
+      {/* Hide Shift Schedules from staff */}
+      {isManagement && (
+        <div className="dash-card mb-4">
+          <h3>🕒 Standard Shift Schedules</h3>
+          <table className="mini-table">
+            <thead><tr><th>Role</th><th>Shift Time</th><th>Days</th><th>Notes</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Manager / Admin Officer</strong></td><td>08:00 - 16:00</td><td>Sun - Thu</td><td>Calendar holidays (Fri/Sat) are off.</td></tr>
+              <tr><td><strong>Safety Officer</strong></td><td>08:00 - 16:00</td><td>Tue - Sun</td><td>Monday OFF. May change due to flight ops.</td></tr>
+              <tr><td><strong>Ground Ops / Security</strong></td><td>06:00 - 14:00 / 08:00 - 16:00</td><td>Rotating</td><td>Refer to Duty Roster.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="dash-card mb-4">
         <h3>📋 Leave Entitlements</h3>

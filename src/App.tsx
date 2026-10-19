@@ -13,6 +13,8 @@ const DEPARTMENTS = [
   'Maintenance',
   'Security',
   'Fire & Rescue',
+  'Administration',
+  'Safety',
 ];
 
 function App() {
