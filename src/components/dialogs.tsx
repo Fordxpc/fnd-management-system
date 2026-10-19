@@ -14,7 +14,7 @@ export function ConfirmDialog({ isOpen, title, message, confirmText = 'Confirm',
   if (!isOpen) return null;
   return (
     <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <h3 style={{ color: isDanger ? '#dc2626' : '#1e293b' }}>{title}</h3>
         <p style={{ color: '#475569', fontSize: '14px', marginBottom: '24px', whiteSpace: 'pre-line' }}>{message}</p>
         <div className="modal-actions">
@@ -47,13 +47,13 @@ export function PromptDialog({ isOpen, title, message, placeholder = 'Type here.
   
   return (
     <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
         <h3>{title}</h3>
         <p style={{ color: '#475569', fontSize: '14px', marginBottom: '16px' }}>{message}</p>
         <input
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value)}
           placeholder={placeholder}
           style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '20px', fontFamily: 'inherit' }}
           autoFocus
