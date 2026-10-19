@@ -36,9 +36,9 @@ function DashboardPage({ onNavigate }: Props) {
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [otEntries, setOtEntries] = useState<any[]>([]);
 
+  // Collapsible sections state
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
-  
   const [showMyBalance, setShowMyBalance] = useState(true);
   const [showMyOT, setShowMyOT] = useState(true);
 
@@ -71,18 +71,15 @@ function DashboardPage({ onNavigate }: Props) {
     const years = getYearsOfService(myStaff.joinDate || '');
     const renews = years >= 2;
     leaveReqs.filter(r => r.staffId === myStaff.id && r.status === 'approved' && r.leaveType === 'ANNUAL LEAVE').forEach(r => {
-      if (!renews) myLeaveUsed += r.days || 0; // Simplified for new hires (all time)
-      else {
-        // Normally we'd check current leave year, but for dashboard summary this is close enough.
-        if ((r.startDate || '').startsWith(new Date().getFullYear().toString())) myLeaveUsed += r.days || 0;
-      }
+      if (!renews) myLeaveUsed += r.days || 0; 
+      else if ((r.startDate || '').startsWith(new Date().getFullYear().toString())) myLeaveUsed += r.days || 0;
     });
   }
   const myBalance = ANNUAL_LEAVE_TOTAL - myLeaveUsed;
 
   // --- My OT Stats ---
   const myOTThisMonth = myStaff ? otEntries.filter(e => e.staffId === myStaff.id && (e.date || '').startsWith(thisMonth)) : [];
-  const myOTWeekday = myOTThisMonth.filter(e => e.otType === 'Weekday OT' || !e.otType).reduce((sum, e) => sum + (e.hours || 0), 0); // fallback
+  const myOTWeekday = myOTThisMonth.filter(e => e.otType === 'Weekday OT' || !e.otType).reduce((sum, e) => sum + (e.hours || 0), 0);
   const myOTFriday = myOTThisMonth.filter(e => e.otType === 'Friday / Off-day OT').reduce((sum, e) => sum + (e.hours || 0), 0);
   const myOTHoliday = myOTThisMonth.filter(e => e.otType === 'Holiday OT').reduce((sum, e) => sum + (e.hours || 0), 0);
   const myOTTotal = myOTWeekday + myOTFriday + myOTHoliday;
@@ -150,7 +147,7 @@ function DashboardPage({ onNavigate }: Props) {
         </div>
       )}
 
-      {/* LEAVE & OT WIDGETS for staff */}
+      {/* LEAVE & OT WIDGETS */}
       <div className="dash-grid" style={{ marginBottom: '20px' }}>
         {myStaff && (
           <div className="collapsible-card" style={{ margin: 0 }}>
