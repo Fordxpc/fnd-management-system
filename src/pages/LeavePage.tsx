@@ -129,7 +129,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 function LeavePage() {
   const { profile, user } = useAuth();
   const isDeveloper = DEVELOPER_ROLES.includes(profile?.role || '');
-  const isStaff = profile?.role === 'staff'; // Staff restrictions
+  const isStaff = profile?.role === 'staff';
 
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
@@ -203,7 +203,7 @@ function LeavePage() {
   const visibleRequests = requests
     .filter((r: any) => {
       if (isStaff) {
-        return myStaff && r.staffId === myStaff.id && r.status === 'pending';
+        return myStaff && r.staffId === myStaff.id; // Staff only see their own
       }
       if (!isDeptManager) {
         if (!myStaff) return false;
@@ -249,7 +249,7 @@ function LeavePage() {
       if (!staff.joinDate) { toast.error(`${staff.name} does not have a Join Date set.`); return; }
       const daysForRequest = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
       const usedAnnual = computeUsedDays(staff.id, staff.joinDate, 'ANNUAL LEAVE', requests);
-      if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) { toast.error(`Exceeds annual leave limit (${usedAnnual + daysForRequest}/30 used).`); return; }
+      if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) { toast.error(`Exceeds annual leave limit.`); return; }
     }
 
     let days = leaveType === 'ANNUAL LEAVE' ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable : allDatesInRange(startDate, endDate).length;
@@ -263,7 +263,7 @@ function LeavePage() {
         leaveType, startDate, endDate, days, reason, status: 'pending',
         requestedAt: new Date().toISOString(), requestedBy: user?.email || '',
       });
-      toast.success(`Leave request submitted (${days} days).`);
+      toast.success(`Leave request submitted.`);
       setShowForm(false); setReason('');
     } catch (error: any) { toast.error('Error: ' + error.message); }
     setSubmitting(false);
@@ -284,7 +284,7 @@ function LeavePage() {
           date: d, shiftTime: '', status: r.leaveType, leaveRequestId: r.id, createdAt: new Date().toISOString(),
         });
       }
-      toast.success('Leave approved and roster updated.');
+      toast.success('Leave approved.');
       setApproveTarget(null);
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
@@ -309,11 +309,11 @@ function LeavePage() {
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
-  let previewDays = 0, previewFridays = 0, previewHolidays = 0;
+  let previewDays = 0, previewFridays = 0;
   if (startDate && endDate && endDate >= startDate) {
     if (leaveType === 'ANNUAL LEAVE') {
       const r = countAnnualLeaveDays(startDate, endDate, holidaySet);
-      previewDays = r.countable; previewFridays = r.skippedFridays; previewHolidays = r.skippedHolidays;
+      previewDays = r.countable; previewFridays = r.skippedFridays;
     } else { previewDays = allDatesInRange(startDate, endDate).length; }
   }
 
@@ -323,16 +323,14 @@ function LeavePage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>Leave Management</h2>
-        {!isStaff && <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Request Leave'}</button>}
+        {/* ALLOW STAFF TO REQUEST LEAVE */}
+        <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Request Leave'}</button>
       </div>
 
       {myStaff && canSeeMyBalance && (
         <div className="collapsible-card">
           <button className="collapsible-header" onClick={() => setShowMyBalance(!showMyBalance)}>
-            <span>
-              <strong>My Leave Balance</strong>
-              {myLeaveYear && myIsAnnualRenewing && <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: '8px' }}>{formatDisplay(formatDate(myLeaveYear.start))} – {formatDisplay(formatDate(myLeaveYear.end))}</span>}
-            </span>
+            <span><strong>My Leave Balance</strong></span>
             <span className="collapsible-toggle">{showMyBalance ? '▼' : '▶'}</span>
           </button>
           {showMyBalance && (
@@ -368,9 +366,7 @@ function LeavePage() {
       {canSeeDeptBalances && deptBalanceStaff.length > 0 && (
         <div className="collapsible-card">
           <button className="collapsible-header" onClick={() => setShowDeptBalances(!showDeptBalances)}>
-            <span>
-              <strong>{canApproveAny || isDeveloper ? '👥 All Staff Leave Balances' : `👥 ${myStaff?.department || ''} — Staff Balances`}</strong>
-            </span>
+            <span><strong>{canApproveAny || isDeveloper ? '👥 All Staff Leave Balances' : `👥 ${myStaff?.department || ''} — Staff Balances`}</strong></span>
             <span className="collapsible-toggle">{showDeptBalances ? '▼' : '▶'}</span>
           </button>
           {showDeptBalances && (
@@ -400,16 +396,18 @@ function LeavePage() {
         </div>
       )}
 
-      {showForm && !isStaff && (
+      {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
           
+          {/* Only managers see the department dropdown */}
           {isDeptManager && (
             <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required>
               {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
 
+          {/* Staff see their own name (locked). Managers see a dropdown. */}
           {isDeptManager ? (
             <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required>
               <option value="">Select Staff Member...</option>
@@ -443,7 +441,6 @@ function LeavePage() {
         </form>
       )}
 
-      {/* Hide Tab Filters for Staff, they only see their pending */}
       {!isStaff && (
         <div className="leave-tabs">
           <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>Pending</button>
@@ -452,15 +449,10 @@ function LeavePage() {
           <button className={tab === 'all' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('all')}>All</button>
         </div>
       )}
-      {isStaff && (
-        <div className="leave-tabs">
-          <div style={{ padding: '12px 0', fontWeight: 600, color: '#475569' }}>My Pending Leave Requests</div>
-        </div>
-      )}
 
       <div className="staff-list" style={{ marginTop: '16px' }}>
         {visibleRequests.length === 0 ? (
-          <div className="empty-state"><p>No requests.</p></div>
+          <div className="empty-state"><p>No leave requests found.</p></div>
         ) : (
           <table>
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
@@ -483,7 +475,7 @@ function LeavePage() {
                           <button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button>
                         </>
                       )}
-                      {canDeleteRequest(r) && !isStaff && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
+                      {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
                     </td>
                   </tr>
                 );
@@ -496,7 +488,7 @@ function LeavePage() {
       <ConfirmDialog
         isOpen={!!approveTarget}
         title="Approve Leave?"
-        message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?\n\nThis will mark those days on the roster.`}
+        message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?`}
         confirmText="Yes, Approve"
         isDanger={false}
         onConfirm={confirmApprove}
