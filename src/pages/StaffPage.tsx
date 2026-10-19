@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import { ConfirmDialog } from '../components/dialogs';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const FND_ALL_STAFF = [
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },

@@ -6,7 +6,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import { ConfirmDialog, PromptDialog } from '../components/dialogs';
+import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
 
 const LEAVE_TYPES = [
   'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
