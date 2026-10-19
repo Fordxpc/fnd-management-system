@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const FND_ALL_STAFF = [
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -58,29 +59,18 @@ const FND_ALL_STAFF = [
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
 const DESIGNATIONS = [
-  'Airport Manager',
-  'Assistant Manager',
-  'Assistant Safety Officer',
-  'Senior Airport Officer',
-  'Operations Officer',
-  'Assistant Operations Officer',
-  'Assistant Security Officer',
-  'Assistant Administrative Officer',
-  'Leading Fireman',
-  'Junior Firefighter',
-  'Firefighter Trainee',
-  'Airport Hand',
-  'Security Agent',
-  'Maintenance Agent',
-  'Cleaning & Gardening',
+  'Airport Manager', 'Assistant Manager', 'Assistant Safety Officer',
+  'Senior Airport Officer', 'Operations Officer', 'Assistant Operations Officer',
+  'Assistant Security Officer', 'Assistant Administrative Officer',
+  'Leading Fireman', 'Junior Firefighter', 'Firefighter Trainee',
+  'Airport Hand', 'Security Agent', 'Maintenance Agent', 'Cleaning & Gardening',
 ];
 
-// Only these roles can see Notes
-const NOTES_ROLES = ['developer'];
+const SENSITIVE_INFO_ROLES = ['developer'];
 
 function StaffPage() {
   const { profile } = useAuth();
-  const canSeeNotes = NOTES_ROLES.includes(profile?.role || '');
+  const canSeeSensitive = SENSITIVE_INFO_ROLES.includes(profile?.role || '');
 
   const [staff, setStaff] = useState<any[]>([]);
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -88,7 +78,11 @@ function StaffPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
+  
+  // State for the Delete Modal
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string, sn: string } | null>(null);
 
+  // Form states
   const [sn, setSn] = useState<string>('');
   const [name, setName] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -119,8 +113,7 @@ function StaffPage() {
     setSn(''); setName(''); setEmail(''); setPersonalEmail('');
     setNid(''); setJoinDate(''); setPhone(''); setGender('');
     setDepartment('Ground Operations'); setPosition('');
-    setIsSMT(false); setBalanceVisible(false);
-    setNotes('');
+    setIsSMT(false); setBalanceVisible(false); setNotes('');
     setBasicSalary(''); setDailyAllowance('');
     setHolidayAllowanceRate(''); setBankAccount('');
     setEditingId(null);
@@ -129,7 +122,7 @@ function StaffPage() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!name || !email) {
-      alert('Name and Email are required');
+      toast.error('Name and Email are required');
       return;
     }
     try {
@@ -141,10 +134,11 @@ function StaffPage() {
         holidayAllowanceRate: Number(holidayAllowanceRate) || 0,
         bankAccount,
       };
-      // Only developer can update notes
-      if (canSeeNotes) {
+      
+      if (canSeeSensitive) {
         payload.notes = notes;
       }
+
       if (editingId) {
         await updateDoc(doc(db, 'staff', editingId), payload);
         toast.success('Staff updated successfully!');
@@ -186,12 +180,19 @@ function StaffPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDelete = async (id: string, name: string, sn: string) => {
-    const ok = window.confirm(
-      `Delete ${name} (${sn || 'no SN'})?\n\nThis removes them from the staff list only.`
-    );
-    if (!ok) return;
-    await deleteDoc(doc(db, 'staff', id));
+  const handleDeleteClick = (id: string, name: string, sn: string) => {
+    setDeleteTarget({ id, name, sn });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteDoc(doc(db, 'staff', deleteTarget.id));
+      toast.success('Staff member deleted.');
+      setDeleteTarget(null);
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    }
   };
 
   const handleCancelForm = () => {
@@ -202,11 +203,9 @@ function StaffPage() {
   const handleImportAll = async () => {
     const missing = FND_ALL_STAFF.filter((m) => !staff.some((s) => s.sn === m.sn));
     if (missing.length === 0) {
-      alert(`✅ All ${FND_ALL_STAFF.length} staff members are already in the system.`);
+      toast.info(`All ${FND_ALL_STAFF.length} staff members are already in the system.`);
       return;
     }
-    const ok = window.confirm(`Add ${missing.length} new staff member(s)?`);
-    if (!ok) return;
 
     setImporting(true);
     let added = 0;
@@ -235,9 +234,9 @@ function StaffPage() {
         });
         added++;
       }
-      alert(`✅ Imported ${added} staff member(s).`);
+      toast.success(`Imported ${added} staff member(s).`);
     } catch (error: any) {
-      alert('Import failed: ' + error.message);
+      toast.error('Import failed: ' + error.message);
     }
     setImporting(false);
   };
@@ -357,7 +356,7 @@ function StaffPage() {
           <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
           <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
 
-          {canSeeNotes && (
+          {canSeeSensitive && (
             <>
               <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>
                 📝 Internal Notes <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(developer only)</span>
@@ -367,15 +366,7 @@ function StaffPage() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                style={{
-                  gridColumn: 'span 2',
-                  padding: '10px',
-                  border: '1px solid #cbd5e1',
-                  borderRadius: '6px',
-                  fontFamily: 'inherit',
-                  fontSize: '14px',
-                  resize: 'vertical',
-                }}
+                style={{ gridColumn: 'span 2', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontFamily: 'inherit', fontSize: '14px', resize: 'vertical' }}
               />
             </>
           )}
@@ -422,7 +413,7 @@ function StaffPage() {
                       <th>Holiday Allow.</th>
                     </>
                   )}
-                  {canSeeNotes && <th>Notes</th>}
+                  {canSeeSensitive && <th>Notes</th>}
                   <th>SMT</th>
                   <th>👁</th>
                   <th></th>
@@ -450,16 +441,8 @@ function StaffPage() {
                         </td>
                       </>
                     )}
-                    {canSeeNotes && (
-                      <td
-                        style={{
-                          maxWidth: '200px',
-                          fontSize: '12px',
-                          color: s.notes ? '#1e293b' : '#94a3b8',
-                          whiteSpace: 'normal',
-                          wordBreak: 'break-word',
-                        }}
-                      >
+                    {canSeeSensitive && (
+                      <td style={{ maxWidth: '200px', fontSize: '12px', color: s.notes ? '#1e293b' : '#94a3b8', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         {s.notes || '—'}
                       </td>
                     )}
@@ -473,7 +456,7 @@ function StaffPage() {
                       <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
                         Edit
                       </button>
-                      <button className="delete-btn" onClick={() => handleDelete(s.id, s.name, s.sn)}>
+                      <button className="delete-btn" onClick={() => handleDeleteClick(s.id, s.name, s.sn)}>
                         Delete
                       </button>
                     </td>
@@ -484,6 +467,18 @@ function StaffPage() {
           </div>
         )}
       </div>
+
+      {/* PROFESSIONAL DELETE MODAL */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Staff Member?"
+        message={`Are you sure you want to delete ${deleteTarget?.name} (${deleteTarget?.sn || 'No SN'})?\n\nThis will permanently remove them from the staff list.`}
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
     </div>
   );
 }

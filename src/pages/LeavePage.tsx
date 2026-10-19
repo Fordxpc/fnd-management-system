@@ -6,6 +6,7 @@ import {
 import { db } from '../firebase';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
 
 const LEAVE_TYPES = [
   'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
@@ -32,7 +33,7 @@ const APPROVER_DESIGNATIONS = [
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 const DEVELOPER_ROLES = ['developer'];
 
-// Added Administration for leave requests
+// Departments available in the Leave Request form
 const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
 const formatDate = (date: Date): string => {
@@ -140,9 +141,11 @@ function LeavePage() {
   const [filterDept, setFilterDept] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Collapsible state
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
+  // Form State
   const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedFormDept, setSelectedFormDept] = useState<string>('');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
@@ -151,6 +154,10 @@ function LeavePage() {
   const [endDate, setEndDate] = useState<string>(formatDate(new Date()));
   const [reason, setReason] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Modal State
+  const [approveTarget, setApproveTarget] = useState<any>(null);
+  const [rejectTarget, setRejectTarget] = useState<any>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'staff'), (snap) => {
@@ -187,6 +194,7 @@ function LeavePage() {
   const canApproveAny = isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   const canSeeDeptBalances = isDeptManager;
+  
   const isManagementProfile = isDeptManager || ['developer', 'manager', 'admin', 'smt'].includes(profile?.role || '');
   const canSeeMyBalance = isManagementProfile || myStaff?.balanceVisible === true;
 
@@ -238,21 +246,21 @@ function LeavePage() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    if (!selectedStaffId) { alert('Please select a staff member'); return; }
-    if (endDate < startDate) { alert('End date cannot be before start date'); return; }
+    if (!selectedStaffId) { toast.error('Please select a staff member'); return; }
+    if (endDate < startDate) { toast.error('End date cannot be before start date'); return; }
     const staff = staffList.find((s) => s.id === selectedStaffId);
-    if (!staff) { alert('Staff not found'); return; }
+    if (!staff) { toast.error('Staff not found'); return; }
 
     const g = (staff.gender || '').toLowerCase();
-    if (g === 'female' && MALE_ONLY.includes(leaveType)) { alert(`${leaveType} is only available for male staff.`); return; }
-    if (g === 'male' && FEMALE_ONLY.includes(leaveType)) { alert(`${leaveType} is only available for female staff.`); return; }
+    if (g === 'female' && MALE_ONLY.includes(leaveType)) { toast.error(`${leaveType} is only available for male staff.`); return; }
+    if (g === 'male' && FEMALE_ONLY.includes(leaveType)) { toast.error(`${leaveType} is only available for female staff.`); return; }
 
     if (leaveType === 'ANNUAL LEAVE') {
-      if (!staff.joinDate) { alert(`${staff.name} does not have a Join Date set.`); return; }
+      if (!staff.joinDate) { toast.error(`${staff.name} does not have a Join Date set.`); return; }
       const daysForRequest = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
       const usedAnnual = computeUsedDays(staff.id, staff.joinDate, 'ANNUAL LEAVE', requests);
       if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) {
-        alert(`⛔ Exceeds annual leave entitlement.\nUsed: ${usedAnnual}\nRequesting: ${daysForRequest}\nTotal: ${usedAnnual + daysForRequest}/30`);
+        toast.error(`Exceeds annual leave limit (${usedAnnual + daysForRequest}/30 used).`);
         return;
       }
     }
@@ -261,7 +269,7 @@ function LeavePage() {
       ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable
       : allDatesInRange(startDate, endDate).length;
 
-    if (days === 0) { alert('No countable days in this range.'); return; }
+    if (days === 0) { toast.error('No countable days in this range.'); return; }
 
     setSubmitting(true);
     try {
@@ -271,38 +279,50 @@ function LeavePage() {
         leaveType, startDate, endDate, days, reason, status: 'pending',
         requestedAt: new Date().toISOString(), requestedBy: user?.email || '',
       });
-      alert(`Leave request submitted (${days} days).`);
+      toast.success(`Leave request submitted (${days} days).`);
       setShowForm(false); setReason('');
-    } catch (error: any) { alert('Error: ' + error.message); }
+    } catch (error: any) { toast.error('Error: ' + error.message); }
     setSubmitting(false);
   };
 
-  const handleApprove = async (r: any) => {
-    if (myStaff && r.staffId === myStaff.id) { alert('You cannot approve your own leave.'); return; }
-    if (!window.confirm(`Approve ${r.leaveType} for ${r.staffName}?`)) return;
+  const confirmApprove = async () => {
+    if (!approveTarget) return;
+    const r = approveTarget;
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), { status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString() });
+      await updateDoc(doc(db, 'leave_requests', r.id), { 
+        status: 'approved', 
+        reviewedBy: user?.email || '', 
+        reviewedAt: new Date().toISOString() 
+      });
+      
       const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(collection(db, 'roster_entries'), where('staffId', '==', r.staffId), where('date', '==', d));
         const existing = await getDocs(q);
         for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
+        
         await addDoc(collection(db, 'roster_entries'), {
           staffId: r.staffId, staffName: r.staffName, staffDepartment: r.staffDepartment,
           date: d, shiftTime: '', status: r.leaveType, leaveRequestId: r.id, createdAt: new Date().toISOString(),
         });
       }
-      toast.success('Leave approved! Roster updated.');
-    } catch (error: any) { alert('Error: ' + error.message); }
+      toast.success('Leave approved and roster updated.');
+      setApproveTarget(null);
+    } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
-  const handleReject = async (r: any) => {
-    const note = window.prompt('Reason for rejection (optional):');
-    if (note === null) return;
+  const confirmReject = async (note: string) => {
+    if (!rejectTarget) return;
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), { status: 'rejected', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(), reviewNotes: note || '' });
-      toast.error('Leave rejected.');
-    } catch (error: any) { alert('Error: ' + error.message); }
+      await updateDoc(doc(db, 'leave_requests', rejectTarget.id), { 
+        status: 'rejected', 
+        reviewedBy: user?.email || '', 
+        reviewedAt: new Date().toISOString(), 
+        reviewNotes: note || '' 
+      });
+      toast.success('Leave rejected.');
+      setRejectTarget(null);
+    } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
   const handleDelete = async (r: any) => {
@@ -312,8 +332,8 @@ function LeavePage() {
       const linkedRoster = await getDocs(q);
       for (const docSnap of linkedRoster.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
       await deleteDoc(doc(db, 'leave_requests', r.id));
-      alert('Leave request deleted.');
-    } catch (error: any) { alert('Error: ' + error.message); }
+      toast.success('Leave request deleted.');
+    } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
   let previewDays = 0, previewFridays = 0, previewHolidays = 0;
@@ -486,8 +506,8 @@ function LeavePage() {
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {canApprove && (
                         <>
-                          <button className="approve-btn" onClick={() => handleApprove(r)}>✓</button>
-                          <button className="reject-btn" onClick={() => handleReject(r)}>✕</button>
+                          <button className="approve-btn" onClick={() => setApproveTarget(r)}>✓</button>
+                          <button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button>
                         </>
                       )}
                       {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
@@ -499,6 +519,27 @@ function LeavePage() {
           </table>
         )}
       </div>
+
+      {/* PROFESSIONAL DIALOGS */}
+      <ConfirmDialog
+        isOpen={!!approveTarget}
+        title="Approve Leave?"
+        message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?\n\nThis will mark those days on the roster.`}
+        confirmText="Yes, Approve"
+        isDanger={false}
+        onConfirm={confirmApprove}
+        onCancel={() => setApproveTarget(null)}
+      />
+
+      <PromptDialog
+        isOpen={!!rejectTarget}
+        title="Reject Leave?"
+        message="Please provide a reason for rejection (optional):"
+        placeholder="e.g. Operational requirements"
+        onSubmit={confirmReject}
+        onCancel={() => setRejectTarget(null)}
+      />
+
     </div>
   );
 }
