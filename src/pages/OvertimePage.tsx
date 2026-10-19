@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
 
 const WEEKLY_THRESHOLD = 48;
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
@@ -138,8 +139,8 @@ function OvertimePage() {
       });
       setFormNotes('');
       setShowForm(false);
-      alert(`✅ Logged ${hours} hour(s).`);
-    } catch (err: any) { alert('Error: ' + err.message); }
+      toast.success(`✅ Logged ${hours} hour(s).`);
+    } catch (err: any) { toast.error('Error: ' + err.message); }
     setSubmitting(false);
   };
 

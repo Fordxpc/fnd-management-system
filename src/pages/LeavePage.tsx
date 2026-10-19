@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
 
 const LEAVE_TYPES = [
   'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
@@ -291,7 +292,7 @@ function LeavePage() {
           date: d, shiftTime: '', status: r.leaveType, leaveRequestId: r.id, createdAt: new Date().toISOString(),
         });
       }
-      alert('Approved! Roster updated.');
+      toast.success('Leave approved! Roster updated.');
     } catch (error: any) { alert('Error: ' + error.message); }
   };
 
@@ -300,7 +301,7 @@ function LeavePage() {
     if (note === null) return;
     try {
       await updateDoc(doc(db, 'leave_requests', r.id), { status: 'rejected', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(), reviewNotes: note || '' });
-      alert('Rejected.');
+      toast.error('Leave rejected.');
     } catch (error: any) { alert('Error: ' + error.message); }
   };
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
 
 const FND_ALL_STAFF = [
   { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
@@ -146,19 +147,19 @@ function StaffPage() {
       }
       if (editingId) {
         await updateDoc(doc(db, 'staff', editingId), payload);
-        alert('Staff updated successfully!');
+        toast.success('Staff updated successfully!');
       } else {
         await addDoc(collection(db, 'staff'), {
           ...payload,
           status: 'active',
           createdAt: new Date().toISOString(),
         });
-        alert('Staff added successfully!');
+        toast.success('Staff added successfully!');
       }
       resetForm();
       setShowForm(false);
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      toast.error('Error: ' + error.message);
     }
   };
 
