@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
+import RampForm from './RampForm'; // Import the reusable form
 
 function RampReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -23,13 +24,15 @@ function RampReportsPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handlePrintModal = () => {
+    document.body.classList.add('printing-modal');
+    window.print();
+    setTimeout(() => document.body.classList.remove('printing-modal'), 1000);
+  };
+
   return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>📁 Saved Ramp Reports</h2>
-      </div>
-      
-      <div className="dash-card">
+    <div>
+      <div className="dash-card" style={{ marginTop: '16px' }}>
         <div style={{ overflowX: 'auto' }}>
           <table className="mini-table">
             <thead>
@@ -57,36 +60,31 @@ function RampReportsPage() {
       {/* Modal for viewing and printing a specific report */}
       {viewingReport && (
         <div className="modal-backdrop" onClick={() => setViewingReport(null)}>
-          <div className="modal-content" style={{ maxWidth: '1000px', width: '100%', padding: '20px' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-              <h3>Report: {viewingReport.fltNo}</h3>
+          <div className="modal-content" id="viewReportModal" style={{ maxWidth: '1100px', width: '100%', padding: '20px' }} onClick={e => e.stopPropagation()}>
+            
+            <div className="modal-header no-print" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+              <h3 style={{ margin: 0 }}>Report: {viewingReport.fltNo}</h3>
               <div>
-                <button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={() => window.print()}>🖨️ Print / Save as PDF</button>
+                <button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrintModal}>🖨️ Print / Save as PDF</button>
                 <button className="cancel-btn" onClick={() => setViewingReport(null)}>Close</button>
               </div>
             </div>
-            {/* 
-              For the modal to print properly, we'd need to move the print CSS logic here. 
-              For simplicity, we will just show the data in a summary table inside the modal.
-            */}
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '13px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div>
-                  <p><strong>A/C Type:</strong> {viewingReport.acType || '—'}</p>
-                  <p><strong>ATA:</strong> {viewingReport.ata || '—'}</p>
-                  <p><strong>STA:</strong> {viewingReport.sta || '—'}</p>
-                  <p><strong>ETA:</strong> {viewingReport.eta || '—'}</p>
-                  <p><strong>ATD:</strong> {viewingReport.atd || '—'}</p>
-                </div>
-                <div>
-                  <p><strong>Route:</strong> {viewingReport.route || '—'}</p>
-                  <p><strong>PAX IN:</strong> {viewingReport.paxInTotal || '0'}</p>
-                  <p><strong>PAX OUT:</strong> {viewingReport.paxOutTotal || '0'}</p>
-                  <p><strong>Cargo In/Out:</strong> {viewingReport.cargoIn || '0'} / {viewingReport.cargoOut || '0'}</p>
-                  <p><strong>Comments:</strong> {viewingReport.comments || '—'}</p>
-                </div>
-              </div>
+
+            {/* Use the exact same RampForm component in view-only mode */}
+            <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px' }}>
+              <RampForm
+                formData={viewingReport}
+                handleChange={() => {}} // No-op for view-only
+                isManager={false}
+                acTypes={[]}
+                routeCodes={[]}
+                handleAddAcType={() => {}}
+                handleAddRoute={() => {}}
+                appendRoute={() => {}}
+                isViewOnlyMode={true}
+              />
             </div>
+
           </div>
         </div>
       )}
