@@ -144,25 +144,47 @@ function DashboardPage({ onNavigate }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
         
         {/* NEXT FLIGHT WIDGET */}
-        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
-          <h3 style={{ color: '#93c5fd', marginBottom: '12px' }}>✈️ Next Flight</h3>
+        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
+            {nextFlight && <span style={{ fontSize: '11px', background: '#2563eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 700 }}>{nextFlight.status}</span>}
+          </div>
+          
           {nextFlight ? (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
-                <div style={{ fontSize: '32px', fontWeight: 900 }}>{nextFlight.flightNo}</div>
-                <div style={{ fontSize: '20px', fontWeight: 700 }}>{nextFlight.departureTime || nextFlight.arrivalTime || '—'}</div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '10px', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '28px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
+                  <div style={{ fontSize: '12px', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: '#93c5fd' }}>{nextFlight.route}</div>
               </div>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>{nextFlight.origin} ✈️ {nextFlight.dest}</div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1' }}>Type: {nextFlight.type}</div>
-              <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: '20px' }}>Date: {formatDisplay(nextFlight.date)}</span>
-                <span style={{ fontSize: '11px', background: '#2563eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 600 }}>{nextFlight.status}</span>
+
+              {/* Flight Times Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>Check-in</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{nextFlight.checkInTime || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>Arrival</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: '#86efac' }}>{nextFlight.arrivalTime || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>Departure</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div>
+                </div>
               </div>
             </div>
           ) : (
-            <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px' }}>No upcoming flights scheduled.</div>
+            <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px', textAlign: 'center' }}>No upcoming flights scheduled.</div>
           )}
-          {isManager && <button className="quick-btn" style={{ marginTop: '16px', background: '#3b82f6', color: 'white', border: 'none' }} onClick={() => onNavigate && onNavigate('flights')}>Manage Flights</button>}
+          
+          {isManager && (
+            <button className="quick-btn" style={{ marginTop: '16px', background: '#3b82f6', color: 'white', border: 'none', width: '100%' }} onClick={() => onNavigate && onNavigate('flights')}>
+              Manage Flight Schedule
+            </button>
+          )}
         </div>
 
         {/* DAILY OPS LINK */}
