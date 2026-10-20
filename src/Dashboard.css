@@ -1114,12 +1114,17 @@
   border-bottom: 2px solid rgba(255,255,255,0.1); margin-bottom: 20px;
 }
 
-.ops-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.ops-grid-3 { 
+  display: grid; 
+  grid-template-columns: repeat(3, 1fr); 
+  gap: 16px; 
+  align-items: start; /* This makes boxes take only the height they need */
+}
 .ops-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 
 .ops-card { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
 .ops-card-header { padding: 12px; font-size: 13px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; min-height: 48px; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
-.ops-card-body { padding: 10px 0; min-height: 100px; }
+.ops-card-body { padding: 10px 0; min-height: 80px; }
 .ops-name-row { padding: 8px; text-align: center; color: #f0f0f0; font-size: 15px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.06); text-transform: uppercase; }
 .ops-name-row:last-child { border-bottom: none; }
 .ops-name-row.empty { color: #555; font-style: italic; }

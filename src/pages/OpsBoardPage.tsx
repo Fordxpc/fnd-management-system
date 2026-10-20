@@ -105,27 +105,50 @@ function OpsBoardPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  // FIXED EXPORT FUNCTION (Forces 1400px width for perfect 3-column layout)
   const exportBoard = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
+    
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-9999px';
+    wrapper.style.top = '0';
+    wrapper.style.width = '1400px'; // Force wide layout
+    wrapper.style.background = '#141414';
+    wrapper.style.padding = '30px';
+
     const clone = ref.current.cloneNode(true) as HTMLElement;
-    clone.style.position = 'fixed';
-    clone.style.left = '-9999px';
-    clone.style.top = '0';
-    clone.style.width = '1200px';
-    clone.style.background = '#141414';
-    document.body.appendChild(clone);
+    clone.style.width = '100%';
+    clone.style.background = 'transparent';
+    
+    // Ensure the grid stays 3 columns even in the clone
+    const grids = clone.querySelectorAll('.ops-grid-3');
+    grids.forEach(g => {
+      (g as HTMLElement).style.gridTemplateColumns = 'repeat(3, 1fr)';
+    });
+
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
 
     try {
-      const canvas = await html2canvas(clone, { scale: 2, backgroundColor: '#141414', width: 1200, windowWidth: 1200 });
-      document.body.removeChild(clone);
+      const canvas = await html2canvas(wrapper, { 
+        scale: 2, 
+        backgroundColor: '#141414', 
+        width: wrapper.scrollWidth, 
+        height: wrapper.scrollHeight,
+        windowWidth: wrapper.scrollWidth,
+        windowHeight: wrapper.scrollHeight
+      });
+      document.body.removeChild(wrapper);
+      
       const link = document.createElement('a');
       link.download = `${filename}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
       link.click();
       toast.success('Downloaded successfully!');
     } catch (err: any) {
-      document.body.removeChild(clone);
+      document.body.removeChild(wrapper);
       toast.error('Export failed: ' + err.message);
     }
   };
@@ -136,7 +159,6 @@ function OpsBoardPage() {
     ...groundHistory.map(h => ({ ...h, type: 'ground' }))
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  // 1. Chart Data (Staff Utilization)
   const staffUtilization: { [name: string]: { runway: number, ground: number } } = {};
   allHistory.forEach(h => {
     if (h.type === 'runway') {
@@ -151,11 +173,11 @@ function OpsBoardPage() {
       });
     }
   });
+  
   const chartData = Object.entries(staffUtilization).map(([name, data]) => ({
     name, runway: data.runway, ground: data.ground, total: data.runway + data.ground
   })).sort((a, b) => b.total - a.total).slice(0, 10);
 
-  // 2. Individual Checker
   const indHistory = selectedStaff ? allHistory.filter(h => {
     if (h.type === 'runway') return [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].includes(selectedStaff);
     return Object.values(h.assignments || {}).flat().includes(selectedStaff);
