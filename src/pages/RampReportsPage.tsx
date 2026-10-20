@@ -63,7 +63,7 @@ function RampReportsPage() {
           <div 
             className="modal-content" 
             id="viewReportModal" 
-            style={{ maxWidth: '1100px', width: '95%', maxHeight: '95vh', padding: 0, display: 'flex', flexDirection: 'column' }} 
+            style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} 
             onClick={e => e.stopPropagation()}
           >
             
@@ -77,7 +77,7 @@ function RampReportsPage() {
             </div>
 
             {/* SCROLLABLE BODY */}
-            <div style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc', maxHeight: '85vh' }}>
               <RampForm
                 formData={viewingReport}
                 handleChange={() => {}}
