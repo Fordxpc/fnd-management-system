@@ -12,7 +12,6 @@ import SettingsPage from './pages/SettingsPage';
 import FlightsPage from './pages/FlightsPage';
 import OpsBoardPage from './pages/OpsBoardPage';
 import RampCheckSheetPage from './pages/RampCheckSheetPage';
-import RampReportsPage from './pages/RampReportsPage'; // NEW
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
@@ -29,7 +28,7 @@ function Dashboard({ user, logout }: any) {
 
   const navigate = (page: string) => {
     setCurrentPage(page);
-    if (['opsboard', 'flights', 'rampcheck', 'rampreports'].includes(page)) setActiveModule('operations');
+    if (['opsboard', 'flights', 'rampcheck'].includes(page)) setActiveModule('operations');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
     else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
   };
@@ -39,7 +38,6 @@ function Dashboard({ user, logout }: any) {
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
     rampcheck: <RampCheckSheetPage />,
-    rampreports: <RampReportsPage />,
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
@@ -65,8 +63,7 @@ function Dashboard({ user, logout }: any) {
               <div className="sidebar-section-title">Operations</div>
               <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>
               <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
-              <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>📝 Ramp Check Sheet</button>
-              <button className={currentPage === 'rampreports' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampreports')}>📁 Ramp Reports</button>
+              <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>
             </>
           )}
 
@@ -98,7 +95,6 @@ function Dashboard({ user, logout }: any) {
       </aside>
 
       <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
-        {/* TOP NAVIGATION TABS */}
         <div style={{ display: 'flex', gap: '10px', padding: '0 30px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
           <button 
             className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`}
