@@ -1085,3 +1085,46 @@
   background-color: #e2e8f0 !important;
   border-color: #94a3b8 !important;
 }
+/* ==================== OPS BOARD NATIVE STYLES ==================== */
+.ops-tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; overflow-x: auto; }
+.ops-tab-btn { padding: 12px 20px; background: transparent; border: none; font-weight: 700; font-size: 14px; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; font-family: inherit; white-space: nowrap; }
+.ops-tab-btn.active { color: #0b2b4f; border-bottom-color: #0b2b4f; }
+
+/* The Export Board Area */
+.ops-board-export-area {
+  background: #141414;
+  padding: 25px;
+  border-radius: 16px;
+  color: white;
+  font-family: Arial, sans-serif;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* We force the inner wrapper to be 1200px so the export is always high-quality desktop format */
+.ops-board-fixed-width {
+  width: 1200px; /* Forces desktop layout for export */
+  min-height: 600px;
+  margin: 0 auto;
+}
+
+.ops-board-title {
+  text-align: center; color: #fff; font-size: 22px; font-weight: 900;
+  letter-spacing: 2px; text-transform: uppercase; padding: 10px 0 16px;
+  border-bottom: 2px solid rgba(255,255,255,0.1); margin-bottom: 20px;
+}
+
+.ops-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.ops-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+.ops-card { background: #1a1a1a; border: 2px solid #333; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+.ops-card-header { padding: 12px; font-size: 13px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; min-height: 48px; display: flex; align-items: center; justify-content: center; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+.ops-card-body { padding: 10px 0; min-height: 100px; }
+.ops-name-row { padding: 8px; text-align: center; color: #f0f0f0; font-size: 15px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.06); text-transform: uppercase; }
+.ops-name-row:last-child { border-bottom: none; }
+.ops-name-row.empty { color: #555; font-style: italic; }
+
+.ops-notes { margin-top: 24px; padding: 16px; background: #0f0f0f; border: 1px solid #333; border-left: 4px solid #fbc02d; border-radius: 8px; }
+.ops-notes h4 { color: #fbc02d; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+.ops-notes ol { padding-left: 20px; color: #d1d5db; font-size: 12px; line-height: 1.6; }
+.ops-notes li { margin-bottom: 6px; }
