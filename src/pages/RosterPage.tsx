@@ -7,8 +7,9 @@ import {
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs';
 
-// Added Administration and Safety
 const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 
@@ -23,44 +24,29 @@ const monthsFull = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AU
 const monthsShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const daysShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-const formatLongDate = (date: Date): string =>
-  `${date.getDate()} ${monthsFull[date.getMonth()]} ${date.getFullYear()}`;
-
-const formatHeaderDate = (date: Date): string =>
-  `${daysShort[date.getDay()]}, ${date.getDate()} ${monthsShort[date.getMonth()]}, ${date.getFullYear()}`;
+const formatLongDate = (date: Date): string => `${date.getDate()} ${monthsFull[date.getMonth()]} ${date.getFullYear()}`;
+const formatHeaderDate = (date: Date): string => `${daysShort[date.getDay()]}, ${date.getDate()} ${monthsShort[date.getMonth()]}, ${date.getFullYear()}`;
 
 const getPeriodStart = (date: Date): Date => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
+  const d = new Date(date); d.setHours(0, 0, 0, 0);
   if (d.getDate() >= 16) d.setDate(16);
   else { d.setMonth(d.getMonth() - 1); d.setDate(16); }
   return d;
 };
 
 const getPeriodEnd = (start: Date): Date => {
-  const d = new Date(start);
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(15);
-  return d;
+  const d = new Date(start); d.setMonth(d.getMonth() + 1); d.setDate(15); return d;
 };
 
 const getSaturdayOnOrBefore = (date: Date): Date => {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const diff = (d.getDay() + 1) % 7;
-  d.setDate(d.getDate() - diff);
-  return d;
+  const d = new Date(date); d.setHours(0, 0, 0, 0); const diff = (d.getDay() + 1) % 7; d.setDate(d.getDate() - diff); return d;
 };
 
 const chunkIntoWeeks = (start: Date, end: Date): Date[][] => {
-  const weeks: Date[][] = [];
-  let current = getSaturdayOnOrBefore(start);
+  const weeks: Date[][] = []; let current = getSaturdayOnOrBefore(start);
   while (current <= end) {
     const week: Date[] = [];
-    for (let i = 0; i < 7; i++) {
-      week.push(new Date(current));
-      current.setDate(current.getDate() + 1);
-    }
+    for (let i = 0; i < 7; i++) { week.push(new Date(current)); current.setDate(current.getDate() + 1); }
     weeks.push(week);
   }
   return weeks;
@@ -80,8 +66,6 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function RosterPage() {
   const { profile } = useAuth();
   const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
-  const isStaff = profile?.role === 'staff'; // Staff cannot edit
-
   const userDepartment = profile?.department;
 
   const [selectedDept, setSelectedDept] = useState<string>('all');
@@ -98,6 +82,11 @@ function RosterPage() {
   const [shiftTime, setShiftTime] = useState<string>('06:00 - 14:00');
   const [customShift, setCustomShift] = useState<string>('');
   const [status, setStatus] = useState<string>('scheduled');
+
+  // Cell Edit Modal State
+  const [editCell, setEditCell] = useState<{ staffId: string, staffName: string, date: string } | null>(null);
+  const [editStatus, setEditStatus] = useState('scheduled');
+  const [editShift, setEditShift] = useState('06:00 - 14:00');
 
   const [showBulkForm, setShowBulkForm] = useState<boolean>(false);
   const [bulkStaffId, setBulkStaffId] = useState<string>('');
@@ -134,22 +123,17 @@ function RosterPage() {
     return () => { unsubStaff(); unsubRoster(); };
   }, []);
 
-  useEffect(() => {
-    setBulkStartDate(formatDate(periodStart));
-    setBulkEndDate(formatDate(periodEnd));
-  }, [periodStart]);
+  useEffect(() => { setBulkStartDate(formatDate(periodStart)); setBulkEndDate(formatDate(periodEnd)); }, [periodStart]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
-    if (!staffId) { alert('Please select a staff member'); return; }
+    if (!staffId) { toast.error('Please select a staff member'); return; }
     const staffMember = staff.find((s) => s.id === staffId);
-
     let finalShiftTime = '';
     if (status === 'scheduled') {
       finalShiftTime = shiftTime === 'CUSTOM' ? customShift : shiftTime;
-      if (!finalShiftTime) { alert('Please enter the custom shift time'); return; }
+      if (!finalShiftTime) { toast.error('Please enter the custom shift time'); return; }
     }
-
     try {
       const q = query(collection(db, 'roster_entries'), where('staffId', '==', staffId), where('date', '==', date));
       const existing = await getDocs(q);
@@ -160,15 +144,38 @@ function RosterPage() {
         date, shiftTime: finalShiftTime, status: status === 'scheduled' ? 'scheduled' : status,
         createdAt: new Date().toISOString(),
       });
-      setShowForm(false); setCustomShift(''); alert('Roster entry added!');
-    } catch (error: any) { alert('Error: ' + error.message); }
+      toast.success('Roster entry added!');
+      setShowForm(false); setCustomShift('');
+    } catch (error: any) { toast.error('Error: ' + error.message); }
+  };
+
+  // Quick cell edit save
+  const handleSaveCell = async () => {
+    if (!editCell) return;
+    let finalShift = '';
+    if (editStatus === 'scheduled') {
+      finalShift = editShift;
+    }
+    try {
+      const q = query(collection(db, 'roster_entries'), where('staffId', '==', editCell.staffId), where('date', '==', editCell.date));
+      const existing = await getDocs(q);
+      for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
+
+      if (editStatus !== 'clear') {
+        await addDoc(collection(db, 'roster_entries'), {
+          staffId: editCell.staffId, staffName: editCell.staffName, staffDepartment: selectedDept === 'all' ? '' : selectedDept,
+          date: editCell.date, shiftTime: finalShift, status: editStatus, createdAt: new Date().toISOString(),
+        });
+      }
+      toast.success('Cell updated!');
+      setEditCell(null);
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const previewBulkDates = (): string[] => {
     const dates: string[] = [];
     if (!bulkStartDate || !bulkEndDate) return dates;
-    const s = new Date(bulkStartDate + 'T00:00:00');
-    const e = new Date(bulkEndDate + 'T00:00:00');
+    const s = new Date(bulkStartDate + 'T00:00:00'); const e = new Date(bulkEndDate + 'T00:00:00');
     if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return dates;
     const cur = new Date(s);
     while (cur <= e) {
@@ -178,15 +185,13 @@ function RosterPage() {
     return dates;
   };
 
-  const toggleBulkDay = (day: number) => {
-    setBulkDaysOfWeek((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort());
-  };
+  const toggleBulkDay = (day: number) => setBulkDaysOfWeek((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort());
 
   const handleBulkAssign = async () => {
-    if (!bulkStaffId) { alert('Please select a staff member'); return; }
+    if (!bulkStaffId) { toast.error('Please select a staff member'); return; }
     const dates = previewBulkDates();
-    if (dates.length === 0) { alert('No dates match the selected days'); return; }
-    if (dates.length > 90) { alert(`Too many dates (${dates.length}). Limit is 90.`); return; }
+    if (dates.length === 0) { toast.error('No dates match the selected days'); return; }
+    if (dates.length > 90) { toast.error(`Too many dates (${dates.length}). Limit is 90.`); return; }
 
     const staffMember = staff.find((s) => s.id === bulkStaffId);
     if (!staffMember) return;
@@ -194,11 +199,8 @@ function RosterPage() {
     let finalShiftTime = '';
     if (bulkType === 'scheduled') {
       finalShiftTime = bulkShift === 'CUSTOM' ? bulkCustomShift : bulkShift;
-      if (!finalShiftTime) { alert('Please enter the custom shift time'); return; }
+      if (!finalShiftTime) { toast.error('Please enter the custom shift time'); return; }
     }
-
-    const ok = window.confirm(`Create ${dates.length} roster entries for ${staffMember.name}?\n\nAny existing entries for those days will be overwritten.`);
-    if (!ok) return;
 
     setBulkSubmitting(true);
     try {
@@ -217,26 +219,20 @@ function RosterPage() {
         });
         created++;
       }
-      alert(`✅ Created ${created} roster entries!`);
+      toast.success(`Created ${created} roster entries!`);
       setShowBulkForm(false);
-    } catch (err: any) { alert('Error: ' + err.message); }
+    } catch (err: any) { toast.error('Error: ' + err.message); }
     setBulkSubmitting(false);
   };
 
   const handleCopyPreviousPeriod = async () => {
     const prevStart = new Date(periodStart); prevStart.setMonth(prevStart.getMonth() - 1);
     const prevEnd = new Date(periodEnd); prevEnd.setMonth(prevEnd.getMonth() - 1);
-
-    const prevStartStr = formatDate(prevStart);
-    const prevEndStr = formatDate(prevEnd);
-    const curStartStr = formatDate(periodStart);
-    const curEndStr = formatDate(periodEnd);
+    const prevStartStr = formatDate(prevStart); const prevEndStr = formatDate(prevEnd);
+    const curStartStr = formatDate(periodStart); const curEndStr = formatDate(periodEnd);
 
     const prevEntries = entries.filter((e) => e.date >= prevStartStr && e.date <= prevEndStr);
-    if (prevEntries.length === 0) { alert('No entries found in the previous period to copy.'); return; }
-
-    const ok = window.confirm(`📋 Copy ${prevEntries.length} entries from the previous period?\n\n⚠ Existing entries in the current period will be OVERWRITTEN.`);
-    if (!ok) return;
+    if (prevEntries.length === 0) { toast.error('No entries found in the previous period to copy.'); return; }
 
     setCopying(true);
     try {
@@ -245,8 +241,7 @@ function RosterPage() {
 
       let created = 0;
       for (const e of prevEntries) {
-        const oldDate = new Date(e.date + 'T00:00:00');
-        const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
+        const oldDate = new Date(e.date + 'T00:00:00'); const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
         const newDateStr = formatDate(newDate);
 
         await addDoc(collection(db, 'roster_entries'), {
@@ -256,20 +251,17 @@ function RosterPage() {
         });
         created++;
       }
-      alert(`✅ Copied ${created} entries!`);
-    } catch (err: any) { alert('Error: ' + err.message); }
+      toast.success(`Copied ${created} entries!`);
+    } catch (err: any) { toast.error('Error: ' + err.message); }
     setCopying(false);
   };
 
   const changePeriod = (direction: number) => {
-    const newDate = new Date(periodStart);
-    newDate.setMonth(newDate.getMonth() + direction);
-    setPeriodStart(newDate);
+    const newDate = new Date(periodStart); newDate.setMonth(newDate.getMonth() + direction); setPeriodStart(newDate);
   };
 
   const moveStaff = async (id: string, direction: 'up' | 'down') => {
-    const list = [...visibleStaff];
-    const index = list.findIndex((s) => s.id === id);
+    const list = [...visibleStaff]; const index = list.findIndex((s) => s.id === id);
     if (index === -1) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= list.length) return;
@@ -278,26 +270,18 @@ function RosterPage() {
       const batch = writeBatch(db);
       list.forEach((s, i) => batch.update(doc(db, 'staff', s.id), { order: i }));
       await batch.commit();
-    } catch (err: any) { alert('Reorder failed: ' + err.message); }
+    } catch (err: any) { toast.error('Reorder failed: ' + err.message); }
   };
 
   const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
-
     const wrapper = document.createElement('div');
-    Object.assign(wrapper.style, {
-      position: 'absolute', left: '-10000px', top: '0', width: '1600px',
-      background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1',
-    });
-
+    Object.assign(wrapper.style, { position: 'absolute', left: '-10000px', top: '0', width: '1600px', background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1' });
     const clone = original.cloneNode(true) as HTMLElement;
-    clone.style.width = '100%'; clone.style.background = '#ffffff'; clone.style.padding = '0';
-    clone.style.borderRadius = '0'; clone.style.boxShadow = 'none';
-
+    clone.style.width = '100%'; clone.style.background = '#ffffff'; clone.style.padding = '0'; clone.style.borderRadius = '0'; clone.style.boxShadow = 'none';
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => { (el as HTMLElement).style.position = 'static'; });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
-
     wrapper.appendChild(clone); document.body.appendChild(wrapper);
     try {
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -310,9 +294,10 @@ function RosterPage() {
     setExporting(true);
     try {
       const canvas = await captureCanvas(); if (!canvas) return;
-      const link = document.createElement('a'); link.download = `FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.jpg`;
+      const link = document.createElement('a'); link.download = `FND-Roster-${formatDate(periodStart)}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95); link.click();
-    } catch (err: any) { alert('Export failed: ' + err.message); }
+      toast.success('JPG downloaded!');
+    } catch (err: any) { toast.error('Export failed: ' + err.message); }
     setExporting(false);
   };
 
@@ -328,8 +313,9 @@ function RosterPage() {
       const imgW = canvas.width * ratio; const imgH = canvas.height * ratio;
       const imgX = (pageWidth - imgW) / 2; const imgY = (pageHeight - imgH) / 2;
       pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
-      pdf.save(`FND-Roster-${titleDeptSafe}-${formatDate(periodStart)}.pdf`);
-    } catch (err: any) { alert('Export failed: ' + err.message); }
+      pdf.save(`FND-Roster-${formatDate(periodStart)}.pdf`);
+      toast.success('PDF downloaded!');
+    } catch (err: any) { toast.error('Export failed: ' + err.message); }
     setExporting(false);
   };
 
@@ -338,40 +324,27 @@ function RosterPage() {
     setTimeout(() => { window.print(); document.body.classList.remove('printing-roster'); }, 100);
   };
 
-  const titleDept = isAdmin ? (selectedDept === 'all' ? 'ALL DEPARTMENTS' : selectedDept.toUpperCase()) : (userDepartment || '').toUpperCase();
-  const titleDeptSafe = titleDept.replace(/\s+/g, '-');
-  const bulkDatesCount = previewBulkDates().length;
-
   return (
     <div className="page-content">
       <div className="staff-header">
-        <h2>
-          Duty Roster
-          <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
-            ({isAdmin ? (selectedDept === 'all' ? 'All Departments' : selectedDept) : userDepartment})
-          </span>
-        </h2>
-        
-        {/* Hide edit buttons for staff */}
-        {!isStaff && (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <h2>Duty Roster</h2>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {isAdmin && (
             <button className={`export-btn ${reorderMode ? 'pdf-btn' : 'jpg-btn'}`} onClick={() => setReorderMode(!reorderMode)}>
               {reorderMode ? '✅ Done' : '↕️ Reorder'}
             </button>
-            <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>{exporting ? '...' : '📷 JPG'}</button>
-            <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF'}</button>
-            <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
-            <button className="export-btn copy-btn" onClick={handleCopyPreviousPeriod} disabled={copying}>{copying ? '...' : '📋 Copy Last Month'}</button>
-            <button className="export-btn bulk-btn" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}</button>
-            <button className="add-staff-btn" onClick={() => { setShowForm(!showForm); setShowBulkForm(false); }}>{showForm ? 'Cancel' : '+ Single'}</button>
-          </div>
-        )}
-        {isStaff && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>{exporting ? '...' : '📷 JPG'}</button>
-            <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF'}</button>
-          </div>
-        )}
+          )}
+          <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>{exporting ? '...' : '📷 JPG'}</button>
+          <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF'}</button>
+          <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
+          {isAdmin && (
+            <>
+              <button className="export-btn copy-btn" onClick={handleCopyPreviousPeriod} disabled={copying}>{copying ? '...' : '📋 Copy Last Month'}</button>
+              <button className="export-btn bulk-btn" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}</button>
+              <button className="add-staff-btn" onClick={() => { setShowForm(!showForm); setShowBulkForm(false); }}>{showForm ? 'Cancel' : '+ Single'}</button>
+            </>
+          )}
+        </div>
       </div>
 
       {isAdmin && (
@@ -383,13 +356,10 @@ function RosterPage() {
         </div>
       )}
 
-      {reorderMode && (
-        <div className="reorder-banner">↕️ <strong>Reorder Mode:</strong> Use the ▲ ▼ arrows to arrange staff. Changes save automatically.</div>
-      )}
+      {reorderMode && <div className="reorder-banner">↕️ <strong>Reorder Mode:</strong> Use arrows to arrange staff.</div>}
 
-      {showForm && !isStaff && (
+      {showForm && isAdmin && (
         <form className="staff-form" onSubmit={handleAdd}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>➕ Single Day Assignment</div>
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
             {visibleStaff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>)}
@@ -404,65 +374,36 @@ function RosterPage() {
               <select value={shiftTime} onChange={(e) => setShiftTime(e.target.value)}>
                 {SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
               </select>
-              {shiftTime === 'CUSTOM' && <input placeholder="Custom time (e.g. 07:00 - 15:00)" value={customShift} onChange={(e) => setCustomShift(e.target.value)} required />}
+              {shiftTime === 'CUSTOM' && <input placeholder="Custom time" value={customShift} onChange={(e) => setCustomShift(e.target.value)} required />}
             </>
           )}
           <button type="submit">Save Entry</button>
         </form>
       )}
 
-      {showBulkForm && !isStaff && (
+      {showBulkForm && isAdmin && (
         <div className="bulk-form">
-          <div className="bulk-form-title">⚡ Bulk Assign — Create many shifts at once</div>
+          <div className="bulk-form-title">⚡ Bulk Assign</div>
           <div className="bulk-form-grid">
             <div className="bulk-field bulk-field-full">
               <label>Staff Member</label>
               <select value={bulkStaffId} onChange={(e) => setBulkStaffId(e.target.value)}>
                 <option value="">Select Staff...</option>
-                {visibleStaff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'}) — {s.department}</option>)}
+                {visibleStaff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>)}
               </select>
             </div>
-            <div className="bulk-field"><label>Start Date</label><input type="date" value={bulkStartDate} onChange={(e) => setBulkStartDate(e.target.value)} /></div>
-            <div className="bulk-field"><label>End Date</label><input type="date" value={bulkEndDate} onChange={(e) => setBulkEndDate(e.target.value)} /></div>
+            <div className="bulk-field"><label>Start</label><input type="date" value={bulkStartDate} onChange={(e) => setBulkStartDate(e.target.value)} /></div>
+            <div className="bulk-field"><label>End</label><input type="date" value={bulkEndDate} onChange={(e) => setBulkEndDate(e.target.value)} /></div>
             <div className="bulk-field bulk-field-full">
-              <label>Days of Week</label>
+              <label>Days</label>
               <div className="bulk-day-buttons">
-                {DAY_LABELS.map((label, i) => (
-                  <button key={i} type="button" className={bulkDaysOfWeek.includes(i) ? 'day-btn active' : 'day-btn'} onClick={() => toggleBulkDay(i)}>{label}</button>
-                ))}
-                <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([0,1,2,3,4,5,6])}>All</button>
-                <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([0,1,2,3,4,6])}>No Fri</button>
-                <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([1,2,3,4,6])}>Mon–Thu+Sat+Sun</button>
-                <button type="button" className="day-btn quick" onClick={() => setBulkDaysOfWeek([])}>Clear</button>
+                {DAY_LABELS.map((label, i) => <button key={i} type="button" className={bulkDaysOfWeek.includes(i) ? 'day-btn active' : 'day-btn'} onClick={() => toggleBulkDay(i)}>{label}</button>)}
               </div>
             </div>
-            <div className="bulk-field">
-              <label>Type</label>
-              <select value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
-                <option value="scheduled">Scheduled Shift</option>
-                {LEAVE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
-            </div>
-            <div className="bulk-field">
-              <label>Shift Time</label>
-              {bulkType === 'scheduled' ? (
-                <>
-                  <select value={bulkShift} onChange={(e) => setBulkShift(e.target.value)}>
-                    {SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                  {bulkShift === 'CUSTOM' && <input placeholder="e.g. 07:00 - 15:00" value={bulkCustomShift} onChange={(e) => setBulkCustomShift(e.target.value)} style={{ marginTop: '6px' }} />}
-                </>
-              ) : (
-                <div style={{ padding: '10px', background: '#f1f5f9', borderRadius: '6px', fontSize: '12px', color: '#64748b' }}>Not applicable</div>
-              )}
-            </div>
+            <div className="bulk-field"><label>Type</label><select value={bulkType} onChange={(e) => setBulkType(e.target.value)}><option value="scheduled">Shift</option>{LEAVE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
+            <div className="bulk-field"><label>Shift</label><select value={bulkShift} onChange={(e) => setBulkShift(e.target.value)}>{SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
           </div>
-          <div className="bulk-preview">
-            <strong>{bulkDatesCount}</strong> entr{bulkDatesCount === 1 ? 'y' : 'ies'} will be created
-          </div>
-          <button className="bulk-submit-btn" onClick={handleBulkAssign} disabled={bulkSubmitting || bulkDatesCount === 0}>
-            {bulkSubmitting ? 'Creating...' : `⚡ Create ${bulkDatesCount} Entr${bulkDatesCount === 1 ? 'y' : 'ies'}`}
-          </button>
+          <button className="bulk-submit-btn" onClick={handleBulkAssign} disabled={bulkSubmitting}>{bulkSubmitting ? '...' : `⚡ Create Entries`}</button>
         </div>
       )}
 
@@ -473,58 +414,86 @@ function RosterPage() {
       </div>
 
       <div ref={gridRef} className="roster-export-area">
-        <div className="roster-title">
-          <h1>FND {titleDept} DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
-        </div>
+        <div className="roster-title"><h1>FND DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1></div>
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="roster-week-section">
             <div className="week-label">WEEK {weekIndex + 1}</div>
             <table className="roster-grid week-grid">
               <thead>
                 <tr>
-                  {reorderMode && <th className="reorder-col" style={{ width: '50px' }}>↕️</th>}
-                  <th className="col-sn">SN No.</th>
-                  <th className="col-name">NAME</th>
+                  {reorderMode && <th className="reorder-col">↕️</th>}
+                  <th className="col-sn">SN No.</th><th className="col-name">NAME</th>
                   {week.map((d) => <th key={formatDate(d)} className="col-date">{formatHeaderDate(d)}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {visibleStaff.length === 0 ? (
-                  <tr><td colSpan={week.length + (reorderMode ? 3 : 2)} style={{ textAlign: 'center', padding: '15px' }}>No staff members found.</td></tr>
-                ) : (
-                  visibleStaff.map((s, staffIndex) => (
-                    <tr key={s.id}>
-                      {reorderMode && (
-                        <td className="reorder-col" style={{ padding: '2px' }}>
-                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')} disabled={staffIndex === 0}>▲</button>
-                          <button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')} disabled={staffIndex === visibleStaff.length - 1}>▼</button>
-                        </td>
-                      )}
-                      <td className="col-sn">{s.sn || '—'}</td>
-                      <td className="col-name">{s.name}</td>
-                      {week.map((d) => {
-                        const dStr = formatDate(d);
-                        const isInPeriod = dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
-                        if (!isInPeriod) return <td key={dStr} className="out-of-period-cell">&nbsp;</td>;
+                {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff.</td></tr> : visibleStaff.map((s, staffIndex) => (
+                  <tr key={s.id}>
+                    {reorderMode && <td className="reorder-col"><button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')}>▲</button><button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')}>▼</button></td>}
+                    <td className="col-sn">{s.sn || '—'}</td><td className="col-name">{s.name}</td>
+                    {week.map((d) => {
+                      const dStr = formatDate(d);
+                      const isInPeriod = dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
+                      if (!isInPeriod) return <td key={dStr} className="out-of-period-cell">&nbsp;</td>;
 
-                        const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
-                        let displayValue = ''; let cellClass = 'empty-cell';
-                        if (entry) {
-                          displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.status;
-                          if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
-                          else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
-                          else cellClass = 'shift-cell';
-                        }
-                        return <td key={dStr} className={cellClass}>{displayValue}</td>;
-                      })}
-                    </tr>
-                  ))
-                )}
+                      const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
+                      let displayValue = ''; let cellClass = 'empty-cell';
+                      if (entry) {
+                        displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.status;
+                        if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
+                        else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
+                        else cellClass = 'shift-cell';
+                      }
+                      return (
+                        <td key={dStr} className={`${cellClass} ${isAdmin ? 'clickable-cell' : ''}`} 
+                            onClick={() => {
+                              if (isAdmin) {
+                                setEditCell({ staffId: s.id, staffName: s.name, date: dStr });
+                                setEditStatus(entry ? entry.status : 'scheduled');
+                                setEditShift(entry && entry.status === 'scheduled' ? entry.shiftTime : '06:00 - 14:00');
+                              }
+                            }}>
+                          {displayValue}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         ))}
       </div>
+
+      {/* CELL EDIT MODAL */}
+      {editCell && isAdmin && (
+        <div className="modal-backdrop" onClick={() => setEditCell(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Edit Roster: {editCell.staffName}</h3>
+            <p style={{ color: '#475569', marginBottom: '20px' }}>Date: {editCell.date}</p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <select value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                <option value="scheduled">Scheduled Shift</option>
+                {LEAVE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                <option value="clear">Clear (Remove Entry)</option>
+              </select>
+              
+              {editStatus === 'scheduled' && (
+                <select value={editShift} onChange={e => setEditShift(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                  {SHIFT_OPTIONS.filter(o => o !== 'CUSTOM').map(o => <option key={o} value={o}>{o}</option>)}
+                  <option value="08:00 - 16:00">08:00 - 16:00</option>
+                </select>
+              )}
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '24px' }}>
+              <button className="cancel-btn" onClick={() => setEditCell(null)}>Cancel</button>
+              <button className="submit-btn" onClick={handleSaveCell}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from './auth'; // Fixed path (./ instead of ../)
+import { useAuth } from './auth';
 import './Dashboard.css';
 import StaffPage from './pages/StaffPage';
 import RosterPage from './pages/RosterPage';
@@ -9,6 +9,8 @@ import OvertimePage from './pages/OvertimePage';
 import UsersPage from './pages/UsersPage';
 import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
+import FlightsPage from './pages/FlightsPage'; // NEW
+import ChecklistPage from './pages/ChecklistPage'; // NEW
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
@@ -26,6 +28,8 @@ function Dashboard({ user, logout }: any) {
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
+    flights: <FlightsPage />, // NEW
+    checklist: <ChecklistPage />, // NEW
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
@@ -40,87 +44,38 @@ function Dashboard({ user, logout }: any) {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h2>Funadhoo Airport</h2>
-          <p>Roster System</p>
+          <p>Ops & Roster System</p>
         </div>
 
-        <nav className="sidebar-nav">
-          <button
-            className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('dashboard')}
-          >
-            📊 Dashboard
-          </button>
+        <nav className="sidebar-nav" style={{ overflowY: 'auto' }}>
+          <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('dashboard')}>📊 Dashboard</button>
+          <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('flights')}>✈️ Flights</button>
+          <button className={currentPage === 'checklist' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('checklist')}>📋 Ops Checks</button>
+          
+          <div style={{ height: '1px', background: '#1e293b', margin: '8px 0' }}></div>
 
-          {isManagement && (
-            <button
-              className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'}
-              onClick={() => setCurrentPage('staff')}
-            >
-              👥 Staff
-            </button>
-          )}
-
-          <button
-            className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('roster')}
-          >
-            📅 Duty Roster
-          </button>
-
-          <button
-            className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('leave')}
-          >
-            🌴 Leave
-          </button>
-
-          <button
-            className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('overtime')}
-          >
-            ⏰ Overtime
-          </button>
-
-          <button
-            className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('holidays')}
-          >
-            🎉 Holidays
-          </button>
-
-          {canManageUsers && (
-            <button
-              className={currentPage === 'users' ? 'nav-item active' : 'nav-item'}
-              onClick={() => setCurrentPage('users')}
-            >
-              🔑 Users
-            </button>
-          )}
-
-          <button
-            className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setCurrentPage('settings')}
-          >
-            ⚙️ Settings
-          </button>
+          {isManagement && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('staff')}>👥 Staff</button>}
+          <button className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('roster')}>📅 Duty Roster</button>
+          <button className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('leave')}>🌴 Leave</button>
+          <button className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('overtime')}>⏰ Overtime</button>
+          
+          <div style={{ height: '1px', background: '#1e293b', margin: '8px 0' }}></div>
+          
+          <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('holidays')}>🎉 Holidays</button>
+          {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('users')}>🔑 Users</button>}
+          <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('settings')}>⚙️ Settings</button>
         </nav>
 
         <div className="sidebar-footer">
           <p className="user-email">{user?.email}</p>
-          <button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>
-            🔐 Change Password
-          </button>
-          <button className="logout-btn" onClick={logout}>
-            Log Out
-          </button>
+          <button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
+          <button className="logout-btn" onClick={logout}>Log Out</button>
         </div>
       </aside>
 
       <main className="main-content">{pages[currentPage]}</main>
 
-      {showPasswordModal && (
-        <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
-      )}
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }
