@@ -111,7 +111,7 @@ function OpsBoardPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const exportBoard = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
+  const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
     
