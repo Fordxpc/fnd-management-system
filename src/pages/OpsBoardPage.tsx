@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL'];
 
@@ -21,8 +21,6 @@ const DEFAULT_TASKS = [
   { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' },
   { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' },
 ];
-
-const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#14b8a6'];
 
 function OpsBoardPage() {
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'history'>('runway');
@@ -43,20 +41,15 @@ function OpsBoardPage() {
   // History State
   const [runwayHistory, setRunwayHistory] = useState<any[]>([]);
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
-  const [selectedStaffHistory, setSelectedStaffHistory] = useState<string>('');
-  const [historyFilter, setHistoryFilter] = useState<'all' | 'runway' | 'ground'>('all');
+  const [selectedStaff, setSelectedStaff] = useState<string>('');
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load History from Firestore
-    const qRunway = query(collection(db, 'ops_runway_history'), orderBy('createdAt', 'desc'), limit(100));
-    const unsubR = onSnapshot(qRunway, (snap) => {
-      setRunwayHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const qRunway = query(collection(db, 'ops_runway_history'), orderBy('createdAt', 'desc'), limit(200));
+    const unsubR = onSnapshot(qRunway, (snap) => setRunwayHistory(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-    const qGround = query(collection(db, 'ops_ground_history'), orderBy('createdAt', 'desc'), limit(100));
-    const unsubG = onSnapshot(qGround, (snap) => {
-      setGroundHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const qGround = query(collection(db, 'ops_ground_history'), orderBy('createdAt', 'desc'), limit(200));
+    const unsubG = onSnapshot(qGround, (snap) => setGroundHistory(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
     return () => { unsubR(); unsubG(); };
   }, []);
@@ -137,35 +130,52 @@ function OpsBoardPage() {
     }
   };
 
-  // --- History Calculations ---
+  // ===== HISTORY CALCULATIONS =====
   const allHistory = [
     ...runwayHistory.map(h => ({ ...h, type: 'runway' })),
     ...groundHistory.map(h => ({ ...h, type: 'ground' }))
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const filteredHistory = allHistory.filter(h => {
-    if (historyFilter === 'all') return true;
-    return h.type === historyFilter;
-  });
-
-  const staffHistory = selectedStaffHistory ? allHistory.filter(h => {
-    if (h.type === 'runway') return h.rwy19?.includes(selectedStaffHistory) || h.rwy01?.includes(selectedStaffHistory) || h.lights?.includes(selectedStaffHistory);
-    if (h.type === 'ground') return Object.values(h.assignments || {}).some((arr: any) => arr.includes(selectedStaffHistory));
-    return false;
-  }) : [];
-
-  // Chart Data
-  const staffTaskCounts: { [name: string]: number } = {};
+  // 1. Chart Data (Staff Utilization)
+  const staffUtilization: { [name: string]: { runway: number, ground: number } } = {};
   allHistory.forEach(h => {
     if (h.type === 'runway') {
-      h.rwy19?.forEach((n: string) => staffTaskCounts[n] = (staffTaskCounts[n] || 0) + 1);
-      h.rwy01?.forEach((n: string) => staffTaskCounts[n] = (staffTaskCounts[n] || 0) + 1);
-      h.lights?.forEach((n: string) => staffTaskCounts[n] = (staffTaskCounts[n] || 0) + 1);
+      [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].forEach((n: string) => {
+        if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 };
+        staffUtilization[n].runway++;
+      });
     } else {
-      Object.values(h.assignments || {}).forEach((arr: any) => arr.forEach((n: string) => staffTaskCounts[n] = (staffTaskCounts[n] || 0) + 1));
+      Object.values(h.assignments || {}).flat().forEach((n: any) => {
+        if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 };
+        staffUtilization[n].ground++;
+      });
     }
   });
-  const staffChartData = Object.entries(staffTaskCounts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count).slice(0, 8);
+  const chartData = Object.entries(staffUtilization).map(([name, data]) => ({
+    name, runway: data.runway, ground: data.ground, total: data.runway + data.ground
+  })).sort((a, b) => b.total - a.total).slice(0, 10);
+
+  // 2. Individual Checker
+  const indHistory = selectedStaff ? allHistory.filter(h => {
+    if (h.type === 'runway') return [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].includes(selectedStaff);
+    return Object.values(h.assignments || {}).flat().includes(selectedStaff);
+  }) : [];
+  
+  const indTaskCounts: { [task: string]: number } = {};
+  indHistory.forEach(h => {
+    if (h.type === 'runway') {
+      if (h.rwy19.includes(selectedStaff)) indTaskCounts['RWY 19 Inspection'] = (indTaskCounts['RWY 19 Inspection'] || 0) + 1;
+      if (h.rwy01.includes(selectedStaff)) indTaskCounts['RWY 01 Inspection'] = (indTaskCounts['RWY 01 Inspection'] || 0) + 1;
+      if (h.lights.includes(selectedStaff)) indTaskCounts['Light Inspection'] = (indTaskCounts['Light Inspection'] || 0) + 1;
+    } else {
+      Object.entries(h.assignments || {}).forEach(([taskId, names]: any) => {
+        if (names.includes(selectedStaff)) {
+          const label = tasks.find(t => t.id === taskId)?.label || taskId;
+          indTaskCounts[label] = (indTaskCounts[label] || 0) + 1;
+        }
+      });
+    }
+  });
 
   return (
     <div className="page-content">
@@ -298,35 +308,57 @@ function OpsBoardPage() {
       {/* ===== HISTORY TAB ===== */}
       {activeTab === 'history' && (
         <div>
+          {/* Top Stats */}
+          <div className="dash-stats" style={{ marginBottom: '20px' }}>
+            <div className="stat-card"><div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>✈️</div><div><div className="stat-value">{runwayHistory.length}</div><div className="stat-label">Runway Boards Saved</div></div></div>
+            <div className="stat-card"><div className="stat-icon" style={{ background: '#dcfce7', color: '#065f46' }}>🛬</div><div><div className="stat-value">{groundHistory.length}</div><div className="stat-label">Ground Boards Saved</div></div></div>
+            <div className="stat-card"><div className="stat-icon" style={{ background: '#dbeafe', color: '#1e40af' }}>👤</div><div><div className="stat-value">{Object.keys(staffUtilization).length}</div><div className="stat-label">Staff Involved</div></div></div>
+          </div>
+
           <div className="dash-grid" style={{ marginBottom: '20px' }}>
+            {/* Individual Checker */}
             <div className="dash-card">
-              <h3>👤 Individual Staff Record Checker</h3>
-              <select value={selectedStaffHistory} onChange={e => setSelectedStaffHistory(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '10px' }}>
+              <h3>🔍 Individual Staff Record</h3>
+              <select value={selectedStaff} onChange={e => setSelectedStaff(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '10px', marginBottom: '16px' }}>
                 <option value="">— Select Staff —</option>
                 {staffPool.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              {selectedStaffHistory && (
-                <div style={{ marginTop: '16px', maxHeight: '200px', overflowY: 'auto' }}>
-                  <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '8px' }}>Total Assignments: {staffHistory.length}</div>
-                  {staffHistory.map(h => (
-                    <div key={h.id} style={{ padding: '8px', borderBottom: '1px solid #e2e8f0', fontSize: '12px' }}>
-                      <span style={{ fontWeight: 700, color: h.type === 'runway' ? '#dc2626' : '#2563eb' }}>{h.type === 'runway' ? '✈️ Runway' : '🛬 Ground'}</span> — {h.date} ({h.time})
+              
+              {selectedStaff ? (
+                <div>
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+                    <div style={{ flex: 1, background: '#f8fafc', padding: '10px', borderRadius: '6px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+                      <div style={{ fontSize: '20px', fontWeight: 800, color: '#0b2b4f' }}>{indHistory.length}</div>
+                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>TOTAL SHIFTS</div>
                     </div>
-                  ))}
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, marginBottom: '8px' }}>Task Breakdown:</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '150px', overflowY: 'auto' }}>
+                    {Object.entries(indTaskCounts).map(([task, count]) => (
+                      <div key={task} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', padding: '4px 0', borderBottom: '1px dashed #e2e8f0' }}>
+                        <span>{task}</span>
+                        <span style={{ fontWeight: 700, background: '#e2e8f0', padding: '2px 8px', borderRadius: '10px' }}>x {count}</span>
+                      </div>
+                    ))}
+                    {Object.keys(indTaskCounts).length === 0 && <span style={{ fontSize: '12px', color: '#94a3b8' }}>No tasks found.</span>}
+                  </div>
                 </div>
-              )}
+              ) : <p style={{ fontSize: '12px', color: '#94a3b8' }}>Select a staff member to see their history.</p>}
             </div>
 
+            {/* Chart */}
             <div className="dash-card">
               <h3>📈 Top Staff Utilization</h3>
               <div style={{ width: '100%', height: 200, marginTop: '10px' }}>
-                {staffChartData.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}>No data yet.</p> : (
+                {chartData.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}>No data yet.</p> : (
                   <ResponsiveContainer>
-                    <BarChart data={staffChartData} layout="vertical" margin={{ left: 20 }}>
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 20 }}>
                       <XAxis type="number" hide />
                       <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={100} />
                       <Tooltip />
-                      <Bar dataKey="count" fill="#2563eb" radius={[0, 4, 4, 0]} />
+                      <Legend wrapperStyle={{ fontSize: '11px' }} />
+                      <Bar dataKey="runway" name="Runway" stackId="a" fill="#dc2626" />
+                      <Bar dataKey="ground" name="Ground" stackId="a" fill="#2563eb" />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -334,35 +366,63 @@ function OpsBoardPage() {
             </div>
           </div>
 
+          {/* History Logs Accordion */}
           <div className="dash-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0 }}>📋 History Logs</h3>
-              <select value={historyFilter} onChange={e => setHistoryFilter(e.target.value as any)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                <option value="all">All Records</option>
-                <option value="runway">Runway Only</option>
-                <option value="ground">Ground Only</option>
-              </select>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {filteredHistory.length === 0 ? <div className="empty-state"><p>No history found.</p></div> : filteredHistory.map(h => (
-                <div key={h.id} style={{ padding: '12px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ fontWeight: 700, fontSize: '14px', color: h.type === 'runway' ? '#dc2626' : '#2563eb' }}>
-                      {h.type === 'runway' ? '✈️ Runway Inspection' : '🛬 Ground Task Board'}
-                    </span>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                      {h.date} at {h.time}
-                    </div>
+            <h3>📋 History Logs</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+              {allHistory.length === 0 ? <div className="empty-state"><p>No history found.</p></div> : allHistory.map(h => {
+                const isExpanded = expandedLog === h.id;
+                return (
+                  <div key={h.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                    <button 
+                      onClick={() => setExpandedLog(isExpanded ? null : h.id)}
+                      style={{ width: '100%', padding: '12px 16px', background: '#f8fafc', border: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+                    >
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: '14px', color: h.type === 'runway' ? '#dc2626' : '#2563eb' }}>
+                          {h.type === 'runway' ? '✈️ Runway Inspection' : '🛬 Ground Task Board'}
+                        </span>
+                        <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '12px' }}>
+                          {h.date} at {h.time}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{isExpanded ? 'Hide Details ▲' : 'Show Details ▼'}</span>
+                    </button>
+                    
+                    {isExpanded && (
+                      <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0', background: 'white', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        {h.type === 'runway' ? (
+                          <>
+                            <div style={{ background: '#fef2f2', padding: '10px', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#991b1b' }}>RWY 19</div>
+                              <div style={{ fontSize: '13px', marginTop: '4px' }}>{h.rwy19?.join(', ') || '—'}</div>
+                            </div>
+                            <div style={{ background: '#eff6ff', padding: '10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e40af' }}>RWY 01</div>
+                              <div style={{ fontSize: '13px', marginTop: '4px' }}>{h.rwy01?.join(', ') || '—'}</div>
+                            </div>
+                            <div style={{ background: '#fef3c7', padding: '10px', borderRadius: '6px', border: '1px solid #fde68a', gridColumn: 'span 2' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#92400e' }}>LIGHT INSPECTION</div>
+                              <div style={{ fontSize: '13px', marginTop: '4px' }}>{h.lights?.join(', ') || '—'}</div>
+                            </div>
+                          </>
+                        ) : (
+                          Object.entries(h.assignments || {}).map(([taskId, names]: any) => {
+                            if (!names || names.length === 0) return null;
+                            const label = tasks.find(t => t.id === taskId)?.label || taskId;
+                            return (
+                              <div key={taskId} style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>{label}</div>
+                                <div style={{ fontSize: '13px', marginTop: '4px' }}>{names.join(', ')}</div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '4px 10px', borderRadius: '20px', fontWeight: 700 }}>
-                    {h.type === 'runway' 
-                      ? `${(h.rwy19?.length || 0) + (h.rwy01?.length || 0) + (h.lights?.length || 0)} Staff Assigned`
-                      : `${Object.values(h.assignments || {}).flat().length} Tasks Assigned`
-                    }
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
