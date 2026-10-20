@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, query, orderBy, doc, deleteDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
-import RampForm from './RampForm'; // Import the reusable form
+import RampForm from './RampForm';
 
 function RampReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -60,9 +60,15 @@ function RampReportsPage() {
       {/* Modal for viewing and printing a specific report */}
       {viewingReport && (
         <div className="modal-backdrop" onClick={() => setViewingReport(null)}>
-          <div className="modal-content" id="viewReportModal" style={{ maxWidth: '1100px', width: '100%', padding: '20px' }} onClick={e => e.stopPropagation()}>
+          <div 
+            className="modal-content" 
+            id="viewReportModal" 
+            style={{ maxWidth: '1100px', width: '95%', maxHeight: '95vh', padding: 0, display: 'flex', flexDirection: 'column' }} 
+            onClick={e => e.stopPropagation()}
+          >
             
-            <div className="modal-header no-print" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+            {/* STICKY HEADER */}
+            <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <h3 style={{ margin: 0 }}>Report: {viewingReport.fltNo}</h3>
               <div>
                 <button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrintModal}>🖨️ Print / Save as PDF</button>
@@ -70,11 +76,11 @@ function RampReportsPage() {
               </div>
             </div>
 
-            {/* Use the exact same RampForm component in view-only mode */}
-            <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px' }}>
+            {/* SCROLLABLE BODY */}
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc' }}>
               <RampForm
                 formData={viewingReport}
-                handleChange={() => {}} // No-op for view-only
+                handleChange={() => {}}
                 isManager={false}
                 acTypes={[]}
                 routeCodes={[]}
