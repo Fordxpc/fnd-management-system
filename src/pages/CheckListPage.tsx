@@ -40,10 +40,10 @@ function ChecklistPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Delete this record?')) {
+    try {
       await deleteDoc(doc(db, 'ops_checks', id));
       toast.success('Record deleted');
-    }
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const visibleChecks = checks.filter(c => c.date === dateFilter).sort((a,b) => a.time.localeCompare(b.time));

@@ -8,7 +8,6 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import { ConfirmDialog } from '../components/Dialogs';
 
 const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
@@ -149,13 +148,9 @@ function RosterPage() {
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
-  // Quick cell edit save
   const handleSaveCell = async () => {
     if (!editCell) return;
-    let finalShift = '';
-    if (editStatus === 'scheduled') {
-      finalShift = editShift;
-    }
+    let finalShift = editStatus === 'scheduled' ? editShift : '';
     try {
       const q = query(collection(db, 'roster_entries'), where('staffId', '==', editCell.staffId), where('date', '==', editCell.date));
       const existing = await getDocs(q);

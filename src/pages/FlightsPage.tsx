@@ -43,10 +43,10 @@ function FlightsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Delete this flight?')) {
+    try {
       await deleteDoc(doc(db, 'flights', id));
       toast.success('Flight deleted');
-    }
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const visibleFlights = flights.filter(f => f.date === dateFilter).sort((a,b) => a.time.localeCompare(b.time));
