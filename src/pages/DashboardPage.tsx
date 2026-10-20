@@ -165,7 +165,7 @@ function DashboardPage({ onNavigate }: Props) {
           <h3 style={{ color: '#065f46', margin: '0 0 8px', fontSize: '16px' }}>Daily Ops Board</h3>
           <p style={{ color: '#047857', fontSize: '12px', marginBottom: '16px' }}>Runway Checks, FOD Collection, Ground Tasks</p>
           <a 
-            href="https://fnd-daily-rwy-inspections.web.app" 
+            href="https://fnd-operations.pages.dev/" 
             target="_blank" 
             rel="noreferrer"
             className="add-staff-btn" 
