@@ -2,15 +2,21 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../auth';
+import { migrateOldOpsData } from '../utils/migrateData';
+import { toast } from 'sonner';
 
 function SettingsPage() {
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
   const isDeveloper = profile?.role === 'developer';
   const isManagement = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
 
   const [otRates, setOtRates] = useState({ weekday: 1.25, friday: 1.5, holiday: 1.5 });
   const [savingRates, setSavingRates] = useState(false);
   const [counts, setCounts] = useState({ staff: 0, rosterEntries: 0, leaveRequests: 0, users: 0 });
+  
+  // Migration State
+  const [migrating, setMigrating] = useState(false);
+  const [migrateMsg, setMigrateMsg] = useState('');
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -33,9 +39,24 @@ function SettingsPage() {
     setSavingRates(true);
     try {
       await setDoc(doc(db, 'settings', 'ot_rates'), otRates);
-      alert('✅ Overtime rates updated!');
-    } catch (err: any) { alert('Error: ' + err.message); }
+      toast.success('Overtime rates updated!');
+    } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingRates(false);
+  };
+
+  const handleMigration = async () => {
+    if (!window.confirm("This will copy all Runway and Ground history from the old database into this app. This may take a minute. Proceed?")) return;
+    setMigrating(true);
+    setMigrateMsg('Starting...');
+    
+    const success = await migrateOldOpsData((msg) => setMigrateMsg(msg));
+    
+    setMigrating(false);
+    if (success) {
+      toast.success('Data imported successfully!');
+    } else {
+      toast.error('Migration failed. Check console.');
+    }
   };
 
   return (
@@ -63,7 +84,6 @@ function SettingsPage() {
         </div>
       )}
 
-      {/* Hide Shift Schedules from staff */}
       {isManagement && (
         <div className="dash-card mb-4">
           <h3>🕒 Standard Shift Schedules</h3>
@@ -97,14 +117,29 @@ function SettingsPage() {
       </div>
 
       {isDeveloper && (
-        <div className="dash-card">
-          <h3>🔐 Database Stats</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm mt-2">
+        <div className="dash-card border-l-4 border-red-500">
+          <h3>🔐 Developer Tools</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm mt-2 mb-4">
             <div>Staff Records: <strong>{counts.staff}</strong></div>
             <div>Roster Entries: <strong>{counts.rosterEntries}</strong></div>
             <div>Leave Requests: <strong>{counts.leaveRequests}</strong></div>
             <div>Active Users: <strong>{counts.users}</strong></div>
           </div>
+          
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '16px' }}>
+            <h4 style={{ margin: '0 0 8px', color: '#dc2626' }}>Legacy Data Import</h4>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+              Click this button to copy all Runway and Ground history from your old standalone Daily Ops app into this new app.
+            </p>
+            {migrating ? (
+              <div style={{ padding: '10px', background: '#f8fafc', borderRadius: '6px', fontWeight: 600 }}>{migrateMsg}</div>
+            ) : (
+              <button onClick={handleMigration} className="quick-btn" style={{ background: '#dc2626', color: 'white' }}>
+                📥 Import Old Ops Data
+              </button>
+            )}
+          </div>
+
           <a href="https://console.firebase.google.com/project/fnd-ops-management/firestore" target="_blank" rel="noreferrer" className="quick-btn inline-block mt-4 text-decoration-none">🔗 Open Firebase Console</a>
         </div>
       )}
