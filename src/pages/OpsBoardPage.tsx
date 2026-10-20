@@ -4,6 +4,7 @@ import { collection, addDoc, onSnapshot, query, orderBy, limit } from 'firebase/
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { useAuth } from '../auth'; // NEW
 
 const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL'];
 
@@ -23,6 +24,9 @@ const DEFAULT_TASKS = [
 ];
 
 function OpsBoardPage() {
+  const { profile } = useAuth(); // NEW
+  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || ''); // NEW
+
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'history'>('runway');
   const [staffPool, setStaffPool] = useState<string[]>(DEFAULT_STAFF);
   const [newStaff, setNewStaff] = useState('');
@@ -55,6 +59,7 @@ function OpsBoardPage() {
   }, []);
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
+    if (!isManager) return; // Safety check
     if (zone !== '19' && rwy19.includes(name)) { toast.error('Already assigned to RWY 19'); return; }
     if (zone !== '01' && rwy01.includes(name)) { toast.error('Already assigned to RWY 01'); return; }
     if (zone !== 'lights' && lights.includes(name)) { toast.error('Already assigned to Lights'); return; }
@@ -65,6 +70,7 @@ function OpsBoardPage() {
   };
 
   const toggleGround = (taskId: string, name: string) => {
+    if (!isManager) return; // Safety check
     setGroundAssign(prev => {
       const current = prev[taskId] || [];
       const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name];
@@ -105,7 +111,6 @@ function OpsBoardPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  // EXPORT FUNCTION
   const exportBoard = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
@@ -114,7 +119,7 @@ function OpsBoardPage() {
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
     wrapper.style.top = '0';
-    wrapper.style.width = '1200px'; // Force wide layout
+    wrapper.style.width = '1200px';
     wrapper.style.background = '#141414';
     wrapper.style.padding = '20px';
 
@@ -122,7 +127,6 @@ function OpsBoardPage() {
     clone.style.width = '100%';
     clone.style.background = 'transparent';
     
-    // Ensure the grid stays 3 columns even in the clone
     const grids = clone.querySelectorAll('.ops-grid-3');
     grids.forEach(g => {
       (g as HTMLElement).style.gridTemplateColumns = 'repeat(3, 1fr)';
@@ -136,7 +140,7 @@ function OpsBoardPage() {
         scale: 2, 
         backgroundColor: '#141414', 
         width: wrapper.scrollWidth, 
-        height: wrapper.scrollHeight, // Dynamically calculate height based on content
+        height: wrapper.scrollHeight,
         windowWidth: wrapper.scrollWidth,
         windowHeight: wrapper.scrollHeight
       });
@@ -153,7 +157,6 @@ function OpsBoardPage() {
     }
   };
 
-  // ===== HISTORY CALCULATIONS =====
   const allHistory = [
     ...runwayHistory.map(h => ({ ...h, type: 'runway' })),
     ...groundHistory.map(h => ({ ...h, type: 'ground' }))
@@ -203,12 +206,15 @@ function OpsBoardPage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>📋 Daily Operations Board</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}>
-            <input placeholder="Add Staff Name..." value={newStaff} onChange={e => setNewStaff(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-            <button type="submit" className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }}>+ Add</button>
-          </form>
-        </div>
+        {/* HIDE ADD STAFF FORM FOR STAFF */}
+        {isManager && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}>
+              <input placeholder="Add Staff Name..." value={newStaff} onChange={e => setNewStaff(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+              <button type="submit" className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }}>+ Add</button>
+            </form>
+          </div>
+        )}
       </div>
 
       <div className="ops-tabs">
@@ -220,26 +226,32 @@ function OpsBoardPage() {
       {/* ===== RUNWAY TAB ===== */}
       {activeTab === 'runway' && (
         <div>
-          <div className="dash-card" style={{ marginBottom: '20px' }}>
-            <h3>Assign Staff (Cannot be in multiple zones)</h3>
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
-              {staffPool.map(s => (
-                <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                  <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy19.includes(s)} onChange={() => toggleRunway('19', s)} disabled={rwy01.includes(s) || lights.includes(s)} /> RWY 19</label>
-                    <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy01.includes(s)} onChange={() => toggleRunway('01', s)} disabled={rwy19.includes(s) || lights.includes(s)} /> RWY 01</label>
-                    <label style={{ fontSize: '11px' }}><input type="checkbox" checked={lights.includes(s)} onChange={() => toggleRunway('lights', s)} disabled={rwy19.includes(s) || rwy01.includes(s)} /> Lights</label>
+          {/* HIDE EDITOR FOR STAFF */}
+          {isManager && (
+            <div className="dash-card" style={{ marginBottom: '20px' }}>
+              <h3>Assign Staff (Cannot be in multiple zones)</h3>
+              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
+                {staffPool.map(s => (
+                  <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy19.includes(s)} onChange={() => toggleRunway('19', s)} disabled={rwy01.includes(s) || lights.includes(s)} /> RWY 19</label>
+                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy01.includes(s)} onChange={() => toggleRunway('01', s)} disabled={rwy19.includes(s) || lights.includes(s)} /> RWY 01</label>
+                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={lights.includes(s)} onChange={() => toggleRunway('lights', s)} disabled={rwy19.includes(s) || rwy01.includes(s)} /> Lights</label>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
-            <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
-            <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
-          </div>
+          {/* HIDE BUTTONS FOR STAFF */}
+          {isManager && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
+              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
+              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
+            </div>
+          )}
 
           <div className="ops-board-export-area">
             <div className="ops-board-fixed-width" ref={runwayRef}>
@@ -273,29 +285,35 @@ function OpsBoardPage() {
       {/* ===== GROUND TAB ===== */}
       {activeTab === 'ground' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
-            <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
-            <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
-          </div>
-
-          <div className="dash-card" style={{ marginBottom: '20px' }}>
-            <h3>Assign Staff to Tasks</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
-              {tasks.map(t => (
-                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                  <span style={{ width: '250px', fontWeight: 700, fontSize: '12px' }}>{t.label}</span>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {staffPool.map(s => (
-                      <label key={s} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px 8px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
-                        <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} />
-                        {s}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
+          {/* HIDE BUTTONS FOR STAFF */}
+          {isManager && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
+              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
+              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
             </div>
-          </div>
+          )}
+
+          {/* HIDE EDITOR FOR STAFF */}
+          {isManager && (
+            <div className="dash-card" style={{ marginBottom: '20px' }}>
+              <h3>Assign Staff to Tasks</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+                {tasks.map(t => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                    <span style={{ width: '250px', fontWeight: 700, fontSize: '12px' }}>{t.label}</span>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {staffPool.map(s => (
+                        <label key={s} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px 8px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} />
+                          {s}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="ops-board-export-area">
             <div className="ops-board-fixed-width" ref={groundRef}>
