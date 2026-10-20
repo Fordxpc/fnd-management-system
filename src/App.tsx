@@ -3,21 +3,18 @@ import { useAuth } from './auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import Dashboard from './Dashboard';
+import PublicLiveView from './pages/PublicLiveView'; // Import public page
 import './App.css';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-
-// Only operational departments need to pick a department at login
-const DEPARTMENTS = [
-  'Ground Operations',
-  'Maintenance',
-  'Security',
-  'Fire & Rescue',
-  'Administration',
-  'Safety',
-];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 function App() {
+  // Check if the URL is for the public live view
+  if (window.location.pathname === '/live') {
+    return <PublicLiveView />;
+  }
+
   const [tab, setTab] = useState<'management' | 'employee'>('management');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,10 +59,7 @@ function App() {
 
       if (tab === 'employee' && userDept && userDept !== department) {
         await logout();
-        alert(
-          `Your account is registered under "${userDept}". ` +
-          `Please select "${userDept}" in the department dropdown.`
-        );
+        alert(`Your account is registered under "${userDept}". Please select "${userDept}" in the department dropdown.`);
         setChecking(false);
         return;
       }
@@ -89,58 +83,32 @@ function App() {
         </div>
 
         <div className="role-toggle">
-          <button
-            className={tab === 'management' ? 'active' : ''}
-            onClick={() => { setTab('management'); setDepartment(''); }}
-            type="button"
-          >
+          <button className={tab === 'management' ? 'active' : ''} onClick={() => { setTab('management'); setDepartment(''); }} type="button">
             SMT / MANAGER
           </button>
-          <button
-            className={tab === 'employee' ? 'active' : ''}
-            onClick={() => setTab('employee')}
-            type="button"
-          >
+          <button className={tab === 'employee' ? 'active' : ''} onClick={() => setTab('employee')} type="button">
             EMPLOYEE
           </button>
         </div>
 
         <p className="subtitle">
-          {tab === 'management'
-            ? 'Sign in to manage rosters, staff and approvals'
-            : 'Sign in to view your schedule and requests'}
+          {tab === 'management' ? 'Sign in to manage rosters, staff and approvals' : 'Sign in to view your schedule and requests'}
         </p>
 
         <form className="login-form" onSubmit={handleLogin}>
           <div className="input-group">
             <label>Email</label>
-            <input
-              type="email"
-              placeholder="name@funadhooairport.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <input type="email" placeholder="name@funadhooairport.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           <div className="input-group">
             <label>Password</label>
-            <input
-              type="password"
-              placeholder="Your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <input type="password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
 
           {tab === 'employee' && (
             <div className="input-group">
               <label>Department</label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                required
-              >
+              <select value={department} onChange={(e) => setDepartment(e.target.value)} required>
                 <option value="">Select your department...</option>
                 {DEPARTMENTS.map((d) => (
                   <option key={d} value={d}>{d}</option>

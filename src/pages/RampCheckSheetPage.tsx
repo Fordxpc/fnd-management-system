@@ -4,7 +4,7 @@ import { collection, addDoc, onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import RampReportsPage from './RampReportsPage';
-import RampForm from './RampForm'; // Import the reusable form
+import RampForm from './RampForm'; 
 import '../styles/RampCheck.css';
 
 const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
@@ -35,6 +35,7 @@ function RampCheckSheetPage() {
 
   const typingTimer = useRef<any>(null);
 
+  // Load Dropdowns
   useEffect(() => {
     const savedAc = JSON.parse(localStorage.getItem('acTypes') || '[]');
     setAcTypes([...new Set([...DEFAULT_AC_TYPES, ...savedAc])]);
@@ -43,6 +44,7 @@ function RampCheckSheetPage() {
     setRouteCodes([...new Set([...DEFAULT_ROUTE_CODES, ...savedRoutes])]);
   }, []);
 
+  // Live Sync Listener
   useEffect(() => {
     const liveDoc = doc(db, 'ramp_live_draft', 'current');
     const unsub = onSnapshot(liveDoc, (docSnap) => {
@@ -62,12 +64,14 @@ function RampCheckSheetPage() {
     const { id, value } = e.target;
     let finalValue = value;
 
+    // Prefix logic
     if (id === 'fltNo' && !finalValue.startsWith('Q2-')) finalValue = 'Q2-' + finalValue.replace(/^Q2-?/i, '');
     if (id === 'acReg' && !finalValue.startsWith('8Q-')) finalValue = '8Q-' + finalValue.replace(/^8Q-?/i, '');
 
     setFormData(prev => {
       const updated = { ...prev, [id]: finalValue };
       
+      // Auto-calc Pax
       if (id.includes('paxIn')) {
         const a = parseInt(updated.paxInAdult) || 0;
         const i = parseInt(updated.paxInInf) || 0;
@@ -90,6 +94,7 @@ function RampCheckSheetPage() {
       return updated;
     });
 
+    // Debounced Live Sync
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(async () => {
       try {
@@ -157,9 +162,14 @@ function RampCheckSheetPage() {
     window.print();
   };
 
+  const copyLiveLink = () => {
+    navigator.clipboard.writeText(window.location.origin + '/live');
+    toast.success('Live View link copied! Share this with external parties.');
+  };
+
   return (
     <div className="page-content">
-      <div className="staff-header">
+      <div className="staff-header no-print">
         <h2>✈️ Flight Operation</h2>
       </div>
 
@@ -180,12 +190,13 @@ function RampCheckSheetPage() {
 
       {activeSubTab === 'form' && (
         <div>
-          <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px' }}>
+          <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
             {isManager && (
               <>
                 <button className="quick-btn" style={{ background: '#2563eb', color: 'white' }} onClick={handleSave}>💾 Save Record</button>
                 <button className="quick-btn" style={{ background: '#dcfce7', color: '#166534' }} onClick={handlePrint}>🖨️ Print / PDF</button>
                 <button className="quick-btn" style={{ background: '#f1f5f9', color: '#334155' }} onClick={handleReset}>➕ New Record</button>
+                <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
               </>
             )}
             {!isManager && <span style={{ color: '#dc2626', fontWeight: 600, alignSelf: 'center' }}>🔒 View Only (Live Sync)</span>}
