@@ -10,7 +10,7 @@ import UsersPage from './pages/UsersPage';
 import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
 import FlightsPage from './pages/FlightsPage'; // NEW
-import ChecklistPage from './pages/ChecklistPage'; // NEW
+import ChecklistPage from './pages/CheckListPage'; // NEW
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
