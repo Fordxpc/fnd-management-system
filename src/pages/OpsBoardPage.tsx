@@ -105,7 +105,7 @@ function OpsBoardPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  // FIXED EXPORT FUNCTION (Forces 1400px width for perfect 3-column layout)
+  // EXPORT FUNCTION
   const exportBoard = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
@@ -114,9 +114,9 @@ function OpsBoardPage() {
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
     wrapper.style.top = '0';
-    wrapper.style.width = '1400px'; // Force wide layout
+    wrapper.style.width = '1200px'; // Force wide layout
     wrapper.style.background = '#141414';
-    wrapper.style.padding = '30px';
+    wrapper.style.padding = '20px';
 
     const clone = ref.current.cloneNode(true) as HTMLElement;
     clone.style.width = '100%';
@@ -136,7 +136,7 @@ function OpsBoardPage() {
         scale: 2, 
         backgroundColor: '#141414', 
         width: wrapper.scrollWidth, 
-        height: wrapper.scrollHeight,
+        height: wrapper.scrollHeight, // Dynamically calculate height based on content
         windowWidth: wrapper.scrollWidth,
         windowHeight: wrapper.scrollHeight
       });

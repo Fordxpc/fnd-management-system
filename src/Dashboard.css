@@ -1104,7 +1104,6 @@
 /* We force the inner wrapper to be 1200px so the export is always high-quality desktop format */
 .ops-board-fixed-width {
   width: 1200px; /* Forces desktop layout for export */
-  min-height: 600px;
   margin: 0 auto;
 }
 
