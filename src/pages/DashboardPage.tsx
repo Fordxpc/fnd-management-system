@@ -74,11 +74,17 @@ function DashboardPage({ onNavigate }: Props) {
 
   // --- Find Next Flight ---
   const upcomingFlights = flights
-    .filter(f => f.date > todayStr || (f.date === todayStr && f.time >= nowTime))
+    .filter(f => {
+      // Use departureTime as the main sort time, fallback to arrivalTime
+      const fTime = f.departureTime || f.arrivalTime || '00:00';
+      return f.date > todayStr || (f.date === todayStr && fTime >= nowTime);
+    })
     .sort((a, b) => {
       const dateCompare = a.date.localeCompare(b.date);
       if (dateCompare !== 0) return dateCompare;
-      return a.time.localeCompare(b.time);
+      const aTime = a.departureTime || a.arrivalTime || '00:00';
+      const bTime = b.departureTime || b.arrivalTime || '00:00';
+      return aTime.localeCompare(bTime);
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
@@ -144,7 +150,7 @@ function DashboardPage({ onNavigate }: Props) {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
                 <div style={{ fontSize: '32px', fontWeight: 900 }}>{nextFlight.flightNo}</div>
-                <div style={{ fontSize: '20px', fontWeight: 700 }}>{nextFlight.time}</div>
+                <div style={{ fontSize: '20px', fontWeight: 700 }}>{nextFlight.departureTime || nextFlight.arrivalTime || '—'}</div>
               </div>
               <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>{nextFlight.origin} ✈️ {nextFlight.dest}</div>
               <div style={{ fontSize: '12px', color: '#cbd5e1' }}>Type: {nextFlight.type}</div>
