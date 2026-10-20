@@ -14,7 +14,12 @@ const formatDate = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
-// Annual leave helpers for dashboard widget
+const formatDisplay = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+};
+
 const ANNUAL_LEAVE_TOTAL = 30;
 const getYearsOfService = (joinDateStr: string): number => {
   if (!joinDateStr) return 0;
@@ -35,8 +40,8 @@ function DashboardPage({ onNavigate }: Props) {
   const [roster, setRoster] = useState<any[]>([]);
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [otEntries, setOtEntries] = useState<any[]>([]);
+  const [flights, setFlights] = useState<any[]>([]);
 
-  // Collapsible sections state
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
   const [showMyBalance, setShowMyBalance] = useState(true);
@@ -47,7 +52,8 @@ function DashboardPage({ onNavigate }: Props) {
     const u2 = onSnapshot(collection(db, 'roster_entries'), (s) => setRoster(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u3 = onSnapshot(collection(db, 'leave_requests'), (s) => setLeaveReqs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u4 = onSnapshot(collection(db, 'overtime_entries'), (s) => setOtEntries(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    return () => { u1(); u2(); u3(); u4(); };
+    const u5 = onSnapshot(collection(db, 'flights'), (s) => setFlights(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, []);
 
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
@@ -56,6 +62,7 @@ function DashboardPage({ onNavigate }: Props) {
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   const todayStr = formatDate(new Date());
   const thisMonth = todayStr.slice(0, 7);
+  const nowTime = new Date().toTimeString().slice(0, 5);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
@@ -64,6 +71,16 @@ function DashboardPage({ onNavigate }: Props) {
   const todayShifts = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
   const todayLeave = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
+
+  // --- Find Next Flight ---
+  const upcomingFlights = flights
+    .filter(f => f.date > todayStr || (f.date === todayStr && f.time >= nowTime))
+    .sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date);
+      if (dateCompare !== 0) return dateCompare;
+      return a.time.localeCompare(b.time);
+    });
+  const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
   // --- My Leave Balance ---
   let myLeaveUsed = 0;
@@ -115,6 +132,49 @@ function DashboardPage({ onNavigate }: Props) {
       <div className="dash-welcome">
         <h2>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {myStaff?.name || 'User'}</h2>
         <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department}</p>
+      </div>
+
+      {/* QUICK OPS HEADER */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+        
+        {/* NEXT FLIGHT WIDGET */}
+        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
+          <h3 style={{ color: '#93c5fd', marginBottom: '12px' }}>✈️ Next Flight</h3>
+          {nextFlight ? (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '10px' }}>
+                <div style={{ fontSize: '32px', fontWeight: 900 }}>{nextFlight.flightNo}</div>
+                <div style={{ fontSize: '20px', fontWeight: 700 }}>{nextFlight.time}</div>
+              </div>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>{nextFlight.origin} ✈️ {nextFlight.dest}</div>
+              <div style={{ fontSize: '12px', color: '#cbd5e1' }}>Type: {nextFlight.type}</div>
+              <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+                <span style={{ fontSize: '11px', background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: '20px' }}>Date: {formatDisplay(nextFlight.date)}</span>
+                <span style={{ fontSize: '11px', background: '#2563eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 600 }}>{nextFlight.status}</span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px' }}>No upcoming flights scheduled.</div>
+          )}
+          {isManager && <button className="quick-btn" style={{ marginTop: '16px', background: '#3b82f6', color: 'white', border: 'none' }} onClick={() => onNavigate && onNavigate('flights')}>Manage Flights</button>}
+        </div>
+
+        {/* DAILY OPS LINK */}
+        <div className="dash-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', border: '1px solid #bbf7d0' }}>
+          <div style={{ fontSize: '40px', marginBottom: '10px' }}>📋</div>
+          <h3 style={{ color: '#065f46', margin: '0 0 8px', fontSize: '16px' }}>Daily Ops Board</h3>
+          <p style={{ color: '#047857', fontSize: '12px', marginBottom: '16px' }}>Runway Checks, FOD Collection, Ground Tasks</p>
+          <a 
+            href="https://fnd-daily-rwy-inspections.web.app" 
+            target="_blank" 
+            rel="noreferrer"
+            className="add-staff-btn" 
+            style={{ background: '#059669', textDecoration: 'none', display: 'inline-block' }}
+          >
+            Open Ops Board ↗
+          </a>
+        </div>
+
       </div>
 
       <div className="dash-stats">
