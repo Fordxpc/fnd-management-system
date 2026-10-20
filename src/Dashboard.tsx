@@ -51,17 +51,26 @@ function Dashboard({ user, logout }: any) {
           {/* OVERVIEW */}
           <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('dashboard')}>📊 Dashboard</button>
           
-          <div className="sidebar-section-title">Operations</div>
+          {/* OPERATIONS HEADING (Clickable) */}
+          <button className="sidebar-section-title" onClick={() => setCurrentPage('opsboard')}>
+            Operations <span>›</span>
+          </button>
           <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('opsboard')}>📋 Daily Ops Board</button>
           <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('flights')}>✈️ Flight Schedule</button>
           
-          <div className="sidebar-section-title">Roster & HR</div>
+          {/* ROSTER HEADING (Clickable) */}
+          <button className="sidebar-section-title" onClick={() => setCurrentPage('roster')}>
+            Roster & HR <span>›</span>
+          </button>
           {isManagement && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('staff')}>👥 Staff List</button>}
           <button className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('roster')}>📅 Duty Roster</button>
           <button className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('leave')}>🌴 Leave Requests</button>
           <button className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('overtime')}>⏰ Overtime Sheet</button>
           
-          <div className="sidebar-section-title">System</div>
+          {/* SYSTEM HEADING (Clickable) */}
+          <button className="sidebar-section-title" onClick={() => setCurrentPage('settings')}>
+            System <span>›</span>
+          </button>
           <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('holidays')}>🎉 Holidays</button>
           {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('users')}>🔑 User Accounts</button>}
           <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('settings')}>⚙️ Settings</button>

@@ -1132,14 +1132,40 @@
 .ops-notes h4 { color: #fbc02d; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
 .ops-notes ol { padding-left: 20px; color: #d1d5db; font-size: 12px; line-height: 1.6; }
 .ops-notes li { margin-bottom: 6px; }
-/* Sidebar Section Headers */
+/* Sidebar Section Headers (Clickable) */
 .sidebar-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #64748b;
+  color: #94a3b8; /* Lighter text */
   font-weight: 700;
-  margin-top: 16px;
-  margin-bottom: 6px;
-  padding-left: 16px;
+  margin-top: 20px;
+  margin-bottom: 4px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.sidebar-section-title:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+}
+
+.sidebar-section-title span {
+  font-size: 16px;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+.sidebar-section-title:hover span {
+  transform: translateX(4px); /* Slide arrow right on hover */
 }
