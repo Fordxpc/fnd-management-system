@@ -11,7 +11,8 @@ import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
 import FlightsPage from './pages/FlightsPage';
 import OpsBoardPage from './pages/OpsBoardPage';
-import RampCheckSheetPage from './pages/RampCheckSheetPage'; // NEW
+import RampCheckSheetPage from './pages/RampCheckSheetPage';
+import RampReportsPage from './pages/RampReportsPage'; // NEW
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
@@ -20,18 +21,25 @@ const USER_ADMIN_ROLES = ['developer', 'manager'];
 function Dashboard({ user, logout }: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [activeModule, setActiveModule] = useState<'operations' | 'roster' | 'system'>('operations');
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
 
   const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
   const canManageUsers = USER_ADMIN_ROLES.includes(profile?.role || '');
 
-  const navigate = (page: string) => setCurrentPage(page);
+  const navigate = (page: string) => {
+    setCurrentPage(page);
+    if (['opsboard', 'flights', 'rampcheck', 'rampreports'].includes(page)) setActiveModule('operations');
+    else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
+    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
+  };
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
-    rampcheck: <RampCheckSheetPage />, // NEW
+    rampcheck: <RampCheckSheetPage />,
+    rampreports: <RampReportsPage />,
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
@@ -50,23 +58,36 @@ function Dashboard({ user, logout }: any) {
         </div>
 
         <nav className="sidebar-nav" style={{ overflowY: 'auto' }}>
-          <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('dashboard')}>📊 Dashboard</button>
+          <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
           
-          <button className="sidebar-section-title" onClick={() => setCurrentPage('opsboard')}>Operations <span>›</span></button>
-          <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('opsboard')}>📋 Daily Ops Board</button>
-          <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('flights')}>✈️ Flight Schedule</button>
-          <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('rampcheck')}>📝 Ramp Check Sheet</button>
-          
-          <button className="sidebar-section-title" onClick={() => setCurrentPage('roster')}>Roster & HR <span>›</span></button>
-          {isManagement && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('staff')}>👥 Staff List</button>}
-          <button className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('roster')}>📅 Duty Roster</button>
-          <button className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('leave')}>🌴 Leave Requests</button>
-          <button className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('overtime')}>⏰ Overtime Sheet</button>
-          
-          <button className="sidebar-section-title" onClick={() => setCurrentPage('settings')}>System <span>›</span></button>
-          <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('holidays')}>🎉 Holidays</button>
-          {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('users')}>🔑 User Accounts</button>}
-          <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('settings')}>⚙️ Settings</button>
+          {activeModule === 'operations' && (
+            <>
+              <div className="sidebar-section-title">Operations</div>
+              <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>
+              <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
+              <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>📝 Ramp Check Sheet</button>
+              <button className={currentPage === 'rampreports' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampreports')}>📁 Ramp Reports</button>
+            </>
+          )}
+
+          {activeModule === 'roster' && (
+            <>
+              <div className="sidebar-section-title">Roster & HR</div>
+              {isManagement && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('staff')}>👥 Staff List</button>}
+              <button className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('roster')}>📅 Duty Roster</button>
+              <button className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('leave')}>🌴 Leave Requests</button>
+              <button className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('overtime')}>⏰ Overtime Sheet</button>
+            </>
+          )}
+
+          {activeModule === 'system' && (
+            <>
+              <div className="sidebar-section-title">System</div>
+              <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('holidays')}>🎉 Holidays</button>
+              {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('users')}>🔑 User Accounts</button>}
+              <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>
+            </>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -76,7 +97,33 @@ function Dashboard({ user, logout }: any) {
         </div>
       </aside>
 
-      <main className="main-content">{pages[currentPage]}</main>
+      <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* TOP NAVIGATION TABS */}
+        <div style={{ display: 'flex', gap: '10px', padding: '0 30px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
+          <button 
+            className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`}
+            onClick={() => { setActiveModule('operations'); navigate('opsboard'); }}
+          >
+            ✈️ Operations
+          </button>
+          <button 
+            className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`}
+            onClick={() => { setActiveModule('roster'); navigate('roster'); }}
+          >
+            📅 Roster & HR
+          </button>
+          <button 
+            className={`top-tab ${activeModule === 'system' ? 'active' : ''}`}
+            onClick={() => { setActiveModule('system'); navigate('settings'); }}
+          >
+            ⚙️ System
+          </button>
+        </div>
+
+        <div style={{ flex: 1, padding: '20px 30px' }}>
+          {pages[currentPage]}
+        </div>
+      </main>
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>

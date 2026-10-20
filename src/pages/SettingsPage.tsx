@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../auth';
-import { migrateOldOpsData } from '../utils/migrateData';
+import { migrateOldOpsData, migrateOldRampData } from '../utils/migrateData';
 import { toast } from 'sonner';
 
 function SettingsPage() {
@@ -44,24 +44,37 @@ function SettingsPage() {
     setSavingRates(false);
   };
 
-  const handleMigration = async () => {
-    if (!window.confirm("This will copy all Runway and Ground history from the old database into this app. This may take a minute. Proceed?")) return;
+  const handleOpsMigration = async () => {
+    if (!window.confirm("This will copy all Runway and Ground history from the old database. Proceed?")) return;
     setMigrating(true);
-    setMigrateMsg('Starting...');
+    setMigrateMsg('Starting Ops Migration...');
     
-    const success = await migrateOldOpsData((msg) => setMigrateMsg(msg));
-    
-    setMigrating(false);
-    if (success) {
-      toast.success('Data imported successfully!');
-    } else {
-      toast.error('Migration failed. Check console.');
+    try {
+      const success = await migrateOldOpsData((msg) => setMigrateMsg(msg));
+      if (success) toast.success('Ops Data imported successfully!');
+    } catch (err: any) {
+      toast.error('Migration failed: ' + err.message);
     }
+    setMigrating(false);
+  };
+
+  const handleRampMigration = async () => {
+    if (!window.confirm("This will copy all Ramp Check reports from the old database. Proceed?")) return;
+    setMigrating(true);
+    setMigrateMsg('Starting Ramp Migration...');
+    
+    try {
+      const success = await migrateOldRampData((msg) => setMigrateMsg(msg));
+      if (success) toast.success('Ramp Data imported successfully!');
+    } catch (err: any) {
+      toast.error('Migration failed: ' + err.message);
+    }
+    setMigrating(false);
   };
 
   return (
     <div className="page-content">
-      <div className="staff-header"><h2>Settings</h2></div>
+      <div className="staff-header"><h2>⚙️ Settings</h2></div>
 
       {isDeveloper && (
         <div className="dash-card mb-4 border-l-4 border-blue-500">
@@ -129,14 +142,20 @@ function SettingsPage() {
           <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '16px' }}>
             <h4 style={{ margin: '0 0 8px', color: '#dc2626' }}>Legacy Data Import</h4>
             <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-              Click this button to copy all Runway and Ground history from your old standalone Daily Ops app into this new app.
+              Click these buttons to copy historical data from your old standalone apps into this new app.
             </p>
+            
             {migrating ? (
               <div style={{ padding: '10px', background: '#f8fafc', borderRadius: '6px', fontWeight: 600 }}>{migrateMsg}</div>
             ) : (
-              <button onClick={handleMigration} className="quick-btn" style={{ background: '#dc2626', color: 'white' }}>
-                📥 Import Old Ops Data
-              </button>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button onClick={handleOpsMigration} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>
+                  📥 Import Old Ops Data
+                </button>
+                <button onClick={handleRampMigration} className="quick-btn" style={{ background: '#dc2626', color: 'white' }}>
+                  📥 Import Old Ramp Check Data
+                </button>
+              </div>
             )}
           </div>
 
