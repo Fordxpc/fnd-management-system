@@ -77,7 +77,7 @@ function RampReportsPage() {
             </div>
 
             {/* SCROLLABLE BODY */}
-            <div style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc', maxHeight: '85vh' }}>
+            <div className="modal-scrollable-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc', maxHeight: '85vh' }}>
               <RampForm
                 formData={viewingReport}
                 handleChange={() => {}}
