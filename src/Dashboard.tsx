@@ -9,8 +9,8 @@ import OvertimePage from './pages/OvertimePage';
 import UsersPage from './pages/UsersPage';
 import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
-import FlightsPage from './pages/FlightsPage'; // NEW
-import ChecklistPage from './pages/CheckListPage'; // NEW
+import FlightsPage from './pages/FlightsPage';
+import OpsBoardPage from './pages/OpsBoardPage'; // NEW
 import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
@@ -28,8 +28,8 @@ function Dashboard({ user, logout }: any) {
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
-    flights: <FlightsPage />, // NEW
-    checklist: <ChecklistPage />, // NEW
+    opsboard: <OpsBoardPage />, // NEW
+    flights: <FlightsPage />, 
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
@@ -49,8 +49,11 @@ function Dashboard({ user, logout }: any) {
 
         <nav className="sidebar-nav" style={{ overflowY: 'auto' }}>
           <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('dashboard')}>📊 Dashboard</button>
+          
+          {/* NEW OPS BOARD TAB */}
+          <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('opsboard')}>📋 Daily Ops Board</button>
+          
           <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('flights')}>✈️ Flights</button>
-          <button className={currentPage === 'checklist' ? 'nav-item active' : 'nav-item'} onClick={() => setCurrentPage('checklist')}>📋 Ops Checks</button>
           
           <div style={{ height: '1px', background: '#1e293b', margin: '8px 0' }}></div>
 

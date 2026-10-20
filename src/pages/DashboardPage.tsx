@@ -164,15 +164,13 @@ function DashboardPage({ onNavigate }: Props) {
           <div style={{ fontSize: '40px', marginBottom: '10px' }}>📋</div>
           <h3 style={{ color: '#065f46', margin: '0 0 8px', fontSize: '16px' }}>Daily Ops Board</h3>
           <p style={{ color: '#047857', fontSize: '12px', marginBottom: '16px' }}>Runway Checks, FOD Collection, Ground Tasks</p>
-          <a 
-            href="https://fnd-operations.pages.dev/" 
-            target="_blank" 
-            rel="noreferrer"
+          <button 
+            onClick={() => onNavigate && onNavigate('opsboard')}
             className="add-staff-btn" 
-            style={{ background: '#059669', textDecoration: 'none', display: 'inline-block' }}
+            style={{ background: '#059669', display: 'inline-block' }}
           >
-            Open Ops Board ↗
-          </a>
+            Open Ops Board
+          </button>
         </div>
 
       </div>
