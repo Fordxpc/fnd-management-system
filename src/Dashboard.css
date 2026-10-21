@@ -373,11 +373,20 @@
     height: 100% !important;
   }
   
-  .roster-title { margin-bottom: 6px !important; padding: 0 !important; }
-  .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 14px !important; margin: 0 !important; padding: 0 !important; font-weight: 900 !important; text-transform: uppercase !important; }
+  .roster-title { margin-bottom: 8px !important; padding: 0 !important; }
+  .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 18px !important; margin: 0 !important; padding: 0 !important; font-weight: 900 !important; text-transform: uppercase !important; }
 
   .roster-week-section { page-break-inside: avoid !important; break-inside: avoid !important; margin: 0 !important; padding: 0 !important; }
-  .week-label { font-size: 10px !important; margin: 0 0 2px 0 !important; padding: 0 !important; line-height: 1 !important; font-weight: bold !important; }
+  
+  /* Bigger and clearer Week Labels */
+  .week-label { 
+    font-size: 14px !important; 
+    margin: 0 0 6px 0 !important; 
+    padding: 0 !important; 
+    line-height: 1 !important; 
+    font-weight: 900 !important; 
+    text-transform: uppercase !important;
+  }
 
   /* Base Table */
   .week-grid { width: 100% !important; table-layout: fixed !important; }
@@ -390,7 +399,7 @@
   }
 
   .week-grid .col-sn { width: 45px !important; }
-  .week-grid .col-name { width: 120px !important; font-size: 8px !important; }
+  .week-grid .col-name { width: 140px !important; font-size: 9px !important; }
   .week-grid .col-date { width: auto !important; }
 
   /* =========================================================
@@ -399,64 +408,72 @@
   body.print-all .roster-title {
     display: none !important; /* Hide main title, use repeated headers */
   }
+  
+  /* Bigger and clearer repeated headers */
   body.print-all .print-week-header {
     display: block !important;
     text-align: center !important;
     font-family: Arial, sans-serif !important;
-    font-size: 14px !important;
+    font-size: 18px !important;
     font-weight: 900 !important;
     text-transform: uppercase !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 10px !important;
     margin-top: 0 !important;
+    padding: 0 !important;
     color: #000 !important;
   }
   
+  /* FIX: Use page-break-after instead of before to remove the blank page */
   body.print-all .roster-week-section {
-    page-break-before: always !important;
-    break-before: page !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
   }
-  body.print-all .roster-week-section:first-child {
-    page-break-before: auto !important;
-    break-before: auto !important;
+  body.print-all .roster-week-section:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
   
   body.print-all .week-grid th, body.print-all .week-grid td {
-    height: 20px !important; font-size: 10px !important; line-height: 1.1 !important;
+    height: 22px !important; font-size: 11px !important; line-height: 1.1 !important;
   }
+  /* Bigger table headers */
   body.print-all .week-grid thead th {
-    height: 24px !important; font-size: 9px !important;
+    height: 28px !important; font-size: 10px !important;
   }
 
   /* =========================================================
      MODE 2: LARGE DEPARTMENTS (Fit tightly to 1 page)
      ========================================================= */
   body.print-large .roster-week-section {
-    margin-bottom: 2px !important;
+    margin-bottom: 4px !important;
   }
   body.print-large .week-grid th, body.print-large .week-grid td {
-    height: 12px !important; 
-    font-size: 7.5px !important; 
+    height: 14px !important; 
+    font-size: 8px !important; 
     line-height: 1 !important;
     padding: 0 !important;
   }
   body.print-large .week-grid thead th {
-    height: 16px !important; font-size: 7px !important;
+    height: 18px !important; font-size: 7.5px !important;
   }
 
   /* =========================================================
      MODE 3: SMALL DEPARTMENTS (Admin, Safety)
      ========================================================= */
   body.print-small .roster-week-section {
-    margin-bottom: 10px !important;
+    margin-bottom: 12px !important;
   }
   body.print-small .week-grid th, body.print-small .week-grid td {
-    height: 24px !important; 
-    font-size: 10px !important; 
+    height: 26px !important; 
+    font-size: 11px !important; 
     line-height: 1.1 !important;
   }
   body.print-small .week-grid thead th {
-    height: 28px !important; 
-    font-size: 9px !important;
+    height: 30px !important; 
+    font-size: 10px !important;
   }
 
   /* Colors */
