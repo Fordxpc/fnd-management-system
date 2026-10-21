@@ -315,7 +315,7 @@ function RosterPage() {
     if (!gridRef.current) return null;
     const original = gridRef.current;
     const wrapper = document.createElement('div');
-    Object.assign(wrapper.style, { position: 'absolute', left: '-10000px', top: '0', width: '1600px', background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1' });
+    Object.assign(wrapper.style, { position: 'absolute', left: '-10000px', top: '0', width: '1800px', background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1' });
     const clone = original.cloneNode(true) as HTMLElement;
     clone.style.width = '100%'; clone.style.background = '#ffffff'; clone.style.padding = '0'; clone.style.borderRadius = '0'; clone.style.boxShadow = 'none';
     clone.style.zoom = '1'; // Reset zoom for export
