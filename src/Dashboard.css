@@ -360,3 +360,121 @@
   .week-grid .col-name { width: 90px !important; min-width: 90px !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
   .week-grid .col-date { min-width: 65px !important; padding: 0 2px !important; }
 }
+
+/* ==================== ROSTER PRINT STYLES ==================== */
+@media print {
+  @page { 
+    size: A4 landscape; /* Force landscape for wide tables */
+    margin: 8mm; 
+  }
+  
+  /* 1. Hide everything except the roster grid */
+  .sidebar, 
+  .top-tabs-container, 
+  .staff-header, 
+  .week-nav, 
+  .dept-tabs, 
+  .no-print, 
+  .reorder-col,
+  .page-content > .staff-header,
+  .page-content > .week-nav {
+    display: none !important;
+  }
+  
+  /* 2. Reset the layout so it fills the page */
+  .dashboard-layout, 
+  .main-content, 
+  .page-wrapper, 
+  .page-content {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+  
+  /* 3. Remove the card shadows and padding from the roster container */
+  .roster-export-area {
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    border: none !important;
+  }
+
+  .roster-title h1 {
+    font-size: 16px !important;
+    margin-bottom: 15px !important;
+    color: #000 !important;
+  }
+
+  /* 4. Force table and text to fit on page */
+  .week-grid {
+    width: 100% !important;
+    table-layout: fixed !important;
+    page-break-inside: auto;
+  }
+  
+  .week-grid th, .week-grid td {
+    border: 1px solid #000 !important;
+    padding: 3px 1px !important;
+    font-size: 9px !important;
+    text-align: center !important;
+    /* THIS IS THE MAGIC LINE THAT FORCES COLORS TO PRINT */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 5. Print the specific colors you requested */
+  
+  /* Header - Green */
+  .week-grid thead th {
+    background-color: #22c55e !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+  }
+
+  /* Scheduled Shifts - Light Green */
+  .week-grid tbody td.shift-cell {
+    background-color: #d1fae5 !important;
+    color: #000000 !important;
+    font-weight: bold !important;
+  }
+
+  /* OFF DAY - Light Pink */
+  .week-grid tbody td.off-day-cell {
+    background-color: #fecaca !important;
+    color: #000000 !important;
+    font-weight: bold !important;
+  }
+
+  /* Leaves - Dark Red (Totally different from shifts) */
+  .week-grid tbody td.leave-cell {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    font-weight: bold !important;
+    white-space: normal !important;
+    font-size: 8px !important;
+  }
+
+  /* Empty cells / Out of period */
+  .week-grid tbody td.empty-cell {
+    background-color: #ffffff !important;
+  }
+  
+  .week-grid tbody tr:nth-child(even) td.empty-cell,
+  .week-grid tbody tr:nth-child(even) td.col-sn,
+  .week-grid tbody tr:nth-child(even) td.col-name {
+    background-color: #fdf6e3 !important; /* Keep the alternating cream row color */
+  }
+
+  .week-grid tbody td.out-of-period-cell {
+    background-color: #e2e8f0 !important;
+  }
+  
+  /* Ignore the zoom applied on screen so it doesn't break the print layout */
+  .roster-export-area {
+    zoom: 1 !important;
+  }
+}
