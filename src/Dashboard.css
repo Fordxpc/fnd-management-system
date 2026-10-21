@@ -1329,3 +1329,67 @@
     font-size: 14px;
   }
 }
+
+/* ==================== BOLDER TOP TABS ==================== */
+.top-tab {
+  font-weight: 800 !important;
+  font-size: 16px !important;
+  letter-spacing: 0.5px;
+  color: #475569;
+}
+.top-tab.active {
+  color: #2563eb;
+  font-weight: 900 !important;
+}
+
+/* ==================== ROSTER MOBILE SCROLLING ==================== */
+.roster-export-area {
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  /* Make the 3 main tabs slightly smaller on mobile but bold */
+  .top-tab {
+    font-size: 13px !important;
+    padding: 12px 8px !important;
+  }
+
+  /* Adjust table columns for mobile so starting time is visible */
+  .week-grid th, 
+  .week-grid td {
+    font-size: 10px !important;
+    padding: 4px 2px !important;
+  }
+
+  /* SN Column */
+  .week-grid .col-sn {
+    width: 45px !important;
+    min-width: 45px !important;
+  }
+  
+  /* Name Column */
+  .week-grid .col-name {
+    width: 90px !important;
+    min-width: 90px !important;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Date Column - Force enough width to see "06:00" */
+  .week-grid .col-date {
+    min-width: 65px !important; 
+    padding: 0 2px !important;
+  }
+  
+  /* The short leave code cells */
+  .week-grid tbody td.leave-cell {
+    font-size: 10px !important;
+    letter-spacing: 0.5px;
+  }
+  
+  .main-content {
+    padding: 10px !important;
+  }
+}

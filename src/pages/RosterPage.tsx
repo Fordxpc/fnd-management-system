@@ -62,6 +62,21 @@ const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00
 const LEAVE_OPTIONS = ['OFF DAY','ANNUAL LEAVE','SICK LEAVE','SICK LEAVE / MC','NO PAY LEAVE','PATERNITY LEAVE','MATERNITY LEAVE','FAMILY RESPONSIBILITY LEAVE (FRL)','ABSENT','LATE',];
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+const getShortLeave = (status: string) => {
+  if (!status) return '';
+  if (status === 'ANNUAL LEAVE') return 'AL';
+  if (status === 'SICK LEAVE') return 'SL';
+  if (status === 'SICK LEAVE / MC') return 'SLMC';
+  if (status === 'NO PAY LEAVE') return 'NPL';
+  if (status === 'PATERNITY LEAVE') return 'PL';
+  if (status === 'MATERNITY LEAVE') return 'ML';
+  if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
+  if (status === 'OFF DAY') return 'OFF';
+  if (status === 'ABSENT') return 'AB';
+  if (status === 'LATE') return 'LT';
+  return status;
+};
+
 function RosterPage() {
   const { profile } = useAuth();
   const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
@@ -434,7 +449,7 @@ function RosterPage() {
                       const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                       let displayValue = ''; let cellClass = 'empty-cell';
                       if (entry) {
-                        displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.status;
+                        displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.getShortLeave(entry.status);
                         if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
                         else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
                         else cellClass = 'shift-cell';
