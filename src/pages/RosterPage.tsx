@@ -167,15 +167,25 @@ function RosterPage() {
 
   useEffect(() => { setBulkStartDate(formatDate(periodStart)); setBulkEndDate(formatDate(periodEnd)); }, [periodStart]);
 
-    // Auto-detect how many weeks to help the printer scale perfectly
+      // Auto-detect layout for printing
   useEffect(() => {
-    document.body.classList.remove('print-5-weeks', 'print-6-weeks');
-    if (weeks.length >= 6) {
-      document.body.classList.add('print-6-weeks');
-    } else {
-      document.body.classList.add('print-5-weeks');
+    document.body.classList.remove('print-all', 'print-large', 'print-small');
+    
+    // 1. If "All Departments" is selected, 1 week per page
+    if (selectedDept === 'all' && isAdmin) {
+      document.body.classList.add('print-all');
+    } 
+    // 2. If individual department, check staff count
+    else {
+      if (visibleStaff.length > 8) {
+        // Large departments (Ops, Security, Maintenance)
+        document.body.classList.add('print-large');
+      } else {
+        // Small departments (Admin, Safety, Fire)
+        document.body.classList.add('print-small');
+      }
     }
-  }, [weeks.length]);
+  }, [weeks.length, selectedDept, visibleStaff.length, isAdmin]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();

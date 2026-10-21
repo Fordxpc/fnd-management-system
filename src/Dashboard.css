@@ -355,33 +355,31 @@
 
 /* ==================== PRINT STYLES (ROSTER) ==================== */
 @media print {
-  @page { size: A4 landscape; margin: 3mm; }
+  @page { size: A4 landscape; margin: 4mm; }
   
-  /* 1. Hide everything except the roster grid */
+  /* Hide everything except the roster grid */
   .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col {
     display: none !important;
   }
   
-  /* 2. Reset layout */
+  /* Reset layout */
   .dashboard-layout, .main-content, .page-wrapper, .page-content {
     display: block !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; overflow: visible !important; height: auto !important;
   }
   
-  /* 3. Container adjustments */
   .roster-export-area {
     box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; border: none !important; zoom: 1 !important;
-    height: 100% !important; /* Force fill height */
   }
   
   .roster-title { margin-bottom: 4px !important; }
   .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 16px !important; margin: 0 !important; padding: 0 !important; font-weight: 900 !important; text-transform: uppercase !important; }
 
-  .roster-week-section { margin-bottom: 6px !important; page-break-inside: avoid; }
+  .roster-week-section { margin-bottom: 8px !important; page-break-inside: avoid; }
   .week-label { font-size: 11px !important; margin: 0 0 2px 0 !important; padding: 0 !important; line-height: 1 !important; font-weight: bold !important; }
 
-  /* 4. Force table to fit */
+  /* Base Table Setup */
   .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
     border: 1px solid #000 !important; 
@@ -391,36 +389,60 @@
     print-color-adjust: exact !important;
   }
 
-  /* WIDER COLUMNS */
   .week-grid .col-sn { width: 55px !important; }
   .week-grid .col-name { width: 160px !important; font-size: 11px !important; }
 
   /* =========================================================
-     SMART AUTO-SCALING & ENLARGING TO FILL PAGE
+     MODE 1: ALL DEPARTMENTS (1 week per page)
      ========================================================= */
-  
-  /* 5 Weeks (Larger fonts and heights to force browser to scale and fill) */
-  body.print-5-weeks .week-grid th, 
-  body.print-5-weeks .week-grid td {
-    height: 26px !important; 
-    font-size: 12px !important; 
+  body.print-all .roster-week-section { 
+    page-break-after: always !important; 
+    page-break-inside: avoid !important;
+    margin-bottom: 0 !important;
+  }
+  body.print-all .roster-week-section:last-child { 
+    page-break-after: auto !important; 
+  }
+  body.print-all .week-grid th, 
+  body.print-all .week-grid td {
+    height: 30px !important; /* Taller rows because it's only 1 week on the page */
+    font-size: 14px !important; 
     line-height: 1.2 !important;
   }
-  body.print-5-weeks .week-grid thead th {
-    height: 30px !important;
-    font-size: 10px !important;
+  body.print-all .week-grid thead th {
+    height: 36px !important;
+    font-size: 12px !important;
   }
 
-  /* 6 Weeks (Slightly smaller than 5 weeks, but still large enough to fill page) */
-  body.print-6-weeks .week-grid th, 
-  body.print-6-weeks .week-grid td {
-    height: 22px !important; 
-    font-size: 10px !important; 
+  /* =========================================================
+     MODE 2: LARGE DEPARTMENTS (Ops, Maintenance, Security)
+     ========================================================= */
+  body.print-large .week-grid th, 
+  body.print-large .week-grid td {
+    height: 20px !important; /* Compact to fit 6 weeks on 1 page */
+    font-size: 9px !important; 
     line-height: 1.1 !important;
   }
-  body.print-6-weeks .week-grid thead th {
-    height: 26px !important;
-    font-size: 9px !important;
+  body.print-large .week-grid thead th {
+    height: 24px !important;
+    font-size: 8px !important;
+  }
+
+  /* =========================================================
+     MODE 3: SMALL DEPARTMENTS (Admin, Safety, Fire)
+     ========================================================= */
+  body.print-small .week-grid th, 
+  body.print-small .week-grid td {
+    height: 40px !important; /* Stretch out to fill the page and look nice */
+    font-size: 14px !important; 
+    line-height: 1.2 !important;
+  }
+  body.print-small .week-grid thead th {
+    height: 45px !important;
+    font-size: 12px !important;
+  }
+  body.print-small .roster-week-section {
+    margin-bottom: 20px !important;
   }
 
   /* Force all the colors to print exactly as seen on screen */
