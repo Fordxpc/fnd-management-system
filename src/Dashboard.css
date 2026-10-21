@@ -272,6 +272,9 @@
 .roster-week-section { margin-bottom: 6px; }
 .week-label { font-size: 10px; font-weight: 700; color: #000000; margin: 0 0 2px 0; font-family: Arial, sans-serif; }
 
+/* Hidden on screen, visible in print */
+.print-week-header { display: none; }
+
 .week-grid { width: 100%; border-collapse: collapse; margin: 0; font-family: Arial, sans-serif; table-layout: fixed; }
 .week-grid th, .week-grid td {
   border: 1px solid #000000; 
@@ -380,13 +383,12 @@
   .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
     border: 1px solid #000 !important; 
-    padding: 0px 1px !important; /* Minimized padding */
+    padding: 0px 1px !important;
     text-align: center !important; 
     -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important;
   }
 
-  /* Adjust column widths globally for print to avoid cutting off dates */
   .week-grid .col-sn { width: 45px !important; }
   .week-grid .col-name { width: 120px !important; font-size: 8px !important; }
   .week-grid .col-date { width: auto !important; }
@@ -394,7 +396,21 @@
   /* =========================================================
      MODE 1: ALL DEPARTMENTS (1 week per page)
      ========================================================= */
-  /* Fix the blank first page issue by using break-before */
+  body.print-all .roster-title {
+    display: none !important; /* Hide main title, use repeated headers */
+  }
+  body.print-all .print-week-header {
+    display: block !important;
+    text-align: center !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    margin-bottom: 8px !important;
+    margin-top: 0 !important;
+    color: #000 !important;
+  }
+  
   body.print-all .roster-week-section {
     page-break-before: always !important;
     break-before: page !important;
@@ -404,7 +420,6 @@
     break-before: auto !important;
   }
   
-  /* Reduced height for All Departments */
   body.print-all .week-grid th, body.print-all .week-grid td {
     height: 20px !important; font-size: 10px !important; line-height: 1.1 !important;
   }
@@ -418,7 +433,6 @@
   body.print-large .roster-week-section {
     margin-bottom: 2px !important;
   }
-  /* Extremely tight rows to force 6 weeks onto 1 page */
   body.print-large .week-grid th, body.print-large .week-grid td {
     height: 12px !important; 
     font-size: 7.5px !important; 
@@ -435,7 +449,6 @@
   body.print-small .roster-week-section {
     margin-bottom: 10px !important;
   }
-  /* Reduced height from before, slightly larger than large depts */
   body.print-small .week-grid th, body.print-small .week-grid td {
     height: 24px !important; 
     font-size: 10px !important; 

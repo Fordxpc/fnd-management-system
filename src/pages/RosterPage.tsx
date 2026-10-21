@@ -143,6 +143,11 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
+  // Get current active department name for headings
+  const activeDeptName = isAdmin 
+    ? (selectedDept === 'all' ? '' : selectedDept.toUpperCase()) 
+    : (userDepartment?.toUpperCase() || '');
+
   const visibleStaff = [...staff]
     .filter((s) => {
       if (!ROSTER_DEPARTMENTS.includes(s.department)) return false;
@@ -335,6 +340,7 @@ function RosterPage() {
     clone.style.zoom = '1'; // Reset zoom for export
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => { (el as HTMLElement).style.position = 'static'; });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
+    clone.querySelectorAll('.print-week-header').forEach((el) => el.remove()); // Remove print headers from image export
     wrapper.appendChild(clone); document.body.appendChild(wrapper);
     try {
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -477,9 +483,18 @@ function RosterPage() {
       </div>
 
       <div ref={gridRef} className="roster-export-area" style={{ zoom: zoom }}>
-        <div className="roster-title"><h1>FND DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1></div>
+        <div className="roster-title">
+          <h1>FND {activeDeptName ? `${activeDeptName} ` : ''}DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
+        </div>
+        
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="roster-week-section">
+            
+            {/* HIDDEN HEADER FOR PRINT ONLY */}
+            <div className="print-week-header">
+              FND {activeDeptName ? `${activeDeptName} ` : ''}DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}
+            </div>
+
             <div className="week-label">WEEK {weekIndex + 1}</div>
             <table className="roster-grid week-grid">
               <thead>
