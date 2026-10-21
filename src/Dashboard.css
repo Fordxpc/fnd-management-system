@@ -269,13 +269,13 @@
 }
 .roster-title { text-align: center; margin-bottom: 8px; }
 .roster-title h1 { font-size: 13px; margin: 0; color: #000000; font-weight: 700; font-family: Arial, sans-serif; }
-.roster-week-section { margin-bottom: 8px; }
-.week-label { font-size: 10px; font-weight: 700; color: #000000; margin: 0 0 1px 0; font-family: Arial, sans-serif; }
+.roster-week-section { margin-bottom: 6px; }
+.week-label { font-size: 10px; font-weight: 700; color: #000000; margin: 0 0 2px 0; font-family: Arial, sans-serif; }
 
 .week-grid { width: 100%; border-collapse: collapse; margin: 0; font-family: Arial, sans-serif; table-layout: fixed; }
 .week-grid th, .week-grid td {
   border: 1px solid #000000; 
-  padding: 1px 3px; 
+  padding: 1px 2px; 
   font-size: 9px;
   text-align: center; 
   white-space: nowrap; 
@@ -283,14 +283,14 @@
   text-overflow: ellipsis;
   color: #000000; 
   background-color: #ffffff; 
-  height: 18px; /* Reduced height */
+  height: 18px;
   line-height: 1.1;
 }
-.week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; font-weight: 700; height: 20px; }
+.week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; font-weight: 700; height: 20px; font-size: 8px; }
 
 /* INCREASED NAME WIDTH */
-.week-grid .col-sn { width: 60px; font-weight: 600; text-align: left; }
-.week-grid .col-name { width: 220px; text-align: left; font-weight: 600; font-size: 10px; }
+.week-grid .col-sn { width: 55px; font-weight: 600; text-align: left; }
+.week-grid .col-name { width: 160px; text-align: left; font-weight: 600; font-size: 10px; }
 
 /* Alternating empty rows */
 .week-grid tbody tr:nth-child(odd) td.empty-cell { background-color: #ffffff; }
@@ -355,7 +355,7 @@
 
 /* ==================== PRINT STYLES (ROSTER) ==================== */
 @media print {
-  @page { size: A4 landscape; margin: 5mm; }
+  @page { size: A4 landscape; margin: 3mm; } /* Reduced margins */
   
   /* 1. Hide everything except the roster grid */
   .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col {
@@ -373,25 +373,41 @@
     box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; border: none !important; zoom: 1 !important;
   }
-  .roster-title h1 { font-size: 16px !important; margin-bottom: 8px !important; color: #000 !important; }
-  .week-label { font-size: 10px !important; margin-bottom: 2px !important; }
+  .roster-title h1 { font-size: 14px !important; margin-bottom: 4px !important; color: #000 !important; }
+  
+  /* Minimize space between weeks */
+  .roster-week-section { 
+    margin-bottom: 4px !important; 
+    page-break-inside: avoid; 
+  }
+  .week-label { 
+    font-size: 9px !important; 
+    margin: 0 !important; 
+    padding: 2px 0 !important; 
+  }
 
   /* 4. Force table to fit on one page & shrink height */
-  .week-grid { width: 100% !important; table-layout: fixed !important; page-break-inside: auto; }
+  .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
     border: 1px solid #000 !important; 
-    padding: 0px 2px !important; /* Minimized padding */
-    font-size: 9px !important; 
-    height: 15px !important; /* Minimized height */
+    padding: 0px 1px !important; /* Minimized padding */
+    font-size: 8px !important; 
+    height: 14px !important; /* Minimized height */
     line-height: 1.1 !important;
     text-align: center !important; 
     -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important;
   }
+  
+  .week-grid thead th {
+    font-size: 7px !important; /* Smaller date header text */
+    height: 16px !important;
+  }
 
-  /* Wider columns for print */
-  .week-grid .col-sn { width: 60px !important; }
-  .week-grid .col-name { width: 200px !important; font-size: 10px !important; }
+  /* Adjust column widths for print */
+  .week-grid .col-sn { width: 50px !important; }
+  .week-grid .col-name { width: 140px !important; font-size: 9px !important; }
+  .week-grid .col-date { width: auto !important; }
 
   /* Force all the colors to print exactly as seen on screen */
   .week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; }
