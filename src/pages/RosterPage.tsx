@@ -58,24 +58,29 @@ const sortStaff = (a: any, b: any): number => {
   return (a.sn || '').localeCompare(b.sn || '');
 };
 
-const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
-const LEAVE_OPTIONS = ['OFF DAY','ANNUAL LEAVE','SICK LEAVE','SICK LEAVE / MC','NO PAY LEAVE','PATERNITY LEAVE','MATERNITY LEAVE','FAMILY RESPONSIBILITY LEAVE (FRL)','ABSENT','LATE',];
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
+// SHORT LEAVE FORMATTING
 const getShortLeave = (status: string) => {
   if (!status) return '';
   if (status === 'ANNUAL LEAVE') return 'AL';
   if (status === 'SICK LEAVE') return 'SL';
-  if (status === 'SICK LEAVE / MC') return 'SLMC';
+  if (status === 'SICK LEAVE / MC') return 'MC';
   if (status === 'NO PAY LEAVE') return 'NPL';
-  if (status === 'PATERNITY LEAVE') return 'PL';
-  if (status === 'MATERNITY LEAVE') return 'ML';
+  if (status === 'PATERNITY LEAVE') return 'PAT';
+  if (status === 'MATERNITY LEAVE') return 'MAT';
   if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
   if (status === 'OFF DAY') return 'OFF';
-  if (status === 'ABSENT') return 'AB';
-  if (status === 'LATE') return 'LT';
+  if (status === 'ABSENT') return 'ABS';
+  if (status === 'LATE') return 'LATE';
   return status;
 };
+
+const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
+const LEAVE_OPTIONS = [
+  'OFF DAY', 'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 
+  'NO PAY LEAVE', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 
+  'FAMILY RESPONSIBILITY LEAVE (FRL)', 'ABSENT', 'LATE'
+];
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function RosterPage() {
   const { profile } = useAuth();
@@ -449,7 +454,8 @@ function RosterPage() {
                       const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                       let displayValue = ''; let cellClass = 'empty-cell';
                       if (entry) {
-                        displayValue = entry.status === 'scheduled' ? entry.shiftTime : entry.getShortLeave(entry.status);
+                        // USE SHORT LEAVE CODE
+                        displayValue = entry.status === 'scheduled' ? entry.shiftTime : getShortLeave(entry.status);
                         if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
                         else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
                         else cellClass = 'shift-cell';
