@@ -17,10 +17,13 @@ import ChangePasswordModal from './pages/ChangePasswordModal';
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
 
+// Main tabs type
+type Module = 'dashboard' | 'operations' | 'roster' | 'system';
+
 function Dashboard({ user, logout }: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [activeModule, setActiveModule] = useState<'operations' | 'roster' | 'system'>('operations');
+  const [activeModule, setActiveModule] = useState<Module>('dashboard');
   const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
 
   const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
@@ -28,7 +31,8 @@ function Dashboard({ user, logout }: any) {
 
   const navigate = (page: string) => {
     setCurrentPage(page);
-    if (['opsboard', 'flights', 'rampcheck'].includes(page)) setActiveModule('operations');
+    if (page === 'dashboard') setActiveModule('dashboard');
+    else if (['opsboard', 'flights', 'rampcheck'].includes(page)) setActiveModule('operations');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
     else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
   };
@@ -56,8 +60,6 @@ function Dashboard({ user, logout }: any) {
         </div>
 
         <nav className="sidebar-nav">
-          <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
-          
           {activeModule === 'operations' && (
             <>
               <div className="sidebar-section-title">Operations</div>
@@ -85,6 +87,13 @@ function Dashboard({ user, logout }: any) {
               <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>
             </>
           )}
+          
+          {activeModule === 'dashboard' && (
+            <>
+              <div className="sidebar-section-title">Overview</div>
+              <button className="nav-item active" onClick={() => navigate('dashboard')}>📊 Dashboard</button>
+            </>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -96,22 +105,16 @@ function Dashboard({ user, logout }: any) {
 
       <main className="main-content">
         <div className="top-tabs-container">
-          <button 
-            className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`}
-            onClick={() => { setActiveModule('operations'); navigate('opsboard'); }}
-          >
+          <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>
+            📊 Dashboard
+          </button>
+          <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>
             ✈️ Operations
           </button>
-          <button 
-            className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`}
-            onClick={() => { setActiveModule('roster'); navigate('roster'); }}
-          >
+          <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>
             📅 Roster & HR
           </button>
-          <button 
-            className={`top-tab ${activeModule === 'system' ? 'active' : ''}`}
-            onClick={() => { setActiveModule('system'); navigate('settings'); }}
-          >
+          <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>
             ⚙️ System
           </button>
         </div>

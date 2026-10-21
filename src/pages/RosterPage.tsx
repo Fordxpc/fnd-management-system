@@ -58,13 +58,14 @@ const sortStaff = (a: any, b: any): number => {
   return (a.sn || '').localeCompare(b.sn || '');
 };
 
-// SHORT LEAVE FORMATTING
+// UPDATED SHORT LEAVES (Added DT and PL)
 const getShortLeave = (status: string) => {
   if (!status) return '';
   if (status === 'ANNUAL LEAVE') return 'AL';
   if (status === 'SICK LEAVE') return 'SL';
   if (status === 'SICK LEAVE / MC') return 'MC';
-  if (status === 'NO PAY LEAVE') return 'NPL';
+  if (status === 'NO PAY LEAVE') return 'PL';
+  if (status === 'DUTY TRAVEL') return 'DT';
   if (status === 'PATERNITY LEAVE') return 'PAT';
   if (status === 'MATERNITY LEAVE') return 'MAT';
   if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
@@ -77,7 +78,7 @@ const getShortLeave = (status: string) => {
 const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
 const LEAVE_OPTIONS = [
   'OFF DAY', 'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 
-  'NO PAY LEAVE', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 
+  'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 
   'FAMILY RESPONSIBILITY LEAVE (FRL)', 'ABSENT', 'LATE'
 ];
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -86,6 +87,9 @@ function RosterPage() {
   const { profile } = useAuth();
   const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
   const userDepartment = profile?.department;
+
+  // ZOOM STATE
+  const [zoom, setZoom] = useState(1);
 
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [entries, setEntries] = useState<any[]>([]);
@@ -102,7 +106,6 @@ function RosterPage() {
   const [customShift, setCustomShift] = useState<string>('');
   const [status, setStatus] = useState<string>('scheduled');
 
-  // Cell Edit Modal State
   const [editCell, setEditCell] = useState<{ staffId: string, staffName: string, date: string } | null>(null);
   const [editStatus, setEditStatus] = useState('scheduled');
   const [editShift, setEditShift] = useState('06:00 - 14:00');
@@ -344,6 +347,17 @@ function RosterPage() {
       <div className="staff-header">
         <h2>Duty Roster</h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          
+          {/* ZOOM CONTROLS */}
+          <div style={{ display: 'flex', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+            <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}>A-</button>
+            <div style={{ padding: '8px 12px', background: '#fff', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1' }}>
+              {Math.round(zoom * 100)}%
+            </div>
+            <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setZoom(z => Math.min(2.5, z + 0.2))}>A+</button>
+            <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#64748b' }} onClick={() => setZoom(1)}>Reset</button>
+          </div>
+
           {isAdmin && (
             <button className={`export-btn ${reorderMode ? 'pdf-btn' : 'jpg-btn'}`} onClick={() => setReorderMode(!reorderMode)}>
               {reorderMode ? '✅ Done' : '↕️ Reorder'}
@@ -428,7 +442,8 @@ function RosterPage() {
         <button onClick={() => changePeriod(1)}>Next Month →</button>
       </div>
 
-      <div ref={gridRef} className="roster-export-area">
+      {/* APPLY ZOOM STYLE HERE */}
+      <div ref={gridRef} className="roster-export-area" style={{ zoom: zoom }}>
         <div className="roster-title"><h1>FND DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1></div>
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="roster-week-section">
@@ -454,7 +469,6 @@ function RosterPage() {
                       const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                       let displayValue = ''; let cellClass = 'empty-cell';
                       if (entry) {
-                        // USE SHORT LEAVE CODE
                         displayValue = entry.status === 'scheduled' ? entry.shiftTime : getShortLeave(entry.status);
                         if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
                         else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
