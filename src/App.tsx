@@ -1,133 +1,51 @@
-import { useState } from 'react';
-import { useAuth } from './auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from './firebase';
-import Dashboard from './Dashboard';
-import PublicLiveView from './pages/PublicLiveView'; // Import public page
-import './App.css';
-
-const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import DashboardPage from "./pages/DashboardPage";
+import FlightsPage from "./pages/FlightsPage";
+import ChecklistPage from "./pages/ChecklistPage";
+import LeavePage from "./pages/LeavePage";
+import HolidaysPage from "./pages/HolidaysPage";
+import SettingsPage from "./pages/SettingsPage";
+import LoginPage from "./auth";
+import { useState } from "react";
 
 function App() {
-  // Check if the URL is for the public live view
-  if (window.location.pathname === '/live') {
-    return <PublicLiveView />;
-  }
-
-  const [tab, setTab] = useState<'management' | 'employee'>('management');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [department, setDepartment] = useState('');
-  const [checking, setChecking] = useState(false);
-  const { user, login, logout } = useAuth();
-
-  const handleLogin = async (e: any) => {
-    e.preventDefault();
-    setChecking(true);
-
-    try {
-      if (tab === 'employee' && !department) {
-        alert('Please select your department.');
-        setChecking(false);
-        return;
-      }
-
-      const cred = await login(email, password);
-
-      const userRef = doc(db, 'users', cred.user.uid);
-      const userSnap = await getDoc(userRef);
-      const data = userSnap.exists() ? userSnap.data() : {};
-      const role = data.role || 'staff';
-      const userDept = data.department || '';
-
-      const isManagement = MANAGEMENT_ROLES.includes(role);
-
-      if (tab === 'management' && !isManagement) {
-        await logout();
-        alert('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
-        setChecking(false);
-        return;
-      }
-
-      if (tab === 'employee' && isManagement) {
-        await logout();
-        alert('This is an SMT / Manager account. Please use the "SMT / MANAGER" tab to sign in.');
-        setChecking(false);
-        return;
-      }
-
-      if (tab === 'employee' && userDept && userDept !== department) {
-        await logout();
-        alert(`Your account is registered under "${userDept}". Please select "${userDept}" in the department dropdown.`);
-        setChecking(false);
-        return;
-      }
-    } catch (error: any) {
-      alert('Error: ' + error.message);
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  if (user) {
-    return <Dashboard user={user} logout={logout} />;
-  }
+  const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div className="login-container">
-      <div className="login-box">
-        <div className="header">
-          <h1>Funadhoo Airport</h1>
-          <p>Staff Duty & Leave Management</p>
-        </div>
+    <Router>
+      <div className="app-container">
 
-        <div className="role-toggle">
-          <button className={tab === 'management' ? 'active' : ''} onClick={() => { setTab('management'); setDepartment(''); }} type="button">
-            SMT / MANAGER
-          </button>
-          <button className={tab === 'employee' ? 'active' : ''} onClick={() => setTab('employee')} type="button">
-            EMPLOYEE
-          </button>
-        </div>
+        {/* MAIN HEADING */}
+        <h1
+          style={{ cursor: "pointer", marginBottom: "10px" }}
+          onClick={() => setShowMenu(!showMenu)}
+        >
+          Funadhoo Airport Ops & Roster System
+        </h1>
 
-        <p className="subtitle">
-          {tab === 'management' ? 'Sign in to manage rosters, staff and approvals' : 'Sign in to view your schedule and requests'}
-        </p>
-
-        <form className="login-form" onSubmit={handleLogin}>
-          <div className="input-group">
-            <label>Email</label>
-            <input type="email" placeholder="name@funadhooairport.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        {/* MAIN MENU UNDER HEADING */}
+        {showMenu && (
+          <div className="main-menu" style={{ marginBottom: "20px" }}>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/flights">Operations</a>
+            <a href="/checklist">Roster & HR</a>
+            <a href="/settings">System & Setting</a>
           </div>
-          <div className="input-group">
-            <label>Password</label>
-            <input type="password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </div>
+        )}
 
-          {tab === 'employee' && (
-            <div className="input-group">
-              <label>Department</label>
-              <select value={department} onChange={(e) => setDepartment(e.target.value)} required>
-                <option value="">Select your department...</option>
-                {DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <button type="submit" className="submit-btn" disabled={checking}>
-            {checking ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="footer-links">
-          <a href="#">Forgot password?</a>
-          <p>No account? <a href="#">Register</a></p>
-        </div>
+        {/* ROUTES */}
+        <Routes>
+          <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/flights" element={<FlightsPage />} />
+          <Route path="/checklist" element={<ChecklistPage />} />
+          <Route path="/leave" element={<LeavePage />} />
+          <Route path="/holidays" element={<HolidaysPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Routes>
       </div>
-    </div>
+    </Router>
   );
 }
 
