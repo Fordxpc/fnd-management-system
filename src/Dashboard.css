@@ -258,6 +258,101 @@
 }
 .week-nav button { background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: inherit; }
 
+/* ==================== BULK ASSIGN FORM (RESTORED) ==================== */
+.bulk-form {
+  background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+  border: 2px solid #a855f7;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.1);
+}
+.bulk-form-title {
+  font-weight: 700;
+  color: #6d28d9;
+  font-size: 15px;
+  margin-bottom: 16px;
+}
+.bulk-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.bulk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bulk-field-full { grid-column: span 2; }
+.bulk-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b21a8;
+  letter-spacing: 0.3px;
+}
+.bulk-field select,
+.bulk-field input {
+  padding: 10px;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #ffffff;
+  color: #1e293b;
+}
+.bulk-field select:focus,
+.bulk-field input:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+}
+.bulk-day-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.day-btn {
+  padding: 8px 14px;
+  border: 1px solid #c4b5fd;
+  background: #ffffff;
+  color: #6b21a8;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+.day-btn:hover { background: #ede9fe; }
+.day-btn.active {
+  background: #7c3aed;
+  color: #ffffff;
+  border-color: #7c3aed;
+}
+.bulk-preview {
+  background: #ffffff;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  color: #6d28d9;
+  font-size: 14px;
+}
+.bulk-submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: #7c3aed;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.bulk-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* ==================== ROSTER GRID & COLORS ==================== */
 .roster-export-area {
   background: #ffffff;
@@ -356,7 +451,7 @@
   @page { size: A4 landscape; margin: 4mm; }
   
   /* Hide UI */
-  .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col {
+  .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form {
     display: none !important;
   }
   
@@ -473,88 +568,54 @@
     overflow-x: hidden !important;
   }
 
-  .sidebar, .main-content {
-    display: contents !important;
-  }
+  .sidebar, .main-content { display: contents !important; }
 
   .sidebar-header {
-    display: block !important;
-    order: 1 !important;
-    width: 100% !important;
-    background: #0f172a !important;
-    padding: 15px !important;
-    border-bottom: 1px solid #1e293b !important;
-    text-align: center !important;
+    display: block !important; order: 1 !important; width: 100% !important;
+    background: #0f172a !important; padding: 15px !important;
+    border-bottom: 1px solid #1e293b !important; text-align: center !important;
   }
   .sidebar-header h2 { font-size: 18px !important; margin: 0 !important; color: #fff !important; }
   .sidebar-header p { font-size: 12px !important; color: #94a3b8 !important; margin: 4px 0 0 !important; }
 
   .top-tabs-container {
-    display: flex !important;
-    order: 2 !important;
-    width: 100% !important;
-    overflow-x: auto !important;
-    background: #fff !important;
-    border-bottom: 2px solid #e2e8f0 !important;
+    display: flex !important; order: 2 !important; width: 100% !important;
+    overflow-x: auto !important; background: #fff !important; border-bottom: 2px solid #e2e8f0 !important;
   }
   .top-tab {
-    flex: 1 !important;
-    padding: 12px 10px !important;
-    font-size: 13px !important;
-    white-space: nowrap !important;
-    text-align: center !important;
+    flex: 1 !important; padding: 12px 10px !important; font-size: 13px !important;
+    white-space: nowrap !important; text-align: center !important;
   }
 
   .sidebar-nav {
-    display: flex !important;
-    flex-direction: row !important;
-    order: 3 !important;
-    width: 100% !important;
-    overflow-x: auto !important;
-    padding: 10px !important;
-    background: #f8fafc !important;
-    border-bottom: 1px solid #e2e8f0 !important;
-    gap: 8px !important;
+    display: flex !important; flex-direction: row !important; order: 3 !important;
+    width: 100% !important; overflow-x: auto !important; padding: 10px !important;
+    background: #f8fafc !important; border-bottom: 1px solid #e2e8f0 !important; gap: 8px !important;
   }
   .sidebar-section-title { display: none !important; }
   .nav-item {
-    white-space: nowrap !important;
-    padding: 8px 16px !important;
-    font-size: 13px !important;
-    border: 1px solid #cbd5e1 !important;
-    background: #fff !important;
-    border-radius: 20px !important;
-    color: #475569 !important;
-    margin: 0 !important;
+    white-space: nowrap !important; padding: 8px 16px !important; font-size: 13px !important;
+    border: 1px solid #cbd5e1 !important; background: #fff !important;
+    border-radius: 20px !important; color: #475569 !important; margin: 0 !important;
   }
   .nav-item.active {
-    background: #2563eb !important;
-    color: #fff !important;
-    border-color: #2563eb !important;
+    background: #2563eb !important; color: #fff !important; border-color: #2563eb !important;
   }
 
   .page-wrapper {
-    display: block !important;
-    order: 4 !important;
-    width: 100% !important;
-    padding: 15px !important;
-    flex: 1 !important;
+    display: block !important; order: 4 !important; width: 100% !important;
+    padding: 15px !important; flex: 1 !important;
   }
 
   .sidebar-footer {
-    display: flex !important;
-    flex-direction: column !important;
-    order: 5 !important;
-    width: 100% !important;
-    background: #0f172a !important;
-    padding: 20px !important;
-    margin-top: auto !important;
+    display: flex !important; flex-direction: column !important; order: 5 !important;
+    width: 100% !important; background: #0f172a !important; padding: 20px !important; margin-top: auto !important;
   }
-  .sidebar-footer button {
-    width: 100% !important;
-    padding: 12px !important;
-    font-size: 14px !important;
-  }
+  .sidebar-footer button { width: 100% !important; padding: 12px !important; font-size: 14px !important; }
+
+  /* Mobile Bulk Form Fixes */
+  .bulk-form-grid { grid-template-columns: 1fr !important; }
+  .bulk-field-full { grid-column: span 1 !important; }
 
   /* Mobile Roster Adjustments */
   .week-grid th, .week-grid td { font-size: 10px !important; padding: 4px 2px !important; }
