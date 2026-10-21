@@ -58,21 +58,43 @@ const sortStaff = (a: any, b: any): number => {
   return (a.sn || '').localeCompare(b.sn || '');
 };
 
-// UPDATED SHORT LEAVES (Added DT and PL)
 const getShortLeave = (status: string) => {
   if (!status) return '';
   if (status === 'ANNUAL LEAVE') return 'AL';
   if (status === 'SICK LEAVE') return 'SL';
-  if (status === 'SICK LEAVE / MC') return 'MC';
-  if (status === 'NO PAY LEAVE') return 'PL';
+  if (status === 'SICK LEAVE / MC') return 'SLMC';
+  if (status === 'NO PAY LEAVE') return 'NPL';
   if (status === 'DUTY TRAVEL') return 'DT';
-  if (status === 'PATERNITY LEAVE') return 'PAT';
-  if (status === 'MATERNITY LEAVE') return 'MAT';
+  if (status === 'PATERNITY LEAVE') return 'PL';
+  if (status === 'MATERNITY LEAVE') return 'ML';
   if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
   if (status === 'OFF DAY') return 'OFF';
-  if (status === 'ABSENT') return 'ABS';
-  if (status === 'LATE') return 'LATE';
+  if (status === 'ABSENT') return 'AB';
+  if (status === 'LATE') return 'LT';
   return status;
+};
+
+// COLOR CODING FUNCTIONS
+const getShiftColorClass = (time: string) => {
+  if (time.includes('06:00 - 14:00')) return 'shift-morning';
+  if (time.includes('08:00 - 16:00')) return 'shift-day';
+  if (time.includes('16:00 - 00:00')) return 'shift-afternoon';
+  if (time.includes('00:00 - 08:00')) return 'shift-night';
+  return 'shift-custom';
+};
+
+const getLeaveColorClass = (status: string) => {
+  if (status === 'OFF DAY') return 'leave-off';
+  if (status.includes('ANNUAL')) return 'leave-annual';
+  if (status.includes('SICK')) return 'leave-sick';
+  if (status.includes('NO PAY')) return 'leave-nopay';
+  if (status.includes('DUTY TRAVEL')) return 'leave-travel';
+  if (status.includes('PATERNITY')) return 'leave-pat';
+  if (status.includes('MATERNITY')) return 'leave-mat';
+  if (status.includes('FAMILY')) return 'leave-frl';
+  if (status === 'ABSENT') return 'leave-absent';
+  if (status === 'LATE') return 'leave-late';
+  return 'leave-other';
 };
 
 const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
@@ -88,9 +110,7 @@ function RosterPage() {
   const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
   const userDepartment = profile?.department;
 
-  // ZOOM STATE
   const [zoom, setZoom] = useState(1);
-
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
@@ -298,6 +318,7 @@ function RosterPage() {
     Object.assign(wrapper.style, { position: 'absolute', left: '-10000px', top: '0', width: '1600px', background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1' });
     const clone = original.cloneNode(true) as HTMLElement;
     clone.style.width = '100%'; clone.style.background = '#ffffff'; clone.style.padding = '0'; clone.style.borderRadius = '0'; clone.style.boxShadow = 'none';
+    clone.style.zoom = '1'; // Reset zoom for export
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => { (el as HTMLElement).style.position = 'static'; });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
     wrapper.appendChild(clone); document.body.appendChild(wrapper);
@@ -324,12 +345,21 @@ function RosterPage() {
     try {
       const canvas = await captureCanvas(); if (!canvas) return;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      
+      // Force landscape A4
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 8; const availWidth = pageWidth - margin * 2; const availHeight = pageHeight - margin * 2;
-      const ratio = Math.min(availWidth / canvas.width, availHeight / canvas.height);
-      const imgW = canvas.width * ratio; const imgH = canvas.height * ratio;
-      const imgX = (pageWidth - imgW) / 2; const imgY = (pageHeight - imgH) / 2;
+      const pageWidth = pdf.internal.pageSize.getWidth(); 
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calculate scaling to fit on 1 page
+      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+      const imgW = canvas.width * ratio; 
+      const imgH = canvas.height * ratio;
+      
+      // Center the image
+      const imgX = (pageWidth - imgW) / 2; 
+      const imgY = (pageHeight - imgH) / 2;
+      
       pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
       pdf.save(`FND-Roster-${formatDate(periodStart)}.pdf`);
       toast.success('PDF downloaded!');
@@ -344,7 +374,7 @@ function RosterPage() {
 
   return (
     <div className="page-content">
-      <div className="staff-header">
+      <div className="staff-header no-print">
         <h2>Duty Roster</h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           
@@ -364,7 +394,7 @@ function RosterPage() {
             </button>
           )}
           <button className="export-btn jpg-btn" onClick={exportToJPG} disabled={exporting}>{exporting ? '...' : '📷 JPG'}</button>
-          <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF'}</button>
+          <button className="export-btn pdf-btn" onClick={exportToPDF} disabled={exporting}>{exporting ? '...' : '📄 PDF (1 Page)'}</button>
           <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
           {isAdmin && (
             <>
@@ -377,7 +407,7 @@ function RosterPage() {
       </div>
 
       {isAdmin && (
-        <div className="dept-tabs">
+        <div className="dept-tabs no-print">
           <button className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('all')}>All Departments</button>
           {ROSTER_DEPARTMENTS.map((d) => (
             <button key={d} className={selectedDept === d ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept(d)}>{d}</button>
@@ -385,10 +415,10 @@ function RosterPage() {
         </div>
       )}
 
-      {reorderMode && <div className="reorder-banner">↕️ <strong>Reorder Mode:</strong> Use arrows to arrange staff.</div>}
+      {reorderMode && <div className="reorder-banner no-print">↕️ <strong>Reorder Mode:</strong> Use arrows to arrange staff.</div>}
 
       {showForm && isAdmin && (
-        <form className="staff-form" onSubmit={handleAdd}>
+        <form className="staff-form no-print" onSubmit={handleAdd}>
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
             {visibleStaff.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>)}
@@ -411,7 +441,7 @@ function RosterPage() {
       )}
 
       {showBulkForm && isAdmin && (
-        <div className="bulk-form">
+        <div className="bulk-form no-print">
           <div className="bulk-form-title">⚡ Bulk Assign</div>
           <div className="bulk-form-grid">
             <div className="bulk-field bulk-field-full">
@@ -436,13 +466,12 @@ function RosterPage() {
         </div>
       )}
 
-      <div className="week-nav">
+      <div className="week-nav no-print">
         <button onClick={() => changePeriod(-1)}>← Previous Month</button>
         <span>{formatLongDate(periodStart)} — {formatLongDate(periodEnd)}</span>
         <button onClick={() => changePeriod(1)}>Next Month →</button>
       </div>
 
-      {/* APPLY ZOOM STYLE HERE */}
       <div ref={gridRef} className="roster-export-area" style={{ zoom: zoom }}>
         <div className="roster-title"><h1>FND DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1></div>
         {weeks.map((week, weekIndex) => (
@@ -451,7 +480,7 @@ function RosterPage() {
             <table className="roster-grid week-grid">
               <thead>
                 <tr>
-                  {reorderMode && <th className="reorder-col">↕️</th>}
+                  {reorderMode && <th className="reorder-col no-print">↕️</th>}
                   <th className="col-sn">SN No.</th><th className="col-name">NAME</th>
                   {week.map((d) => <th key={formatDate(d)} className="col-date">{formatHeaderDate(d)}</th>)}
                 </tr>
@@ -459,7 +488,7 @@ function RosterPage() {
               <tbody>
                 {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff.</td></tr> : visibleStaff.map((s, staffIndex) => (
                   <tr key={s.id}>
-                    {reorderMode && <td className="reorder-col"><button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')}>▲</button><button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')}>▼</button></td>}
+                    {reorderMode && <td className="reorder-col no-print"><button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')}>▲</button><button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')}>▼</button></td>}
                     <td className="col-sn">{s.sn || '—'}</td><td className="col-name">{s.name}</td>
                     {week.map((d) => {
                       const dStr = formatDate(d);
@@ -468,12 +497,18 @@ function RosterPage() {
 
                       const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                       let displayValue = ''; let cellClass = 'empty-cell';
+                      
                       if (entry) {
                         displayValue = entry.status === 'scheduled' ? entry.shiftTime : getShortLeave(entry.status);
-                        if (entry.status === 'OFF DAY') cellClass = 'off-day-cell';
-                        else if (entry.status && entry.status !== 'scheduled') cellClass = 'leave-cell';
-                        else cellClass = 'shift-cell';
+                        
+                        // APPLY NEW COLOR CLASSES
+                        if (entry.status === 'scheduled') {
+                          cellClass = getShiftColorClass(entry.shiftTime);
+                        } else {
+                          cellClass = getLeaveColorClass(entry.status);
+                        }
                       }
+                      
                       return (
                         <td key={dStr} className={`${cellClass} ${isAdmin ? 'clickable-cell' : ''}`} 
                             onClick={() => {
@@ -497,7 +532,7 @@ function RosterPage() {
 
       {/* CELL EDIT MODAL */}
       {editCell && isAdmin && (
-        <div className="modal-backdrop" onClick={() => setEditCell(null)}>
+        <div className="modal-backdrop no-print" onClick={() => setEditCell(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Edit Roster: {editCell.staffName}</h3>
             <p style={{ color: '#475569', marginBottom: '20px' }}>Date: {editCell.date}</p>

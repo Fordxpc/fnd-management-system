@@ -76,6 +76,17 @@ function SettingsPage() {
     <div className="page-content">
       <div className="staff-header"><h2>⚙️ Settings</h2></div>
 
+      {/* NEW: ACCOUNT INFO */}
+      <div className="dash-card mb-4 border-l-4 border-slate-500">
+        <h3>👤 Account Information</h3>
+        <p style={{ margin: '8px 0 0', color: '#475569', fontSize: '14px' }}>
+          You are currently logged in as: <strong style={{ color: '#0f172a' }}>{profile?.email}</strong>
+        </p>
+        <p style={{ margin: '4px 0 0', color: '#475569', fontSize: '13px' }}>
+          Role: <span style={{ textTransform: 'uppercase', fontWeight: 700, color: '#2563eb' }}>{profile?.role}</span>
+        </p>
+      </div>
+
       {isDeveloper && (
         <div className="dash-card mb-4 border-l-4 border-blue-500">
           <h3>⚙️ Overtime Rates (Developer Only)</h3>

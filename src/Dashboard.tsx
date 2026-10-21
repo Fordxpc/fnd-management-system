@@ -97,7 +97,7 @@ function Dashboard({ user, logout }: any) {
         </nav>
 
         <div className="sidebar-footer">
-          <p className="user-email">{user?.email}</p>
+          {/* EMAIL REMOVED FROM HERE AS REQUESTED */}
           <button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
           <button className="logout-btn" onClick={logout}>Log Out</button>
         </div>
