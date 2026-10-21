@@ -106,6 +106,25 @@
   overflow-x: hidden;
 }
 
+.main-app-header {
+  background: #0f172a;
+  color: #fff;
+  padding: 16px 30px 14px;
+  flex-shrink: 0;
+}
+.main-app-header h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.main-app-header p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #93c5fd;
+  font-weight: 600;
+}
+
 /* ==================== TOP TABS ==================== */
 .top-tabs-container {
   display: flex;
@@ -451,7 +470,7 @@
   @page { size: A4 landscape; margin: 4mm; }
   
   /* Hide UI */
-  .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form {
+  .sidebar, .top-tabs-container, .main-app-header, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form {
     display: none !important;
   }
   

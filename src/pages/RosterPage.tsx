@@ -67,6 +67,7 @@ const getShortLeave = (status: string) => {
   if (status === 'DUTY TRAVEL') return 'DT';
   if (status === 'PATERNITY LEAVE') return 'PL';
   if (status === 'MATERNITY LEAVE') return 'ML';
+  if (status === 'PRE-MATERNITY LEAVE') return 'PML';
   if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
   if (status === 'OFF DAY') return 'OFF';
   if (status === 'ABSENT') return 'AB';
@@ -97,11 +98,12 @@ const getLeaveColorClass = (status: string) => {
 };
 
 const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
-const LEAVE_OPTIONS = [
-  'OFF DAY', 'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 
-  'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 
-  'FAMILY RESPONSIBILITY LEAVE (FRL)', 'ABSENT', 'LATE'
+const ROSTER_STATUS_OPTIONS = ['OFF DAY', 'ABSENT', 'LATE'];
+const APPROVED_LEAVE_STATUSES = [
+  'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL',
+  'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)',
 ];
+const isApprovedLeaveStatus = (status?: string) => !!status && APPROVED_LEAVE_STATUSES.includes(status);
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function RosterPage() {
@@ -189,6 +191,10 @@ function RosterPage() {
   const handleAdd = async (e: any) => {
     e.preventDefault();
     if (!staffId) { toast.error('Please select a staff member'); return; }
+    if (isApprovedLeaveStatus(status)) {
+      toast.error('Leave can only be written on the roster after a supervisor approves it in Leave Requests.');
+      return;
+    }
     const staffMember = staff.find((s) => s.id === staffId);
     let finalShiftTime = '';
     if (status === 'scheduled') {
@@ -198,6 +204,10 @@ function RosterPage() {
     try {
       const q = query(collection(db, 'roster_entries'), where('staffId', '==', staffId), where('date', '==', date));
       const existing = await getDocs(q);
+      if (existing.docs.some((d) => isApprovedLeaveStatus(d.data().status) || d.data().leaveRequestId)) {
+        toast.error('This date already has approved leave. Change it from Leave Requests.');
+        return;
+      }
       for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
 
       await addDoc(collection(db, 'roster_entries'), {
@@ -212,10 +222,18 @@ function RosterPage() {
 
   const handleSaveCell = async () => {
     if (!editCell) return;
+    if (isApprovedLeaveStatus(editStatus)) {
+      toast.error('Leave can only be written on the roster after a supervisor approves it in Leave Requests.');
+      return;
+    }
     let finalShift = editStatus === 'scheduled' ? editShift : '';
     try {
       const q = query(collection(db, 'roster_entries'), where('staffId', '==', editCell.staffId), where('date', '==', editCell.date));
       const existing = await getDocs(q);
+      if (existing.docs.some((d) => isApprovedLeaveStatus(d.data().status) || d.data().leaveRequestId)) {
+        toast.error('Approved leave cannot be overwritten from the roster. Edit it in Leave Requests.');
+        return;
+      }
       for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
 
       if (editStatus !== 'clear') {
@@ -261,14 +279,20 @@ function RosterPage() {
 
     setBulkSubmitting(true);
     try {
+      const skipDates = new Set<string>();
       for (const d of dates) {
         const q = query(collection(db, 'roster_entries'), where('staffId', '==', bulkStaffId), where('date', '==', d));
         const existing = await getDocs(q);
+        if (existing.docs.some((docSnap) => isApprovedLeaveStatus(docSnap.data().status) || docSnap.data().leaveRequestId)) {
+          skipDates.add(d);
+          continue;
+        }
         for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
       }
 
       let created = 0;
       for (const d of dates) {
+        if (skipDates.has(d)) continue;
         await addDoc(collection(db, 'roster_entries'), {
           staffId: bulkStaffId, staffName: staffMember.name, staffDepartment: staffMember.department,
           date: d, shiftTime: finalShiftTime, status: bulkType === 'scheduled' ? 'scheduled' : bulkType,
@@ -276,7 +300,10 @@ function RosterPage() {
         });
         created++;
       }
-      toast.success(`Created ${created} roster entries!`);
+      const skipped = skipDates.size;
+      toast.success(skipped
+        ? `Created ${created} roster entries. Skipped ${skipped} day(s) with approved leave.`
+        : `Created ${created} roster entries!`);
       setShowBulkForm(false);
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setBulkSubmitting(false);
@@ -288,18 +315,29 @@ function RosterPage() {
     const prevStartStr = formatDate(prevStart); const prevEndStr = formatDate(prevEnd);
     const curStartStr = formatDate(periodStart); const curEndStr = formatDate(periodEnd);
 
-    const prevEntries = entries.filter((e) => e.date >= prevStartStr && e.date <= prevEndStr);
+    const prevEntries = entries.filter((e) =>
+      e.date >= prevStartStr && e.date <= prevEndStr && !isApprovedLeaveStatus(e.status) && !e.leaveRequestId
+    );
     if (prevEntries.length === 0) { toast.error('No entries found in the previous period to copy.'); return; }
 
     setCopying(true);
     try {
-      const current = entries.filter((e) => e.date >= curStartStr && e.date <= curEndStr);
+      const current = entries.filter((e) =>
+        e.date >= curStartStr && e.date <= curEndStr && !isApprovedLeaveStatus(e.status) && !e.leaveRequestId
+      );
       for (const e of current) await deleteDoc(doc(db, 'roster_entries', e.id));
+
+      const protectedKeys = new Set(
+        entries
+          .filter((e) => e.date >= curStartStr && e.date <= curEndStr && (isApprovedLeaveStatus(e.status) || e.leaveRequestId))
+          .map((e) => `${e.staffId}|${e.date}`)
+      );
 
       let created = 0;
       for (const e of prevEntries) {
         const oldDate = new Date(e.date + 'T00:00:00'); const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
         const newDateStr = formatDate(newDate);
+        if (protectedKeys.has(`${e.staffId}|${newDateStr}`)) continue;
 
         await addDoc(collection(db, 'roster_entries'), {
           staffId: e.staffId, staffName: e.staffName, staffDepartment: e.staffDepartment,
@@ -436,7 +474,7 @@ function RosterPage() {
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="scheduled">Scheduled Shift</option>
-            {LEAVE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+            {ROSTER_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
           </select>
           {status === 'scheduled' && (
             <>
@@ -469,7 +507,7 @@ function RosterPage() {
                 {DAY_LABELS.map((label, i) => <button key={i} type="button" className={bulkDaysOfWeek.includes(i) ? 'day-btn active' : 'day-btn'} onClick={() => toggleBulkDay(i)}>{label}</button>)}
               </div>
             </div>
-            <div className="bulk-field"><label>Type</label><select value={bulkType} onChange={(e) => setBulkType(e.target.value)}><option value="scheduled">Shift</option>{LEAVE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
+            <div className="bulk-field"><label>Type</label><select value={bulkType} onChange={(e) => setBulkType(e.target.value)}><option value="scheduled">Shift</option>{ROSTER_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
             <div className="bulk-field"><label>Shift</label><select value={bulkShift} onChange={(e) => setBulkShift(e.target.value)}>{SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
           </div>
           <button className="bulk-submit-btn" onClick={handleBulkAssign} disabled={bulkSubmitting}>{bulkSubmitting ? '...' : `⚡ Create Entries`}</button>
@@ -529,11 +567,14 @@ function RosterPage() {
                       return (
                         <td key={dStr} className={`${cellClass} ${isAdmin ? 'clickable-cell' : ''}`} 
                             onClick={() => {
-                              if (isAdmin) {
-                                setEditCell({ staffId: s.id, staffName: s.name, date: dStr });
-                                setEditStatus(entry ? entry.status : 'scheduled');
-                                setEditShift(entry && entry.status === 'scheduled' ? entry.shiftTime : '06:00 - 14:00');
+                              if (!isAdmin) return;
+                              if (entry && (isApprovedLeaveStatus(entry.status) || entry.leaveRequestId)) {
+                                toast.error('Approved leave cannot be edited from the roster. Change it in Leave Requests.');
+                                return;
                               }
+                              setEditCell({ staffId: s.id, staffName: s.name, date: dStr });
+                              setEditStatus(entry ? entry.status : 'scheduled');
+                              setEditShift(entry && entry.status === 'scheduled' ? entry.shiftTime : '06:00 - 14:00');
                             }}>
                           {displayValue}
                         </td>
@@ -557,7 +598,7 @@ function RosterPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <select value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
                 <option value="scheduled">Scheduled Shift</option>
-                {LEAVE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                {ROSTER_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 <option value="clear">Clear (Remove Entry)</option>
               </select>
               

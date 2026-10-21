@@ -12,7 +12,6 @@ import SettingsPage from './pages/SettingsPage';
 import FlightsPage from './pages/FlightsPage';
 import OpsBoardPage from './pages/OpsBoardPage';
 import RampCheckSheetPage from './pages/RampCheckSheetPage';
-import ChangePasswordModal from './pages/ChangePasswordModal';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
@@ -20,11 +19,10 @@ const USER_ADMIN_ROLES = ['developer', 'manager'];
 // Main tabs type
 type Module = 'dashboard' | 'operations' | 'roster' | 'system';
 
-function Dashboard({ user, logout }: any) {
+function Dashboard(_props: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
-  const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
 
   const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
   const canManageUsers = USER_ADMIN_ROLES.includes(profile?.role || '');
@@ -81,7 +79,7 @@ function Dashboard({ user, logout }: any) {
 
           {activeModule === 'system' && (
             <>
-              <div className="sidebar-section-title">System</div>
+              <div className="sidebar-section-title">System & Setting</div>
               <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('holidays')}>🎉 Holidays</button>
               {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('users')}>🔑 User Accounts</button>}
               <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>
@@ -95,15 +93,14 @@ function Dashboard({ user, logout }: any) {
             </>
           )}
         </nav>
-
-        <div className="sidebar-footer">
-          {/* EMAIL REMOVED FROM HERE AS REQUESTED */}
-          <button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
-          <button className="logout-btn" onClick={logout}>Log Out</button>
-        </div>
       </aside>
 
       <main className="main-content">
+        <div className="main-app-header">
+          <h1>Funadhoo Airport</h1>
+          <p>Ops & Roster System</p>
+        </div>
+
         <div className="top-tabs-container">
           <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>
             📊 Dashboard
@@ -115,7 +112,7 @@ function Dashboard({ user, logout }: any) {
             📅 Roster & HR
           </button>
           <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>
-            ⚙️ System
+            ⚙️ System & Setting
           </button>
         </div>
 
@@ -123,8 +120,6 @@ function Dashboard({ user, logout }: any) {
           {pages[currentPage]}
         </div>
       </main>
-
-      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }

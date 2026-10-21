@@ -4,9 +4,11 @@ import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore'
 import { useAuth } from '../auth';
 import { migrateOldOpsData, migrateOldRampData } from '../utils/migrateData';
 import { toast } from 'sonner';
+import ChangePasswordModal from './ChangePasswordModal';
 
 function SettingsPage() {
-  const { profile } = useAuth();
+  const { profile, logout } = useAuth();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const isDeveloper = profile?.role === 'developer';
   const isManagement = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
 
@@ -76,15 +78,18 @@ function SettingsPage() {
     <div className="page-content">
       <div className="staff-header"><h2>⚙️ Settings</h2></div>
 
-      {/* NEW: ACCOUNT INFO */}
       <div className="dash-card mb-4 border-l-4 border-slate-500">
         <h3>👤 Account Information</h3>
         <p style={{ margin: '8px 0 0', color: '#475569', fontSize: '14px' }}>
           You are currently logged in as: <strong style={{ color: '#0f172a' }}>{profile?.email}</strong>
         </p>
-        <p style={{ margin: '4px 0 0', color: '#475569', fontSize: '13px' }}>
+        <p style={{ margin: '4px 0 8px', color: '#475569', fontSize: '13px' }}>
           Role: <span style={{ textTransform: 'uppercase', fontWeight: 700, color: '#2563eb' }}>{profile?.role}</span>
         </p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+          <button className="change-pw-btn" style={{ width: 'auto', padding: '8px 14px' }} onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
+          <button className="logout-btn" style={{ width: 'auto', padding: '8px 14px' }} onClick={logout}>Log Out</button>
+        </div>
       </div>
 
       {isDeveloper && (
@@ -127,14 +132,14 @@ function SettingsPage() {
         <table className="mini-table">
           <thead><tr><th>Leave Type</th><th>Entitlement</th><th>Fridays Counted?</th><th>Gender</th></tr></thead>
           <tbody>
-            <tr><td>Annual Leave</td><td>30 days</td><td>❌ No</td><td>All</td></tr>
+            <tr><td>Annual Leave</td><td>30 days</td><td>❌ No (shown on roster, not deducted)</td><td>All</td></tr>
             <tr><td>Sick Leave</td><td>15 days</td><td>✅ Yes</td><td>All</td></tr>
             <tr><td>Sick / MC</td><td>15 days</td><td>✅ Yes</td><td>All</td></tr>
             <tr><td>Family Responsibility</td><td>10 days</td><td>✅ Yes</td><td>All</td></tr>
-            <tr><td>Pre-Maternity</td><td>15 days</td><td>✅ Yes</td><td>Female</td></tr>
-            <tr><td>Maternity</td><td>180 days (6 mo)</td><td>✅ Yes</td><td>Female</td></tr>
-            <tr><td>Paternity</td><td>30 days (1 mo)</td><td>✅ Yes</td><td>Male</td></tr>
-            <tr><td>No Pay</td><td>365 days</td><td>✅ Yes</td><td>All</td></tr>
+            <tr><td>Pre-Maternity</td><td>15 days</td><td>✅ Yes (Friday & off days)</td><td>Female</td></tr>
+            <tr><td>Maternity</td><td>180 days (6 mo)</td><td>✅ Yes (Friday & off days)</td><td>Female</td></tr>
+            <tr><td>Paternity</td><td>30 days (1 mo)</td><td>✅ Yes (Friday & off days)</td><td>Male</td></tr>
+            <tr><td>No Pay</td><td>365 days</td><td>✅ Yes (Friday & off days)</td><td>All</td></tr>
             <tr><td>Duty Travel</td><td>No limit</td><td>✅ Yes</td><td>All</td></tr>
           </tbody>
         </table>
@@ -173,6 +178,8 @@ function SettingsPage() {
           <a href="https://console.firebase.google.com/project/fnd-ops-management/firestore" target="_blank" rel="noreferrer" className="quick-btn inline-block mt-4 text-decoration-none">🔗 Open Firebase Console</a>
         </div>
       )}
+
+      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
     </div>
   );
 }

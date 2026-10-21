@@ -22,6 +22,10 @@ const ENTITLEMENTS: { [key: string]: number } = {
 
 const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
 const MALE_ONLY = ['PATERNITY LEAVE'];
+const COUNTS_FRIDAY_AND_OFF_DAYS = [
+  'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'NO PAY LEAVE',
+  'SICK LEAVE', 'SICK LEAVE / MC', 'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL',
+];
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
 
@@ -252,7 +256,9 @@ function LeavePage() {
       if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) { toast.error(`Exceeds annual leave limit.`); return; }
     }
 
-    let days = leaveType === 'ANNUAL LEAVE' ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable : allDatesInRange(startDate, endDate).length;
+    let days = leaveType === 'ANNUAL LEAVE'
+      ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable
+      : allDatesInRange(startDate, endDate).length;
     if (days === 0) { toast.error('No countable days in this range.'); return; }
 
     setSubmitting(true);
@@ -274,6 +280,8 @@ function LeavePage() {
     const r = approveTarget;
     try {
       await updateDoc(doc(db, 'leave_requests', r.id), { status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString() });
+      // Write every calendar day on the roster, including Friday and off days.
+      // Annual leave still shows on Friday; Friday is excluded from the balance count at submit time.
       const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(collection(db, 'roster_entries'), where('staffId', '==', r.staffId), where('date', '==', d));
@@ -326,6 +334,9 @@ function LeavePage() {
         {/* ALLOW STAFF TO REQUEST LEAVE */}
         <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Request Leave'}</button>
       </div>
+      <p style={{ margin: '-8px 0 16px', fontSize: '13px', color: '#64748b' }}>
+        Leave is written on the roster only after a supervisor approves the request.
+      </p>
 
       {myStaff && canSeeMyBalance && (
         <div className="collapsible-card">
@@ -433,7 +444,16 @@ function LeavePage() {
 
           <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#475569' }}>
             <strong>Countable days:</strong> {previewDays}
-            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>ℹ️ {previewFridays} Friday(s) excluded</div>}
+            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (
+              <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                ℹ️ {previewFridays} Friday(s) will show on the roster but will not be deducted from the balance.
+              </div>
+            )}
+            {COUNTS_FRIDAY_AND_OFF_DAYS.includes(leaveType) && (
+              <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
+                Friday and off days in this range are counted toward the balance.
+              </div>
+            )}
           </div>
           <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>
             {submitting ? 'Submitting...' : 'Submit Leave Request'}
