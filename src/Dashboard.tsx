@@ -55,7 +55,7 @@ function Dashboard({ user, logout }: any) {
           <p>Ops & Roster System</p>
         </div>
 
-        <nav className="sidebar-nav" style={{ overflowY: 'auto' }}>
+        <nav className="sidebar-nav">
           <button className={currentPage === 'dashboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
           
           {activeModule === 'operations' && (
@@ -94,8 +94,8 @@ function Dashboard({ user, logout }: any) {
         </div>
       </aside>
 
-      <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', gap: '10px', padding: '0 30px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
+      <main className="main-content">
+        <div className="top-tabs-container">
           <button 
             className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`}
             onClick={() => { setActiveModule('operations'); navigate('opsboard'); }}
@@ -116,7 +116,7 @@ function Dashboard({ user, logout }: any) {
           </button>
         </div>
 
-        <div style={{ flex: 1, padding: '20px 30px' }}>
+        <div className="page-wrapper">
           {pages[currentPage]}
         </div>
       </main>

@@ -1224,3 +1224,108 @@
     padding: 10px !important;
   }
 }
+
+/* ==================== MOBILE RESPONSIVE LAYOUT ==================== */
+@media (max-width: 768px) {
+  .dashboard-layout {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  /* Make sidebar and main-content act as transparent wrappers */
+  .sidebar, .main-content {
+    display: contents;
+  }
+  
+  /* 1. Top: App Title */
+  .sidebar-header {
+    order: 1;
+    padding: 15px;
+    background: #0f172a;
+    color: white;
+    text-align: center;
+    border-bottom: 1px solid #1e293b;
+  }
+  .sidebar-header h2 { font-size: 18px; margin: 0; }
+  .sidebar-header p { font-size: 12px; margin: 2px 0 0; color: #94a3b8; }
+
+  /* 2. Main 3 Tabs */
+  .top-tabs-container {
+    order: 2;
+    display: flex;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0;
+  }
+  .top-tab {
+    flex: 1;
+    padding: 15px 5px;
+    font-size: 13px;
+    text-align: center;
+    border-bottom: 3px solid transparent;
+  }
+  .top-tab.active {
+    border-bottom-color: #2563eb;
+    color: #2563eb;
+  }
+
+  /* 3. Sub Tabs (Horizontal Scroll) */
+  .sidebar-nav {
+    order: 3;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 10px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    gap: 8px;
+  }
+  .sidebar-section-title {
+    display: none; /* Hide section titles on mobile */
+  }
+  .nav-item {
+    white-space: nowrap;
+    padding: 8px 16px;
+    font-size: 13px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    border-radius: 20px;
+    color: #475569;
+    margin: 0;
+  }
+  .nav-item.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #2563eb;
+  }
+
+  /* 4. Main Content */
+  .page-wrapper {
+    order: 4;
+    flex: 1; /* Pushes footer to the bottom */
+    background: #f1f5f9;
+    padding: 15px;
+  }
+
+  /* 5. Footer (Logout & Password) */
+  .sidebar-footer {
+    order: 5;
+    background: #0f172a;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+  }
+  .sidebar-footer .user-email {
+    text-align: center;
+    margin: 0 0 10px 0;
+    font-size: 12px;
+  }
+  .sidebar-footer button {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+  }
+}
