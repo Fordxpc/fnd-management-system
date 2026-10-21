@@ -373,18 +373,26 @@
     height: 100% !important;
   }
   
-  .roster-title { margin-bottom: 8px !important; padding: 0 !important; }
-  .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 18px !important; margin: 0 !important; padding: 0 !important; font-weight: 900 !important; text-transform: uppercase !important; }
+  /* Make Main Title smaller and unbold */
+  .roster-title { margin-bottom: 4px !important; padding: 0 !important; }
+  .roster-title h1 { 
+    font-family: Arial, sans-serif !important; 
+    font-size: 14px !important; 
+    font-weight: 500 !important; /* Unbolded */
+    margin: 0 !important; 
+    padding: 0 !important; 
+    text-transform: uppercase !important; 
+  }
 
   .roster-week-section { page-break-inside: avoid !important; break-inside: avoid !important; margin: 0 !important; padding: 0 !important; }
   
-  /* Bigger and clearer Week Labels */
+  /* Make Week Label smaller and unbold */
   .week-label { 
-    font-size: 14px !important; 
-    margin: 0 0 6px 0 !important; 
+    font-size: 10px !important; 
+    margin: 0 0 2px 0 !important; 
     padding: 0 !important; 
     line-height: 1 !important; 
-    font-weight: 900 !important; 
+    font-weight: 500 !important; /* Unbolded */
     text-transform: uppercase !important;
   }
 
@@ -409,21 +417,20 @@
     display: none !important; /* Hide main title, use repeated headers */
   }
   
-  /* Bigger and clearer repeated headers */
+  /* Smaller unbolded repeated headers */
   body.print-all .print-week-header {
     display: block !important;
     text-align: center !important;
     font-family: Arial, sans-serif !important;
-    font-size: 18px !important;
-    font-weight: 900 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important; /* Unbolded */
     text-transform: uppercase !important;
-    margin-bottom: 10px !important;
+    margin-bottom: 4px !important;
     margin-top: 0 !important;
     padding: 0 !important;
     color: #000 !important;
   }
   
-  /* FIX: Use page-break-after instead of before to remove the blank page */
   body.print-all .roster-week-section {
     page-break-after: always !important;
     break-after: page !important;
@@ -437,43 +444,43 @@
   }
   
   body.print-all .week-grid th, body.print-all .week-grid td {
-    height: 22px !important; font-size: 11px !important; line-height: 1.1 !important;
+    height: 20px !important; font-size: 10px !important; line-height: 1.1 !important;
   }
-  /* Bigger table headers */
   body.print-all .week-grid thead th {
-    height: 28px !important; font-size: 10px !important;
+    height: 24px !important; font-size: 9px !important;
   }
 
   /* =========================================================
      MODE 2: LARGE DEPARTMENTS (Fit tightly to 1 page)
      ========================================================= */
   body.print-large .roster-week-section {
-    margin-bottom: 4px !important;
+    margin-bottom: 2px !important;
   }
+  /* Very tight rows to ensure it stays on 1 page */
   body.print-large .week-grid th, body.print-large .week-grid td {
-    height: 14px !important; 
-    font-size: 8px !important; 
+    height: 12px !important; 
+    font-size: 7.5px !important; 
     line-height: 1 !important;
     padding: 0 !important;
   }
   body.print-large .week-grid thead th {
-    height: 18px !important; font-size: 7.5px !important;
+    height: 16px !important; font-size: 7px !important;
   }
 
   /* =========================================================
      MODE 3: SMALL DEPARTMENTS (Admin, Safety)
      ========================================================= */
   body.print-small .roster-week-section {
-    margin-bottom: 12px !important;
+    margin-bottom: 10px !important;
   }
   body.print-small .week-grid th, body.print-small .week-grid td {
-    height: 26px !important; 
-    font-size: 11px !important; 
+    height: 24px !important; 
+    font-size: 10px !important; 
     line-height: 1.1 !important;
   }
   body.print-small .week-grid thead th {
-    height: 30px !important; 
-    font-size: 10px !important;
+    height: 28px !important; 
+    font-size: 9px !important;
   }
 
   /* Colors */
