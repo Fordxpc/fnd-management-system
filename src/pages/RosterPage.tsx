@@ -167,6 +167,16 @@ function RosterPage() {
 
   useEffect(() => { setBulkStartDate(formatDate(periodStart)); setBulkEndDate(formatDate(periodEnd)); }, [periodStart]);
 
+    // Auto-detect how many weeks to help the printer scale perfectly
+  useEffect(() => {
+    document.body.classList.remove('print-5-weeks', 'print-6-weeks');
+    if (weeks.length >= 6) {
+      document.body.classList.add('print-6-weeks');
+    } else {
+      document.body.classList.add('print-5-weeks');
+    }
+  }, [weeks.length]);
+
   const handleAdd = async (e: any) => {
     e.preventDefault();
     if (!staffId) { toast.error('Please select a staff member'); return; }

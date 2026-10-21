@@ -268,7 +268,7 @@
   -webkit-overflow-scrolling: touch;
 }
 .roster-title { text-align: center; margin-bottom: 8px; }
-.roster-title h1 { font-size: 13px; margin: 0; color: #000000; font-weight: 700; font-family: Arial, sans-serif; }
+.roster-title h1 { font-size: 14px; margin: 0; color: #000000; font-weight: 900; font-family: Arial, sans-serif; text-transform: uppercase; }
 .roster-week-section { margin-bottom: 6px; }
 .week-label { font-size: 10px; font-weight: 700; color: #000000; margin: 0 0 2px 0; font-family: Arial, sans-serif; }
 
@@ -355,7 +355,7 @@
 
 /* ==================== PRINT STYLES (ROSTER) ==================== */
 @media print {
-  @page { size: A4 landscape; margin: 3mm; } /* Reduced margins */
+  @page { size: A4 landscape; margin: 3mm; }
   
   /* 1. Hide everything except the roster grid */
   .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col {
@@ -373,41 +373,60 @@
     box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; border: none !important; zoom: 1 !important;
   }
-  .roster-title h1 { font-size: 14px !important; margin-bottom: 4px !important; color: #000 !important; }
   
-  /* Minimize space between weeks */
-  .roster-week-section { 
-    margin-bottom: 4px !important; 
-    page-break-inside: avoid; 
-  }
-  .week-label { 
-    font-size: 9px !important; 
-    margin: 0 !important; 
-    padding: 2px 0 !important; 
-  }
+  /* TIGHTER HEADING */
+  .roster-title { margin-bottom: 2px !important; }
+  .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 12px !important; margin: 0 !important; padding: 0 !important; font-weight: 900 !important; text-transform: uppercase !important; }
 
-  /* 4. Force table to fit on one page & shrink height */
+  /* MINIMIZE SPACE BETWEEN WEEKS */
+  .roster-week-section { margin-bottom: 2px !important; page-break-inside: avoid; }
+  .week-label { font-size: 8px !important; margin: 0 !important; padding: 0 !important; line-height: 1 !important; }
+
+  /* 4. Force table to fit */
   .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
     border: 1px solid #000 !important; 
-    padding: 0px 1px !important; /* Minimized padding */
-    font-size: 8px !important; 
-    height: 14px !important; /* Minimized height */
-    line-height: 1.1 !important;
+    padding: 0px 1px !important;
     text-align: center !important; 
     -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important;
   }
+
+  /* WIDER COLUMNS */
+  .week-grid .col-sn { width: 45px !important; }
+  .week-grid .col-name { width: 130px !important; font-size: 8px !important; }
+
+  /* =========================================================
+     SMART AUTO-SCALING BASED ON NUMBER OF WEEKS
+     ========================================================= */
   
-  .week-grid thead th {
-    font-size: 7px !important; /* Smaller date header text */
-    height: 16px !important;
+  /* 5 Weeks (More space, slightly larger text) */
+  body.print-5-weeks .week-grid th, 
+  body.print-5-weeks .week-grid td {
+    height: 14px !important; 
+    font-size: 8px !important; 
+    line-height: 1.1 !important;
+  }
+  body.print-5-weeks .week-grid thead th {
+    height: 18px !important;
+    font-size: 7px !important;
   }
 
-  /* Adjust column widths for print */
-  .week-grid .col-sn { width: 50px !important; }
-  .week-grid .col-name { width: 140px !important; font-size: 9px !important; }
-  .week-grid .col-date { width: auto !important; }
+  /* 6 Weeks (Tighter space, smaller text to force fit on 1 page) */
+  body.print-6-weeks .week-grid th, 
+  body.print-6-weeks .week-grid td {
+    height: 10px !important; 
+    font-size: 6.5px !important; 
+    line-height: 1 !important;
+    padding: 0 !important;
+  }
+  body.print-6-weeks .week-grid thead th {
+    height: 14px !important;
+    font-size: 6px !important;
+  }
+  body.print-6-weeks .week-label {
+    font-size: 7px !important;
+  }
 
   /* Force all the colors to print exactly as seen on screen */
   .week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; }
