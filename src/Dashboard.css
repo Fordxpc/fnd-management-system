@@ -288,24 +288,20 @@
 }
 .week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; font-weight: 700; height: 20px; font-size: 8px; }
 
-/* INCREASED NAME WIDTH */
 .week-grid .col-sn { width: 55px; font-weight: 600; text-align: left; }
 .week-grid .col-name { width: 160px; text-align: left; font-weight: 600; font-size: 10px; }
 
-/* Alternating empty rows */
 .week-grid tbody tr:nth-child(odd) td.empty-cell { background-color: #ffffff; }
 .week-grid tbody tr:nth-child(even) td.empty-cell { background-color: #fdf6e3; }
 .week-grid tbody tr:nth-child(odd) td.col-sn, .week-grid tbody tr:nth-child(odd) td.col-name { background-color: #ffffff; }
 .week-grid tbody tr:nth-child(even) td.col-sn, .week-grid tbody tr:nth-child(even) td.col-name { background-color: #fdf6e3; }
 
-/* --- SHIFT COLORS --- */
 .week-grid tbody td.shift-morning { background-color: #d1fae5 !important; color: #065f46 !important; font-weight: bold; }
 .week-grid tbody td.shift-day { background-color: #dbeafe !important; color: #1e40af !important; font-weight: bold; }
 .week-grid tbody td.shift-afternoon { background-color: #ffedd5 !important; color: #9a3412 !important; font-weight: bold; }
 .week-grid tbody td.shift-night { background-color: #f3e8ff !important; color: #6b21a8 !important; font-weight: bold; }
 .week-grid tbody td.shift-custom { background-color: #f1f5f9 !important; color: #334155 !important; font-weight: bold; }
 
-/* --- LEAVE COLORS --- */
 .week-grid tbody td.leave-off { background-color: #fecaca !important; color: #991b1b !important; font-weight: bold; }
 .week-grid tbody td.leave-annual { background-color: #dc2626 !important; color: #ffffff !important; font-weight: bold; }
 .week-grid tbody td.leave-sick { background-color: #f59e0b !important; color: #ffffff !important; font-weight: bold; }
@@ -353,11 +349,11 @@
 .cancel-btn { padding: 10px 18px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 .modal-actions .submit-btn { padding: 10px 18px; color: #ffffff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; background: #2563eb; }
 
-/* ==================== PRINT STYLES (ROSTER) ==================== */
+/* ==================== PRINT STYLES (SMART LAYOUTS) ==================== */
 @media print {
   @page { size: A4 landscape; margin: 4mm; }
   
-  /* Hide everything except the roster grid */
+  /* Hide UI */
   .sidebar, .top-tabs-container, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col {
     display: none !important;
   }
@@ -371,15 +367,16 @@
   .roster-export-area {
     box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; border: none !important; zoom: 1 !important;
+    height: 100% !important;
   }
   
   .roster-title { margin-bottom: 4px !important; }
   .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 16px !important; margin: 0 !important; padding: 0 !important; font-weight: 900 !important; text-transform: uppercase !important; }
 
-  .roster-week-section { margin-bottom: 8px !important; page-break-inside: avoid; }
+  .roster-week-section { margin-bottom: 8px !important; page-break-inside: avoid !important; break-inside: avoid !important; }
   .week-label { font-size: 11px !important; margin: 0 0 2px 0 !important; padding: 0 !important; line-height: 1 !important; font-weight: bold !important; }
 
-  /* Base Table Setup */
+  /* Base Table */
   .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
     border: 1px solid #000 !important; 
@@ -392,60 +389,42 @@
   .week-grid .col-sn { width: 55px !important; }
   .week-grid .col-name { width: 160px !important; font-size: 11px !important; }
 
-  /* =========================================================
-     MODE 1: ALL DEPARTMENTS (1 week per page)
-     ========================================================= */
+  /* MODE 1: ALL DEPARTMENTS (1 week per page) */
   body.print-all .roster-week-section { 
     page-break-after: always !important; 
-    page-break-inside: avoid !important;
-    margin-bottom: 0 !important;
+    break-after: page !important;
   }
   body.print-all .roster-week-section:last-child { 
     page-break-after: auto !important; 
+    break-after: auto !important;
   }
-  body.print-all .week-grid th, 
-  body.print-all .week-grid td {
-    height: 30px !important; /* Taller rows because it's only 1 week on the page */
-    font-size: 14px !important; 
-    line-height: 1.2 !important;
+  body.print-all .week-grid th, body.print-all .week-grid td {
+    height: 30px !important; font-size: 14px !important; line-height: 1.2 !important;
   }
   body.print-all .week-grid thead th {
-    height: 36px !important;
-    font-size: 12px !important;
+    height: 36px !important; font-size: 12px !important;
   }
 
-  /* =========================================================
-     MODE 2: LARGE DEPARTMENTS (Ops, Maintenance, Security)
-     ========================================================= */
-  body.print-large .week-grid th, 
-  body.print-large .week-grid td {
-    height: 20px !important; /* Compact to fit 6 weeks on 1 page */
-    font-size: 9px !important; 
-    line-height: 1.1 !important;
+  /* MODE 2: LARGE DEPARTMENTS (Fit tightly to 1 page) */
+  body.print-large .week-grid th, body.print-large .week-grid td {
+    height: 20px !important; font-size: 9px !important; line-height: 1.1 !important;
   }
   body.print-large .week-grid thead th {
-    height: 24px !important;
-    font-size: 8px !important;
+    height: 24px !important; font-size: 8px !important;
   }
 
-  /* =========================================================
-     MODE 3: SMALL DEPARTMENTS (Admin, Safety, Fire)
-     ========================================================= */
-  body.print-small .week-grid th, 
-  body.print-small .week-grid td {
-    height: 40px !important; /* Stretch out to fill the page and look nice */
-    font-size: 14px !important; 
-    line-height: 1.2 !important;
+  /* MODE 3: SMALL DEPARTMENTS (Stretch to fill page) */
+  body.print-small .week-grid th, body.print-small .week-grid td {
+    height: 40px !important; font-size: 14px !important; line-height: 1.2 !important;
   }
   body.print-small .week-grid thead th {
-    height: 45px !important;
-    font-size: 12px !important;
+    height: 45px !important; font-size: 12px !important;
   }
   body.print-small .roster-week-section {
     margin-bottom: 20px !important;
   }
 
-  /* Force all the colors to print exactly as seen on screen */
+  /* Colors */
   .week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; }
   .shift-morning { background-color: #d1fae5 !important; }
   .shift-day { background-color: #dbeafe !important; }

@@ -70,11 +70,10 @@ const getShortLeave = (status: string) => {
   if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
   if (status === 'OFF DAY') return 'OFF';
   if (status === 'ABSENT') return 'AB';
-  if (status === 'LATE') return 'LT';
+  if (status === 'LATE') return 'LATE';
   return status;
 };
 
-// COLOR CODING FUNCTIONS
 const getShiftColorClass = (time: string) => {
   if (time.includes('06:00 - 14:00')) return 'shift-morning';
   if (time.includes('08:00 - 16:00')) return 'shift-day';
@@ -155,6 +154,21 @@ function RosterPage() {
     })
     .sort(sortStaff);
 
+  // AUTO-DETECT PRINT LAYOUT
+  useEffect(() => {
+    document.body.classList.remove('print-all', 'print-large', 'print-small');
+    
+    if (selectedDept === 'all' && isAdmin) {
+      document.body.classList.add('print-all');
+    } else {
+      if (visibleStaff.length > 8) {
+        document.body.classList.add('print-large');
+      } else {
+        document.body.classList.add('print-small');
+      }
+    }
+  }, [weeks.length, selectedDept, visibleStaff.length, isAdmin]);
+
   useEffect(() => {
     const unsubStaff = onSnapshot(collection(db, 'staff'), (snapshot) => {
       setStaff(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
@@ -166,26 +180,6 @@ function RosterPage() {
   }, []);
 
   useEffect(() => { setBulkStartDate(formatDate(periodStart)); setBulkEndDate(formatDate(periodEnd)); }, [periodStart]);
-
-      // Auto-detect layout for printing
-  useEffect(() => {
-    document.body.classList.remove('print-all', 'print-large', 'print-small');
-    
-    // 1. If "All Departments" is selected, 1 week per page
-    if (selectedDept === 'all' && isAdmin) {
-      document.body.classList.add('print-all');
-    } 
-    // 2. If individual department, check staff count
-    else {
-      if (visibleStaff.length > 8) {
-        // Large departments (Ops, Security, Maintenance)
-        document.body.classList.add('print-large');
-      } else {
-        // Small departments (Admin, Safety, Fire)
-        document.body.classList.add('print-small');
-      }
-    }
-  }, [weeks.length, selectedDept, visibleStaff.length, isAdmin]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
@@ -365,21 +359,12 @@ function RosterPage() {
     try {
       const canvas = await captureCanvas(); if (!canvas) return;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      
-      // Force landscape A4
       const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth(); 
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
-      // Calculate scaling to fit on 1 page
-      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
-      const imgW = canvas.width * ratio; 
-      const imgH = canvas.height * ratio;
-      
-      // Center the image
-      const imgX = (pageWidth - imgW) / 2; 
-      const imgY = (pageHeight - imgH) / 2;
-      
+      const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 8; const availWidth = pageWidth - margin * 2; const availHeight = pageHeight - margin * 2;
+      const ratio = Math.min(availWidth / canvas.width, availHeight / canvas.height);
+      const imgW = canvas.width * ratio; const imgH = canvas.height * ratio;
+      const imgX = (pageWidth - imgW) / 2; const imgY = (pageHeight - imgH) / 2;
       pdf.addImage(imgData, 'JPEG', imgX, imgY, imgW, imgH);
       pdf.save(`FND-Roster-${formatDate(periodStart)}.pdf`);
       toast.success('PDF downloaded!');
@@ -398,7 +383,6 @@ function RosterPage() {
         <h2>Duty Roster</h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           
-          {/* ZOOM CONTROLS */}
           <div style={{ display: 'flex', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
             <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}>A-</button>
             <div style={{ padding: '8px 12px', background: '#fff', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1' }}>
@@ -520,8 +504,6 @@ function RosterPage() {
                       
                       if (entry) {
                         displayValue = entry.status === 'scheduled' ? entry.shiftTime : getShortLeave(entry.status);
-                        
-                        // APPLY NEW COLOR CLASSES
                         if (entry.status === 'scheduled') {
                           cellClass = getShiftColorClass(entry.shiftTime);
                         } else {
