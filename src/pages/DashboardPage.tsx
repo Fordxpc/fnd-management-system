@@ -26,6 +26,17 @@ const getYearsOfService = (joinDateStr: string): number => {
   return years;
 };
 
+// Open-Meteo Weather Codes to Text/Icon mapping
+const getWeatherInfo = (code: number) => {
+  if (code === 0) return { text: 'Clear Sky', icon: '☀️' };
+  if (code >= 1 && code <= 3) return { text: 'Partly Cloudy', icon: '⛅' };
+  if (code >= 45 && code <= 48) return { text: 'Fog', icon: '🌫️' };
+  if (code >= 51 && code <= 67) return { text: 'Rain', icon: '🌧️' };
+  if (code >= 80 && code <= 82) return { text: 'Showers', icon: '🌦️' };
+  if (code >= 95) return { text: 'Thunderstorm', icon: '⛈️' };
+  return { text: 'Clear', icon: '☀️' };
+};
+
 interface Props { onNavigate?: (page: string) => void; }
 
 function DashboardPage({ onNavigate }: Props) {
@@ -35,12 +46,21 @@ function DashboardPage({ onNavigate }: Props) {
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [otEntries, setOtEntries] = useState<any[]>([]);
   const [flights, setFlights] = useState<any[]>([]);
-  const [liveRamp, setLiveRamp] = useState<any>(null); // NEW: Live ramp sheet data
+  const [liveRamp, setLiveRamp] = useState<any>(null);
+  
+  // FOD & Weather states
+  const [todayFOD, setTodayFOD] = useState<any[]>([]);
+  const [weather, setWeather] = useState<any>(null);
 
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
   const [showMyBalance, setShowMyBalance] = useState(true);
   const [showMyOT, setShowMyOT] = useState(true);
+
+  const todayStr = formatDate(new Date());
+  const thisMonth = todayStr.slice(0, 7);
+  const nowTime = new Date().toTimeString().slice(0, 5);
+  const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'staff'), (s) => setStaff(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
@@ -52,25 +72,35 @@ function DashboardPage({ onNavigate }: Props) {
       if (docSnap.exists()) setLiveRamp(docSnap.data());
       else setLiveRamp(null);
     });
+    const u7 = onSnapshot(collection(db, 'fod_collections'), (s) => {
+      const allFod = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      setTodayFOD(allFod.filter((f: any) => f.date === todayStr));
+    });
 
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
-  }, []);
+    // Fetch Weather (Funadhoo Airport Lat: 6.1614, Lon: 73.2864)
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current_weather=true')
+      .then(res => res.json())
+      .then(data => setWeather(data.current_weather))
+      .catch(err => console.error("Weather fetch failed", err));
+
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
+  }, [todayStr]);
 
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
   const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
 
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
-  const todayStr = formatDate(new Date());
-  const thisMonth = todayStr.slice(0, 7);
-  const nowTime = new Date().toTimeString().slice(0, 5);
-  const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
-
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
-
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   const todayShifts = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
   const todayLeave = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
+
+  // Total FOD today
+  const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
+
+  // --- Today's Flights ---
+  const todaysFlights = flights.filter(f => f.date === todayStr).sort((a, b) => (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00'));
 
   // --- Find Next Flight ---
   const upcomingFlights = flights
@@ -89,22 +119,11 @@ function DashboardPage({ onNavigate }: Props) {
 
   // --- LIVE STATUS LOGIC FROM RAMP CHECK SHEET ---
   let liveStatus = nextFlight?.status || 'On Time';
-  let liveEta = nextFlight?.checkInTime || '—';
-  let liveAta = nextFlight?.arrivalTime || '—';
-  let liveAtd = nextFlight?.departureTime || '—';
-
-  if (nextFlight && liveRamp) {
-    // If the currently drafted flight on the check sheet matches the next flight
-    if (liveRamp.fltNo === nextFlight.flightNo) {
-      if (liveRamp.atd) liveStatus = 'Departed';
-      else if (liveRamp.boarding) liveStatus = 'Boarding';
-      else if (liveRamp.ata) liveStatus = 'Landed';
-      else if (liveRamp.eta || liveRamp.sta) liveStatus = 'Expected';
-      
-      if (liveRamp.eta) liveEta = liveRamp.eta;
-      if (liveRamp.ata) liveAta = liveRamp.ata;
-      if (liveRamp.atd) liveAtd = liveRamp.atd;
-    }
+  if (nextFlight && liveRamp && liveRamp.fltNo === nextFlight.flightNo) {
+    if (liveRamp.atd) liveStatus = 'Departed';
+    else if (liveRamp.boarding) liveStatus = 'Boarding';
+    else if (liveRamp.ata) liveStatus = 'Landed';
+    else if (liveRamp.eta || liveRamp.sta) liveStatus = 'Expected';
   }
 
   // --- My Leave Balance ---
@@ -165,35 +184,17 @@ function DashboardPage({ onNavigate }: Props) {
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {nextFlight && <span style={{ fontSize: '11px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 700, transition: 'all 0.3s' }}>{liveStatus}</span>}
+            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800, transition: 'all 0.3s' }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '10px', marginBottom: '8px' }}>
-                  <div style={{ fontSize: '28px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
-                  <div style={{ fontSize: '12px', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
-                  <div style={{ fontSize: '11px', background: '#3b82f6', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
-                </div>
-                <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: '#93c5fd' }}>{nextFlight.route}</div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '12px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '32px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
+                <div style={{ fontSize: '13px', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
+                <div style={{ fontSize: '12px', background: '#3b82f6', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
               </div>
-
-              {/* Flight Times Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>ETA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{liveEta}</div>
-                </div>
-                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>ATA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: liveAta !== '—' ? '#86efac' : '#cbd5e1' }}>{liveAta}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>ATD</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: liveAtd !== '—' ? '#93c5fd' : '#cbd5e1' }}>{liveAtd}</div>
-                </div>
-              </div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
             </div>
           ) : (
             <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px', textAlign: 'center' }}>No upcoming flights scheduled.</div>
@@ -206,20 +207,51 @@ function DashboardPage({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* DAILY OPS LINK */}
-        <div className="dash-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', border: '1px solid #bbf7d0' }}>
-          <div style={{ fontSize: '40px', marginBottom: '10px' }}>📋</div>
-          <h3 style={{ color: '#065f46', margin: '0 0 8px', fontSize: '16px' }}>Daily Ops Board</h3>
-          <p style={{ color: '#047857', fontSize: '12px', marginBottom: '16px' }}>Runway Checks, FOD Collection, Ground Tasks</p>
-          <button 
-            onClick={() => onNavigate && onNavigate('opsboard')}
-            className="add-staff-btn" 
-            style={{ background: '#059669', display: 'inline-block' }}
-          >
-            Open Ops Board
-          </button>
-        </div>
+        {/* TODAY'S FLIGHTS & WEATHER */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          {/* LIVE WEATHER */}
+          <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
+            <div>
+              <h3 style={{ color: '#e0f2fe', margin: '0 0 4px', fontSize: '14px' }}>🌤️ Funadhoo Weather</h3>
+              {weather ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '32px' }}>{getWeatherInfo(weather.weathercode).icon}</span>
+                  <div>
+                    <div style={{ fontSize: '24px', fontWeight: 900 }}>{weather.temperature}°C</div>
+                    <div style={{ fontSize: '12px', color: '#bae6fd' }}>{getWeatherInfo(weather.weathercode).text} · Wind {weather.windspeed} km/h</div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: '13px' }}>Loading weather...</div>
+              )}
+            </div>
+            <div style={{ textAlign: 'right', fontSize: '11px', color: '#bae6fd' }}>
+              Live Sync<br/>Open-Meteo
+            </div>
+          </div>
 
+          {/* TODAY'S FLIGHTS LIST */}
+          <div className="dash-card" style={{ flex: 1, padding: '16px 20px' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '15px' }}>📅 Today's Flights ({todaysFlights.length})</h3>
+            {todaysFlights.length === 0 ? (
+              <p style={{ fontSize: '13px', color: '#64748b' }}>No flights scheduled for today.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '100px', overflowY: 'auto' }}>
+                {todaysFlights.map(f => (
+                  <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: '#1e293b' }}>{f.flightNo}</span>
+                      <span style={{ fontSize: '12px', color: '#64748b' }}>{f.route}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>{f.departureTime || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
 
       <div className="dash-stats">
@@ -234,6 +266,11 @@ function DashboardPage({ onNavigate }: Props) {
         <div className="stat-card" onClick={() => onNavigate && onNavigate('roster')}>
           <div className="stat-icon" style={{ background: '#dcfce7', color: '#065f46' }}>📅</div>
           <div><div className="stat-value">{todayShifts.length}</div><div className="stat-label">On Duty Today</div></div>
+        </div>
+        {/* FOD STAT CARD */}
+        <div className="stat-card" onClick={() => onNavigate && onNavigate('opsboard')}>
+          <div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>🪨</div>
+          <div><div className="stat-value">{totalFODGrams}g</div><div className="stat-label">FOD Collected Today</div></div>
         </div>
       </div>
 

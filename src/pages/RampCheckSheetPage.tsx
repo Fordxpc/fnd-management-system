@@ -35,7 +35,6 @@ function RampCheckSheetPage() {
 
   const typingTimer = useRef<any>(null);
 
-  // Load Dropdowns
   useEffect(() => {
     const savedAc = JSON.parse(localStorage.getItem('acTypes') || '[]');
     setAcTypes([...new Set([...DEFAULT_AC_TYPES, ...savedAc])]);
@@ -44,7 +43,6 @@ function RampCheckSheetPage() {
     setRouteCodes([...new Set([...DEFAULT_ROUTE_CODES, ...savedRoutes])]);
   }, []);
 
-  // Live Sync Listener
   useEffect(() => {
     const liveDoc = doc(db, 'ramp_live_draft', 'current');
     const unsub = onSnapshot(liveDoc, (docSnap) => {
@@ -134,18 +132,15 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
-      // Exclude the Firestore doc id if it was loaded from a report
       const { id: _id, ...rest } = formData as any;
 
       if (currentDocId) {
-        // Update existing — preserve original createdAt, add updatedAt
         await setDoc(doc(db, 'ramp_inspections', currentDocId), {
           ...rest,
           updatedAt: new Date().toISOString(),
         }, { merge: true });
         toast.success('Record updated!');
       } else {
-        // Create new
         const ref = await addDoc(collection(db, 'ramp_inspections'), {
           ...rest,
           createdAt: new Date().toISOString(),
@@ -153,7 +148,8 @@ function RampCheckSheetPage() {
         setCurrentDocId(ref.id);
         toast.success('Record saved!');
       }
-      await setDoc(doc(db, 'ramp_live_draft', 'current'), {});
+      // REMOVED: await setDoc(doc(db, 'ramp_live_draft', 'current'), {}); 
+      // Draft stays live for external parties.
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -161,6 +157,7 @@ function RampCheckSheetPage() {
     if (!isManager) return;
     setFormData(INITIAL_FORM);
     setCurrentDocId(null);
+    // Clears live draft only when explicitly resetting to new record
     setDoc(doc(db, 'ramp_live_draft', 'current'), {});
     toast.success('Form cleared');
   };
@@ -174,7 +171,6 @@ function RampCheckSheetPage() {
     toast.success('Live View link copied! Share this with external parties.');
   };
 
-  // Task 5b: load an existing report into the form for editing
   const handleEditReport = (report: any) => {
     const { id, createdAt: _c, updatedAt: _u, ...rest } = report;
     setFormData({ ...INITIAL_FORM, ...rest });

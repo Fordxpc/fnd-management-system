@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -23,11 +23,13 @@ const DEFAULT_TASKS = [
   { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' },
 ];
 
+const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
 function OpsBoardPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
 
-  const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'history'>('runway');
+  const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
   const [staffPool, setStaffPool] = useState<string[]>(DEFAULT_STAFF);
   const [newStaff, setNewStaff] = useState('');
 
@@ -39,6 +41,11 @@ function OpsBoardPage() {
   const [tasks] = useState(DEFAULT_TASKS);
   const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>({});
   const groundRef = useRef<HTMLDivElement>(null);
+
+  // FOD State
+  const [fodList, setFodList] = useState<any[]>([]);
+  const [fodForm, setFodForm] = useState({ date: formatDate(new Date()), grams: '', remarks: '' });
+  const [fodSubmitting, setFodSubmitting] = useState(false);
 
   const [runwayHistory, setRunwayHistory] = useState<any[]>([]);
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
@@ -52,7 +59,10 @@ function OpsBoardPage() {
     const qGround = query(collection(db, 'ops_ground_history'), orderBy('createdAt', 'desc'), limit(200));
     const unsubG = onSnapshot(qGround, (snap) => setGroundHistory(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-    return () => { unsubR(); unsubG(); };
+    const qFod = query(collection(db, 'fod_collections'), orderBy('date', 'desc'), limit(200));
+    const unsubF = onSnapshot(qFod, (snap) => setFodList(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    return () => { unsubR(); unsubG(); unsubF(); };
   }, []);
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
@@ -108,10 +118,34 @@ function OpsBoardPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const handleSaveFOD = async (e: any) => {
+    e.preventDefault();
+    if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; }
+    setFodSubmitting(true);
+    try {
+      await addDoc(collection(db, 'fod_collections'), {
+        ...fodForm,
+        grams: Number(fodForm.grams),
+        loggedBy: user?.email || '',
+        createdAt: new Date().toISOString()
+      });
+      toast.success('FOD entry recorded!');
+      setFodForm({ date: formatDate(new Date()), grams: '', remarks: '' });
+    } catch (err: any) { toast.error(err.message); }
+    setFodSubmitting(false);
+  };
+
+  const handleDeleteFOD = async (id: string) => {
+    if (!window.confirm('Delete this FOD record?')) return;
+    try {
+      await deleteDoc(doc(db, 'fod_collections', id));
+      toast.success('FOD record deleted');
+    } catch (err: any) { toast.error(err.message); }
+  };
+
   const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
-
     const wrapper = document.createElement('div');
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
@@ -125,9 +159,6 @@ function OpsBoardPage() {
     clone.style.background = 'transparent';
     clone.style.overflow = 'visible';
 
-    // ===== TASK 4 FIX =====
-    // Force BOTH boards (Runway + Ground) into a stable 3-per-row layout.
-    // Additional task boxes wrap below as new rows, exactly like the RWY board.
     const grids = clone.querySelectorAll('.ops-grid-3');
     grids.forEach(g => {
       const el = g as HTMLElement;
@@ -139,7 +170,6 @@ function OpsBoardPage() {
       el.style.width = '100%';
     });
 
-    // Each task box takes exactly 1/3 — wraps to new rows below automatically
     clone.querySelectorAll('.ops-card').forEach(c => {
       const el = c as HTMLElement;
       el.style.width = '100%';
@@ -150,7 +180,6 @@ function OpsBoardPage() {
 
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
-    // Force a synchronous layout so html2canvas reads final grid sizes
     void wrapper.offsetHeight;
 
     try {
@@ -163,7 +192,6 @@ function OpsBoardPage() {
         windowHeight: wrapper.scrollHeight
       });
       document.body.removeChild(wrapper);
-
       const link = document.createElement('a');
       link.download = `${filename}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
@@ -237,6 +265,7 @@ function OpsBoardPage() {
       <div className="ops-tabs">
         <button className={`ops-tab-btn ${activeTab === 'runway' ? 'active' : ''}`} onClick={() => setActiveTab('runway')}>✈️ Runway Inspection</button>
         <button className={`ops-tab-btn ${activeTab === 'ground' ? 'active' : ''}`} onClick={() => setActiveTab('ground')}>🛬 Ground Task Allocation</button>
+        <button className={`ops-tab-btn ${activeTab === 'fod' ? 'active' : ''}`} onClick={() => setActiveTab('fod')}>🪨 FOD Collection</button>
         <button className={`ops-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📊 History & Reports</button>
       </div>
 
@@ -353,6 +382,58 @@ function OpsBoardPage() {
                 </ol>
               </div>
               <div style={{ textAlign: 'center', color: '#aaa', marginTop: '20px', fontSize: '14px' }}>{new Date().toLocaleString()}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== FOD TAB ===== */}
+      {activeTab === 'fod' && (
+        <div className="dash-grid">
+          {/* FOD Form */}
+          <div className="dash-card">
+            <h3>🪨 Log FOD Collection</h3>
+            <form onSubmit={handleSaveFOD} className="staff-form" style={{ gridTemplateColumns: '1fr', padding: 0, boxShadow: 'none' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date</label>
+                <input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} required />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Stone Count (grams)</label>
+                <input type="number" placeholder="e.g. 15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required />
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Remarks / Details</label>
+                <input placeholder="e.g. Small rocks found near RWY 19" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required />
+              </div>
+              <button type="submit" disabled={fodSubmitting} style={{ gridColumn: 'span 1' }}>
+                {fodSubmitting ? 'Saving...' : 'Save FOD Entry'}
+              </button>
+            </form>
+          </div>
+
+          {/* FOD List */}
+          <div className="dash-card">
+            <h3>📋 Recent FOD Collections</h3>
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              <table className="mini-table">
+                <thead><tr><th>Date</th><th>Grams</th><th>Remarks</th><th>Logged By</th><th></th></tr></thead>
+                <tbody>
+                  {fodList.length === 0 ? (
+                    <tr><td colSpan={5} style={{ textAlign: 'center' }}>No FOD records yet.</td></tr>
+                  ) : fodList.map(f => (
+                    <tr key={f.id}>
+                      <td>{f.date}</td>
+                      <td style={{ fontWeight: 800, color: '#dc2626' }}>{f.grams}g</td>
+                      <td style={{ fontSize: '12px' }}>{f.remarks}</td>
+                      <td style={{ fontSize: '11px', color: '#64748b' }}>{f.loggedBy.split('@')[0]}</td>
+                      <td>
+                        {isManager && <button className="delete-btn" onClick={() => handleDeleteFOD(f.id)}>Delete</button>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
