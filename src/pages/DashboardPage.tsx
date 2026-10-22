@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
@@ -12,12 +12,6 @@ const formatDate = (date: Date): string => {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
-};
-
-const formatDisplay = (dateStr: string): string => {
-  if (!dateStr) return '';
-  const parts = dateStr.split('-');
-  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
 };
 
 const ANNUAL_LEAVE_TOTAL = 30;
@@ -41,6 +35,7 @@ function DashboardPage({ onNavigate }: Props) {
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [otEntries, setOtEntries] = useState<any[]>([]);
   const [flights, setFlights] = useState<any[]>([]);
+  const [liveRamp, setLiveRamp] = useState<any>(null); // NEW: Live ramp sheet data
 
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
@@ -53,7 +48,12 @@ function DashboardPage({ onNavigate }: Props) {
     const u3 = onSnapshot(collection(db, 'leave_requests'), (s) => setLeaveReqs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u4 = onSnapshot(collection(db, 'overtime_entries'), (s) => setOtEntries(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u5 = onSnapshot(collection(db, 'flights'), (s) => setFlights(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    return () => { u1(); u2(); u3(); u4(); u5(); };
+    const u6 = onSnapshot(doc(db, 'ramp_live_draft', 'current'), (docSnap) => {
+      if (docSnap.exists()) setLiveRamp(docSnap.data());
+      else setLiveRamp(null);
+    });
+
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
   }, []);
 
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
@@ -75,7 +75,6 @@ function DashboardPage({ onNavigate }: Props) {
   // --- Find Next Flight ---
   const upcomingFlights = flights
     .filter(f => {
-      // Use departureTime as the main sort time, fallback to arrivalTime
       const fTime = f.departureTime || f.arrivalTime || '00:00';
       return f.date > todayStr || (f.date === todayStr && fTime >= nowTime);
     })
@@ -87,6 +86,26 @@ function DashboardPage({ onNavigate }: Props) {
       return aTime.localeCompare(bTime);
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
+
+  // --- LIVE STATUS LOGIC FROM RAMP CHECK SHEET ---
+  let liveStatus = nextFlight?.status || 'On Time';
+  let liveEta = nextFlight?.checkInTime || '—';
+  let liveAta = nextFlight?.arrivalTime || '—';
+  let liveAtd = nextFlight?.departureTime || '—';
+
+  if (nextFlight && liveRamp) {
+    // If the currently drafted flight on the check sheet matches the next flight
+    if (liveRamp.fltNo === nextFlight.flightNo) {
+      if (liveRamp.atd) liveStatus = 'Departed';
+      else if (liveRamp.boarding) liveStatus = 'Boarding';
+      else if (liveRamp.ata) liveStatus = 'Landed';
+      else if (liveRamp.eta || liveRamp.sta) liveStatus = 'Expected';
+      
+      if (liveRamp.eta) liveEta = liveRamp.eta;
+      if (liveRamp.ata) liveAta = liveRamp.ata;
+      if (liveRamp.atd) liveAtd = liveRamp.atd;
+    }
+  }
 
   // --- My Leave Balance ---
   let myLeaveUsed = 0;
@@ -140,14 +159,13 @@ function DashboardPage({ onNavigate }: Props) {
         <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department}</p>
       </div>
 
-      {/* QUICK OPS HEADER */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
         
         {/* NEXT FLIGHT WIDGET */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {nextFlight && <span style={{ fontSize: '11px', background: '#2563eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 700 }}>{nextFlight.status}</span>}
+            {nextFlight && <span style={{ fontSize: '11px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '4px 10px', borderRadius: '20px', fontWeight: 700, transition: 'all 0.3s' }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
@@ -156,6 +174,7 @@ function DashboardPage({ onNavigate }: Props) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '10px', marginBottom: '8px' }}>
                   <div style={{ fontSize: '28px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
                   <div style={{ fontSize: '12px', background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
+                  <div style={{ fontSize: '11px', background: '#3b82f6', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
                 </div>
                 <div style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: '#93c5fd' }}>{nextFlight.route}</div>
               </div>
@@ -163,16 +182,16 @@ function DashboardPage({ onNavigate }: Props) {
               {/* Flight Times Grid */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
                 <div>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>Check-in</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{nextFlight.checkInTime || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>ETA</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px' }}>{liveEta}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>Arrival</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: '#86efac' }}>{nextFlight.arrivalTime || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>ATA</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: liveAta !== '—' ? '#86efac' : '#cbd5e1' }}>{liveAta}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>Departure</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600, textTransform: 'uppercase' }}>ATD</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, marginTop: '2px', color: liveAtd !== '—' ? '#93c5fd' : '#cbd5e1' }}>{liveAtd}</div>
                 </div>
               </div>
             </div>
@@ -233,7 +252,6 @@ function DashboardPage({ onNavigate }: Props) {
         </div>
       )}
 
-      {/* LEAVE & OT WIDGETS */}
       <div className="dash-grid" style={{ marginBottom: '20px' }}>
         {myStaff && (
           <div className="collapsible-card" style={{ margin: 0 }}>

@@ -629,3 +629,48 @@
   .week-grid .col-name { width: 90px !important; min-width: 90px !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
   .week-grid .col-date { min-width: 65px !important; padding: 0 2px !important; }
 }
+/* ==================== FIXED ROSTER HEADING ==================== */
+.roster-title h1 { 
+  font-size: 20px !important; 
+  font-weight: 900 !important; 
+  color: #0f172a !important; 
+  letter-spacing: 1px !important; 
+  margin-bottom: 12px !important;
+}
+
+/* ==================== NICE OPS TABS ==================== */
+.ops-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  background: #ffffff;
+  padding: 8px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.ops-tab-btn {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 8px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.ops-tab-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.ops-tab-btn.active {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+}
