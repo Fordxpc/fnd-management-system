@@ -26,7 +26,6 @@ const getYearsOfService = (joinDateStr: string): number => {
   return years;
 };
 
-// Open-Meteo Weather Codes to Text/Icon mapping
 const getWeatherInfo = (code: number) => {
   if (code === 0) return { text: 'Clear Sky', icon: '☀️' };
   if (code >= 1 && code <= 3) return { text: 'Partly Cloudy', icon: '⛅' };
@@ -47,8 +46,6 @@ function DashboardPage({ onNavigate }: Props) {
   const [otEntries, setOtEntries] = useState<any[]>([]);
   const [flights, setFlights] = useState<any[]>([]);
   const [liveRamp, setLiveRamp] = useState<any>(null);
-  
-  // FOD & Weather states
   const [todayFOD, setTodayFOD] = useState<any[]>([]);
   const [weather, setWeather] = useState<any>(null);
 
@@ -61,6 +58,9 @@ function DashboardPage({ onNavigate }: Props) {
   const thisMonth = todayStr.slice(0, 7);
   const nowTime = new Date().toTimeString().slice(0, 5);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+
+  // Get display name from Auth profile or Email prefix
+  const displayName = profile?.name || user?.email?.split('@')[0] || 'User';
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'staff'), (s) => setStaff(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
@@ -77,7 +77,6 @@ function DashboardPage({ onNavigate }: Props) {
       setTodayFOD(allFod.filter((f: any) => f.date === todayStr));
     });
 
-    // Fetch Weather (Funadhoo Airport Lat: 6.1614, Lon: 73.2864)
     fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current_weather=true')
       .then(res => res.json())
       .then(data => setWeather(data.current_weather))
@@ -96,13 +95,10 @@ function DashboardPage({ onNavigate }: Props) {
   const todayLeave = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
 
-  // Total FOD today
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
 
-  // --- Today's Flights ---
   const todaysFlights = flights.filter(f => f.date === todayStr).sort((a, b) => (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00'));
 
-  // --- Find Next Flight ---
   const upcomingFlights = flights
     .filter(f => {
       const fTime = f.departureTime || f.arrivalTime || '00:00';
@@ -117,7 +113,6 @@ function DashboardPage({ onNavigate }: Props) {
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
-  // --- LIVE STATUS LOGIC FROM RAMP CHECK SHEET ---
   let liveStatus = nextFlight?.status || 'On Time';
   if (nextFlight && liveRamp && liveRamp.fltNo === nextFlight.flightNo) {
     if (liveRamp.atd) liveStatus = 'Departed';
@@ -126,7 +121,6 @@ function DashboardPage({ onNavigate }: Props) {
     else if (liveRamp.eta || liveRamp.sta) liveStatus = 'Expected';
   }
 
-  // --- My Leave Balance ---
   let myLeaveUsed = 0;
   if (myStaff) {
     const years = getYearsOfService(myStaff.joinDate || '');
@@ -138,7 +132,6 @@ function DashboardPage({ onNavigate }: Props) {
   }
   const myBalance = ANNUAL_LEAVE_TOTAL - myLeaveUsed;
 
-  // --- My OT Stats ---
   const myOTThisMonth = myStaff ? otEntries.filter(e => e.staffId === myStaff.id && (e.date || '').startsWith(thisMonth)) : [];
   const myOTWeekday = myOTThisMonth.filter(e => e.otType === 'Weekday OT' || !e.otType).reduce((sum, e) => sum + (e.hours || 0), 0);
   const myOTFriday = myOTThisMonth.filter(e => e.otType === 'Friday / Off-day OT').reduce((sum, e) => sum + (e.hours || 0), 0);
@@ -174,8 +167,8 @@ function DashboardPage({ onNavigate }: Props) {
   return (
     <div className="page-content">
       <div className="dash-welcome">
-        <h2>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {myStaff?.name || 'User'}</h2>
-        <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department}</p>
+        <h2>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {displayName}</h2>
+        <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department || 'All Depts'}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
@@ -267,10 +260,13 @@ function DashboardPage({ onNavigate }: Props) {
           <div className="stat-icon" style={{ background: '#dcfce7', color: '#065f46' }}>📅</div>
           <div><div className="stat-value">{todayShifts.length}</div><div className="stat-label">On Duty Today</div></div>
         </div>
-        {/* FOD STAT CARD */}
         <div className="stat-card" onClick={() => onNavigate && onNavigate('opsboard')}>
           <div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>🪨</div>
           <div><div className="stat-value">{totalFODGrams}g</div><div className="stat-label">FOD Collected Today</div></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: '#f3e8ff', color: '#6b21a8' }}>🦅</div>
+          <div><div className="stat-value">0</div><div className="stat-label">Wildlife Today</div></div>
         </div>
       </div>
 
@@ -323,7 +319,15 @@ function DashboardPage({ onNavigate }: Props) {
         )}
       </div>
 
+      {/* ZONE MAP PLACEHOLDER & CHARTS */}
       <div className="dash-grid" style={{ marginBottom: '20px' }}>
+        <div className="dash-card">
+          <h3>🗺️ Zone Map</h3>
+          <div style={{ background: '#f1f5f9', height: '200px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', color: '#94a3b8', fontWeight: 600 }}>
+            Zone Map Image Placeholder (Coming Soon)
+          </div>
+        </div>
+
         <div className="dash-card">
           <h3>🏢 Staff by Department</h3>
           <div style={{ width: '100%', height: 200 }}>
@@ -335,22 +339,6 @@ function DashboardPage({ onNavigate }: Props) {
                 <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="dash-card">
-          <h3>🌴 Approved Leave Types</h3>
-          <div style={{ width: '100%', height: 200 }}>
-            {leaveTypeData.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}>No approved leaves yet.</p> : (
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={leaveTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
-                    {leaveTypeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
           </div>
         </div>
       </div>

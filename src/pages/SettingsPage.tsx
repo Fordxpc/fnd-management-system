@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
+import { db, auth } from '../firebase'; // Imported auth
+import { sendPasswordResetEmail } from 'firebase/auth'; // Imported reset function
 import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -14,6 +15,10 @@ function SettingsPage() {
   const [otRates, setOtRates] = useState({ weekday: 1.25, friday: 1.5, holiday: 1.5 });
   const [savingRates, setSavingRates] = useState(false);
   const [counts, setCounts] = useState({ staff: 0, rosterEntries: 0, leaveRequests: 0, users: 0 });
+
+  // Password reset state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -39,6 +44,24 @@ function SettingsPage() {
       toast.success('Overtime rates updated!');
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingRates(false);
+  };
+
+  const handleSendReset = async (e: any) => {
+    e.preventDefault();
+    if (!resetEmail) return;
+    setResetting(true);
+    try {
+      await sendPasswordResetEmail(auth, resetEmail);
+      toast.success(`Password reset email sent to ${resetEmail}`);
+      setResetEmail('');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        toast.error('No user found with this email address.');
+      } else {
+        toast.error(err.message);
+      }
+    }
+    setResetting(false);
   };
 
   return (
@@ -127,7 +150,30 @@ function SettingsPage() {
             <div>Leave Requests: <strong>{counts.leaveRequests}</strong></div>
             <div>Active Users: <strong>{counts.users}</strong></div>
           </div>
-          <a href="https://console.firebase.google.com/project/fnd-ops-management/firestore" target="_blank" rel="noreferrer" className="quick-btn inline-block mt-4 text-decoration-none">🔗 Open Firebase Console</a>
+          
+          <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px', marginTop: '16px' }}>
+            <h4 style={{ margin: '0 0 8px', color: '#dc2626' }}>Send User Password Reset</h4>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+              Send a reset link to a user's email address (uses Firebase Auth).
+            </p>
+            <form onSubmit={handleSendReset} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <input 
+                type="email" 
+                placeholder="user@funadhooairport.com" 
+                value={resetEmail} 
+                onChange={e => setResetEmail(e.target.value)} 
+                style={{ flex: 1, padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontFamily: 'inherit', minWidth: '200px' }}
+                required
+              />
+              <button type="submit" disabled={resetting} className="quick-btn" style={{ background: '#dc2626', color: 'white', padding: '10px 20px' }}>
+                {resetting ? 'Sending...' : 'Send Reset'}
+              </button>
+            </form>
+          </div>
+
+          <div style={{ marginTop: '24px' }}>
+            <a href="https://console.firebase.google.com/project/fnd-ops-management/firestore" target="_blank" rel="noreferrer" className="quick-btn inline-block text-decoration-none">🔗 Open Firebase Console</a>
+          </div>
         </div>
       )}
 

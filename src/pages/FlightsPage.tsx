@@ -31,7 +31,6 @@ function FlightsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Form State
   const [flightNo, setFlightNo] = useState('Q2-');
   const [type, setType] = useState('Scheduled');
   const [aircraft, setAircraft] = useState('DH-8/300');
@@ -130,6 +129,54 @@ function FlightsPage() {
     .filter(f => f.date === dateFilter)
     .sort((a, b) => (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00'));
 
+  const completedStatuses = ['Departed', 'Landed', 'Cancelled'];
+  const departedFlights = visibleFlights.filter(f => completedStatuses.includes(f.status));
+  const scheduledFlights = visibleFlights.filter(f => !completedStatuses.includes(f.status));
+
+  const FlightCard = ({ f }: { f: any }) => (
+    <div className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0' }}>
+      <div style={{ background: f.type === 'Air Ambulance' ? '#fef2f2' : f.type === 'Additional' ? '#fef3c7' : '#eff6ff', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h3 style={{ margin: 0, fontSize: '22px', color: f.type === 'Air Ambulance' ? '#991b1b' : f.type === 'Additional' ? '#92400e' : '#1e40af' }}>{f.flightNo}</h3>
+          <span style={{ background: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, border: '1px solid #cbd5e1' }}>{f.aircraft}</span>
+          <span style={{ background: f.type === 'Air Ambulance' ? '#dc2626' : f.type === 'Additional' ? '#f59e0b' : '#2563eb', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700 }}>{f.type}</span>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>BOOKED</div>
+          <div style={{ fontSize: '16px', fontWeight: 800 }}>{f.bookedFigure || '—'}</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', padding: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>ARRIVAL</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>DEPARTURE</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
+        </div>
+
+        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, letterSpacing: '1px', marginBottom: '8px' }}>ROUTE</div>
+          <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '2px', color: '#1e293b' }}>{f.route}</div>
+          {f.originDepTime && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px', fontWeight: 600 }}>Origin Dep: {f.originDepTime}</div>}
+        </div>
+
+        <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>STATUS</div>
+            <span className="status-badge" style={{ fontSize: '14px', padding: '6px 12px', background: f.status === 'Delayed' ? '#fef3c7' : f.status === 'Cancelled' ? '#fee2e2' : f.status === 'Departed' || f.status === 'Landed' ? '#e2e8f0' : '#dcfce7', color: f.status === 'Delayed' ? '#92400e' : f.status === 'Cancelled' ? '#991b1b' : f.status === 'Departed' || f.status === 'Landed' ? '#475569' : '#065f46' }}>{f.status}</span>
+          </div>
+          {f.remarks && <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', textAlign: 'right' }}>{f.remarks}</div>}
+          {isManager && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
+              <button className="delete-btn" onClick={() => handleDelete(f.id)}>Delete</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="page-content">
       <div className="staff-header">
@@ -193,61 +240,33 @@ function FlightsPage() {
           <p>No flights scheduled for {formatDisplayDate(dateFilter)} ({getDayName(dateFilter)}).</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <div className="dash-card" style={{ padding: '16px 24px', textAlign: 'center', background: '#f8fafc' }}>
             <h3 style={{ margin: 0, color: '#1e293b' }}>FLIGHT SCHEDULE — {formatDisplayDate(dateFilter)}</h3>
             <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px', fontWeight: 700, letterSpacing: '1px' }}>{getDayName(dateFilter)}</p>
           </div>
 
-          {visibleFlights.map(f => (
-            <div key={f.id} className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0' }}>
-              <div style={{ background: f.type === 'Air Ambulance' ? '#fef2f2' : f.type === 'Additional' ? '#fef3c7' : '#eff6ff', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <h3 style={{ margin: 0, fontSize: '22px', color: f.type === 'Air Ambulance' ? '#991b1b' : f.type === 'Additional' ? '#92400e' : '#1e40af' }}>{f.flightNo}</h3>
-                  <span style={{ background: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, border: '1px solid #cbd5e1' }}>{f.aircraft}</span>
-                  <span style={{ background: f.type === 'Air Ambulance' ? '#dc2626' : f.type === 'Additional' ? '#f59e0b' : '#2563eb', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700 }}>{f.type}</span>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>BOOKED</div>
-                  <div style={{ fontSize: '16px', fontWeight: 800 }}>{f.bookedFigure || '—'}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', padding: '20px' }}>
-                
-                {/* Times */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
-                  <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
-                  <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>ARRIVAL</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
-                  <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>DEPARTURE</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
-                </div>
-
-                {/* Route */}
-                <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                  <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, letterSpacing: '1px', marginBottom: '8px' }}>ROUTE</div>
-                  <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '2px', color: '#1e293b' }}>{f.route}</div>
-                  {f.originDepTime && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px', fontWeight: 600 }}>Origin Dep: {f.originDepTime}</div>}
-                </div>
-
-                {/* Status & Actions */}
-                <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>STATUS</div>
-                    <span className="status-badge status-approved" style={{ fontSize: '14px', padding: '6px 12px', background: f.status === 'Delayed' ? '#fef3c7' : f.status === 'Cancelled' ? '#fee2e2' : '#dcfce7', color: f.status === 'Delayed' ? '#92400e' : f.status === 'Cancelled' ? '#991b1b' : '#065f46' }}>{f.status}</span>
-                  </div>
-                  {f.remarks && <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', textAlign: 'right' }}>{f.remarks}</div>}
-                  {isManager && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                      <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
-                      <button className="delete-btn" onClick={() => handleDelete(f.id)}>Delete</button>
-                    </div>
-                  )}
-                </div>
-
+          {/* SCHEDULED FLIGHTS */}
+          {scheduledFlights.length > 0 && (
+            <div>
+              <h3 style={{ color: '#2563eb', borderBottom: '2px solid #bfdbfe', paddingBottom: '8px', marginBottom: '16px' }}>🕒 Scheduled & Active</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {scheduledFlights.map(f => <FlightCard key={f.id} f={f} />)}
               </div>
             </div>
-          ))}
+          )}
+
+          {/* DEPARTED FLIGHTS */}
+          {departedFlights.length > 0 && (
+            <div>
+              <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Departed / Completed</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', opacity: 0.8 }}>
+                {departedFlights.map(f => <FlightCard key={f.id} f={f} />)}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </div>
