@@ -16,7 +16,6 @@ import RampCheckSheetPage from './pages/RampCheckSheetPage';
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
 
-// Main tabs type
 type Module = 'dashboard' | 'operations' | 'roster' | 'system';
 
 function Dashboard(_props: any) {
@@ -52,11 +51,6 @@ function Dashboard(_props: any) {
   return (
     <div className="dashboard-layout">
       <aside className="sidebar">
-        <div className="sidebar-header">
-          <h2>Funadhoo Airport</h2>
-          <p>Ops & Roster System</p>
-        </div>
-
         <nav className="sidebar-nav">
           {activeModule === 'operations' && (
             <>
@@ -85,7 +79,7 @@ function Dashboard(_props: any) {
               <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>
             </>
           )}
-          
+
           {activeModule === 'dashboard' && (
             <>
               <div className="sidebar-section-title">Overview</div>

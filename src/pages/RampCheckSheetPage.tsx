@@ -4,7 +4,7 @@ import { collection, addDoc, onSnapshot, doc, setDoc } from 'firebase/firestore'
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import RampReportsPage from './RampReportsPage';
-import RampForm from './RampForm'; 
+import RampForm from './RampForm';
 import '../styles/RampCheck.css';
 
 const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
@@ -26,7 +26,7 @@ const INITIAL_FORM = {
 function RampCheckSheetPage() {
   const { profile } = useAuth();
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
-  
+
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
   const [formData, setFormData] = useState<Record<string, string>>(INITIAL_FORM);
   const [acTypes, setAcTypes] = useState<string[]>([]);
@@ -64,14 +64,12 @@ function RampCheckSheetPage() {
     const { id, value } = e.target;
     let finalValue = value;
 
-    // Prefix logic
     if (id === 'fltNo' && !finalValue.startsWith('Q2-')) finalValue = 'Q2-' + finalValue.replace(/^Q2-?/i, '');
     if (id === 'acReg' && !finalValue.startsWith('8Q-')) finalValue = '8Q-' + finalValue.replace(/^8Q-?/i, '');
 
     setFormData(prev => {
       const updated = { ...prev, [id]: finalValue };
-      
-      // Auto-calc Pax
+
       if (id.includes('paxIn')) {
         const a = parseInt(updated.paxInAdult) || 0;
         const i = parseInt(updated.paxInInf) || 0;
@@ -94,7 +92,6 @@ function RampCheckSheetPage() {
       return updated;
     });
 
-    // Debounced Live Sync
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(async () => {
       try {
@@ -137,16 +134,26 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
-      const payload = { ...formData, createdAt: new Date().toISOString() };
+      // Exclude the Firestore doc id if it was loaded from a report
+      const { id: _id, ...rest } = formData as any;
+
       if (currentDocId) {
-        await setDoc(doc(db, 'ramp_inspections', currentDocId), payload);
+        // Update existing — preserve original createdAt, add updatedAt
+        await setDoc(doc(db, 'ramp_inspections', currentDocId), {
+          ...rest,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
         toast.success('Record updated!');
       } else {
-        const ref = await addDoc(collection(db, 'ramp_inspections'), payload);
+        // Create new
+        const ref = await addDoc(collection(db, 'ramp_inspections'), {
+          ...rest,
+          createdAt: new Date().toISOString(),
+        });
         setCurrentDocId(ref.id);
         toast.success('Record saved!');
       }
-      await setDoc(doc(db, 'ramp_live_draft', 'current'), {}); 
+      await setDoc(doc(db, 'ramp_live_draft', 'current'), {});
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -167,21 +174,36 @@ function RampCheckSheetPage() {
     toast.success('Live View link copied! Share this with external parties.');
   };
 
+  // Task 5b: load an existing report into the form for editing
+  const handleEditReport = (report: any) => {
+    const { id, createdAt: _c, updatedAt: _u, ...rest } = report;
+    setFormData({ ...INITIAL_FORM, ...rest });
+    setCurrentDocId(id);
+    setActiveSubTab('form');
+    toast.success(`Report ${report.fltNo || ''} loaded for editing. Make changes and click Save Record.`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="page-content">
       <div className="staff-header no-print">
         <h2>✈️ Flight Operation</h2>
+        {currentDocId && (
+          <span style={{ fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '6px 12px', borderRadius: '6px', fontWeight: 700 }}>
+            ✏️ Editing existing report — click <strong>New Record</strong> to start fresh
+          </span>
+        )}
       </div>
 
       <div className="ops-tabs no-print">
-        <button 
-          className={`ops-tab-btn ${activeSubTab === 'form' ? 'active' : ''}`} 
+        <button
+          className={`ops-tab-btn ${activeSubTab === 'form' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('form')}
         >
           📝 Ramp Supervisor Check Sheet
         </button>
-        <button 
-          className={`ops-tab-btn ${activeSubTab === 'reports' ? 'active' : ''}`} 
+        <button
+          className={`ops-tab-btn ${activeSubTab === 'reports' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('reports')}
         >
           📁 Saved Reports
@@ -218,7 +240,7 @@ function RampCheckSheetPage() {
       )}
 
       {activeSubTab === 'reports' && (
-        <RampReportsPage />
+        <RampReportsPage onEdit={handleEditReport} />
       )}
     </div>
   );

@@ -4,7 +4,7 @@ import { collection, addDoc, onSnapshot, query, orderBy, limit } from 'firebase/
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useAuth } from '../auth'; // NEW
+import { useAuth } from '../auth';
 
 const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL'];
 
@@ -24,25 +24,22 @@ const DEFAULT_TASKS = [
 ];
 
 function OpsBoardPage() {
-  const { profile } = useAuth(); // NEW
-  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || ''); // NEW
+  const { profile } = useAuth();
+  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
 
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'history'>('runway');
   const [staffPool, setStaffPool] = useState<string[]>(DEFAULT_STAFF);
   const [newStaff, setNewStaff] = useState('');
 
-  // Runway State
   const [rwy19, setRwy19] = useState<string[]>([]);
   const [rwy01, setRwy01] = useState<string[]>([]);
   const [lights, setLights] = useState<string[]>([]);
   const runwayRef = useRef<HTMLDivElement>(null);
 
-  // Ground State
-  const [tasks, setTasks] = useState(DEFAULT_TASKS);
+  const [tasks] = useState(DEFAULT_TASKS);
   const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>({});
   const groundRef = useRef<HTMLDivElement>(null);
 
-  // History State
   const [runwayHistory, setRunwayHistory] = useState<any[]>([]);
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string>('');
@@ -59,7 +56,7 @@ function OpsBoardPage() {
   }, []);
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
-    if (!isManager) return; // Safety check
+    if (!isManager) return;
     if (zone !== '19' && rwy19.includes(name)) { toast.error('Already assigned to RWY 19'); return; }
     if (zone !== '01' && rwy01.includes(name)) { toast.error('Already assigned to RWY 01'); return; }
     if (zone !== 'lights' && lights.includes(name)) { toast.error('Already assigned to Lights'); return; }
@@ -70,7 +67,7 @@ function OpsBoardPage() {
   };
 
   const toggleGround = (taskId: string, name: string) => {
-    if (!isManager) return; // Safety check
+    if (!isManager) return;
     setGroundAssign(prev => {
       const current = prev[taskId] || [];
       const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name];
@@ -114,7 +111,7 @@ function OpsBoardPage() {
   const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
-    
+
     const wrapper = document.createElement('div');
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
@@ -126,26 +123,47 @@ function OpsBoardPage() {
     const clone = ref.current.cloneNode(true) as HTMLElement;
     clone.style.width = '100%';
     clone.style.background = 'transparent';
-    
+    clone.style.overflow = 'visible';
+
+    // ===== TASK 4 FIX =====
+    // Force BOTH boards (Runway + Ground) into a stable 3-per-row layout.
+    // Additional task boxes wrap below as new rows, exactly like the RWY board.
     const grids = clone.querySelectorAll('.ops-grid-3');
     grids.forEach(g => {
-      (g as HTMLElement).style.gridTemplateColumns = 'repeat(3, 1fr)';
+      const el = g as HTMLElement;
+      el.style.display = 'grid';
+      el.style.gridTemplateColumns = 'repeat(3, 1fr)';
+      el.style.gridAutoFlow = 'row';
+      el.style.gap = '12px';
+      el.style.overflow = 'visible';
+      el.style.width = '100%';
+    });
+
+    // Each task box takes exactly 1/3 — wraps to new rows below automatically
+    clone.querySelectorAll('.ops-card').forEach(c => {
+      const el = c as HTMLElement;
+      el.style.width = '100%';
+      el.style.minWidth = '0';
+      el.style.overflow = 'hidden';
+      (el.style as any).breakInside = 'avoid';
     });
 
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
+    // Force a synchronous layout so html2canvas reads final grid sizes
+    void wrapper.offsetHeight;
 
     try {
-      const canvas = await html2canvas(wrapper, { 
-        scale: 2, 
-        backgroundColor: '#141414', 
-        width: wrapper.scrollWidth, 
+      const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        backgroundColor: '#141414',
+        width: wrapper.scrollWidth,
         height: wrapper.scrollHeight,
         windowWidth: wrapper.scrollWidth,
         windowHeight: wrapper.scrollHeight
       });
       document.body.removeChild(wrapper);
-      
+
       const link = document.createElement('a');
       link.download = `${filename}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95);
@@ -176,7 +194,7 @@ function OpsBoardPage() {
       });
     }
   });
-  
+
   const chartData = Object.entries(staffUtilization).map(([name, data]) => ({
     name, runway: data.runway, ground: data.ground, total: data.runway + data.ground
   })).sort((a, b) => b.total - a.total).slice(0, 10);
@@ -185,7 +203,7 @@ function OpsBoardPage() {
     if (h.type === 'runway') return [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].includes(selectedStaff);
     return Object.values(h.assignments || {}).flat().includes(selectedStaff);
   }) : [];
-  
+
   const indTaskCounts: { [task: string]: number } = {};
   indHistory.forEach(h => {
     if (h.type === 'runway') {
@@ -206,7 +224,6 @@ function OpsBoardPage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>📋 Daily Operations Board</h2>
-        {/* HIDE ADD STAFF FORM FOR STAFF */}
         {isManager && (
           <div style={{ display: 'flex', gap: '8px' }}>
             <form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}>
@@ -226,7 +243,6 @@ function OpsBoardPage() {
       {/* ===== RUNWAY TAB ===== */}
       {activeTab === 'runway' && (
         <div>
-          {/* HIDE EDITOR FOR STAFF */}
           {isManager && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff (Cannot be in multiple zones)</h3>
@@ -245,7 +261,6 @@ function OpsBoardPage() {
             </div>
           )}
 
-          {/* HIDE BUTTONS FOR STAFF */}
           {isManager && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
@@ -285,7 +300,6 @@ function OpsBoardPage() {
       {/* ===== GROUND TAB ===== */}
       {activeTab === 'ground' && (
         <div>
-          {/* HIDE BUTTONS FOR STAFF */}
           {isManager && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
@@ -293,7 +307,6 @@ function OpsBoardPage() {
             </div>
           )}
 
-          {/* HIDE EDITOR FOR STAFF */}
           {isManager && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff to Tasks</h3>
@@ -348,7 +361,6 @@ function OpsBoardPage() {
       {/* ===== HISTORY TAB ===== */}
       {activeTab === 'history' && (
         <div>
-          {/* Top Stats */}
           <div className="dash-stats" style={{ marginBottom: '20px' }}>
             <div className="stat-card"><div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>✈️</div><div><div className="stat-value">{runwayHistory.length}</div><div className="stat-label">Runway Boards Saved</div></div></div>
             <div className="stat-card"><div className="stat-icon" style={{ background: '#dcfce7', color: '#065f46' }}>🛬</div><div><div className="stat-value">{groundHistory.length}</div><div className="stat-label">Ground Boards Saved</div></div></div>
@@ -356,14 +368,13 @@ function OpsBoardPage() {
           </div>
 
           <div className="dash-grid" style={{ marginBottom: '20px' }}>
-            {/* Individual Checker */}
             <div className="dash-card">
               <h3>🔍 Individual Staff Record</h3>
               <select value={selectedStaff} onChange={e => setSelectedStaff(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '10px', marginBottom: '16px' }}>
                 <option value="">— Select Staff —</option>
                 {staffPool.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              
+
               {selectedStaff ? (
                 <div>
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
@@ -386,7 +397,6 @@ function OpsBoardPage() {
               ) : <p style={{ fontSize: '12px', color: '#94a3b8' }}>Select a staff member to see their history.</p>}
             </div>
 
-            {/* Chart */}
             <div className="dash-card">
               <h3>📈 Top Staff Utilization</h3>
               <div style={{ width: '100%', height: 200, marginTop: '10px' }}>
@@ -406,7 +416,6 @@ function OpsBoardPage() {
             </div>
           </div>
 
-          {/* History Logs Accordion */}
           <div className="dash-card">
             <h3>📋 History Logs</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
@@ -414,7 +423,7 @@ function OpsBoardPage() {
                 const isExpanded = expandedLog === h.id;
                 return (
                   <div key={h.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                    <button 
+                    <button
                       onClick={() => setExpandedLog(isExpanded ? null : h.id)}
                       style={{ width: '100%', padding: '12px 16px', background: '#f8fafc', border: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
                     >
@@ -428,7 +437,7 @@ function OpsBoardPage() {
                       </div>
                       <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{isExpanded ? 'Hide Details ▲' : 'Show Details ▼'}</span>
                     </button>
-                    
+
                     {isExpanded && (
                       <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0', background: 'white', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         {h.type === 'runway' ? (

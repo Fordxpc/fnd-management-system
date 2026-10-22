@@ -19,12 +19,6 @@
   padding: 20px 0;
   flex-shrink: 0;
 }
-.sidebar-header {
-  padding: 0 20px 20px;
-  border-bottom: 1px solid #1e293b;
-}
-.sidebar-header h2 { margin: 0; font-size: 18px; }
-.sidebar-header p { margin: 4px 0 0; font-size: 12px; color: #94a3b8; }
 
 .sidebar-nav {
   flex: 1;
@@ -148,10 +142,10 @@
   letter-spacing: 0.3px;
 }
 .top-tab:hover { color: #1e293b; background: #f8fafc; }
-.top-tab.active { 
-  color: #2563eb; 
-  border-bottom-color: #2563eb; 
-  font-weight: 900 !important; 
+.top-tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  font-weight: 900 !important;
   background: #eff6ff;
 }
 
@@ -277,7 +271,7 @@
 }
 .week-nav button { background-color: #2563eb; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; font-family: inherit; }
 
-/* ==================== BULK ASSIGN FORM (RESTORED) ==================== */
+/* ==================== BULK ASSIGN FORM ==================== */
 .bulk-form {
   background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
   border: 2px solid #a855f7;
@@ -390,15 +384,15 @@
 
 .week-grid { width: 100%; border-collapse: collapse; margin: 0; font-family: Arial, sans-serif; table-layout: fixed; }
 .week-grid th, .week-grid td {
-  border: 1px solid #000000; 
-  padding: 1px 2px; 
+  border: 1px solid #000000;
+  padding: 1px 2px;
   font-size: 9px;
-  text-align: center; 
-  white-space: nowrap; 
-  overflow: hidden; 
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
-  color: #000000; 
-  background-color: #ffffff; 
+  color: #000000;
+  background-color: #ffffff;
   height: 18px;
   line-height: 1.1;
 }
@@ -429,6 +423,15 @@
 .week-grid tbody td.leave-absent { background-color: #000000 !important; color: #ffffff !important; font-weight: bold; }
 .week-grid tbody td.leave-late { background-color: #f97316 !important; color: #ffffff !important; font-weight: bold; }
 .week-grid tbody td.leave-other { background-color: #94a3b8 !important; color: #ffffff !important; font-weight: bold; }
+
+/* Admin staff auto-holiday cells (Fri / Sat / government holidays) */
+.week-grid tbody td.admin-holiday {
+  background-color: #fef3c7 !important;
+  color: #92400e !important;
+  font-weight: bold;
+  font-size: 8px;
+  letter-spacing: 0.3px;
+}
 
 .week-grid tbody td.out-of-period-cell { background-color: #e2e8f0 !important; color: #94a3b8 !important; }
 .clickable-cell { cursor: pointer; transition: all 0.15s; }
@@ -468,37 +471,34 @@
 /* ==================== PRINT STYLES (SMART LAYOUTS) ==================== */
 @media print {
   @page { size: A4 landscape; margin: 4mm; }
-  
-  /* Hide UI */
+
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form {
     display: none !important;
   }
-  
-  /* Reset layout */
+
   .dashboard-layout, .main-content, .page-wrapper, .page-content {
-    display: block !important; padding: 0 !important; margin: 0 !important; 
+    display: block !important; padding: 0 !important; margin: 0 !important;
     background: #ffffff !important; overflow: visible !important; height: auto !important;
   }
-  
+
   .roster-export-area {
-    box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
+    box-shadow: none !important; padding: 0 !important; margin: 0 !important;
     background: #ffffff !important; border: none !important; zoom: 1 !important;
     height: 100% !important;
   }
-  
+
   .roster-title { margin-bottom: 6px !important; padding: 0 !important; }
   .roster-title h1 { font-family: Arial, sans-serif !important; font-size: 14px !important; font-weight: 500 !important; margin: 0 !important; padding: 0 !important; text-transform: uppercase !important; }
 
   .roster-week-section { page-break-inside: avoid !important; break-inside: avoid !important; margin: 0 !important; padding: 0 !important; }
   .week-label { font-size: 10px !important; margin: 0 0 2px 0 !important; padding: 0 !important; line-height: 1 !important; font-weight: 500 !important; text-transform: uppercase !important; }
 
-  /* Base Table */
   .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
-    border: 1px solid #000 !important; 
+    border: 1px solid #000 !important;
     padding: 0px 1px !important;
-    text-align: center !important; 
-    -webkit-print-color-adjust: exact !important; 
+    text-align: center !important;
+    -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
@@ -506,7 +506,6 @@
   .week-grid .col-name { width: 140px !important; font-size: 9px !important; }
   .week-grid .col-date { width: auto !important; }
 
-  /* MODE 1: ALL DEPARTMENTS (1 week per page) */
   body.print-all .roster-title { display: none !important; }
   body.print-all .print-week-header {
     display: block !important;
@@ -538,7 +537,6 @@
     height: 24px !important; font-size: 9px !important;
   }
 
-  /* MODE 2: LARGE DEPARTMENTS (Fit tightly to 1 page) */
   body.print-large .roster-week-section { margin-bottom: 2px !important; }
   body.print-large .week-grid th, body.print-large .week-grid td {
     height: 12px !important; font-size: 7.5px !important; line-height: 1 !important; padding: 0 !important;
@@ -547,7 +545,6 @@
     height: 16px !important; font-size: 7px !important;
   }
 
-  /* MODE 3: SMALL DEPARTMENTS (Admin, Safety) */
   body.print-small .roster-week-section { margin-bottom: 10px !important; }
   body.print-small .week-grid th, body.print-small .week-grid td {
     height: 24px !important; font-size: 10px !important; line-height: 1.1 !important;
@@ -556,7 +553,6 @@
     height: 28px !important; font-size: 9px !important;
   }
 
-  /* Colors */
   .week-grid thead th { background-color: #22c55e !important; color: #ffffff !important; }
   .shift-morning { background-color: #d1fae5 !important; }
   .shift-day { background-color: #dbeafe !important; }
@@ -572,6 +568,7 @@
   .leave-frl { background-color: #0ea5e9 !important; color: #fff !important; }
   .leave-absent { background-color: #000000 !important; color: #fff !important; }
   .leave-late { background-color: #f97316 !important; color: #fff !important; }
+  .admin-holiday { background-color: #fef3c7 !important; color: #92400e !important; }
   .out-of-period-cell { background-color: #e2e8f0 !important; }
 }
 
@@ -588,14 +585,6 @@
   }
 
   .sidebar, .main-content { display: contents !important; }
-
-  .sidebar-header {
-    display: block !important; order: 1 !important; width: 100% !important;
-    background: #0f172a !important; padding: 15px !important;
-    border-bottom: 1px solid #1e293b !important; text-align: center !important;
-  }
-  .sidebar-header h2 { font-size: 18px !important; margin: 0 !important; color: #fff !important; }
-  .sidebar-header p { font-size: 12px !important; color: #94a3b8 !important; margin: 4px 0 0 !important; }
 
   .top-tabs-container {
     display: flex !important; order: 2 !important; width: 100% !important;
@@ -632,11 +621,9 @@
   }
   .sidebar-footer button { width: 100% !important; padding: 12px !important; font-size: 14px !important; }
 
-  /* Mobile Bulk Form Fixes */
   .bulk-form-grid { grid-template-columns: 1fr !important; }
   .bulk-field-full { grid-column: span 1 !important; }
 
-  /* Mobile Roster Adjustments */
   .week-grid th, .week-grid td { font-size: 10px !important; padding: 4px 2px !important; }
   .week-grid .col-sn { width: 45px !important; min-width: 45px !important; }
   .week-grid .col-name { width: 90px !important; min-width: 90px !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }

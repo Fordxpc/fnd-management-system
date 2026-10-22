@@ -4,7 +4,11 @@ import { collection, onSnapshot, query, orderBy, doc, deleteDoc } from 'firebase
 import { toast } from 'sonner';
 import RampForm from './RampForm';
 
-function RampReportsPage() {
+interface RampReportsPageProps {
+  onEdit?: (report: any) => void;
+}
+
+function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const [reports, setReports] = useState<any[]>([]);
   const [viewingReport, setViewingReport] = useState<any>(null);
 
@@ -46,8 +50,21 @@ function RampReportsPage() {
                   <td>{r.date || '—'}</td>
                   <td><strong>{r.fltNo || '—'}</strong></td>
                   <td>{r.acReg || '—'}</td>
-                  <td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="reset-pw-btn" onClick={() => setViewingReport(r)}>👁️ View / Print</button>
+                    {onEdit && (
+                      <button
+                        className="edit-btn"
+                        onClick={() => {
+                          if (window.confirm(`Edit saved report ${r.fltNo || ''}? The current form will be replaced.`)) {
+                            onEdit(r);
+                          }
+                        }}
+                        style={{ marginLeft: '6px' }}
+                      >
+                        ✏️ Edit
+                      </button>
+                    )}
                     <button className="delete-btn" onClick={() => handleDelete(r.id)} style={{ marginLeft: '6px' }}>Delete</button>
                   </td>
                 </tr>
@@ -57,17 +74,14 @@ function RampReportsPage() {
         </div>
       </div>
 
-      {/* Modal for viewing and printing a specific report */}
       {viewingReport && (
         <div className="modal-backdrop" onClick={() => setViewingReport(null)}>
-          <div 
-            className="modal-content" 
-            id="viewReportModal" 
-            style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} 
+          <div
+            className="modal-content"
+            id="viewReportModal"
+            style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }}
             onClick={e => e.stopPropagation()}
           >
-            
-            {/* STICKY HEADER */}
             <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
               <h3 style={{ margin: 0 }}>Report: {viewingReport.fltNo}</h3>
               <div>
@@ -76,7 +90,6 @@ function RampReportsPage() {
               </div>
             </div>
 
-            {/* SCROLLABLE BODY */}
             <div className="modal-scrollable-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc', maxHeight: '85vh' }}>
               <RampForm
                 formData={viewingReport}
@@ -86,11 +99,10 @@ function RampReportsPage() {
                 routeCodes={[]}
                 handleAddAcType={() => {}}
                 handleAddRoute={() => {}}
-                appendRoute={() => {}}
+                appendRoute={(_code: string) => {}}
                 isViewOnlyMode={true}
               />
             </div>
-
           </div>
         </div>
       )}

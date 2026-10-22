@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
+const ADMIN_DEPARTMENTS = ['Administration'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -115,6 +116,7 @@ function RosterPage() {
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
+  const [holidays, setHolidays] = useState<any[]>([]);
   const [periodStart, setPeriodStart] = useState<Date>(getPeriodStart(new Date()));
   const [exporting, setExporting] = useState<boolean>(false);
   const [reorderMode, setReorderMode] = useState<boolean>(false);
@@ -145,9 +147,8 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-  // Get current active department name for headings
-  const activeDeptName = isAdmin 
-    ? (selectedDept === 'all' ? '' : selectedDept.toUpperCase()) 
+  const activeDeptName = isAdmin
+    ? (selectedDept === 'all' ? '' : selectedDept.toUpperCase())
     : (userDepartment?.toUpperCase() || '');
 
   const visibleStaff = [...staff]
@@ -161,10 +162,13 @@ function RosterPage() {
     })
     .sort(sortStaff);
 
+  // Build a Set of holiday dates for quick lookup
+  const holidayDateSet = new Set<string>(holidays.map((h: any) => h.date));
+
   // AUTO-DETECT PRINT LAYOUT
   useEffect(() => {
     document.body.classList.remove('print-all', 'print-large', 'print-small');
-    
+
     if (selectedDept === 'all' && isAdmin) {
       document.body.classList.add('print-all');
     } else {
@@ -183,7 +187,10 @@ function RosterPage() {
     const unsubRoster = onSnapshot(collection(db, 'roster_entries'), (snapshot) => {
       setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsubStaff(); unsubRoster(); };
+    const unsubHolidays = onSnapshot(collection(db, 'holidays'), (snapshot) => {
+      setHolidays(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubStaff(); unsubRoster(); unsubHolidays(); };
   }, []);
 
   useEffect(() => { setBulkStartDate(formatDate(periodStart)); setBulkEndDate(formatDate(periodEnd)); }, [periodStart]);
@@ -226,7 +233,8 @@ function RosterPage() {
       toast.error('Leave can only be written on the roster after a supervisor approves it in Leave Requests.');
       return;
     }
-    let finalShift = editStatus === 'scheduled' ? editShift : '';
+    // Non-scheduled statuses always get a blank shiftTime
+    const finalShift = editStatus === 'scheduled' ? editShift : '';
     try {
       const q = query(collection(db, 'roster_entries'), where('staffId', '==', editCell.staffId), where('date', '==', editCell.date));
       const existing = await getDocs(q);
@@ -375,10 +383,10 @@ function RosterPage() {
     Object.assign(wrapper.style, { position: 'absolute', left: '-10000px', top: '0', width: '1400px', background: '#ffffff', padding: '16px', fontFamily: 'Arial, Helvetica, sans-serif', zIndex: '1' });
     const clone = original.cloneNode(true) as HTMLElement;
     clone.style.width = '100%'; clone.style.background = '#ffffff'; clone.style.padding = '0'; clone.style.borderRadius = '0'; clone.style.boxShadow = 'none';
-    clone.style.zoom = '1'; // Reset zoom for export
+    clone.style.zoom = '1';
     clone.querySelectorAll('.sticky-col, .sticky-col-name').forEach((el) => { (el as HTMLElement).style.position = 'static'; });
     clone.querySelectorAll('.reorder-col').forEach((el) => el.remove());
-    clone.querySelectorAll('.print-week-header').forEach((el) => el.remove()); // Remove print headers from image export
+    clone.querySelectorAll('.print-week-header').forEach((el) => el.remove());
     wrapper.appendChild(clone); document.body.appendChild(wrapper);
     try {
       await new Promise((resolve) => setTimeout(resolve, 200));
@@ -426,7 +434,7 @@ function RosterPage() {
       <div className="staff-header no-print">
         <h2>Duty Roster</h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          
+
           <div style={{ display: 'flex', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
             <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}>A-</button>
             <div style={{ padding: '8px 12px', background: '#fff', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1' }}>
@@ -507,8 +515,27 @@ function RosterPage() {
                 {DAY_LABELS.map((label, i) => <button key={i} type="button" className={bulkDaysOfWeek.includes(i) ? 'day-btn active' : 'day-btn'} onClick={() => toggleBulkDay(i)}>{label}</button>)}
               </div>
             </div>
-            <div className="bulk-field"><label>Type</label><select value={bulkType} onChange={(e) => setBulkType(e.target.value)}><option value="scheduled">Shift</option>{ROSTER_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
-            <div className="bulk-field"><label>Shift</label><select value={bulkShift} onChange={(e) => setBulkShift(e.target.value)}>{SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}</select></div>
+            <div className="bulk-field">
+              <label>Type</label>
+              <select value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
+                <option value="scheduled">Shift</option>
+                {ROSTER_STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+              </select>
+            </div>
+            {bulkType === 'scheduled' && (
+              <div className="bulk-field">
+                <label>Shift</label>
+                <select value={bulkShift} onChange={(e) => setBulkShift(e.target.value)}>
+                  {SHIFT_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </div>
+            )}
+            {bulkType === 'scheduled' && bulkShift === 'CUSTOM' && (
+              <div className="bulk-field bulk-field-full">
+                <label>Custom Time</label>
+                <input placeholder="e.g. 09:00 - 17:00" value={bulkCustomShift} onChange={(e) => setBulkCustomShift(e.target.value)} />
+              </div>
+            )}
           </div>
           <button className="bulk-submit-btn" onClick={handleBulkAssign} disabled={bulkSubmitting}>{bulkSubmitting ? '...' : `⚡ Create Entries`}</button>
         </div>
@@ -524,11 +551,10 @@ function RosterPage() {
         <div className="roster-title">
           <h1>FND {activeDeptName ? `${activeDeptName} ` : ''}DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
         </div>
-        
+
         {weeks.map((week, weekIndex) => (
           <div key={weekIndex} className="roster-week-section">
-            
-            {/* HIDDEN HEADER FOR PRINT ONLY */}
+
             <div className="print-week-header">
               FND {activeDeptName ? `${activeDeptName} ` : ''}DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}
             </div>
@@ -543,7 +569,7 @@ function RosterPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff.</td></tr> : visibleStaff.map((s, staffIndex) => (
+                {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff.</td></tr> : visibleStaff.map((s) => (
                   <tr key={s.id}>
                     {reorderMode && <td className="reorder-col no-print"><button className="reorder-btn" onClick={() => moveStaff(s.id, 'up')}>▲</button><button className="reorder-btn" onClick={() => moveStaff(s.id, 'down')}>▼</button></td>}
                     <td className="col-sn">{s.sn || '—'}</td><td className="col-name">{s.name}</td>
@@ -553,19 +579,38 @@ function RosterPage() {
                       if (!isInPeriod) return <td key={dStr} className="out-of-period-cell">&nbsp;</td>;
 
                       const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
-                      let displayValue = ''; let cellClass = 'empty-cell';
-                      
+                      let displayValue = '';
+                      let cellClass = 'empty-cell';
+
                       if (entry) {
-                        displayValue = entry.status === 'scheduled' ? entry.shiftTime : getShortLeave(entry.status);
+                        // Task 2: non-scheduled statuses always show NO time (only short label)
+                        displayValue = entry.status === 'scheduled'
+                          ? (entry.shiftTime || '')
+                          : getShortLeave(entry.status);
                         if (entry.status === 'scheduled') {
-                          cellClass = getShiftColorClass(entry.shiftTime);
+                          cellClass = getShiftColorClass(entry.shiftTime || '');
                         } else {
                           cellClass = getLeaveColorClass(entry.status);
                         }
+                      } else if (ADMIN_DEPARTMENTS.includes(s.department)) {
+                        // Task 1: Administration staff auto-marked as holiday on Fri/Sat/govt holiday
+                        const dayOfWeek = new Date(dStr + 'T00:00:00').getDay();
+                        const isGovHoliday = holidayDateSet.has(dStr);
+                        if (isGovHoliday) {
+                          const hol = holidays.find((h: any) => h.date === dStr);
+                          displayValue = (hol?.name || 'HOLIDAY').replace(/^🌐\s*/, '').slice(0, 12).toUpperCase();
+                          cellClass = 'admin-holiday';
+                        } else if (dayOfWeek === 5) {
+                          displayValue = 'FRIDAY';
+                          cellClass = 'admin-holiday';
+                        } else if (dayOfWeek === 6) {
+                          displayValue = 'SATURDAY';
+                          cellClass = 'admin-holiday';
+                        }
                       }
-                      
+
                       return (
-                        <td key={dStr} className={`${cellClass} ${isAdmin ? 'clickable-cell' : ''}`} 
+                        <td key={dStr} className={`${cellClass} ${isAdmin ? 'clickable-cell' : ''}`}
                             onClick={() => {
                               if (!isAdmin) return;
                               if (entry && (isApprovedLeaveStatus(entry.status) || entry.leaveRequestId)) {
@@ -594,14 +639,23 @@ function RosterPage() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Edit Roster: {editCell.staffName}</h3>
             <p style={{ color: '#475569', marginBottom: '20px' }}>Date: {editCell.date}</p>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <select value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+              <select
+                value={editStatus}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setEditStatus(next);
+                  // Task 2: clear shift time immediately when switching to a non-scheduled status
+                  if (next !== 'scheduled') setEditShift('');
+                }}
+                style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              >
                 <option value="scheduled">Scheduled Shift</option>
                 {ROSTER_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                 <option value="clear">Clear (Remove Entry)</option>
               </select>
-              
+
               {editStatus === 'scheduled' && (
                 <select value={editShift} onChange={e => setEditShift(e.target.value)} style={{ padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
                   {SHIFT_OPTIONS.filter(o => o !== 'CUSTOM').map(o => <option key={o} value={o}>{o}</option>)}
