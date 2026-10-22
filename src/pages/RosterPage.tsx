@@ -593,18 +593,12 @@ function RosterPage() {
                           cellClass = getLeaveColorClass(entry.status);
                         }
                       } else if (ADMIN_DEPARTMENTS.includes(s.department)) {
-                        // Task 1: Administration staff auto-marked as holiday on Fri/Sat/govt holiday
                         const dayOfWeek = new Date(dStr + 'T00:00:00').getDay();
                         const isGovHoliday = holidayDateSet.has(dStr);
-                        if (isGovHoliday) {
-                          const hol = holidays.find((h: any) => h.date === dStr);
-                          displayValue = (hol?.name || 'HOLIDAY').replace(/^🌐\s*/, '').slice(0, 12).toUpperCase();
-                          cellClass = 'admin-holiday';
-                        } else if (dayOfWeek === 5) {
-                          displayValue = 'FRIDAY';
-                          cellClass = 'admin-holiday';
-                        } else if (dayOfWeek === 6) {
-                          displayValue = 'SATURDAY';
+                        
+                        // Admin staff: mark ALL Fridays, Saturdays, and Govt Holidays simply as "HOLIDAY"
+                        if (isGovHoliday || dayOfWeek === 5 || dayOfWeek === 6) {
+                          displayValue = 'HOLIDAY';
                           cellClass = 'admin-holiday';
                         }
                       }
