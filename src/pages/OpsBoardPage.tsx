@@ -27,7 +27,18 @@ const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
 function OpsBoardPage() {
   const { profile, user } = useAuth();
-  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
+  
+  // Access Control
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager';
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const dept = profile?.department || '';
+  const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
+  
+  // Can edit if Dev, Manager, or Ops/Safety SMT
+  const canEdit = isDev || isManager || (isSMT && isOpsOrSafety);
+  // Can view if Dev, Manager, SMT, or Ops/Safety regular staff
+  const canView = canEdit || isSMT || isOpsOrSafety;
 
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
   const [staffPool, setStaffPool] = useState<string[]>(DEFAULT_STAFF);
@@ -42,7 +53,6 @@ function OpsBoardPage() {
   const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>({});
   const groundRef = useRef<HTMLDivElement>(null);
 
-  // FOD State
   const [fodList, setFodList] = useState<any[]>([]);
   const [fodForm, setFodForm] = useState({ date: formatDate(new Date()), grams: '', remarks: '' });
   const [fodSubmitting, setFodSubmitting] = useState(false);
@@ -51,6 +61,27 @@ function OpsBoardPage() {
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
+
+  // --- LOAD DRAFT FROM LOCAL STORAGE ---
+  useEffect(() => {
+    const saved = localStorage.getItem('ops_board_draft');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setRwy19(parsed.rwy19 || []);
+        setRwy01(parsed.rwy01 || []);
+        setLights(parsed.lights || []);
+        setGroundAssign(parsed.groundAssign || {});
+      } catch (e) {
+        console.error("Failed to load draft", e);
+      }
+    }
+  }, []);
+
+  // --- SAVE DRAFT TO LOCAL STORAGE ---
+  useEffect(() => {
+    localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
+  }, [rwy19, rwy01, lights, groundAssign]);
 
   useEffect(() => {
     const qRunway = query(collection(db, 'ops_runway_history'), orderBy('createdAt', 'desc'), limit(200));
@@ -66,7 +97,7 @@ function OpsBoardPage() {
   }, []);
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
-    if (!isManager) return;
+    if (!canEdit) return;
     if (zone !== '19' && rwy19.includes(name)) { toast.error('Already assigned to RWY 19'); return; }
     if (zone !== '01' && rwy01.includes(name)) { toast.error('Already assigned to RWY 01'); return; }
     if (zone !== 'lights' && lights.includes(name)) { toast.error('Already assigned to Lights'); return; }
@@ -77,7 +108,7 @@ function OpsBoardPage() {
   };
 
   const toggleGround = (taskId: string, name: string) => {
-    if (!isManager) return;
+    if (!canEdit) return;
     setGroundAssign(prev => {
       const current = prev[taskId] || [];
       const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name];
@@ -248,11 +279,13 @@ function OpsBoardPage() {
     }
   });
 
+  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2><p>You do not have permission to view the Operations Board.</p></div></div>;
+
   return (
     <div className="page-content">
       <div className="staff-header">
         <h2>📋 Daily Operations Board</h2>
-        {isManager && (
+        {canEdit && (
           <div style={{ display: 'flex', gap: '8px' }}>
             <form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}>
               <input placeholder="Add Staff Name..." value={newStaff} onChange={e => setNewStaff(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
@@ -272,7 +305,7 @@ function OpsBoardPage() {
       {/* ===== RUNWAY TAB ===== */}
       {activeTab === 'runway' && (
         <div>
-          {isManager && (
+          {canEdit && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff (Cannot be in multiple zones)</h3>
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
@@ -290,7 +323,7 @@ function OpsBoardPage() {
             </div>
           )}
 
-          {isManager && (
+          {canEdit && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
               <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
@@ -329,14 +362,14 @@ function OpsBoardPage() {
       {/* ===== GROUND TAB ===== */}
       {activeTab === 'ground' && (
         <div>
-          {isManager && (
+          {canEdit && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
               <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
             </div>
           )}
 
-          {isManager && (
+          {canEdit && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff to Tasks</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
@@ -390,7 +423,6 @@ function OpsBoardPage() {
       {/* ===== FOD TAB ===== */}
       {activeTab === 'fod' && (
         <div className="dash-grid">
-          {/* FOD Form */}
           <div className="dash-card">
             <h3>🪨 Log FOD Collection</h3>
             <form onSubmit={handleSaveFOD} className="staff-form" style={{ gridTemplateColumns: '1fr', padding: 0, boxShadow: 'none' }}>
@@ -412,7 +444,6 @@ function OpsBoardPage() {
             </form>
           </div>
 
-          {/* FOD List */}
           <div className="dash-card">
             <h3>📋 Recent FOD Collections</h3>
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -428,7 +459,7 @@ function OpsBoardPage() {
                       <td style={{ fontSize: '12px' }}>{f.remarks}</td>
                       <td style={{ fontSize: '11px', color: '#64748b' }}>{f.loggedBy.split('@')[0]}</td>
                       <td>
-                        {isManager && <button className="delete-btn" onClick={() => handleDeleteFOD(f.id)}>Delete</button>}
+                        {canEdit && <button className="delete-btn" onClick={() => handleDeleteFOD(f.id)}>Delete</button>}
                       </td>
                     </tr>
                   ))}

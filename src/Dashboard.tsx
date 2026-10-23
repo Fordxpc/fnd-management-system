@@ -23,8 +23,20 @@ function Dashboard(_props: any) {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
-  const isManagement = MANAGEMENT_ROLES.includes(profile?.role || '');
-  const canManageUsers = USER_ADMIN_ROLES.includes(profile?.role || '');
+  // --- ACCESS CONTROL FLAGS ---
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager';
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const dept = profile?.department || '';
+  
+  // Dept specific rules
+  const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
+  const canManageUsers = isDev || isManager;
+  
+  // Tab Visibilities
+  const canSeeOpsBoard = isDev || isManager || isSMT || isOpsOrSafety;
+  const canSeeRampCheck = isDev || isManager || isSMT;
+  const canSeeStaffList = isDev || isManager || isSMT;
 
   const navigate = (page: string) => {
     setCurrentPage(page);
@@ -55,16 +67,16 @@ function Dashboard(_props: any) {
           {activeModule === 'operations' && (
             <>
               <div className="sidebar-section-title">Operations</div>
-              <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>
+              {canSeeOpsBoard && <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>}
               <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
-              <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>
+              {canSeeRampCheck && <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>}
             </>
           )}
 
           {activeModule === 'roster' && (
             <>
               <div className="sidebar-section-title">Roster & HR</div>
-              {isManagement && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('staff')}>👥 Staff List</button>}
+              {canSeeStaffList && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('staff')}>👥 Staff List</button>}
               <button className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('roster')}>📅 Duty Roster</button>
               <button className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('leave')}>🌴 Leave Requests</button>
               <button className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('overtime')}>⏰ Overtime Sheet</button>
@@ -99,19 +111,26 @@ function Dashboard(_props: any) {
           <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>
             📊 Dashboard
           </button>
-          <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>
-            ✈️ Operations
-          </button>
+          
+          {(canSeeOpsBoard) && (
+            <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate(canSeeOpsBoard ? 'opsboard' : 'flights')}>
+              ✈️ Operations
+            </button>
+          )}
+
           <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>
             📅 Roster & HR
           </button>
-          <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>
-            ⚙️ System & Setting
-          </button>
+          
+          {activeModule !== 'dashboard' && (
+            <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>
+              ⚙️ System & Setting
+            </button>
+          )}
         </div>
 
         <div className="page-wrapper">
-          {pages[currentPage]}
+          {pages[currentPage] || <div className="empty-state">Access Denied</div>}
         </div>
       </main>
     </div>

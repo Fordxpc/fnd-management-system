@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, deleteDoc, doc, doc as firestoreDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 
-const WEEKLY_THRESHOLD = 48;
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
 const formatDate = (date: Date): string => {
@@ -23,8 +22,6 @@ const formatDisplay = (dateStr: string): string => {
 const getDayShort = (dateStr: string): string => {
   return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(dateStr + 'T00:00:00').getDay()];
 };
-
-const isFriday = (dateStr: string): boolean => new Date(dateStr + 'T00:00:00').getDay() === 5;
 
 const computeHours = (start: string, end: string): number => {
   if (!start || !end) return 0;
@@ -52,8 +49,11 @@ function OvertimePage() {
   const { profile, user } = useAuth();
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
+  const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
 
   const [monthFilter, setMonthFilter] = useState<string>(formatDate(new Date()).slice(0, 7));
   const [viewMode, setViewMode] = useState<'individual' | 'department'>('individual');
@@ -61,7 +61,6 @@ function OvertimePage() {
   const [filterStaff, setFilterStaff] = useState<string>('all');
   const [showForm, setShowForm] = useState<boolean>(false);
 
-  // Form state
   const [formDept, setFormDept] = useState<string>('Ground Operations');
   const [formStaffId, setFormStaffId] = useState<string>('');
   const [formDate, setFormDate] = useState<string>(formatDate(new Date()));
@@ -71,6 +70,12 @@ function OvertimePage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
+    const fetchRules = async () => {
+      const snap = await getDoc(firestoreDoc(db, 'settings', 'ot_rules'));
+      if (snap.exists()) setOtRules(snap.data() as any);
+    };
+    fetchRules();
+
     const unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setStaff(list);
@@ -86,21 +91,32 @@ function OvertimePage() {
     const unsubOT = onSnapshot(collection(db, 'overtime_entries'), (snap) => {
       setEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsubStaff(); unsubOT(); };
+    const unsubLeave = onSnapshot(collection(db, 'leave_requests'), (snap) => {
+      setLeaveReqs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubStaff(); unsubOT(); unsubLeave(); };
   }, [user]);
 
-  const isManager = ['developer', 'manager', 'admin', 'smt'].includes(profile?.role || '');
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager';
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const canApprove = isDev || isManager || isSMT;
+
+  // Check if current user is excluded from OT (Manager / Assistant Manager)
+  const isExcludedFromOT = (staffName: string, position: string) => {
+    const n = (staffName || '').toLowerCase();
+    const p = (position || '').toLowerCase();
+    return n.includes('manager') || p.includes('manager') || p.includes('assistant manager');
+  };
 
   let filtered = entries.filter((e) => (e.date || '').startsWith(monthFilter));
   
-  if (isManager) {
+  if (canApprove) {
     if (viewMode === 'individual' && myStaff) {
       filtered = filtered.filter((e) => e.staffId === myStaff.id);
     } else {
       filtered = filtered.filter((e) => e.staffDepartment === filterDept);
-      if (filterStaff !== 'all') {
-        filtered = filtered.filter((e) => e.staffId === filterStaff);
-      }
+      if (filterStaff !== 'all') filtered = filtered.filter((e) => e.staffId === filterStaff);
     }
   } else {
     filtered = filtered.filter((e) => myStaff && e.staffId === myStaff.id);
@@ -116,26 +132,26 @@ function OvertimePage() {
   });
   const weekKeys = Object.keys(weekMap).sort();
 
-  const myMonthEntries = myStaff ? entries.filter((e) => e.staffId === myStaff.id && (e.date || '').startsWith(monthFilter)) : [];
-  const myMonthHours = myMonthEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-
-  // Filter staff options for the form
-  const formStaffOptions = staff.filter(s => s.department === formDept);
-
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!formStaffId) { alert('Please select a staff member'); return; }
-    const hours = computeHours(formStart, formEnd);
-    if (hours <= 0) { alert('End time must be after start time'); return; }
     const staffMember = staff.find((s) => s.id === formStaffId);
     if (!staffMember) return;
+
+    if (isExcludedFromOT(staffMember.name, staffMember.position)) {
+      toast.error('Managers and Assistant Managers are not eligible for OT.');
+      return;
+    }
+
+    const hours = computeHours(formStart, formEnd);
+    if (hours <= 0) { alert('End time must be after start time'); return; }
 
     setSubmitting(true);
     try {
       await addDoc(collection(db, 'overtime_entries'), {
         staffId: formStaffId, staffName: staffMember.name, staffSN: staffMember.sn || '',
         staffDepartment: staffMember.department, date: formDate, startTime: formStart, endTime: formEnd,
-        hours, notes: formNotes, isFriday: isFriday(formDate), createdAt: new Date().toISOString(), createdBy: user?.email || '',
+        hours, notes: formNotes, createdAt: new Date().toISOString(), createdBy: user?.email || '',
       });
       setFormNotes('');
       setShowForm(false);
@@ -157,18 +173,20 @@ function OvertimePage() {
         <h2>Overtime Sheet</h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
           <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-          <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Log OT'}</button>
+          {!isExcludedFromOT(myStaff?.name, myStaff?.position) && (
+            <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Log OT'}</button>
+          )}
         </div>
       </div>
 
-      {isManager && (
+      {canApprove && (
         <div className="leave-tabs" style={{ marginBottom: '16px' }}>
           <button className={viewMode === 'individual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('individual')}>👤 My Individual OT</button>
           <button className={viewMode === 'department' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('department')}>🏢 Department OT</button>
         </div>
       )}
 
-      {isManager && viewMode === 'department' && (
+      {canApprove && viewMode === 'department' && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
           <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
             {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
@@ -180,30 +198,20 @@ function OvertimePage() {
         </div>
       )}
 
-      {myStaff && (
-        <div className="collapsible-card" style={{ marginBottom: '16px' }}>
-          <div className="collapsible-body" style={{ paddingTop: '16px' }}>
-            <div className="balance-grid">
-              <div className="balance-item"><span className="balance-label">My OT hours ({monthFilter})</span><span className="balance-value">{myMonthHours.toFixed(2)} hrs</span></div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showForm && (
+      {showForm && !isExcludedFromOT(myStaff?.name, myStaff?.position) && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>⏰ Log Overtime</div>
           
-          {isManager && (
+          {canApprove && (
             <select value={formDept} onChange={(e) => { setFormDept(e.target.value); setFormStaffId(''); }} required>
               {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
 
-          {isManager ? (
+          {canApprove ? (
             <select value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} required>
               <option value="">Select Staff...</option>
-              {formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
+              {staff.filter(s => s.department === formDept && !isExcludedFromOT(s.name, s.position)).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
             </select>
           ) : (
             <input value={myStaff ? `${myStaff.name}` : 'Not linked'} disabled />
@@ -232,23 +240,53 @@ function OvertimePage() {
         weekKeys.map((weekKey) => {
           const weekEntries = weekMap[weekKey];
           const weekTotal = weekEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-          const isOver = weekTotal >= WEEKLY_THRESHOLD;
-          const eligible = Math.max(0, weekTotal - WEEKLY_THRESHOLD);
+          
+          // --- NEW OT MATH ---
+          const sampleStaff = staff.find(s => s.id === weekEntries[0].staffId);
+          const isAdmin = sampleStaff?.department === 'Administration';
+          const targetHours = isAdmin ? otRules.adminHours : otRules.regularHours;
+
+          const weekEnd = getWeekEnd(weekKey);
+          const weekLeaves = leaveReqs.filter(r => 
+            r.staffId === weekEntries[0].staffId && 
+            r.status === 'approved' && 
+            otRules.deductLeaves.includes(r.leaveType) &&
+            r.startDate <= weekEnd && r.endDate >= weekKey
+          );
+          
+          // Calculate deduction (8 hours per day for overlapping leaves)
+          let deductionHours = 0;
+          weekLeaves.forEach(l => {
+            // rough overlap calculation
+            const s = new Date(l.startDate + 'T00:00:00');
+            const e = new Date(l.endDate + 'T00:00:00');
+            let count = 0;
+            for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+              const dStr = formatDate(d);
+              if (dStr >= weekKey && dStr <= weekEnd) count++;
+            }
+            deductionHours += count * 8;
+          });
+
+          const adjustedTarget = Math.max(0, targetHours - deductionHours);
+          const isOver = weekTotal > adjustedTarget;
+          const eligible = Math.max(0, weekTotal - adjustedTarget);
+
           return (
             <div key={weekKey} style={{ marginBottom: '20px' }}>
               <div style={{ padding: '12px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', fontWeight: 700, fontSize: '13px', display: 'flex', justifyContent: 'space-between', backgroundColor: isOver ? '#dcfce7' : '#f1f5f9', color: isOver ? '#065f46' : '#475569' }}>
-                <span>Week: {formatDisplay(weekKey)} – {formatDisplay(getWeekEnd(weekKey))}</span>
-                <span>Total: {weekTotal.toFixed(2)} hrs {isOver ? `· ✅ Eligible (${eligible.toFixed(2)} OT)` : `· ${(WEEKLY_THRESHOLD - weekTotal).toFixed(2)} hrs to 48`}</span>
+                <span>Week: {formatDisplay(weekKey)} – {formatDisplay(weekEnd)}</span>
+                <span>Total: {weekTotal.toFixed(2)} hrs {isOver ? `· ✅ Eligible (${eligible.toFixed(2)} OT)` : `· ${(adjustedTarget - weekTotal).toFixed(2)} hrs to ${adjustedTarget}`}</span>
               </div>
               <div className="staff-list" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <table>
-                  <thead><tr><th>Date</th><th>Day</th>{isManager && viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th></th></tr></thead>
+                  <thead><tr><th>Date</th><th>Day</th>{canApprove && viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th></th></tr></thead>
                   <tbody>
                     {weekEntries.map((e) => (
                       <tr key={e.id}>
                         <td>{formatDisplay(e.date)}</td>
                         <td>{getDayShort(e.date)}</td>
-                        {isManager && viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
+                        {canApprove && viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
                         <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
                         <td><button className="delete-btn" onClick={() => handleDelete(e.id)}>Delete</button></td>

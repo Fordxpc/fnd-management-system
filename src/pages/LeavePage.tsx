@@ -132,8 +132,13 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 
 function LeavePage() {
   const { profile, user } = useAuth();
-  const isDeveloper = DEVELOPER_ROLES.includes(profile?.role || '');
-  const isStaff = profile?.role === 'staff';
+  
+  // Access Control
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager';
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const userDept = profile?.department || '';
+  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
 
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
@@ -144,6 +149,7 @@ function LeavePage() {
   const [loading, setLoading] = useState<boolean>(true);
 
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
+  const [balanceTab, setBalanceTab] = useState<'annual' | 'sick' | 'other'>('annual');
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -186,42 +192,45 @@ function LeavePage() {
   }, []);
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
-  const canApproveAny = isDeveloper || GLOBAL_APPROVERS.includes(myStaff?.position || '');
-  const isDeptManager = canApproveAny || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
-  const canSeeDeptBalances = isDeptManager && !isStaff;
   
-  const isManagementProfile = isDeptManager || ['developer', 'manager', 'admin', 'smt'].includes(profile?.role || '');
-  const canSeeMyBalance = isManagementProfile || myStaff?.balanceVisible === true;
+  // Roster edit logic applied to leave approvals
+  const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
+  const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
+  
+  const canApproveThisDept = (dept: string) => {
+    if (isDev || isManager || canApproveAnyDept) return true;
+    if (isDeptManager && myStaff?.department === dept) return true;
+    if (isSMT && myStaff?.department === dept) return true;
+    if (myStaff?.department === 'Safety' && dept === 'Security') return true; // Safety edits Security
+    return false;
+  };
+
+  const canSeeDeptBalances = isDev || isManager || isSMT;
+  const canSeeMyBalance = !isStaff || myStaff?.balanceVisible === true || isSMT || isManager;
 
   const canApproveRequest = (r: any): boolean => {
-    if (canApproveAny) return true;
-    if (!APPROVER_DESIGNATIONS.includes(myStaff?.position || '')) return false;
-    return myStaff?.department === r.staffDepartment;
+    if (r.staffId === myStaff?.id) return false; // Cannot approve own
+    if (isDev || isManager || canApproveAnyDept) return true;
+    return canApproveThisDept(r.staffDepartment);
   };
 
   const canDeleteRequest = (r: any): boolean => {
-    if (isDeveloper || isDeptManager) return true;
+    if (isDev || isManager) return true;
     return myStaff && r.staffId === myStaff.id;
   };
 
   const visibleRequests = requests
     .filter((r: any) => {
-      if (isStaff) {
-        return myStaff && r.staffId === myStaff.id; // Staff only see their own
-      }
-      if (!isDeptManager) {
-        if (!myStaff) return false;
-        return r.staffId === myStaff.id;
-      }
+      if (isStaff) return myStaff && r.staffId === myStaff.id;
+      if (!isDeptManager && !isSMT && !isDev && !isManager) return myStaff && r.staffId === myStaff.id;
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })
-    .filter((r: any) => (isStaff ? true : (tab === 'all' ? true : r.status === tab)))
+    .filter((r: any) => (isStaff ? r.status === 'approved' || r.status === 'pending' : (tab === 'all' ? true : r.status === tab)))
     .sort((a: any, b: any) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
-  const myLeaveYear = myStaff?.joinDate ? getCurrentLeaveYear(myStaff.joinDate) : null;
 
   const formStaffOptions = staffList.filter(s => s.department === selectedFormDept);
   const selectedStaff = staffList.find((s) => s.id === selectedStaffId);
@@ -233,7 +242,7 @@ function LeavePage() {
   const deptBalanceStaff = staffList
     .filter((s: any) => {
       if (s.isSMT === true || s.department === 'Administration' || s.department === 'Safety') return false;
-      if (canApproveAny || isDeveloper) return true;
+      if (isDev || isManager || canApproveAnyDept) return true;
       return myStaff?.department ? s.department === myStaff.department : false;
     })
     .sort((a: any, b: any) => (a.sn || '').localeCompare(b.sn || ''));
@@ -244,6 +253,18 @@ function LeavePage() {
     if (endDate < startDate) { toast.error('End date cannot be before start date'); return; }
     const staff = staffList.find((s) => s.id === selectedStaffId);
     if (!staff) { toast.error('Staff not found'); return; }
+
+    // OVERLAP CHECK
+    const overlap = requests.some(r => 
+      r.staffId === selectedStaffId && 
+      r.status === 'approved' && 
+      r.startDate <= endDate && 
+      r.endDate >= startDate
+    );
+    if (overlap) {
+      toast.error('This request overlaps with an already approved leave. Please check the dates.');
+      return;
+    }
 
     const g = (staff.gender || '').toLowerCase();
     if (g === 'female' && MALE_ONLY.includes(leaveType)) { toast.error(`${leaveType} is only available for male staff.`); return; }
@@ -280,8 +301,6 @@ function LeavePage() {
     const r = approveTarget;
     try {
       await updateDoc(doc(db, 'leave_requests', r.id), { status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString() });
-      // Write every calendar day on the roster, including Friday and off days.
-      // Annual leave still shows on Friday; Friday is excluded from the balance count at submit time.
       const dates = allDatesInRange(r.startDate, r.endDate);
       for (const d of dates) {
         const q = query(collection(db, 'roster_entries'), where('staffId', '==', r.staffId), where('date', '==', d));
@@ -331,7 +350,6 @@ function LeavePage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>Leave Management</h2>
-        {/* ALLOW STAFF TO REQUEST LEAVE */}
         <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Request Leave'}</button>
       </div>
       <p style={{ margin: '-8px 0 16px', fontSize: '13px', color: '#64748b' }}>
@@ -346,11 +364,21 @@ function LeavePage() {
           </button>
           {showMyBalance && (
             <div className="collapsible-body">
+              <div className="leave-tabs" style={{ marginBottom: '16px' }}>
+                <button className={balanceTab === 'annual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setBalanceTab('annual')}>Annual</button>
+                <button className={balanceTab === 'sick' ? 'leave-tab active' : 'leave-tab'} onClick={() => setBalanceTab('sick')}>Sick</button>
+                <button className={balanceTab === 'other' ? 'leave-tab active' : 'leave-tab'} onClick={() => setBalanceTab('other')}>Other</button>
+              </div>
               <div className="balance-grid">
-                {getLeaveTypesForStaff(myStaff).map((t) => {
+                {getLeaveTypesForStaff(myStaff).filter(t => {
+                  if (balanceTab === 'annual') return t.includes('ANNUAL');
+                  if (balanceTab === 'sick') return t.includes('SICK');
+                  return !t.includes('ANNUAL') && !t.includes('SICK');
+                }).map((t) => {
                   const isAnnual = t === 'ANNUAL LEAVE';
                   const entitlement = ENTITLEMENTS[t] || 0;
                   const used = usedDays[t] || 0;
+                  
                   if (isAnnual && !myIsAnnualRenewing && myStaff.joinDate) {
                     return (
                       <div key={t} className="balance-item">
@@ -377,7 +405,7 @@ function LeavePage() {
       {canSeeDeptBalances && deptBalanceStaff.length > 0 && (
         <div className="collapsible-card">
           <button className="collapsible-header" onClick={() => setShowDeptBalances(!showDeptBalances)}>
-            <span><strong>{canApproveAny || isDeveloper ? '👥 All Staff Leave Balances' : `👥 ${myStaff?.department || ''} — Staff Balances`}</strong></span>
+            <span><strong>{canApproveAnyDept || isDev ? '👥 All Staff Leave Balances' : `👥 ${myStaff?.department || ''} — Staff Balances`}</strong></span>
             <span className="collapsible-toggle">{showDeptBalances ? '▼' : '▶'}</span>
           </button>
           {showDeptBalances && (
@@ -411,15 +439,13 @@ function LeavePage() {
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
           
-          {/* Only managers see the department dropdown */}
-          {isDeptManager && (
+          {!isStaff && (
             <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required>
               {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
 
-          {/* Staff see their own name (locked). Managers see a dropdown. */}
-          {isDeptManager ? (
+          {!isStaff ? (
             <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required>
               <option value="">Select Staff Member...</option>
               {formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
@@ -449,11 +475,6 @@ function LeavePage() {
                 ℹ️ {previewFridays} Friday(s) will show on the roster but will not be deducted from the balance.
               </div>
             )}
-            {COUNTS_FRIDAY_AND_OFF_DAYS.includes(leaveType) && (
-              <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>
-                Friday and off days in this range are counted toward the balance.
-              </div>
-            )}
           </div>
           <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>
             {submitting ? 'Submitting...' : 'Submit Leave Request'}
@@ -478,7 +499,7 @@ function LeavePage() {
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleRequests.map((r: any) => {
-                const canApprove = canApproveRequest(r) && r.status === 'pending' && r.staffId !== myStaff?.id;
+                const canApprove = canApproveRequest(r) && r.status === 'pending';
                 return (
                   <tr key={r.id}>
                     <td><strong>{r.staffName}</strong></td>
