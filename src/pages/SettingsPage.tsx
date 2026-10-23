@@ -8,6 +8,52 @@ import ChangePasswordModal from './ChangePasswordModal';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
 
+// Parsed from fnd_staff_logins.csv
+const STAFF_CREDENTIALS = [
+  { email: 'sn-0034@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Adam' },
+  { email: 'sn-0035@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Aslam' },
+  { email: 'sn-0036@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Mohamed' },
+  { email: 'sn-0037@funadhooairport.com', password: 'Fnd@2026', name: 'Adam Faisal' },
+  { email: 'sn-0038@funadhooairport.com', password: 'Fnd@2026', name: 'Adam Shakir' },
+  { email: 'sn-0039@funadhooairport.com', password: 'Fnd@2026', name: 'Adam Yaeesh' },
+  { email: 'sn-0040@funadhooairport.com', password: 'Fnd@2026', name: 'Ahmed Raushaan' },
+  { email: 'sn-0041@funadhooairport.com', password: 'Fnd@2026', name: 'Ali Navshad' },
+  { email: 'sn-0042@funadhooairport.com', password: 'Fnd@2026', name: 'Aiminath Moosa' },
+  { email: 'sn-0044@funadhooairport.com', password: 'Fnd@2026', name: 'Hassan Abdul Rahman' },
+  { email: 'sn-0047@funadhooairport.com', password: 'Fnd@2026', name: 'Ismail Nifaaz Adam' },
+  { email: 'sn-0048@funadhooairport.com', password: 'Fnd@2026', name: 'Maazin Hassan' },
+  { email: 'sn-0049@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Zaki' },
+  { email: 'sn-0434@funadhooairport.com', password: 'Fnd@2026', name: 'Ismail Shafeeq' },
+  { email: 'sn-0435@funadhooairport.com', password: 'Fnd@2026', name: 'Ahmed Naahee' },
+  { email: 'sn-0437@funadhooairport.com', password: 'Fnd@2026', name: 'Aminath Shehereeza' },
+  { email: 'sn-0439@funadhooairport.com', password: 'Fnd@2026', name: 'Hassan Shujaau' },
+  { email: 'sn-0480@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Ibrahim' },
+  { email: 'sn-0481@funadhooairport.com', password: 'Fnd@2026', name: 'Zimla Ayyoob' },
+  { email: 'sn-0484@funadhooairport.com', password: 'Fnd@2026', name: 'Abdul Ghanee Mohamed' },
+  { email: 'sn-0725@funadhooairport.com', password: 'Fnd@2026', name: 'Ahmed Aseel' },
+  { email: 'sn-0726@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Karam' },
+  { email: 'sn-0727@funadhooairport.com', password: 'Fnd@2026', name: 'Ahmed Jinah' },
+  { email: 'sn-0728@funadhooairport.com', password: 'Fnd@2026', name: 'Ibrahim Khalaf Ahmed' },
+  { email: 'sn-0729@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Fuadhu' },
+  { email: 'sn-0730@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Nadheem' },
+  { email: 'sn-0731@funadhooairport.com', password: 'Fnd@2026', name: 'Aishath Maiha Adam' },
+  { email: 'sn-0732@funadhooairport.com', password: 'Fnd@2026', name: 'Aishath Sahana' },
+  { email: 'sn-0733@funadhooairport.com', password: 'Fnd@2026', name: 'Thoriq Mohamed' },
+  { email: 'sn-0753@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Maayal' },
+  { email: 'sn-0754@funadhooairport.com', password: 'Fnd@2026', name: 'Ali Shameem' },
+  { email: 'sn-0757@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Adam' },
+  { email: 'sn-0959@funadhooairport.com', password: 'Fnd@2026', name: 'Vishan Mohamed' },
+  { email: 'sn-0961@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Hisham' },
+  { email: 'sn-0967@funadhooairport.com', password: 'Fnd@2026', name: 'Hassan Malaz' },
+  { email: 'sn-0980@funadhooairport.com', password: 'Fnd@2026', name: 'Ismail Kameel' },
+  { email: 'sn-0985@funadhooairport.com', password: 'Fnd@2026', name: 'Aishath Nabaa' },
+  { email: 'sn-0995@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Vishal' },
+  { email: 'sn-1007@funadhooairport.com', password: 'Fnd@2026', name: 'Muna Abdhul Qafoor' },
+  { email: 'sn-1008@funadhooairport.com', password: 'Fnd@2026', name: 'Aiminath Maha' },
+  { email: 'sn-1009@funadhooairport.com', password: 'Fnd@2026', name: 'Hassan Naafis' },
+  { email: 'sn-1173@funadhooairport.com', password: 'Fnd@2026', name: 'Mohamed Sameeh' },
+];
+
 function SettingsPage() {
   const { profile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'rules'>('general');
@@ -15,8 +61,7 @@ function SettingsPage() {
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager';
-  const isManagement = isDev || isManager || ['owner', 'admin', 'smt'].includes(profile?.role || '');
-
+  
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
   const [usersList, setUsersList] = useState<any[]>([]);
@@ -65,8 +110,14 @@ function SettingsPage() {
     setResetting(null);
   };
 
+  const copyCredentials = () => {
+    const text = STAFF_CREDENTIALS.map(c => `${c.name} | ${c.email} | ${c.password}`).join('\n');
+    navigator.clipboard.writeText(text);
+    toast.success('All credentials copied to clipboard!');
+  };
+
   return (
-    <div className="page-content" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
       <div className="staff-header" style={{ justifyContent: 'center', marginBottom: '20px' }}>
         <h2 style={{ fontSize: '24px' }}>⚙️ Settings</h2>
       </div>
@@ -138,9 +189,38 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
-          {/* ALL USERS LOGIN DETAILS */}
+          {/* STAFF LOGIN CREDENTIALS (DEV ONLY) */}
+          {isDev && (
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h4 style={{ margin: 0, color: '#1e293b' }}>🔑 Master Staff Login Credentials</h4>
+                <button onClick={copyCredentials} className="quick-btn" style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', fontSize: '12px', padding: '6px 12px' }}>
+                  📋 Copy All
+                </button>
+              </div>
+              <p style={{ fontSize: '12px', color: '#dc2626', marginBottom: '12px', fontWeight: 600 }}>
+                ⚠️ Security Warning: These are default passwords. Staff must change them upon first login.
+              </p>
+              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <table className="mini-table">
+                  <thead><tr><th>Name</th><th>Email</th><th>Default Password</th></tr></thead>
+                  <tbody>
+                    {STAFF_CREDENTIALS.map(u => (
+                      <tr key={u.email}>
+                        <td><strong>{u.name}</strong></td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>{u.password}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ACTIVE LOGGED IN USERS */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>👥 All User Logins ({usersList.length})</h4>
+            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>👥 Active System Users ({usersList.length})</h4>
             <div style={{ overflowX: 'auto' }}>
               <table className="mini-table">
                 <thead><tr><th>Email</th><th>Role</th><th>Dept</th><th>Actions</th></tr></thead>
