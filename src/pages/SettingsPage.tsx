@@ -64,8 +64,13 @@ function SettingsPage() {
   
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
-  const [usersList, setUsersList] = useState<any[]>([]);
+  
+  // User Data states
+  const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [preRegs, setPreRegs] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [resetting, setResetting] = useState<string | null>(null);
+  
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -75,10 +80,13 @@ function SettingsPage() {
     };
     loadSettings();
 
-    const unsub = onSnapshot(collection(db, 'users'), (s) => {
-      setUsersList(s.docs.map(d => ({ id: d.id, ...d.data() })));
+    const unsubUsers = onSnapshot(collection(db, 'users'), (s) => {
+      setActiveUsers(s.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    return () => unsub();
+    const unsubPresets = onSnapshot(collection(db, 'user_presets'), (s) => {
+      setPreRegs(s.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubUsers(); unsubPresets(); };
   }, []);
 
   const saveRules = async (e: any) => {
@@ -110,11 +118,42 @@ function SettingsPage() {
     setResetting(null);
   };
 
-  const copyCredentials = () => {
-    const text = STAFF_CREDENTIALS.map(c => `${c.name} | ${c.email} | ${c.password}`).join('\n');
-    navigator.clipboard.writeText(text);
-    toast.success('All credentials copied to clipboard!');
-  };
+  // --- MERGE ALL USERS ---
+  // 1. Start with default CSV staff
+  let allMergedUsers = STAFF_CREDENTIALS.map(c => ({
+    email: c.email,
+    name: c.name,
+    password: c.password,
+    role: 'staff',
+    department: '—',
+    status: 'Default'
+  }));
+
+  // 2. Merge Pre-registered
+  preRegs.forEach(p => {
+    const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === p.email.toLowerCase());
+    if (idx >= 0) {
+      allMergedUsers[idx] = { ...allMergedUsers[idx], role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered' };
+    } else {
+      allMergedUsers.push({ email: p.email, name: p.email.split('@')[0], password: '—', role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered' });
+    }
+  });
+
+  // 3. Merge Active Users (SMT, Managers, etc.)
+  activeUsers.forEach(a => {
+    const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase());
+    if (idx >= 0) {
+      allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active' };
+    } else {
+      allMergedUsers.push({ email: a.email, name: a.name || a.email.split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active' });
+    }
+  });
+
+  // Filter by Search
+  const filteredUsers = allMergedUsers.filter(u => 
+    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  ).sort((a, b) => a.email.localeCompare(b.email));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -189,27 +228,58 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
-          {/* STAFF LOGIN CREDENTIALS (DEV ONLY) */}
+          {/* MASTER USER LIST */}
           {isDev && (
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h4 style={{ margin: 0, color: '#1e293b' }}>🔑 Master Staff Login Credentials</h4>
-                <button onClick={copyCredentials} className="quick-btn" style={{ background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe', fontSize: '12px', padding: '6px 12px' }}>
-                  📋 Copy All
-                </button>
+            <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                <div>
+                  <h4 style={{ margin: 0, color: '#1e293b' }}>👥 Master User List ({allMergedUsers.length})</h4>
+                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Includes Default Staff, Pre-registered, and Active Logins.</p>
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="🔍 Search name or email..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '250px', fontSize: '13px' }}
+                />
               </div>
-              <p style={{ fontSize: '12px', color: '#dc2626', marginBottom: '12px', fontWeight: 600 }}>
-                ⚠️ Security Warning: These are default passwords. Staff must change them upon first login.
-              </p>
-              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                <table className="mini-table">
-                  <thead><tr><th>Name</th><th>Email</th><th>Default Password</th></tr></thead>
+              
+              <div style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                <table className="mini-table" style={{ margin: 0 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
+                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Password</th><th>Actions</th></tr>
+                  </thead>
                   <tbody>
-                    {STAFF_CREDENTIALS.map(u => (
+                    {filteredUsers.length === 0 ? (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No users found matching "{searchQuery}"</td></tr>
+                    ) : filteredUsers.map(u => (
                       <tr key={u.email}>
                         <td><strong>{u.name}</strong></td>
                         <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>{u.password}</td>
+                        <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: u.role === 'developer' ? '#fee2e2' : u.role === 'smt' ? '#fef3c7' : '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
+                        <td>
+                          <span style={{ 
+                            fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+                            background: u.status === 'Active' ? '#dcfce7' : u.status === 'Pre-registered' ? '#fef3c7' : '#f1f5f9',
+                            color: u.status === 'Active' ? '#166534' : u.status === 'Pre-registered' ? '#92400e' : '#475569'
+                          }}>
+                            {u.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
+                          {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
+                        </td>
+                        <td>
+                          <button 
+                            className="reset-pw-btn" 
+                            disabled={resetting === u.email}
+                            onClick={() => handleSendReset(u.email)}
+                            style={{ padding: '4px 10px', fontSize: '11px' }}
+                          >
+                            {resetting === u.email ? '...' : '📧 Reset'}
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -217,35 +287,6 @@ function SettingsPage() {
               </div>
             </div>
           )}
-
-          {/* ACTIVE LOGGED IN USERS */}
-          <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>👥 Active System Users ({usersList.length})</h4>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="mini-table">
-                <thead><tr><th>Email</th><th>Role</th><th>Dept</th><th>Actions</th></tr></thead>
-                <tbody>
-                  {usersList.map(u => (
-                    <tr key={u.id}>
-                      <td><strong>{u.email}</strong></td>
-                      <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
-                      <td>{u.department || '—'}</td>
-                      <td>
-                        <button 
-                          className="reset-pw-btn" 
-                          disabled={resetting === u.email}
-                          onClick={() => handleSendReset(u.email)}
-                          style={{ padding: '4px 10px', fontSize: '11px' }}
-                        >
-                          {resetting === u.email ? 'Sending...' : '📧 Reset PW'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
         </div>
       )}
