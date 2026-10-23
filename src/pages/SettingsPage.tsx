@@ -27,6 +27,9 @@ function SettingsPage() {
   const [resetEmail, setResetEmail] = useState('');
   const [resetting, setResetting] = useState(false);
 
+  // Get current session details
+  const currentUser = auth.currentUser;
+
   useEffect(() => {
     const loadSettings = async () => {
       const snap = await getDoc(doc(db, 'settings', 'ot_rules'));
@@ -81,7 +84,7 @@ function SettingsPage() {
       </div>
 
       {/* TABS */}
-      <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px' }}>
+      <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px', margin: '0 auto 24px auto' }}>
         <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General & Account</button>
         {(isDev || isManager) && (
           <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ System Rules & Access</button>
@@ -128,6 +131,18 @@ function SettingsPage() {
                 <div>Leave Requests: <strong>{counts.leaveRequests}</strong></div>
                 <div>Active Users: <strong>{counts.users}</strong></div>
               </div>
+              
+              {/* LOGIN DETAILS */}
+              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>🛡️ Current Session Details</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#475569' }}>
+                  <div><strong>Auth UID:</strong> <br/><span style={{ fontSize: '11px', fontFamily: 'monospace' }}>{currentUser?.uid}</span></div>
+                  <div><strong>Email:</strong> <br/>{currentUser?.email}</div>
+                  <div><strong>Last Login:</strong> <br/>{currentUser?.metadata.lastSignInTime}</div>
+                  <div><strong>Account Created:</strong> <br/>{currentUser?.metadata.creationTime}</div>
+                </div>
+              </div>
+
               <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
                 <h4 style={{ margin: '0 0 8px', color: '#dc2626' }}>Send User Password Reset</h4>
                 <form onSubmit={handleSendReset} style={{ display: 'flex', gap: '8px' }}>

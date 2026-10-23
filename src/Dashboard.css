@@ -142,10 +142,10 @@
   letter-spacing: 0.3px;
 }
 .top-tab:hover { color: #1e293b; background: #f8fafc; }
-.top-tab.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
-  font-weight: 900 !important;
+.top-tab.active { 
+  color: #2563eb; 
+  border-bottom-color: #2563eb; 
+  font-weight: 900 !important; 
   background: #eff6ff;
 }
 
@@ -153,6 +153,43 @@
   padding: 20px 30px;
   flex: 1;
   overflow-y: auto;
+}
+
+/* ==================== MODERN CLICKABLE TABS (NEW) ==================== */
+.ops-tabs, .leave-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 24px;
+  background: #f1f5f9;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  width: fit-content;
+}
+
+.ops-tab-btn, .leave-tab {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 8px;
+  font-family: inherit;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ops-tab-btn:hover, .leave-tab:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.ops-tab-btn.active, .leave-tab.active {
+  background: #ffffff;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
 /* ==================== STAFF PAGE ==================== */
@@ -376,7 +413,7 @@
   -webkit-overflow-scrolling: touch;
 }
 .roster-title { text-align: center; margin-bottom: 8px; }
-.roster-title h1 { font-size: 14px; margin: 0; color: #000000; font-weight: 900; font-family: Arial, sans-serif; text-transform: uppercase; }
+.roster-title h1 { font-size: 20px !important; margin: 0; color: #0f172a !important; font-weight: 900 !important; font-family: Arial, sans-serif; text-transform: uppercase; letter-spacing: 1px; }
 .roster-week-section { margin-bottom: 6px; }
 .week-label { font-size: 10px; font-weight: 700; color: #000000; margin: 0 0 2px 0; font-family: Arial, sans-serif; }
 
@@ -384,15 +421,15 @@
 
 .week-grid { width: 100%; border-collapse: collapse; margin: 0; font-family: Arial, sans-serif; table-layout: fixed; }
 .week-grid th, .week-grid td {
-  border: 1px solid #000000;
-  padding: 1px 2px;
+  border: 1px solid #000000; 
+  padding: 1px 2px; 
   font-size: 9px;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
+  text-align: center; 
+  white-space: nowrap; 
+  overflow: hidden; 
   text-overflow: ellipsis;
-  color: #000000;
-  background-color: #ffffff;
+  color: #000000; 
+  background-color: #ffffff; 
   height: 18px;
   line-height: 1.1;
 }
@@ -468,7 +505,7 @@
 .cancel-btn { padding: 10px 18px; background: #e2e8f0; color: #475569; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 .modal-actions .submit-btn { padding: 10px 18px; color: #ffffff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; background: #2563eb; }
 
-/* ==================== PRINT STYLES (SMART LAYOUTS) ==================== */
+/* ==================== PRINT STYLES ==================== */
 @media print {
   @page { size: A4 landscape; margin: 4mm; }
 
@@ -477,12 +514,12 @@
   }
 
   .dashboard-layout, .main-content, .page-wrapper, .page-content {
-    display: block !important; padding: 0 !important; margin: 0 !important;
+    display: block !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; overflow: visible !important; height: auto !important;
   }
 
   .roster-export-area {
-    box-shadow: none !important; padding: 0 !important; margin: 0 !important;
+    box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
     background: #ffffff !important; border: none !important; zoom: 1 !important;
     height: 100% !important;
   }
@@ -495,10 +532,10 @@
 
   .week-grid { width: 100% !important; table-layout: fixed !important; }
   .week-grid th, .week-grid td {
-    border: 1px solid #000 !important;
+    border: 1px solid #000 !important; 
     padding: 0px 1px !important;
-    text-align: center !important;
-    -webkit-print-color-adjust: exact !important;
+    text-align: center !important; 
+    -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important;
   }
 
@@ -628,49 +665,4 @@
   .week-grid .col-sn { width: 45px !important; min-width: 45px !important; }
   .week-grid .col-name { width: 90px !important; min-width: 90px !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
   .week-grid .col-date { min-width: 65px !important; padding: 0 2px !important; }
-}
-/* ==================== FIXED ROSTER HEADING ==================== */
-.roster-title h1 { 
-  font-size: 20px !important; 
-  font-weight: 900 !important; 
-  color: #0f172a !important; 
-  letter-spacing: 1px !important; 
-  margin-bottom: 12px !important;
-}
-
-/* ==================== NICE OPS TABS ==================== */
-.ops-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  background: #ffffff;
-  padding: 8px;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  border: 1px solid #e2e8f0;
-  flex-wrap: wrap;
-}
-
-.ops-tab-btn {
-  padding: 12px 24px;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  border-radius: 8px;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-
-.ops-tab-btn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
-}
-
-.ops-tab-btn.active {
-  background: #2563eb;
-  color: #ffffff;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
