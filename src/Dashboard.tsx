@@ -12,37 +12,38 @@ import SettingsPage from './pages/SettingsPage';
 import FlightsPage from './pages/FlightsPage';
 import OpsBoardPage from './pages/OpsBoardPage';
 import RampCheckSheetPage from './pages/RampCheckSheetPage';
+import WildlifePage from './pages/WildlifePage'; // NEW
+import ReportsPage from './pages/ReportsPage'; // NEW
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
 
-type Module = 'dashboard' | 'operations' | 'roster' | 'system';
+type Module = 'dashboard' | 'operations' | 'roster' | 'reports' | 'system';
 
 function Dashboard(_props: any) {
   const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
-  // --- ACCESS CONTROL FLAGS ---
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const dept = profile?.department || '';
   
-  // Dept specific rules
   const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
   const canManageUsers = isDev || isManager;
   
-  // Tab Visibilities
   const canSeeOpsBoard = isDev || isManager || isSMT || isOpsOrSafety;
   const canSeeRampCheck = isDev || isManager || isSMT;
   const canSeeStaffList = isDev || isManager || isSMT;
+  const canSeeReports = isDev || isManager || isSMT || isOpsOrSafety;
 
   const navigate = (page: string) => {
     setCurrentPage(page);
     if (page === 'dashboard') setActiveModule('dashboard');
-    else if (['opsboard', 'flights', 'rampcheck'].includes(page)) setActiveModule('operations');
+    else if (['opsboard', 'flights', 'rampcheck', 'wildlife'].includes(page)) setActiveModule('operations');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
+    else if (['reports'].includes(page)) setActiveModule('reports');
     else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
   };
 
@@ -51,6 +52,8 @@ function Dashboard(_props: any) {
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
     rampcheck: <RampCheckSheetPage />,
+    wildlife: <WildlifePage />,
+    reports: <ReportsPage />,
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
@@ -70,6 +73,14 @@ function Dashboard(_props: any) {
               {canSeeOpsBoard && <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>}
               <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
               {canSeeRampCheck && <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>}
+              <button className={currentPage === 'wildlife' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('wildlife')}>🦅 Wildlife & Bird Strike</button>
+            </>
+          )}
+
+          {activeModule === 'reports' && (
+            <>
+              <div className="sidebar-section-title">Reports</div>
+              <button className={currentPage === 'reports' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('reports')}>📊 Analytics & Reports</button>
             </>
           )}
 
@@ -108,25 +119,19 @@ function Dashboard(_props: any) {
         </div>
 
         <div className="top-tabs-container">
-          <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>
-            📊 Dashboard
-          </button>
+          <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
           
-          {(canSeeOpsBoard) && (
-            <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate(canSeeOpsBoard ? 'opsboard' : 'flights')}>
-              ✈️ Operations
-            </button>
+          {canSeeOpsBoard && (
+            <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>✈️ Operations</button>
           )}
 
-          <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>
-            📅 Roster & HR
-          </button>
-          
-          {activeModule !== 'dashboard' && (
-            <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>
-              ⚙️ System & Setting
-            </button>
+          {canSeeReports && (
+            <button className={`top-tab ${activeModule === 'reports' ? 'active' : ''}`} onClick={() => navigate('reports')}>📈 Reports</button>
           )}
+
+          <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>📅 Roster & HR</button>
+          
+          <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>⚙️ System</button>
         </div>
 
         <div className="page-wrapper">

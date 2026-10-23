@@ -6,10 +6,7 @@ import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
 
-const ALL_LEAVES = [
-  'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL',
-  'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)',
-];
+const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
 
 function SettingsPage() {
   const { profile, logout } = useAuth();
@@ -22,12 +19,10 @@ function SettingsPage() {
 
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
-  
   const [counts, setCounts] = useState({ staff: 0, rosterEntries: 0, leaveRequests: 0, users: 0 });
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetting, setResetting] = useState(false);
-
-  // Get current session details
+  
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [resetting, setResetting] = useState<string | null>(null);
   const currentUser = auth.currentUser;
 
   useEffect(() => {
@@ -41,7 +36,10 @@ function SettingsPage() {
       onSnapshot(collection(db, 'staff'), (s) => setCounts(c => ({ ...c, staff: s.size }))),
       onSnapshot(collection(db, 'roster_entries'), (s) => setCounts(c => ({ ...c, rosterEntries: s.size }))),
       onSnapshot(collection(db, 'leave_requests'), (s) => setCounts(c => ({ ...c, leaveRequests: s.size }))),
-      onSnapshot(collection(db, 'users'), (s) => setCounts(c => ({ ...c, users: s.size }))),
+      onSnapshot(collection(db, 'users'), (s) => {
+        setCounts(c => ({ ...c, users: s.size }));
+        setUsersList(s.docs.map(d => ({ id: d.id, ...d.data() })));
+      }),
     ];
     return () => unsubs.forEach(u => u());
   }, []);
@@ -63,31 +61,28 @@ function SettingsPage() {
     });
   };
 
-  const handleSendReset = async (e: any) => {
-    e.preventDefault();
-    if (!resetEmail) return;
-    setResetting(true);
+  const handleSendReset = async (email: string) => {
+    if (!window.confirm(`Send password reset email to ${email}?`)) return;
+    setResetting(email);
     try {
-      await sendPasswordResetEmail(auth, resetEmail);
-      toast.success(`Password reset email sent to ${resetEmail}`);
-      setResetEmail('');
+      await sendPasswordResetEmail(auth, email);
+      toast.success(`Password reset email sent to ${email}`);
     } catch (err: any) {
       toast.error(err.code === 'auth/user-not-found' ? 'No user found with this email.' : err.message);
     }
-    setResetting(false);
+    setResetting(null);
   };
 
   return (
-    <div className="page-content" style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div className="page-content" style={{ maxWidth: '1000px', margin: '0 auto' }}>
       <div className="staff-header" style={{ justifyContent: 'center', marginBottom: '20px' }}>
         <h2 style={{ fontSize: '24px' }}>⚙️ Settings</h2>
       </div>
 
-      {/* TABS */}
       <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px', margin: '0 auto 24px auto' }}>
         <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General & Account</button>
         {(isDev || isManager) && (
-          <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ System Rules & Access</button>
+          <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ System Rules & Users</button>
         )}
       </div>
 
@@ -106,49 +101,15 @@ function SettingsPage() {
               <button className="logout-btn" style={{ width: 'auto', padding: '10px 20px' }} onClick={logout}>Log Out</button>
             </div>
           </div>
-
-          <div className="dash-card mb-4">
-            <h3>📋 Leave Entitlements</h3>
-            <table className="mini-table">
-              <thead><tr><th>Leave Type</th><th>Entitlement</th><th>Fridays Counted?</th><th>Gender</th></tr></thead>
-              <tbody>
-                <tr><td>Annual Leave</td><td>30 days</td><td>❌ No</td><td>All</td></tr>
-                <tr><td>Sick Leave</td><td>15 days</td><td>✅ Yes</td><td>All</td></tr>
-                <tr><td>Sick / MC</td><td>15 days</td><td>✅ Yes</td><td>All</td></tr>
-                <tr><td>Family Responsibility</td><td>10 days</td><td>✅ Yes</td><td>All</td></tr>
-                <tr><td>Maternity</td><td>180 days</td><td>✅ Yes</td><td>Female</td></tr>
-                <tr><td>Paternity</td><td>30 days</td><td>✅ Yes</td><td>Male</td></tr>
-              </tbody>
-            </table>
-          </div>
           
           {isDev && (
             <div className="dash-card border-l-4 border-red-500">
-              <h3>🔐 Developer Tools</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm mt-2 mb-4">
-                <div>Staff Records: <strong>{counts.staff}</strong></div>
-                <div>Roster Entries: <strong>{counts.rosterEntries}</strong></div>
-                <div>Leave Requests: <strong>{counts.leaveRequests}</strong></div>
-                <div>Active Users: <strong>{counts.users}</strong></div>
-              </div>
-              
-              {/* LOGIN DETAILS */}
-              <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-                <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>🛡️ Current Session Details</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#475569' }}>
-                  <div><strong>Auth UID:</strong> <br/><span style={{ fontSize: '11px', fontFamily: 'monospace' }}>{currentUser?.uid}</span></div>
-                  <div><strong>Email:</strong> <br/>{currentUser?.email}</div>
-                  <div><strong>Last Login:</strong> <br/>{currentUser?.metadata.lastSignInTime}</div>
-                  <div><strong>Account Created:</strong> <br/>{currentUser?.metadata.creationTime}</div>
-                </div>
-              </div>
-
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
-                <h4 style={{ margin: '0 0 8px', color: '#dc2626' }}>Send User Password Reset</h4>
-                <form onSubmit={handleSendReset} style={{ display: 'flex', gap: '8px' }}>
-                  <input type="email" placeholder="user@email.com" value={resetEmail} onChange={e => setResetEmail(e.target.value)} style={{ flex: 1, padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} required />
-                  <button type="submit" disabled={resetting} className="quick-btn" style={{ background: '#dc2626', color: 'white' }}>Send Reset</button>
-                </form>
+              <h3>🔐 Current Session Details</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#475569', marginTop: '12px' }}>
+                <div><strong>Auth UID:</strong> <br/><span style={{ fontSize: '11px', fontFamily: 'monospace' }}>{currentUser?.uid}</span></div>
+                <div><strong>Email:</strong> <br/>{currentUser?.email}</div>
+                <div><strong>Last Login:</strong> <br/>{currentUser?.metadata.lastSignInTime}</div>
+                <div><strong>Account Created:</strong> <br/>{currentUser?.metadata.creationTime}</div>
               </div>
             </div>
           )}
@@ -158,9 +119,8 @@ function SettingsPage() {
       {activeTab === 'rules' && (isDev || isManager) && (
         <div className="dash-card border-l-4 border-blue-500">
           <h3>⚙️ System Rules & Access Control</h3>
-          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>These rules govern how OT is calculated and who can edit what.</p>
           
-          <form onSubmit={saveRules} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+          <form onSubmit={saveRules} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px', marginTop: '16px' }}>
             <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>Overtime Thresholds</h4>
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
               <div>
@@ -186,20 +146,35 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '20px', borderRadius: '8px' }}>
-            <h4 style={{ margin: '0 0 12px', color: '#92400e' }}>📋 Role Access Matrix</h4>
-            <table className="mini-table" style={{ background: 'transparent' }}>
-              <thead><tr><th>Feature</th><th>Developer / Manager</th><th>Operations / Safety SMT</th><th>Other SMT</th><th>Normal Staff</th></tr></thead>
-              <tbody>
-                <tr><td>Dashboard</td><td>View</td><td>View</td><td>View</td><td>View</td></tr>
-                <tr><td>Flight Schedule</td><td>Edit</td><td>Edit</td><td>Edit</td><td>View</td></tr>
-                <tr><td>Ops Board / FOD</td><td>Edit</td><td>Edit</td><td>View</td><td>View (Own Dept Only)</td></tr>
-                <tr><td>Ramp Check Sheet</td><td>Edit</td><td>Edit</td><td>View</td><td>Hidden</td></tr>
-                <tr><td>Roster</td><td>Edit All</td><td>Edit Own Dept</td><td>Edit Own Dept</td><td>View Own Dept</td></tr>
-                <tr><td>Staff List</td><td>Edit</td><td>View</td><td>View</td><td>Hidden</td></tr>
-              </tbody>
-            </table>
+          {/* USER LIST */}
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
+            <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>👥 All User Logins ({usersList.length})</h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="mini-table">
+                <thead><tr><th>Email</th><th>Role</th><th>Dept</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {usersList.map(u => (
+                    <tr key={u.id}>
+                      <td><strong>{u.email}</strong></td>
+                      <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
+                      <td>{u.department || '—'}</td>
+                      <td>
+                        <button 
+                          className="reset-pw-btn" 
+                          disabled={resetting === u.email}
+                          onClick={() => handleSendReset(u.email)}
+                          style={{ padding: '4px 10px', fontSize: '11px' }}
+                        >
+                          {resetting === u.email ? 'Sending...' : '📧 Reset PW'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+
         </div>
       )}
 
