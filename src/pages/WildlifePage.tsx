@@ -69,7 +69,7 @@ function WildlifePage() {
   };
 
   const calculateRisk = (row: any) => {
-    if (!row.bird) return { total: 0, riskIndex: 0, status: '—', rshb: 0 };
+    if (!row.bird) return { total: 0, riskIndex: 0, status: '—', rshb: 0, action: 'Not required' };
     const dbBird = BIRD_DB.find(b => b.name === row.bird);
     const rshb = dbBird?.rshb || 0;
     const mass = dbBird?.mass || 0;
@@ -78,11 +78,12 @@ function WildlifePage() {
     const riskIndex = Math.round(flocksVal * (mass / 1000) * rshb * totalBirds);
     
     let status = 'LOW RISK';
-    if (riskIndex >= 1000) status = 'ALERT';
-    else if (riskIndex > 250) status = 'HIGH RISK';
-    else if (riskIndex > 100) status = 'MODERATE';
+    let action = 'Mitigation Not required';
+    if (riskIndex >= 1000) { status = 'ALERT'; action = 'Urgently mitigation required before Operation'; }
+    else if (riskIndex > 250) { status = 'HIGH RISK'; action = 'Mitigation required before Operation'; }
+    else if (riskIndex > 100) { status = 'MODERATE'; action = 'Advise to disparce bird near Runway Area'; }
 
-    return { total: totalBirds, riskIndex, status, rshb };
+    return { total: totalBirds, riskIndex, status, rshb, action };
   };
 
   const handleSave = async () => {
@@ -133,7 +134,7 @@ function WildlifePage() {
             <div><label style={{fontSize:'12px', fontWeight:'bold'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" /></div>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'center', fontFamily: 'Arial' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', textAlign: 'center', fontFamily: 'Arial' }}>
             <thead>
               <tr>
                 <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th>
@@ -177,12 +178,35 @@ function WildlifePage() {
                     <td style={{border:'1px solid #000', padding:'4px'}}>{calc.rshb}</td>
                     <td style={{border:'1px solid #000', padding:'4px'}} className="font-bold">{calc.total}</td>
                     <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status}</td>
-                    <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status === 'ALERT' ? 'Urgent' : calc.status === 'HIGH RISK' ? 'Required' : 'Not Required'}</td>
+                    <td style={{border:'1px solid #000', padding:'4px'}}>{calc.action}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+          
+          <div style={{ marginTop: '40px', borderTop: '2px dashed #ccc', paddingTop: '20px' }}>
+            <h3 style={{ textAlign: 'center', fontFamily: 'Arial', marginBottom: '16px' }}>Bird Watch Report</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '12px', fontFamily: 'Arial', border: '1px solid #000' }}>
+              <div style={{ padding: '10px', borderRight: '1px solid #000' }}>
+                <div style={{ marginBottom: '8px' }}><strong>Report No:</strong> {refNo}</div>
+                <div style={{ marginBottom: '8px' }}><strong>Condition:</strong> LOW / MODERATE / SEVERE / High / ALERT</div>
+                <div><strong>Legend:</strong><br/>
+                  LOW: Normal bird activity, low probability.<br/>
+                  MODERATE: Concentrations represent probable hazard.<br/>
+                  SEVERE: Heavy concentration, immediate hazard.<br/>
+                  ALERT: Weather/time makes influx likely.
+                </div>
+              </div>
+              <div style={{ padding: '10px' }}>
+                <div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {date} <strong>Review date:</strong> {date}</div>
+                <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {user?.email}</div>
+                <div style={{ marginBottom: '8px' }}><strong>Designation:</strong> OPERATIONS OFFICER</div>
+                <div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div>
+                <div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div>
+              </div>
+            </div>
+          </div>
 
           <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }} className="no-print">
             {isManager && <button className="add-staff-btn" onClick={handleSave}>💾 Save Bird Count</button>}
@@ -197,12 +221,12 @@ function WildlifePage() {
           <table className="mini-table mt-4">
             <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Total Species</th><th>Actions</th></tr></thead>
             <tbody>
-              {records.map(r => (
+              {records.map((r: any) => (
                 <tr key={r.id}>
                   <td>{r.date}</td>
                   <td>{r.refNo}</td>
                   <td>{r.observer}</td>
-                  <td>{r.rows.length}</td>
+                  <td>{r.rows?.length || 0}</td>
                   <td>
                     <button className="delete-btn" onClick={() => deleteDoc(doc(db, 'bird_counts', r.id))}>Delete</button>
                   </td>

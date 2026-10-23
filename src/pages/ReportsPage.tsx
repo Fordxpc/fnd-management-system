@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { useAuth } from '../auth';
 
-// Reusable exact Excel-style table header
 const ExcelHeader = ({ title, subtitle }: { title: string, subtitle: string }) => (
   <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
     <img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} />
@@ -12,25 +10,22 @@ const ExcelHeader = ({ title, subtitle }: { title: string, subtitle: string }) =
   </div>
 );
 
-const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '11px', fontFamily: 'Arial, sans-serif', textAlign: 'center' };
+const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif', textAlign: 'center' };
 const thStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold' };
 const tdStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px' };
 
 function ReportsPage() {
-  const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'dfis' | 'wildlife' | 'fod' | 'stats' | 'traffic' | 'lights'>('dfis');
   
   const [rampData, setRampData] = useState<any[]>([]);
   const [fodData, setFodData] = useState<any[]>([]);
-  const [flightData, setFlightData] = useState<any[]>([]);
   const [birdData, setBirdData] = useState<any[]>([]);
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'ramp_inspections'), s => setRampData(s.docs.map(d => ({id: d.id, ...d.data()}))));
     const u2 = onSnapshot(collection(db, 'fod_collections'), s => setFodData(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    const u3 = onSnapshot(collection(db, 'flights'), s => setFlightData(s.docs.map(d => ({id: d.id, ...d.data()}))));
     const u4 = onSnapshot(collection(db, 'bird_counts'), s => setBirdData(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    return () => { u1(); u2(); u3(); u4(); };
+    return () => { u1(); u2(); u4(); };
   }, []);
 
   return (
@@ -86,7 +81,7 @@ function ReportsPage() {
                     <td style={tdStyle}>{r.checkIn}</td>
                     <td style={tdStyle}>{r.acReg}</td>
                     <td style={tdStyle}>{r.acType}</td>
-                    <td style={tdStyle}>Island Aviation Services</td>
+                    <td style={tdStyle}>Island Aviations Services</td>
                     <td style={tdStyle}>{r.fltNo}</td>
                     <td style={tdStyle}>{r.eta}</td>
                     <td style={tdStyle}>{r.ata}</td>

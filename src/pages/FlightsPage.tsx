@@ -9,12 +9,6 @@ const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Priv
 const STATUS_OPTIONS = ['On Time', 'Delayed', 'Boarding', 'Departed', 'Landed', 'Cancelled'];
 
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
-
-const getDayName = (dateStr: string) => {
-  const days = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-  return days[new Date(dateStr + 'T00:00:00').getDay()];
-};
-
 const formatDisplayDate = (dateStr: string) => {
   if (!dateStr) return '';
   const [y, m, d] = dateStr.split('-');
@@ -27,7 +21,7 @@ function FlightsPage() {
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   
   const [flights, setFlights] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState(formatDate(new Date()));
+  const [dateFilter, setDateFilter] = useState(formatDate(new Date())); // Used only for adding new
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -62,7 +56,7 @@ function FlightsPage() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!flightNo || flightNo === 'Q2-') {
-      toast.error('Please enter a valid Flight Number (e.g., Q2-192)');
+      toast.error('Please enter a valid Flight Number');
       return;
     }
     
@@ -96,6 +90,7 @@ function FlightsPage() {
     setEditingId(f.id);
     setFlightNo(f.flightNo || 'Q2-');
     setType(f.type || 'Scheduled');
+    setDateFilter(f.date || formatDate(new Date()));
     
     if (AIRCRAFT_OPTIONS.includes(f.aircraft)) {
       setAircraft(f.aircraft);
@@ -125,13 +120,18 @@ function FlightsPage() {
     }
   };
 
-  const visibleFlights = flights
-    .filter(f => f.date === dateFilter)
-    .sort((a, b) => (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00'));
+  const todayStr = formatDate(new Date());
+  
+  // Sorting all flights by date and time
+  const sortedFlights = [...flights].sort((a, b) => {
+    const dateCompare = (a.date || '').localeCompare(b.date || '');
+    if (dateCompare !== 0) return dateCompare;
+    return (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00');
+  });
 
   const completedStatuses = ['Departed', 'Landed', 'Cancelled'];
-  const departedFlights = visibleFlights.filter(f => completedStatuses.includes(f.status));
-  const scheduledFlights = visibleFlights.filter(f => !completedStatuses.includes(f.status));
+  const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(f.status));
+  const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(f.status)).reverse();
 
   const FlightCard = ({ f }: { f: any }) => (
     <div className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0' }}>
@@ -142,30 +142,28 @@ function FlightsPage() {
           <span style={{ background: f.type === 'Air Ambulance' ? '#dc2626' : f.type === 'Additional' ? '#f59e0b' : '#2563eb', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700 }}>{f.type}</span>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>BOOKED</div>
-          <div style={{ fontSize: '16px', fontWeight: 800 }}>{f.bookedFigure || '—'}</div>
+          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>DATE</div>
+          <div style={{ fontSize: '16px', fontWeight: 800 }}>{formatDisplayDate(f.date)}</div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', padding: '20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>ARRIVAL</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>DEPARTURE</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
         </div>
 
         <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, letterSpacing: '1px', marginBottom: '8px' }}>ROUTE</div>
-          <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '2px', color: '#1e293b' }}>{f.route}</div>
-          {f.originDepTime && <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px', fontWeight: 600 }}>Origin Dep: {f.originDepTime}</div>}
+          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '8px' }}>ROUTE</div>
+          <div style={{ fontSize: '20px', fontWeight: 900, color: '#1e293b' }}>{f.route}</div>
         </div>
 
         <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, letterSpacing: '1px', marginBottom: '4px' }}>STATUS</div>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>STATUS</div>
             <span className="status-badge" style={{ fontSize: '14px', padding: '6px 12px', background: f.status === 'Delayed' ? '#fef3c7' : f.status === 'Cancelled' ? '#fee2e2' : f.status === 'Departed' || f.status === 'Landed' ? '#e2e8f0' : '#dcfce7', color: f.status === 'Delayed' ? '#92400e' : f.status === 'Cancelled' ? '#991b1b' : f.status === 'Departed' || f.status === 'Landed' ? '#475569' : '#065f46' }}>{f.status}</span>
           </div>
-          {f.remarks && <div style={{ fontSize: '11px', color: '#64748b', fontStyle: 'italic', textAlign: 'right' }}>{f.remarks}</div>}
           {isManager && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
               <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
@@ -181,11 +179,8 @@ function FlightsPage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>Flight Operations</h2>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit' }} />
-          {isManager && !showForm && <button className="add-staff-btn" onClick={() => { setShowForm(true); resetForm(); }}>+ Add Flight</button>}
-          {showForm && <button className="export-btn pdf-btn" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</button>}
-        </div>
+        {isManager && !showForm && <button className="add-staff-btn" onClick={() => { setShowForm(true); resetForm(); }}>+ Add Flight</button>}
+        {showForm && <button className="export-btn pdf-btn" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</button>}
       </div>
 
       {showForm && (
@@ -194,6 +189,7 @@ function FlightsPage() {
             {editingId ? '✏️ Edit Flight Details' : '➕ Add New Flight'}
           </div>
 
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date *</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} required /></div>
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Flight No. *</label><input placeholder="Q2-192" value={flightNo} onChange={e => setFlightNo(e.target.value.toUpperCase())} required /></div>
           
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Type</label>
@@ -208,18 +204,13 @@ function FlightsPage() {
             </select>
           </div>
 
-          {aircraft === 'CUSTOM' ? (
-            <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>
-          ) : (
-            <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Booked Figure</label><input placeholder="e.g. 29+0" value={bookedFigure} onChange={e => setBookedFigure(e.target.value)} /></div>
-          )}
+          {aircraft === 'CUSTOM' && <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>}
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time</label><input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></div>
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Arrival Time (FND)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Departure Time (FND)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Origin Dep. Time (e.g. MLE)</label><input type="time" value={originDep} onChange={e => setOriginDep(e.target.value)} /></div>
 
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route (Use / for transit)</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
           
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Status</label>
             <select value={status} onChange={e => setStatus(e.target.value)}>
@@ -227,49 +218,37 @@ function FlightsPage() {
             </select>
           </div>
 
-          <input placeholder="Remarks" value={remarks} onChange={e => setRemarks(e.target.value)} style={{ gridColumn: 'span 2' }} />
-          
           <button type="submit" style={{ gridColumn: 'span 2', background: editingId ? '#2563eb' : '#16a34a' }}>
             {editingId ? 'Save Changes' : 'Save Flight'}
           </button>
         </form>
       )}
 
-      {visibleFlights.length === 0 ? (
-        <div className="empty-state">
-          <p>No flights scheduled for {formatDisplayDate(dateFilter)} ({getDayName(dateFilter)}).</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          
-          <div className="dash-card" style={{ padding: '16px 24px', textAlign: 'center', background: '#f8fafc' }}>
-            <h3 style={{ margin: 0, color: '#1e293b' }}>FLIGHT SCHEDULE — {formatDisplayDate(dateFilter)}</h3>
-            <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: '13px', fontWeight: 700, letterSpacing: '1px' }}>{getDayName(dateFilter)}</p>
-          </div>
-
-          {/* SCHEDULED FLIGHTS */}
-          {scheduledFlights.length > 0 && (
-            <div>
-              <h3 style={{ color: '#2563eb', borderBottom: '2px solid #bfdbfe', paddingBottom: '8px', marginBottom: '16px' }}>🕒 Scheduled & Active</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {scheduledFlights.map(f => <FlightCard key={f.id} f={f} />)}
-              </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        
+        {/* UPCOMING */}
+        <div>
+          <h3 style={{ color: '#2563eb', borderBottom: '2px solid #bfdbfe', paddingBottom: '8px', marginBottom: '16px' }}>🕒 Upcoming & Active Flights</h3>
+          {upcomingFlights.length === 0 ? <div className="empty-state"><p>No upcoming flights.</p></div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {upcomingFlights.map(f => <FlightCard key={f.id} f={f} />)}
             </div>
           )}
+        </div>
 
-          {/* DEPARTED FLIGHTS */}
-          {departedFlights.length > 0 && (
-            <div>
-              <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Departed / Completed</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', opacity: 0.8 }}>
-                {departedFlights.map(f => <FlightCard key={f.id} f={f} />)}
-              </div>
+        {/* PAST */}
+        <div>
+          <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Past & Departed Flights</h3>
+          {pastFlights.length === 0 ? <div className="empty-state"><p>No past flights.</p></div> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', opacity: 0.8 }}>
+              {pastFlights.map(f => <FlightCard key={f.id} f={f} />)}
             </div>
           )}
-
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
+
 export default FlightsPage;

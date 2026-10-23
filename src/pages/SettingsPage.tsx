@@ -1,14 +1,23 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
 
-// Parsed from fnd_staff_logins.csv
+interface MergedUser {
+  email: string;
+  name: string;
+  password: string;
+  role: string;
+  department: string;
+  status: string;
+  id: string | null;
+}
+
 const STAFF_CREDENTIALS = [
   { email: 'sn-0034@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Adam' },
   { email: 'sn-0035@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Aslam' },
@@ -65,7 +74,6 @@ function SettingsPage() {
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
   
-  // User Data states
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [preRegs, setPreRegs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,42 +126,53 @@ function SettingsPage() {
     setResetting(null);
   };
 
-  // --- MERGE ALL USERS ---
-  // 1. Start with default CSV staff
-  let allMergedUsers = STAFF_CREDENTIALS.map(c => ({
+  const handleRemoveUser = async (email: string) => {
+    if (!window.confirm(`Are you sure you want to remove ${email} from the database?`)) return;
+    try {
+      const activeMatch = activeUsers.find(u => u.email === email);
+      if (activeMatch && activeMatch.id) await deleteDoc(doc(db, 'users', activeMatch.id));
+
+      const regMatch = preRegs.find(u => u.email === email);
+      if (regMatch && regMatch.id) await deleteDoc(doc(db, 'user_presets', regMatch.id));
+
+      toast.success(`${email} removed from lists.`);
+    } catch (err: any) {
+      toast.error('Error: ' + err.message);
+    }
+  };
+
+  let allMergedUsers: MergedUser[] = STAFF_CREDENTIALS.map(c => ({
     email: c.email,
     name: c.name,
     password: c.password,
     role: 'staff',
     department: '—',
-    status: 'Default'
+    status: 'Default',
+    id: null
   }));
 
-  // 2. Merge Pre-registered
   preRegs.forEach(p => {
-    const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === p.email.toLowerCase());
+    const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (p.email || '').toLowerCase());
     if (idx >= 0) {
-      allMergedUsers[idx] = { ...allMergedUsers[idx], role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered' };
+      allMergedUsers[idx] = { ...allMergedUsers[idx], role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered', id: p.id };
     } else {
-      allMergedUsers.push({ email: p.email, name: p.email.split('@')[0], password: '—', role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered' });
+      allMergedUsers.push({ email: p.email || '', name: (p.email || '').split('@')[0], password: '—', role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered', id: p.id });
     }
   });
 
-  // 3. Merge Active Users (SMT, Managers, etc.)
   activeUsers.forEach(a => {
     const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase());
     if (idx >= 0) {
-      allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active' };
+      allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id };
     } else {
-      allMergedUsers.push({ email: a.email, name: a.name || a.email.split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active' });
+      allMergedUsers.push({ email: a.email || '', name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id });
     }
   });
 
-  // Filter by Search
-  const filteredUsers = allMergedUsers.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
-  ).sort((a, b) => a.email.localeCompare(b.email));
+  const filteredUsers = allMergedUsers.filter((u: MergedUser) => 
+    (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())
+  ).sort((a: MergedUser, b: MergedUser) => (a.email || '').localeCompare(b.email || ''));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -228,13 +247,11 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
-          {/* MASTER USER LIST */}
           {isDev && (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
                   <h4 style={{ margin: 0, color: '#1e293b' }}>👥 Master User List ({allMergedUsers.length})</h4>
-                  <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>Includes Default Staff, Pre-registered, and Active Logins.</p>
                 </div>
                 <input 
                   type="text" 
@@ -253,41 +270,49 @@ function SettingsPage() {
                   <tbody>
                     {filteredUsers.length === 0 ? (
                       <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No users found matching "{searchQuery}"</td></tr>
-                    ) : filteredUsers.map(u => (
-                      <tr key={u.email}>
-                        <td><strong>{u.name}</strong></td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
-                        <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: u.role === 'developer' ? '#fee2e2' : u.role === 'smt' ? '#fef3c7' : '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
-                        <td>
-                          <span style={{ 
-                            fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
-                            background: u.status === 'Active' ? '#dcfce7' : u.status === 'Pre-registered' ? '#fef3c7' : '#f1f5f9',
-                            color: u.status === 'Active' ? '#166534' : u.status === 'Pre-registered' ? '#92400e' : '#475569'
-                          }}>
-                            {u.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
-                          {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
-                        </td>
-                        <td>
-                          <button 
-                            className="reset-pw-btn" 
-                            disabled={resetting === u.email}
-                            onClick={() => handleSendReset(u.email)}
-                            style={{ padding: '4px 10px', fontSize: '11px' }}
-                          >
-                            {resetting === u.email ? '...' : '📧 Reset'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    ) : (
+                      filteredUsers.map((u: MergedUser) => (
+                        <tr key={u.email}>
+                          <td><strong>{u.name}</strong></td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
+                          <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: u.role === 'developer' ? '#fee2e2' : u.role === 'smt' ? '#fef3c7' : '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
+                          <td>
+                            <span style={{ 
+                              fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+                              background: u.status === 'Active' ? '#dcfce7' : u.status === 'Pre-registered' ? '#fef3c7' : '#f1f5f9',
+                              color: u.status === 'Active' ? '#166534' : u.status === 'Pre-registered' ? '#92400e' : '#475569'
+                            }}>
+                              {u.status.toUpperCase()}
+                            </span>
+                          </td>
+                          <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
+                            {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <button 
+                              className="reset-pw-btn" 
+                              disabled={resetting === u.email}
+                              onClick={() => handleSendReset(u.email)}
+                              style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}
+                            >
+                              {resetting === u.email ? '...' : '📧 Reset'}
+                            </button>
+                            <button 
+                              className="delete-btn"
+                              onClick={() => handleRemoveUser(u.email)}
+                              style={{ padding: '4px 8px', fontSize: '11px' }}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
-
         </div>
       )}
 

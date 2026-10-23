@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
@@ -36,9 +36,11 @@ const getWeatherInfo = (code: number) => {
   return { text: 'Clear', icon: '☀️' };
 };
 
-interface Props { onNavigate?: (page: string) => void; }
+interface DashboardProps {
+  onNavigate?: (page: string) => void;
+}
 
-function DashboardPage({ onNavigate }: Props) {
+const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const { profile, user } = useAuth();
   const [staff, setStaff] = useState<any[]>([]);
   const [roster, setRoster] = useState<any[]>([]);
@@ -77,7 +79,6 @@ function DashboardPage({ onNavigate }: Props) {
       setTodayFOD(allFod.filter((f: any) => f.date === todayStr));
     });
     const u8 = onSnapshot(collection(db, 'bird_counts'), (s) => {
-      // FIX: Explicitly type the array as any[] to resolve the TS error
       const todayBirds: any[] = s.docs.map(d => ({ id: d.id, ...d.data() })).filter((b: any) => b.date === todayStr);
       let total = 0;
       todayBirds.forEach(record => {
@@ -107,8 +108,6 @@ function DashboardPage({ onNavigate }: Props) {
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
-
-  const todaysFlights = flights.filter(f => f.date === todayStr).sort((a, b) => (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00'));
 
   const upcomingFlights = flights
     .filter(f => {
@@ -185,10 +184,7 @@ function DashboardPage({ onNavigate }: Props) {
         <div style={{ fontSize: '40px' }}>✈️</div>
       </div>
 
-      {/* ROW 1: LIVE OPS */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-        
-        {/* NEXT FLIGHT WIDGET */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '20px' }}>
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
@@ -215,7 +211,6 @@ function DashboardPage({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* LIVE WEATHER */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <h3 style={{ color: '#e0f2fe', margin: '0 0 12px', fontSize: '14px' }}>🌤️ Weather</h3>
           {weather ? (
@@ -229,15 +224,8 @@ function DashboardPage({ onNavigate }: Props) {
             </div>
           ) : <div style={{ fontSize: '13px' }}>Loading...</div>}
         </div>
-
-        {/* ZONE MAP */}
-        <div className="dash-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '10px' }}>
-          <h3 style={{ margin: '0 0 8px', fontSize: '14px', textAlign: 'center' }}>🗺️ Zone Map</h3>
-          <img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', height: '100px', objectFit: 'contain', borderRadius: '6px', cursor: 'pointer' }} onClick={() => onNavigate && onNavigate('wildlife')} />
-        </div>
       </div>
 
-      {/* ROW 2: STATS */}
       <div className="dash-stats">
         <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>
           <div className="stat-icon" style={{ background: '#dbeafe', color: '#1e40af' }}>👥</div>
@@ -257,7 +245,6 @@ function DashboardPage({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* ROW 3: QUICK LINKS */}
       <div className="dash-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
         <h3 style={{ margin: '0 0 12px' }}>🚀 Quick Access</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
@@ -276,7 +263,6 @@ function DashboardPage({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* ROW 4: PERSONAL STATS & APPROVALS */}
       {isManager && pendingLeave.length > 0 && (
         <div className="dash-card" style={{ marginBottom: '20px', borderLeft: '4px solid #f59e0b' }}>
           <h3>⚠️ Awaiting Approvals ({pendingLeave.length})</h3>
@@ -326,7 +312,6 @@ function DashboardPage({ onNavigate }: Props) {
         )}
       </div>
 
-      {/* ROW 5: CHARTS */}
       <div className="dash-grid" style={{ marginBottom: '20px' }}>
         <div className="dash-card">
           <h3>🏢 Staff by Department</h3>
@@ -359,13 +344,19 @@ function DashboardPage({ onNavigate }: Props) {
         </div>
       </div>
 
-      {/* ROW 6: TODAY LISTS */}
+      <div className="dash-card" style={{ marginBottom: '20px', textAlign: 'center' }}>
+        <h3>🗺️ Airside Zone Map</h3>
+        <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+          <img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', maxHeight: '400px', objectFit: 'contain', cursor: 'pointer' }} onClick={() => onNavigate && onNavigate('wildlife')} />
+        </div>
+      </div>
+
       <div className="dash-grid">
         <div className="dash-card">
           <h3>📅 Today's Duty (By Dept)</h3>
           {Object.keys(dutyByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No scheduled shifts today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {Object.entries(dutyByDept).map(([dept, entries]) => {
+              {Object.entries(dutyByDept).map(([dept, entries]: any) => {
                 const isOpen = openDepts[dept] !== false;
                 return (
                   <div key={dept} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
@@ -393,7 +384,7 @@ function DashboardPage({ onNavigate }: Props) {
           <h3>🌴 On Leave Today (By Dept)</h3>
           {Object.keys(leaveByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No one is on leave today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {Object.entries(leaveByDept).map(([dept, entries]) => {
+              {Object.entries(leaveByDept).map(([dept, entries]: any) => {
                 const isOpen = openLeaveDepts[dept] !== false;
                 return (
                   <div key={dept} style={{ border: '1px solid #fecaca', borderRadius: '6px', overflow: 'hidden' }}>
