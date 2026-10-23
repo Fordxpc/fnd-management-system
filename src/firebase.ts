@@ -2,13 +2,14 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// Hardcoded for testing to bypass Cloudflare environment variable issues
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyD6SjiszP7dtr02gmaawr-JOZQxIAUGHS8I",
+  authDomain: "fnd-ops-management.firebaseapp.com",
+  projectId: "fnd-ops-management",
+  storageBucket: "fnd-ops-management.firebasestorage.app",
+  messagingSenderId: "76853703487",
+  appId: "1:76853703487:web:081b2d905668d1cb93998a",
 };
 
 const app = initializeApp(firebaseConfig);
