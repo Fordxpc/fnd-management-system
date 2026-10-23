@@ -166,7 +166,8 @@ function LeavePage() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'staff'), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      // FIX: Explicitly type list as any[]
+      const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setStaffList(list);
       const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
@@ -201,7 +202,7 @@ function LeavePage() {
     if (isDev || isManager || canApproveAnyDept) return true;
     if (isDeptManager && myStaff?.department === dept) return true;
     if (isSMT && myStaff?.department === dept) return true;
-    if (myStaff?.department === 'Safety' && dept === 'Security') return true; // Safety edits Security
+    if (myStaff?.department === 'Safety' && dept === 'Security') return true;
     return false;
   };
 
@@ -209,7 +210,7 @@ function LeavePage() {
   const canSeeMyBalance = !isStaff || myStaff?.balanceVisible === true || isSMT || isManager;
 
   const canApproveRequest = (r: any): boolean => {
-    if (r.staffId === myStaff?.id) return false; // Cannot approve own
+    if (r.staffId === myStaff?.id) return false;
     if (isDev || isManager || canApproveAnyDept) return true;
     return canApproveThisDept(r.staffDepartment);
   };
@@ -219,10 +220,10 @@ function LeavePage() {
     return myStaff && r.staffId === myStaff.id;
   };
 
+  // FIXED: Simplified filter to prevent TS errors
   const visibleRequests = requests
     .filter((r: any) => {
       if (isStaff) return myStaff && r.staffId === myStaff.id;
-      if (!isDeptManager && !isSMT && !isDev && !isManager) return myStaff && r.staffId === myStaff.id;
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })

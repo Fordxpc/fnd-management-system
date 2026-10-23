@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, doc as firestoreDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -71,13 +71,14 @@ function OvertimePage() {
 
   useEffect(() => {
     const fetchRules = async () => {
-      const snap = await getDoc(firestoreDoc(db, 'settings', 'ot_rules'));
+      const snap = await getDoc(doc(db, 'settings', 'ot_rules'));
       if (snap.exists()) setOtRules(snap.data() as any);
     };
     fetchRules();
 
     const unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      // FIX: Explicitly type list as any[] to stop the red squiggly
+      const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setStaff(list);
       const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
@@ -102,7 +103,6 @@ function OvertimePage() {
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const canApprove = isDev || isManager || isSMT;
 
-  // Check if current user is excluded from OT (Manager / Assistant Manager)
   const isExcludedFromOT = (staffName: string, position: string) => {
     const n = (staffName || '').toLowerCase();
     const p = (position || '').toLowerCase();
@@ -241,7 +241,6 @@ function OvertimePage() {
           const weekEntries = weekMap[weekKey];
           const weekTotal = weekEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
           
-          // --- NEW OT MATH ---
           const sampleStaff = staff.find(s => s.id === weekEntries[0].staffId);
           const isAdmin = sampleStaff?.department === 'Administration';
           const targetHours = isAdmin ? otRules.adminHours : otRules.regularHours;
@@ -254,10 +253,8 @@ function OvertimePage() {
             r.startDate <= weekEnd && r.endDate >= weekKey
           );
           
-          // Calculate deduction (8 hours per day for overlapping leaves)
           let deductionHours = 0;
           weekLeaves.forEach(l => {
-            // rough overlap calculation
             const s = new Date(l.startDate + 'T00:00:00');
             const e = new Date(l.endDate + 'T00:00:00');
             let count = 0;
