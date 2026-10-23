@@ -19,8 +19,6 @@ function SettingsPage() {
 
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
-  const [counts, setCounts] = useState({ staff: 0, rosterEntries: 0, leaveRequests: 0, users: 0 });
-  
   const [usersList, setUsersList] = useState<any[]>([]);
   const [resetting, setResetting] = useState<string | null>(null);
   const currentUser = auth.currentUser;
@@ -32,16 +30,10 @@ function SettingsPage() {
     };
     loadSettings();
 
-    const unsubs = [
-      onSnapshot(collection(db, 'staff'), (s) => setCounts(c => ({ ...c, staff: s.size }))),
-      onSnapshot(collection(db, 'roster_entries'), (s) => setCounts(c => ({ ...c, rosterEntries: s.size }))),
-      onSnapshot(collection(db, 'leave_requests'), (s) => setCounts(c => ({ ...c, leaveRequests: s.size }))),
-      onSnapshot(collection(db, 'users'), (s) => {
-        setCounts(c => ({ ...c, users: s.size }));
-        setUsersList(s.docs.map(d => ({ id: d.id, ...d.data() })));
-      }),
-    ];
-    return () => unsubs.forEach(u => u());
+    const unsub = onSnapshot(collection(db, 'users'), (s) => {
+      setUsersList(s.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
   }, []);
 
   const saveRules = async (e: any) => {
@@ -146,7 +138,7 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
-          {/* USER LIST */}
+          {/* ALL USERS LOGIN DETAILS */}
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
             <h4 style={{ margin: '0 0 12px', color: '#1e293b' }}>👥 All User Logins ({usersList.length})</h4>
             <div style={{ overflowX: 'auto' }}>

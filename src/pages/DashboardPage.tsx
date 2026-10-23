@@ -47,6 +47,7 @@ function DashboardPage({ onNavigate }: Props) {
   const [flights, setFlights] = useState<any[]>([]);
   const [liveRamp, setLiveRamp] = useState<any>(null);
   const [todayFOD, setTodayFOD] = useState<any[]>([]);
+  const [todayBirdCount, setTodayBirdCount] = useState<number>(0);
   const [weather, setWeather] = useState<any>(null);
 
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
@@ -59,7 +60,6 @@ function DashboardPage({ onNavigate }: Props) {
   const nowTime = new Date().toTimeString().slice(0, 5);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
-  // Get display name from Auth profile or Email prefix
   const displayName = profile?.name || user?.email?.split('@')[0] || 'User';
 
   useEffect(() => {
@@ -73,8 +73,19 @@ function DashboardPage({ onNavigate }: Props) {
       else setLiveRamp(null);
     });
     const u7 = onSnapshot(collection(db, 'fod_collections'), (s) => {
-      const allFod = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      const allFod: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
       setTodayFOD(allFod.filter((f: any) => f.date === todayStr));
+    });
+    const u8 = onSnapshot(collection(db, 'bird_counts'), (s) => {
+      // FIX: Explicitly type the array as any[] to resolve the TS error
+      const todayBirds: any[] = s.docs.map(d => ({ id: d.id, ...d.data() })).filter((b: any) => b.date === todayStr);
+      let total = 0;
+      todayBirds.forEach(record => {
+        record.rows?.forEach((row: any) => {
+          total += row.zones.reduce((a: number, b: number) => a + b, 0);
+        });
+      });
+      setTodayBirdCount(total);
     });
 
     fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current_weather=true')
@@ -82,7 +93,7 @@ function DashboardPage({ onNavigate }: Props) {
       .then(data => setWeather(data.current_weather))
       .catch(err => console.error("Weather fetch failed", err));
 
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
+    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
   }, [todayStr]);
 
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
@@ -166,28 +177,32 @@ function DashboardPage({ onNavigate }: Props) {
 
   return (
     <div className="page-content">
-      <div className="dash-welcome">
-        <h2>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {displayName}</h2>
-        <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department || 'All Depts'}</p>
+      <div className="dash-welcome" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {displayName}</h2>
+          <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department || 'All Depts'}</p>
+        </div>
+        <div style={{ fontSize: '40px' }}>✈️</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+      {/* ROW 1: LIVE OPS */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '16px', marginBottom: '20px' }}>
         
         {/* NEXT FLIGHT WIDGET */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800, transition: 'all 0.3s' }}>{liveStatus}</span>}
+            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '12px', marginBottom: '12px' }}>
-                <div style={{ fontSize: '32px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
-                <div style={{ fontSize: '13px', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
+                <div style={{ fontSize: '36px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
+                <div style={{ fontSize: '14px', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
                 <div style={{ fontSize: '12px', background: '#3b82f6', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
               </div>
-              <div style={{ fontSize: '22px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
             </div>
           ) : (
             <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px', textAlign: 'center' }}>No upcoming flights scheduled.</div>
@@ -200,53 +215,29 @@ function DashboardPage({ onNavigate }: Props) {
           )}
         </div>
 
-        {/* TODAY'S FLIGHTS & WEATHER */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
-          {/* LIVE WEATHER */}
-          <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
-            <div>
-              <h3 style={{ color: '#e0f2fe', margin: '0 0 4px', fontSize: '14px' }}>🌤️ Funadhoo Weather</h3>
-              {weather ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '32px' }}>{getWeatherInfo(weather.weathercode).icon}</span>
-                  <div>
-                    <div style={{ fontSize: '24px', fontWeight: 900 }}>{weather.temperature}°C</div>
-                    <div style={{ fontSize: '12px', color: '#bae6fd' }}>{getWeatherInfo(weather.weathercode).text} · Wind {weather.windspeed} km/h</div>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ fontSize: '13px' }}>Loading weather...</div>
-              )}
-            </div>
-            <div style={{ textAlign: 'right', fontSize: '11px', color: '#bae6fd' }}>
-              Live Sync<br/>Open-Meteo
-            </div>
-          </div>
-
-          {/* TODAY'S FLIGHTS LIST */}
-          <div className="dash-card" style={{ flex: 1, padding: '16px 20px' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '15px' }}>📅 Today's Flights ({todaysFlights.length})</h3>
-            {todaysFlights.length === 0 ? (
-              <p style={{ fontSize: '13px', color: '#64748b' }}>No flights scheduled for today.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '100px', overflowY: 'auto' }}>
-                {todaysFlights.map(f => (
-                  <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 800, color: '#1e293b' }}>{f.flightNo}</span>
-                      <span style={{ fontSize: '12px', color: '#64748b' }}>{f.route}</span>
-                    </div>
-                    <span style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>{f.departureTime || '—'}</span>
-                  </div>
-                ))}
+        {/* LIVE WEATHER */}
+        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <h3 style={{ color: '#e0f2fe', margin: '0 0 12px', fontSize: '14px' }}>🌤️ Weather</h3>
+          {weather ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '40px' }}>{getWeatherInfo(weather.weathercode).icon}</span>
+              <div>
+                <div style={{ fontSize: '28px', fontWeight: 900 }}>{weather.temperature}°C</div>
+                <div style={{ fontSize: '12px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weathercode).text}</div>
+                <div style={{ fontSize: '11px', color: '#bae6fd' }}>Wind: {weather.windspeed} km/h</div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : <div style={{ fontSize: '13px' }}>Loading...</div>}
+        </div>
 
+        {/* ZONE MAP */}
+        <div className="dash-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '10px' }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: '14px', textAlign: 'center' }}>🗺️ Zone Map</h3>
+          <img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', height: '100px', objectFit: 'contain', borderRadius: '6px', cursor: 'pointer' }} onClick={() => onNavigate && onNavigate('wildlife')} />
         </div>
       </div>
 
+      {/* ROW 2: STATS */}
       <div className="dash-stats">
         <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>
           <div className="stat-icon" style={{ background: '#dbeafe', color: '#1e40af' }}>👥</div>
@@ -256,20 +247,36 @@ function DashboardPage({ onNavigate }: Props) {
           <div className="stat-icon" style={{ background: '#fef3c7', color: '#92400e' }}>🌴</div>
           <div><div className="stat-value">{pendingLeave.length}</div><div className="stat-label">Pending Leave</div></div>
         </div>
-        <div className="stat-card" onClick={() => onNavigate && onNavigate('roster')}>
-          <div className="stat-icon" style={{ background: '#dcfce7', color: '#065f46' }}>📅</div>
-          <div><div className="stat-value">{todayShifts.length}</div><div className="stat-label">On Duty Today</div></div>
-        </div>
         <div className="stat-card" onClick={() => onNavigate && onNavigate('opsboard')}>
           <div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>🪨</div>
-          <div><div className="stat-value">{totalFODGrams}g</div><div className="stat-label">FOD Collected Today</div></div>
+          <div><div className="stat-value">{totalFODGrams}g</div><div className="stat-label">FOD Today</div></div>
         </div>
-        <div className="stat-card">
+        <div className="stat-card" onClick={() => onNavigate && onNavigate('wildlife')}>
           <div className="stat-icon" style={{ background: '#f3e8ff', color: '#6b21a8' }}>🦅</div>
-          <div><div className="stat-value">0</div><div className="stat-label">Wildlife Today</div></div>
+          <div><div className="stat-value">{todayBirdCount}</div><div className="stat-label">Birds Today</div></div>
         </div>
       </div>
 
+      {/* ROW 3: QUICK LINKS */}
+      <div className="dash-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+        <h3 style={{ margin: '0 0 12px' }}>🚀 Quick Access</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('opsboard')}>
+            <span style={{ fontSize: '24px' }}>📋</span> Daily Ops Board
+          </button>
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('rampcheck')}>
+            <span style={{ fontSize: '24px' }}>✈️</span> Ramp Check
+          </button>
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('wildlife')}>
+            <span style={{ fontSize: '24px' }}>🦅</span> Wildlife
+          </button>
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('reports')}>
+            <span style={{ fontSize: '24px' }}>📊</span> Reports
+          </button>
+        </div>
+      </div>
+
+      {/* ROW 4: PERSONAL STATS & APPROVALS */}
       {isManager && pendingLeave.length > 0 && (
         <div className="dash-card" style={{ marginBottom: '20px', borderLeft: '4px solid #f59e0b' }}>
           <h3>⚠️ Awaiting Approvals ({pendingLeave.length})</h3>
@@ -319,15 +326,8 @@ function DashboardPage({ onNavigate }: Props) {
         )}
       </div>
 
-      {/* ZONE MAP PLACEHOLDER & CHARTS */}
+      {/* ROW 5: CHARTS */}
       <div className="dash-grid" style={{ marginBottom: '20px' }}>
-        <div className="dash-card">
-          <h3>🗺️ Zone Map</h3>
-          <div style={{ background: '#f1f5f9', height: '200px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px dashed #cbd5e1', color: '#94a3b8', fontWeight: 600 }}>
-            Zone Map Image Placeholder (Coming Soon)
-          </div>
-        </div>
-
         <div className="dash-card">
           <h3>🏢 Staff by Department</h3>
           <div style={{ width: '100%', height: 200 }}>
@@ -341,8 +341,25 @@ function DashboardPage({ onNavigate }: Props) {
             </ResponsiveContainer>
           </div>
         </div>
+
+        <div className="dash-card">
+          <h3>🌴 Approved Leave Types</h3>
+          <div style={{ width: '100%', height: 200 }}>
+            {leaveTypeData.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}>No approved leaves yet.</p> : (
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={leaveTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
+                    {leaveTypeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* ROW 6: TODAY LISTS */}
       <div className="dash-grid">
         <div className="dash-card">
           <h3>📅 Today's Duty (By Dept)</h3>

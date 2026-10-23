@@ -4,7 +4,6 @@ import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firesto
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 
-// Pre-loaded Bird Database (Extracted from your Excel)
 const BIRD_DB = [
   { name: 'Kiru Bondana', common: 'Kentish Plover', mass: 44, rshb: 1.5 },
   { name: 'Alaka', common: 'Grey Plover', mass: 300, rshb: 2.5 },
@@ -37,7 +36,6 @@ function WildlifePage() {
   const [activeTab, setActiveTab] = useState<'form' | 'records' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
   
-  // Form State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [refNo, setRefNo] = useState(`RACL-FND-WHP-${new Date().getFullYear()}-01`);
   const [wind, setWind] = useState('');
@@ -47,7 +45,6 @@ function WildlifePage() {
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('08:30');
   
-  // Rows State
   const [rows, setRows] = useState<any[]>(
     Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] }))
   );
@@ -78,8 +75,6 @@ function WildlifePage() {
     const mass = dbBird?.mass || 0;
     const flocksVal = row.flocks === 'Y' ? 2 : 1;
     const totalBirds = row.zones.reduce((a: number, b: number) => a + b, 0);
-    
-    // Formula: Flocks * Mass(kg) * RSHB * TotalBirds
     const riskIndex = Math.round(flocksVal * (mass / 1000) * rshb * totalBirds);
     
     let status = 'LOW RISK';
@@ -103,12 +98,9 @@ function WildlifePage() {
       });
       toast.success('Bird count saved successfully!');
       setActiveTab('records');
-      // Reset
       setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
     } catch (err: any) { toast.error(err.message); }
   };
-
-  const handlePrint = () => { window.print(); };
 
   return (
     <div className="page-content">
@@ -123,24 +115,43 @@ function WildlifePage() {
       </div>
 
       {activeTab === 'form' && (
-        <div className="dash-card" style={{ padding: '24px', overflowX: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-            <div><label className="text-xs font-bold text-slate-500">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Ref No</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Start Time</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Finish Time</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Wind</label><input placeholder="WSW 31KM/H" value={wind} onChange={e => setWind(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Temperature</label><input placeholder="28°C" value={temp} onChange={e => setTemp(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Cloudy</label><input placeholder="100%" value={cloud} onChange={e => setCloud(e.target.value)} className="w-full p-2 border rounded" /></div>
-            <div><label className="text-xs font-bold text-slate-500">Rain Last 24h</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-2 border rounded"><option value="N">N</option><option value="Y">Y</option></select></div>
+        <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
+          <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
+            <img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} />
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div>
+            <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div>
           </div>
 
-          <table className="mini-table" style={{ width: '100%', fontSize: '11px', textAlign: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>DATE:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-1 border" /></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>REF NO:</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-1 border" /></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>WIND DIRECTION:</label><input placeholder="WSW 31KM/H" value={wind} onChange={e => setWind(e.target.value)} className="w-full p-1 border" /></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>START TIME:</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-1 border" /></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>TEMPERATURE:</label><input placeholder="28°C" value={temp} onChange={e => setTemp(e.target.value)} className="w-full p-1 border" /></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>CLOUDY:</label><input placeholder="100%" value={cloud} onChange={e => setCloud(e.target.value)} className="w-full p-1 border" /></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>RAIN LAST 24 HRS:</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-1 border"><option value="N">N</option><option value="Y">Y</option></select></div>
+            <div><label style={{fontSize:'12px', fontWeight:'bold'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" /></div>
+          </div>
+
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'center', fontFamily: 'Arial' }}>
             <thead>
               <tr>
-                <th>BIRD SPECIES</th><th>FLOCKS (Y/N)</th>
-                {ZONES.map(z => <th key={z} style={{ width: '40px' }}>Z{z}</th>)}
-                <th>Total</th><th>RSHB</th><th>Risk Index</th><th>Status</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>BIRD SPECIES</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>FLOCKS (Y/N)</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={7}>Concentration of Birds at Zone</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Hazardous Behaviour</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Bird Type Total @ Zones</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Status</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Action Required</th>
+              </tr>
+              <tr>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={3}></th>
+                {ZONES.map(z => <th key={z} style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>{z}</th>)}
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>RSHB</th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
+                <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
               </tr>
             </thead>
             <tbody>
@@ -148,33 +159,34 @@ function WildlifePage() {
                 const calc = calculateRisk(row);
                 return (
                   <tr key={i}>
-                    <td>
-                      <select value={row.bird} onChange={e => handleRowChange(i, 'bird', e.target.value)} className="w-full p-1 border rounded text-xs">
-                        <option value="">Select Bird...</option>
+                    <td style={{border:'1px solid #000', padding:'4px'}}>{i + 1}</td>
+                    <td style={{border:'1px solid #000', padding:'4px'}}>
+                      <select value={row.bird} onChange={e => handleRowChange(i, 'bird', e.target.value)} className="w-full p-1 border-0 text-xs text-center">
+                        <option value="">Select...</option>
                         {BIRD_DB.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
                       </select>
                     </td>
-                    <td>
-                      <select value={row.flocks} onChange={e => handleRowChange(i, 'flocks', e.target.value)} className="p-1 border rounded text-xs">
+                    <td style={{border:'1px solid #000', padding:'4px'}}>
+                      <select value={row.flocks} onChange={e => handleRowChange(i, 'flocks', e.target.value)} className="p-1 border-0 text-xs text-center">
                         <option value="N">N</option><option value="Y">Y</option>
                       </select>
                     </td>
                     {ZONES.map((_, zIdx) => (
-                      <td key={zIdx}><input type="number" min="0" value={row.zones[zIdx] || ''} onChange={e => handleRowChange(i, 'zone', e.target.value, zIdx)} className="w-10 p-1 border rounded text-center" /></td>
+                      <td key={zIdx} style={{border:'1px solid #000', padding:'4px'}}><input type="number" min="0" value={row.zones[zIdx] || ''} onChange={e => handleRowChange(i, 'zone', e.target.value, zIdx)} style={{width:'30px', border:'none', textAlign:'center'}} /></td>
                     ))}
-                    <td className="font-bold">{calc.total}</td>
-                    <td>{calc.rshb}</td>
-                    <td className="font-bold" style={{ color: calc.riskIndex > 250 ? '#dc2626' : calc.riskIndex > 100 ? '#f59e0b' : '#16a34a' }}>{calc.riskIndex}</td>
-                    <td><span className="status-badge" style={{ fontSize: '10px', background: calc.status === 'ALERT' ? '#fee2e2' : calc.status === 'HIGH RISK' ? '#fef3c7' : calc.status === 'MODERATE' ? '#fef08a' : '#dcfce7' }}>{calc.status}</span></td>
+                    <td style={{border:'1px solid #000', padding:'4px'}}>{calc.rshb}</td>
+                    <td style={{border:'1px solid #000', padding:'4px'}} className="font-bold">{calc.total}</td>
+                    <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status}</td>
+                    <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status === 'ALERT' ? 'Urgent' : calc.status === 'HIGH RISK' ? 'Required' : 'Not Required'}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
 
-          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }} className="no-print">
             {isManager && <button className="add-staff-btn" onClick={handleSave}>💾 Save Bird Count</button>}
-            <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
+            <button className="export-btn print-btn" onClick={() => window.print()}>🖨️ Print</button>
           </div>
         </div>
       )}
@@ -205,15 +217,8 @@ function WildlifePage() {
         <div className="dash-card" style={{ textAlign: 'center' }}>
           <h3>🗺️ Airside Zone Map</h3>
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>Reference map for Bird Concentration Zones (1-7)</p>
-          <div style={{ background: '#f8fafc', height: '400px', borderRadius: '12px', border: '2px dashed #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 800 }}>[ ZONE MAP IMAGE ]</h2>
-            <p>Upload your airport diagram here.</p>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <span style={{ background: '#dc2626', color: '#fff', padding: '4px 12px', borderRadius: '4px' }}>Zone 1 (RWY)</span>
-              <span style={{ background: '#f59e0b', color: '#fff', padding: '4px 12px', borderRadius: '4px' }}>Zone 2 (Inflight)</span>
-              <span style={{ background: '#eab308', color: '#fff', padding: '4px 12px', borderRadius: '4px' }}>Zone 3 (TXY)</span>
-              <span style={{ background: '#84cc16', color: '#fff', padding: '4px 12px', borderRadius: '4px' }}>Zone 4 (Strip)</span>
-            </div>
+          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
+            <img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', maxWidth: '800px', height: 'auto', objectFit: 'contain' }} />
           </div>
         </div>
       )}
