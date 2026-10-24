@@ -380,16 +380,27 @@ function OpsBoardPage() {
           {canEdit && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff to Tasks</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
                 {tasks.map(t => (
-                  <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                    <span style={{ width: '250px', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>{t.label}</span>
+                  <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+                    {/* Task Label on top for mobile, full width */}
+                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
                     
-                    {/* FIXED MOBILE 3-COLUMN GRID */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', flex: 1 }}>
+                    {/* 3 Column Grid on mobile, flex-grow on desktop */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                       {staffPool.map(s => (
-                        <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
-                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '12px', height: '12px', flexShrink: 0 }} />
+                        <label key={s} style={{ 
+                          fontSize: '10px', 
+                          display: 'flex', 
+                          alignItems: 'flex-start', 
+                          gap: '4px', 
+                          background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', 
+                          padding: '6px', 
+                          borderRadius: '4px', 
+                          border: '1px solid #cbd5e1',
+                          cursor: 'pointer'
+                        }}>
+                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
                           <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
                         </label>
                       ))}
