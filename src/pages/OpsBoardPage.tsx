@@ -392,13 +392,15 @@ function OpsBoardPage() {
               <h3>Assign Staff to Tasks</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
                 {tasks.map(t => (
-                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
-                    <span style={{ width: '250px', fontWeight: 700, fontSize: '12px' }}>{t.label}</span>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+                    <span style={{ width: '250px', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>{t.label}</span>
+                    
+                    {/* MOBILE FIX: Wrapping Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '6px', flex: 1 }}>
                       {staffPool.map(s => (
-                        <label key={s} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px 8px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
-                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} />
-                          {s}
+                        <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px', borderRadius: '4px', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '12px', height: '12px' }} />
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s}</span>
                         </label>
                       ))}
                     </div>

@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
 
 const LEAVE_TYPES = [
-  'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
+  'ANNUAL LEAVE', 'ABSENT','SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
   'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE',
   'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL',
 ];

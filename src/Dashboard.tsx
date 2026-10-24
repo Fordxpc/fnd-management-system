@@ -12,8 +12,8 @@ import SettingsPage from './pages/SettingsPage';
 import FlightsPage from './pages/FlightsPage';
 import OpsBoardPage from './pages/OpsBoardPage';
 import RampCheckSheetPage from './pages/RampCheckSheetPage';
-import WildlifePage from './pages/WildlifePage'; // NEW
-import ReportsPage from './pages/ReportsPage'; // NEW
+import WildlifePage from './pages/WildlifePage';
+import ReportsPage from './pages/ReportsPage';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
@@ -29,6 +29,7 @@ function Dashboard(_props: any) {
   const isManager = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const dept = profile?.department || '';
+  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
   
   const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
   const canManageUsers = isDev || isManager;
@@ -36,7 +37,10 @@ function Dashboard(_props: any) {
   const canSeeOpsBoard = isDev || isManager || isSMT || isOpsOrSafety;
   const canSeeRampCheck = isDev || isManager || isSMT;
   const canSeeStaffList = isDev || isManager || isSMT;
-  const canSeeReports = isDev || isManager || isSMT || isOpsOrSafety;
+  
+  // Hide Reports and Wildlife for normal staff
+  const canSeeReports = !isStaff; 
+  const canSeeWildlife = !isStaff;
 
   const navigate = (page: string) => {
     setCurrentPage(page);
@@ -73,14 +77,14 @@ function Dashboard(_props: any) {
               {canSeeOpsBoard && <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>}
               <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
               {canSeeRampCheck && <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>}
-              <button className={currentPage === 'wildlife' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('wildlife')}>🦅 Wildlife & Bird Strike</button>
+              {canSeeWildlife && <button className={currentPage === 'wildlife' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('wildlife')}>🦅 Wildlife & Bird Strike</button>}
             </>
           )}
 
           {activeModule === 'reports' && (
             <>
               <div className="sidebar-section-title">Reports</div>
-              <button className={currentPage === 'reports' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('reports')}>📊 Analytics & Reports</button>
+              {canSeeReports && <button className={currentPage === 'reports' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('reports')}>📊 Analytics & Reports</button>}
             </>
           )}
 

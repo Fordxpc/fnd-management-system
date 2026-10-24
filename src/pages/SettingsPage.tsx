@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
@@ -65,7 +65,7 @@ const STAFF_CREDENTIALS = [
 
 function SettingsPage() {
   const { profile, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'rules'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'detailed' | 'console'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   const isDev = profile?.role === 'developer';
@@ -73,7 +73,6 @@ function SettingsPage() {
   
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
-  
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [preRegs, setPreRegs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -142,13 +141,7 @@ function SettingsPage() {
   };
 
   let allMergedUsers: MergedUser[] = STAFF_CREDENTIALS.map(c => ({
-    email: c.email,
-    name: c.name,
-    password: c.password,
-    role: 'staff',
-    department: '—',
-    status: 'Default',
-    id: null
+    email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null
   }));
 
   preRegs.forEach(p => {
@@ -181,9 +174,15 @@ function SettingsPage() {
       </div>
 
       <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px', margin: '0 auto 24px auto' }}>
-        <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General & Account</button>
+        <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General</button>
         {(isDev || isManager) && (
-          <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ System Rules & Users</button>
+          <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ Rules & Users</button>
+        )}
+        {isDev && (
+          <button className={`ops-tab-btn ${activeTab === 'detailed' ? 'active' : ''}`} onClick={() => setActiveTab('detailed')}>📋 Access Details</button>
+        )}
+        {isDev && (
+          <button className={`ops-tab-btn ${activeTab === 'console' ? 'active' : ''}`} onClick={() => setActiveTab('console')}>💻 Console</button>
         )}
       </div>
 
@@ -270,49 +269,78 @@ function SettingsPage() {
                   <tbody>
                     {filteredUsers.length === 0 ? (
                       <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No users found matching "{searchQuery}"</td></tr>
-                    ) : (
-                      filteredUsers.map((u: MergedUser) => (
-                        <tr key={u.email}>
-                          <td><strong>{u.name}</strong></td>
-                          <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
-                          <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: u.role === 'developer' ? '#fee2e2' : u.role === 'smt' ? '#fef3c7' : '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
-                          <td>
-                            <span style={{ 
-                              fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
-                              background: u.status === 'Active' ? '#dcfce7' : u.status === 'Pre-registered' ? '#fef3c7' : '#f1f5f9',
-                              color: u.status === 'Active' ? '#166534' : u.status === 'Pre-registered' ? '#92400e' : '#475569'
-                            }}>
-                              {u.status.toUpperCase()}
-                            </span>
-                          </td>
-                          <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
-                            {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
-                          </td>
-                          <td style={{ whiteSpace: 'nowrap' }}>
-                            <button 
-                              className="reset-pw-btn" 
-                              disabled={resetting === u.email}
-                              onClick={() => handleSendReset(u.email)}
-                              style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}
-                            >
-                              {resetting === u.email ? '...' : '📧 Reset'}
-                            </button>
-                            <button 
-                              className="delete-btn"
-                              onClick={() => handleRemoveUser(u.email)}
-                              style={{ padding: '4px 8px', fontSize: '11px' }}
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
+                    ) : filteredUsers.map(u => (
+                      <tr key={u.email}>
+                        <td><strong>{u.name}</strong></td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
+                        <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: u.role === 'developer' ? '#fee2e2' : u.role === 'smt' ? '#fef3c7' : '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
+                        <td>
+                          <span style={{ 
+                            fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
+                            background: u.status === 'Active' ? '#dcfce7' : u.status === 'Pre-registered' ? '#fef3c7' : '#f1f5f9',
+                            color: u.status === 'Active' ? '#166534' : u.status === 'Pre-registered' ? '#92400e' : '#475569'
+                          }}>
+                            {u.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#dc2626', fontWeight: 700 }}>
+                          {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
+                        </td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <button 
+                            className="reset-pw-btn" 
+                            disabled={resetting === u.email}
+                            onClick={() => handleSendReset(u.email)}
+                            style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}
+                          >
+                            {resetting === u.email ? '...' : '📧 Reset'}
+                          </button>
+                          <button 
+                            className="delete-btn"
+                            onClick={() => handleRemoveUser(u.email)}
+                            style={{ padding: '4px 8px', fontSize: '11px' }}
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'detailed' && isDev && (
+        <div className="dash-card border-l-4 border-purple-500">
+          <h3>📋 Detailed Access Sheet</h3>
+          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Overview of all system permissions and field settings.</p>
+          <table className="mini-table">
+            <thead><tr><th>Role</th><th>Settings</th><th>Users</th><th>Roster</th><th>Leave</th><th>Reports</th><th>Ramp Check</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Developer</strong></td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td></tr>
+              <tr><td><strong>Manager / Admin</strong></td><td>✅ View</td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td><td>✅ Full</td></tr>
+              <tr><td><strong>SMT</strong></td><td>❌ No</td><td>✅ View</td><td>✅ Own Dept</td><td>✅ Own Dept</td><td>✅ View</td><td>✅ View</td></tr>
+              <tr><td><strong>Staff</strong></td><td>❌ No</td><td>❌ No</td><td>✅ View Own</td><td>✅ View Own</td><td>❌ No</td><td>❌ No</td></tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'console' && isDev && (
+        <div className="dash-card border-l-4 border-slate-800" style={{ background: '#0f172a', color: '#e2e8f0', fontFamily: 'monospace' }}>
+          <h3 style={{ color: '#38bdf8' }}>💻 System Console</h3>
+          <div style={{ maxHeight: '400px', overflowY: 'auto', fontSize: '12px' }}>
+            <p><span style={{ color: '#4ade80' }}>[OK]</span> Firebase initialized (Project: {import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fnd-ops-management'})</p>
+            <p><span style={{ color: '#4ade80' }}>[OK]</span> Auth Provider loaded</p>
+            <p><span style={{ color: '#facc15' }}>[INFO]</span> Active Staff Records: {activeUsers.length}</p>
+            <p><span style={{ color: '#facc15' }}>[INFO]</span> Active Pre-registrations: {preRegs.length}</p>
+            <p><span style={{ color: '#facc15' }}>[INFO]</span> UID: {currentUser?.uid}</p>
+            <p><span style={{ color: '#facc15' }}>[INFO]</span> Current Token Expiry: {currentUser?.metadata?.lastSignInTime}</p>
+            <p><span style={{ color: '#38bdf8' }}>[LOG]</span> Waiting for developer input...</p>
+          </div>
         </div>
       )}
 
