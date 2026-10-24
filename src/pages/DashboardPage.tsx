@@ -101,7 +101,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       setTodayBirdCount(total);
     });
 
-    // Expanded Weather API
     fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,visibility,surface_pressure&timezone=auto')
       .then(res => res.json())
       .then(data => setWeather(data.current))
@@ -138,6 +137,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   let baseStatus = nextFlight?.status || 'Scheduled';
   if (baseStatus === 'On Time') baseStatus = 'Scheduled';
   let liveStatus = baseStatus;
+  
   if (nextFlight && liveRamp && liveRamp.fltNo === nextFlight.flightNo) {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
@@ -223,16 +223,16 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>STA/ETA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{nextFlight.eta || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>SCHEDULED</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{nextFlight.arrivalTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.ata || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ARRIVAL</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{liveRamp?.ata || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.atd || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>DEPARTURE</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{liveRamp?.atd || nextFlight.departureTime || '—'}</div>
                 </div>
               </div>
             </div>
@@ -268,7 +268,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       {nextFlight && <FlightRadarWidget flightNumber={nextFlight.flightNo} />}
 
-      {/* Rest of the dashboard (Stats, Quick Access, etc.) - Kept exactly as before */}
       <div className="dash-stats" style={{ marginTop: '20px' }}>
         {isManager && (
           <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>

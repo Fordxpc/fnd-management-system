@@ -106,7 +106,6 @@ function FlightsPage() {
     setDeparture(f.departureTime || '');
     setRoute(f.route || '');
     setOriginDep(f.originDepTime || '');
-    // Convert old 'On Time' to 'Scheduled' when editing
     setStatus(f.status === 'On Time' ? 'Scheduled' : (f.status || 'Scheduled')); 
     setRemarks(f.remarks || '');
     setShowForm(true);
@@ -123,7 +122,6 @@ function FlightsPage() {
 
   const todayStr = formatDate(new Date());
   
-  // Helper to map old statuses to new
   const displayStatus = (s: string) => s === 'On Time' ? 'Scheduled' : s;
 
   const sortedFlights = [...flights].sort((a, b) => {
@@ -153,8 +151,8 @@ function FlightsPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', padding: '20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>SCHEDULED ARR</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>SCHEDULED DEP</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
         </div>
 
         <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
@@ -210,8 +208,8 @@ function FlightsPage() {
           {aircraft === 'CUSTOM' && <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>}
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time</label><input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Arrival Time (FND)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Departure Time (FND)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (FND)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (FND)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
           
