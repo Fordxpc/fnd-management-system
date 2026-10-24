@@ -22,9 +22,24 @@ function ReportsPage() {
   const [birdData, setBirdData] = useState<any[]>([]);
 
   useEffect(() => {
-    const u1 = onSnapshot(collection(db, 'ramp_inspections'), s => setRampData(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    const u2 = onSnapshot(collection(db, 'fod_collections'), s => setFodData(s.docs.map(d => ({id: d.id, ...d.data()}))));
-    const u4 = onSnapshot(collection(db, 'bird_counts'), s => setBirdData(s.docs.map(d => ({id: d.id, ...d.data()}))));
+    const u1 = onSnapshot(collection(db, 'ramp_inspections'), s => {
+      // FIX: Explicitly type as any[] to allow sorting by .date
+      const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      setRampData(data);
+    });
+    const u2 = onSnapshot(collection(db, 'fod_collections'), s => {
+      // FIX: Explicitly type as any[]
+      const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      setFodData(data);
+    });
+    const u4 = onSnapshot(collection(db, 'bird_counts'), s => {
+      // FIX: Explicitly type as any[]
+      const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      setBirdData(data);
+    });
     return () => { u1(); u2(); u4(); };
   }, []);
 
@@ -45,7 +60,6 @@ function ReportsPage() {
 
       <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
         
-        {/* DFIS TAB - Aircraft Turnaround Log */}
         {activeTab === 'dfis' && (
           <div>
             <ExcelHeader title="AIRCRAFT TURNAROUND LOG" subtitle="Funadhoo Airport" />
@@ -118,7 +132,6 @@ function ReportsPage() {
           </div>
         )}
 
-        {/* STATISTICS TAB */}
         {activeTab === 'stats' && (
           <div>
             <ExcelHeader title="FUNADHOO AIRPORT" subtitle="Statistics Report" />
@@ -154,7 +167,6 @@ function ReportsPage() {
           </div>
         )}
 
-        {/* TRAFFIC TAB */}
         {activeTab === 'traffic' && (
           <div>
             <ExcelHeader title="TRAFFIC MONTHLY REPORT (FUNADHOO AIRPORT)" subtitle="2026" />
@@ -194,7 +206,6 @@ function ReportsPage() {
           </div>
         )}
 
-        {/* WILDLIFE TAB */}
         {activeTab === 'wildlife' && (
           <div>
              <ExcelHeader title="WILDLIFE TREND ANALYSIS" subtitle="Bird Sightings & Risk Summary" />
@@ -223,7 +234,6 @@ function ReportsPage() {
           </div>
         )}
 
-        {/* FOD TAB */}
         {activeTab === 'fod' && (
           <div>
              <ExcelHeader title="FOD COLLECTION LOG" subtitle="Foreign Object Debris Report" />
@@ -243,7 +253,6 @@ function ReportsPage() {
           </div>
         )}
 
-        {/* RWY LIGHTS TAB */}
         {activeTab === 'lights' && (
           <div>
              <ExcelHeader title="RUNWAY LIGHTS INSPECTION" subtitle="Fault & Maintenance Report" />

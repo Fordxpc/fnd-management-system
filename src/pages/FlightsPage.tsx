@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
-const STATUS_OPTIONS = ['On Time', 'Delayed', 'Boarding', 'Departed', 'Landed', 'Cancelled'];
+const STATUS_OPTIONS = ['Scheduled', 'Delayed', 'Boarding', 'Departed', 'Landed', 'Cancelled'];
 
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 const formatDisplayDate = (dateStr: string) => {
@@ -21,7 +21,7 @@ function FlightsPage() {
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   
   const [flights, setFlights] = useState<any[]>([]);
-  const [dateFilter, setDateFilter] = useState(formatDate(new Date())); // Used only for adding new
+  const [dateFilter, setDateFilter] = useState(formatDate(new Date()));
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -35,7 +35,7 @@ function FlightsPage() {
   const [departure, setDeparture] = useState('');
   const [route, setRoute] = useState('MLE/FND/MLE');
   const [originDep, setOriginDep] = useState('');
-  const [status, setStatus] = useState('On Time');
+  const [status, setStatus] = useState('Scheduled'); // Changed from 'On Time'
   const [remarks, setRemarks] = useState('');
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function FlightsPage() {
     setFlightNo('Q2-'); setType('Scheduled'); setAircraft('DH-8/300');
     setCustomAircraft(''); setBookedFigure(''); setCheckIn('');
     setArrival(''); setDeparture(''); setRoute('MLE/FND/MLE');
-    setOriginDep(''); setStatus('On Time'); setRemarks('');
+    setOriginDep(''); setStatus('Scheduled'); setRemarks('');
     setEditingId(null);
   };
 
@@ -106,7 +106,7 @@ function FlightsPage() {
     setDeparture(f.departureTime || '');
     setRoute(f.route || '');
     setOriginDep(f.originDepTime || '');
-    setStatus(f.status || 'On Time');
+    setStatus(f.status || 'Scheduled');
     setRemarks(f.remarks || '');
     setShowForm(true);
   };
@@ -122,7 +122,6 @@ function FlightsPage() {
 
   const todayStr = formatDate(new Date());
   
-  // Sorting all flights by date and time
   const sortedFlights = [...flights].sort((a, b) => {
     const dateCompare = (a.date || '').localeCompare(b.date || '');
     if (dateCompare !== 0) return dateCompare;
@@ -225,8 +224,6 @@ function FlightsPage() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        
-        {/* UPCOMING */}
         <div>
           <h3 style={{ color: '#2563eb', borderBottom: '2px solid #bfdbfe', paddingBottom: '8px', marginBottom: '16px' }}>🕒 Upcoming & Active Flights</h3>
           {upcomingFlights.length === 0 ? <div className="empty-state"><p>No upcoming flights.</p></div> : (
@@ -236,7 +233,6 @@ function FlightsPage() {
           )}
         </div>
 
-        {/* PAST */}
         <div>
           <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Past & Departed Flights</h3>
           {pastFlights.length === 0 ? <div className="empty-state"><p>No past flights.</p></div> : (
@@ -245,7 +241,6 @@ function FlightsPage() {
             </div>
           )}
         </div>
-
       </div>
     </div>
   );

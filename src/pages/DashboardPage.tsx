@@ -96,9 +96,9 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       setTodayBirdCount(total);
     });
 
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current_weather=true')
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto')
       .then(res => res.json())
-      .then(data => setWeather(data.current_weather))
+      .then(data => setWeather(data.current))
       .catch(err => console.error("Weather fetch failed", err));
 
     return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
@@ -129,7 +129,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
-  let liveStatus = nextFlight?.status || 'On Time';
+  let liveStatus = nextFlight?.status || 'Scheduled';
   if (nextFlight && liveRamp && liveRamp.fltNo === nextFlight.flightNo) {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
@@ -190,10 +190,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div style={{ fontSize: '40px' }}>✈️</div>
       </div>
 
-      {/* ROW 1: FULL WIDTH FLIGHT & WEATHER */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
-        
-        {/* FLIGHT CARD */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
@@ -207,23 +204,11 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div style={{ fontSize: '14px', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
                 <div style={{ fontSize: '12px', background: '#3b82f6', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
               </div>
-              
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
-
-              {/* ETA / ATA / ATD Grid (Responsive) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
-                </div>
-                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.arrivalTime || '—'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div>
-                </div>
+                <div><div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div><div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div></div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}><div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div><div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.arrivalTime || '—'}</div></div>
+                <div><div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div><div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div></div>
               </div>
             </div>
           ) : (
@@ -237,17 +222,17 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
           )}
         </div>
 
-        {/* WEATHER CARD */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
           <div>
             <h3 style={{ color: '#e0f2fe', margin: '0 0 8px', fontSize: '14px' }}>🌤️ Weather</h3>
             {weather ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '40px' }}>{getWeatherInfo(weather.weathercode).icon}</span>
+                <span style={{ fontSize: '40px' }}>{getWeatherInfo(weather.weather_code).icon}</span>
                 <div>
-                  <div style={{ fontSize: '28px', fontWeight: 900 }}>{weather.temperature}°C</div>
-                  <div style={{ fontSize: '12px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weathercode).text}</div>
-                  <div style={{ fontSize: '11px', color: '#bae6fd' }}>Wind: {weather.windspeed} km/h</div>
+                  <div style={{ fontSize: '28px', fontWeight: 900 }}>{weather.temperature_2m}°C</div>
+                  <div style={{ fontSize: '12px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weather_code).text}</div>
+                  <div style={{ fontSize: '11px', color: '#bae6fd' }}>Feels like: {weather.apparent_temperature}°C · Wind: {weather.wind_speed_10m} km/h</div>
+                  <div style={{ fontSize: '11px', color: '#bae6fd' }}>Humidity: {weather.relative_humidity_2m}% · Rain: {weather.precipitation} mm</div>
                 </div>
               </div>
             ) : <div style={{ fontSize: '13px' }}>Loading...</div>}
@@ -255,10 +240,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* LIVE TRACKING WIDGET (Displays if nextFlight exists) */}
       {nextFlight && <FlightRadarWidget flightNumber={nextFlight.flightNo} />}
 
-      {/* ... Rest of the Dashboard (Stats, Quick Access, etc.) ... */}
       <div className="dash-stats" style={{ marginTop: '20px' }}>
         {isManager && (
           <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>
@@ -284,7 +267,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         )}
       </div>
 
-      {/* QUICK ACCESS */}
       <div className="dash-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
         <h3 style={{ margin: '0 0 12px' }}>🚀 Quick Access</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
@@ -307,7 +289,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* ... Rest of the Dashboard elements (Leave Balance, OT, Zone Map, Duty Lists) ... */}
       {isManager && pendingLeave.length > 0 && (
         <div className="dash-card" style={{ marginBottom: '20px', borderLeft: '4px solid #f59e0b' }}>
           <h3>⚠️ Awaiting Approvals ({pendingLeave.length})</h3>

@@ -279,6 +279,10 @@ function RosterPage() {
 
   const toggleBulkDay = (day: number) => setBulkDaysOfWeek((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort());
   
+  const toggleBulkStaff = (id: string) => {
+    setBulkStaffIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
   const handleBulkAssign = async () => {
     if (bulkStaffIds.length === 0) { toast.error('Please select at least one staff member'); return; }
     
@@ -386,7 +390,6 @@ function RosterPage() {
     } catch (err: any) { toast.error('Reorder failed: ' + err.message); }
   };
 
-  // ... captureCanvas, exportToJPG, exportToPDF, handlePrint ... (unchanged)
   const captureCanvas = async () => {
     if (!gridRef.current) return null;
     const original = gridRef.current;
@@ -405,6 +408,7 @@ function RosterPage() {
       document.body.removeChild(wrapper); return canvas;
     } catch (err) { document.body.removeChild(wrapper); throw err; }
   };
+
   const exportToJPG = async () => {
     setExporting(true);
     try {
@@ -415,6 +419,7 @@ function RosterPage() {
     } catch (err: any) { toast.error('Export failed: ' + err.message); }
     setExporting(false);
   };
+
   const exportToPDF = async () => {
     setExporting(true);
     try {
@@ -432,6 +437,7 @@ function RosterPage() {
     } catch (err: any) { toast.error('Export failed: ' + err.message); }
     setExporting(false);
   };
+
   const handlePrint = () => {
     document.body.classList.add('printing-roster');
     setTimeout(() => { window.print(); document.body.classList.remove('printing-roster'); }, 100);
@@ -502,13 +508,19 @@ function RosterPage() {
           <div className="bulk-form-title">⚡ Bulk Assign</div>
           <div className="bulk-form-grid">
             <div className="bulk-field bulk-field-full">
-              <label>Staff Members (Hold Ctrl/Cmd to select multiple)</label>
-              <select multiple value={bulkStaffIds} onChange={(e) => {
-                const options = Array.from(e.target.selectedOptions, option => option.value);
-                setBulkStaffIds(options);
-              }} style={{ height: '100px' }}>
-                {editableStaffList.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>)}
-              </select>
+              <label>Staff Members (Tick to select)</label>
+              <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #c4b5fd', borderRadius: '6px', padding: '8px', background: '#fff' }}>
+                {editableStaffList.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', fontSize: '13px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={bulkStaffIds.includes(s.id)} 
+                      onChange={() => toggleBulkStaff(s.id)} 
+                    />
+                    {s.name} ({s.sn || 'No SN'})
+                  </label>
+                ))}
+              </div>
             </div>
             <div className="bulk-field"><label>Start</label><input type="date" value={bulkStartDate} onChange={(e) => setBulkStartDate(e.target.value)} /></div>
             <div className="bulk-field"><label>End</label><input type="date" value={bulkEndDate} onChange={(e) => setBulkEndDate(e.target.value)} /></div>
