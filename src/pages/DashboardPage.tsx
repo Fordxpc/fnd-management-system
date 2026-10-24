@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import FlightRadarWidget from './FlightRadarWidget';
+import FlightRadarWidget from '../FlightRadarWidget';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6', '#06b6d4'];

@@ -27,23 +27,26 @@ function App() {
     setChecking(true);
 
     try {
-      if (tab === 'employee' && userDept && userDept !== department) {
-        await logout();
-        toast.error(`Your account is registered under "${userDept}". Please select "${userDept}" in the dropdown.`);
+      if (tab === 'employee' && !department) {
+        toast.error('Please select your department.');
         setChecking(false);
         return;
       }
 
+      // 1. Log in first
       const cred = await login(email, password);
 
+      // 2. Then fetch the user profile
       const userRef = doc(db, 'users', cred.user.uid);
       const userSnap = await getDoc(userRef);
       const data = userSnap.exists() ? userSnap.data() : {};
+      
       const role = data.role || 'staff';
       const userDept = data.department || '';
 
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
+      // 3. NOW we can perform the checks using userDept
       if (tab === 'management' && !isManagement) {
         await logout();
         toast.error('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
@@ -64,6 +67,7 @@ function App() {
         setChecking(false);
         return;
       }
+      
     } catch (error: any) {
       console.error(error);
       toast.error('Error: ' + error.message);
