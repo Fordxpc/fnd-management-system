@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 const AuthContext = createContext<any>({});
@@ -15,15 +15,33 @@ export function AuthProvider({ children }: any) {
       setUser(currentUser);
 
       if (currentUser) {
+        const email = (currentUser.email || "").toLowerCase();
+        
         try {
+          // 1. Get the real department from the STAFF collection
+          let staffDept = "Ground Operations";
+          try {
+            const staffQ = query(collection(db, "staff"), where("email", "==", email));
+            const staffSnap = await getDocs(staffQ);
+            if (!staffSnap.empty) {
+              staffDept = staffSnap.docs[0].data().department || "Ground Operations";
+            }
+          } catch (e) { console.warn("Staff lookup failed", e); }
+
           const userRef = doc(db, "users", currentUser.uid);
           const userSnap = await getDoc(userRef);
 
           if (userSnap.exists()) {
-            setProfile(userSnap.data());
+            const userData = userSnap.data();
+            // Self-heal: If user's department doesn't match staff department, fix it!
+            if (userData.department !== staffDept) {
+              await updateDoc(userRef, { department: staffDept });
+              setProfile({ ...userData, department: staffDept });
+            } else {
+              setProfile(userData);
+            }
           } else {
             // New user - check for preset
-            const email = (currentUser.email || "").toLowerCase();
             let presetDoc: any = null;
             let presetId: string | null = null;
 
@@ -39,8 +57,8 @@ export function AuthProvider({ children }: any) {
             }
 
             const newProfile = presetDoc
-              ? { email: currentUser.email, role: presetDoc.role || "staff", department: presetDoc.department || "Ground Operations", createdAt: new Date().toISOString(), presetApplied: true }
-              : { email: currentUser.email, role: "staff", department: "Ground Operations", createdAt: new Date().toISOString() };
+              ? { email: currentUser.email, role: presetDoc.role || "staff", department: presetDoc.department || staffDept, createdAt: new Date().toISOString(), presetApplied: true }
+              : { email: currentUser.email, role: "staff", department: staffDept, createdAt: new Date().toISOString() };
 
             await setDoc(userRef, newProfile);
             setProfile(newProfile);

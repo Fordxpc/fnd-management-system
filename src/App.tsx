@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from './auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import Dashboard from './Dashboard';
 import PublicLiveView from './pages/PublicLiveView';
@@ -36,17 +36,28 @@ function App() {
       // 1. Log in first
       const cred = await login(email, password);
 
-      // 2. Then fetch the user profile
+      // 2. Fetch the TRUE department from the STAFF collection
+      let staffDept = "";
+      try {
+        const staffQ = query(collection(db, "staff"), where("email", "==", email.toLowerCase()));
+        const staffSnap = await getDocs(staffQ);
+        if (!staffSnap.empty) {
+          staffDept = staffSnap.docs[0].data().department || "";
+        }
+      } catch (e) { console.warn(e); }
+
+      // 3. Fetch role from USERS collection
       const userRef = doc(db, 'users', cred.user.uid);
       const userSnap = await getDoc(userRef);
       const data = userSnap.exists() ? userSnap.data() : {};
       
       const role = data.role || 'staff';
-      const userDept = data.department || '';
+      // Fallback logic: use staffDept, then users doc, then Ground Ops
+      const userDept = staffDept || data.department || 'Ground Operations';
 
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
-      // 3. NOW we can perform the checks using userDept
+      // 4. Perform checks
       if (tab === 'management' && !isManagement) {
         await logout();
         toast.error('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
