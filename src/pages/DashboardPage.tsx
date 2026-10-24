@@ -68,12 +68,17 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const nowTime = new Date().toTimeString().slice(0, 5);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
-  const displayName = profile?.name || user?.email?.split('@')[0] || 'User';
-
+  // Role Checks
   const isDev = profile?.role === 'developer';
   const isManagerRole = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const isManager = isDev || isManagerRole || isSMT || ['owner', 'admin'].includes(profile?.role || '');
+  const isAdminOrOwner = ['owner', 'admin'].includes(profile?.role || '');
+  
+  // SMT AND ABOVE SEE ALL DEPARTMENTS
+  const canSeeAllDepartments = isDev || isManagerRole || isSMT || isAdminOrOwner;
+  
+  // Ops Board & Quick Access permissions
+  const isManager = canSeeAllDepartments; 
   const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
 
   useEffect(() => {
@@ -113,10 +118,21 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
 
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+  
+  // Use actual Staff Name
+  const firstName = myStaff?.name ? myStaff.name.split(' ')[0] : (profile?.name || user?.email?.split('@')[0] || 'User');
+  const displayName = firstName;
+
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
-  const todayShifts = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
-  const todayLeave = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
+  const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
+  const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
+
+  const userDept = profile?.department;
+  
+  // SMT & Above see ALL shifts/leaves. Employees see only THEIR department.
+  const todayShifts = canSeeAllDepartments ? todayShiftsAll : todayShiftsAll.filter(r => r.staffDepartment === userDept);
+  const todayLeave = canSeeAllDepartments ? todayLeaveAll : todayLeaveAll.filter(r => r.staffDepartment === userDept);
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
 
@@ -216,7 +232,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
               </div>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
               
-              {/* 4-Column Grid for Times */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
                 <div>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>CHECK-IN</div>
@@ -295,20 +310,20 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       <div className="dash-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
         <h3 style={{ margin: '0 0 12px' }}>🚀 Quick Access</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('roster')}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', alignItems: 'stretch' }}>
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '100%' }} onClick={() => onNavigate && onNavigate('roster')}>
             <span style={{ fontSize: '24px' }}>📅</span> My Roster
           </button>
-          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('leave')}>
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '100%' }} onClick={() => onNavigate && onNavigate('leave')}>
             <span style={{ fontSize: '24px' }}>🌴</span> Request Leave
           </button>
           {(isManager || isOpsOrSafety) && (
-            <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('opsboard')}>
+            <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '100%' }} onClick={() => onNavigate && onNavigate('opsboard')}>
               <span style={{ fontSize: '24px' }}>📋</span> Ops Board
             </button>
           )}
           {isManager && (
-            <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('rampcheck')}>
+            <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '100%' }} onClick={() => onNavigate && onNavigate('rampcheck')}>
               <span style={{ fontSize: '24px' }}>✈️</span> Ramp Check
             </button>
           )}
@@ -373,7 +388,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       <div className="dash-grid">
         <div className="dash-card">
-          <h3>📅 Today's Duty (By Dept)</h3>
+          {/* SMT AND ABOVE WILL SEE "ALL DEPTS" */}
+          <h3>📅 Today's Duty {canSeeAllDepartments ? '(All Depts)' : `(${userDept})`}</h3>
           {Object.keys(dutyByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No scheduled shifts today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {Object.entries(dutyByDept).map(([dept, entries]: any) => {
@@ -401,7 +417,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
 
         <div className="dash-card">
-          <h3>🌴 On Leave Today (By Dept)</h3>
+          {/* SMT AND ABOVE WILL SEE "ALL DEPTS" */}
+          <h3>🌴 On Leave Today {canSeeAllDepartments ? '(All Depts)' : `(${userDept})`}</h3>
           {Object.keys(leaveByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No one is on leave today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {Object.entries(leaveByDept).map(([dept, entries]: any) => {
