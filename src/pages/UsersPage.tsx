@@ -12,15 +12,16 @@ import { db, auth } from '../firebase';
 import { useAuth } from '../auth';
 
 const ADMIN_ROLES = ['developer', 'manager'];
-
 const ALL_ROLES = ['developer', 'manager', 'admin', 'smt', 'staff'];
 
+// FIX: Added 'Safety' to the list
 const DEPARTMENTS = [
   'Ground Operations',
   'Maintenance',
   'Security',
   'Fire & Rescue',
   'Administration',
+  'Safety', 
 ];
 
 function UsersPage() {
@@ -257,7 +258,6 @@ function UsersPage() {
         </form>
       )}
 
-      {/* Pre-registered users (pending first login) */}
       {presets.length > 0 && (
         <div className="collapsible-card">
           <div className="collapsible-header" style={{ cursor: 'default' }}>
@@ -340,7 +340,6 @@ function UsersPage() {
         </div>
       )}
 
-      {/* Active users */}
       <div className="collapsible-card">
         <div className="collapsible-header" style={{ cursor: 'default' }}>
           <span>

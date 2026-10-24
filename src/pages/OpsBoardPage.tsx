@@ -365,7 +365,6 @@ function OpsBoardPage() {
             </div>
           </div>
 
-          {/* MOVED BUTTONS TO BOTTOM */}
           {canEdit && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
@@ -386,12 +385,12 @@ function OpsBoardPage() {
                   <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
                     <span style={{ width: '250px', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>{t.label}</span>
                     
-                    {/* 3-COLUMN MOBILE GRID */}
+                    {/* FIXED MOBILE 3-COLUMN GRID */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', flex: 1 }}>
                       {staffPool.map(s => (
-                        <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px', borderRadius: '4px', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+                        <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
                           <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '12px', height: '12px', flexShrink: 0 }} />
-                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s}</span>
+                          <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
                         </label>
                       ))}
                     </div>
@@ -435,7 +434,6 @@ function OpsBoardPage() {
             </div>
           </div>
 
-          {/* MOVED BUTTONS TO BOTTOM */}
           {canEdit && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
