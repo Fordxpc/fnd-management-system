@@ -27,8 +27,9 @@ function App() {
     setChecking(true);
 
     try {
-      if (tab === 'employee' && !department) {
-        toast.error('Please select your department.');
+      if (tab === 'employee' && userDept && userDept !== department) {
+        await logout();
+        toast.error(`Your account is registered under "${userDept}". Please select "${userDept}" in the dropdown.`);
         setChecking(false);
         return;
       }

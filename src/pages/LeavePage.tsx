@@ -133,7 +133,6 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 function LeavePage() {
   const { profile, user } = useAuth();
   
-  // Access Control
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
@@ -166,7 +165,6 @@ function LeavePage() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'staff'), (snap) => {
-      // FIX: Explicitly type list as any[]
       const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setStaffList(list);
       const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
@@ -194,15 +192,14 @@ function LeavePage() {
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
   
-  // Roster edit logic applied to leave approvals
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   
   const canApproveThisDept = (dept: string) => {
     if (isDev || isManager || canApproveAnyDept) return true;
-    if (isDeptManager && myStaff?.department === dept) return true;
-    if (isSMT && myStaff?.department === dept) return true;
     if (myStaff?.department === 'Safety' && dept === 'Security') return true;
+    if (isSMT && myStaff?.department === dept) return true;
+    if (isDeptManager && myStaff?.department === dept) return true;
     return false;
   };
 
@@ -220,7 +217,6 @@ function LeavePage() {
     return myStaff && r.staffId === myStaff.id;
   };
 
-  // FIXED: Simplified filter to prevent TS errors
   const visibleRequests = requests
     .filter((r: any) => {
       if (isStaff) return myStaff && r.staffId === myStaff.id;
@@ -255,7 +251,6 @@ function LeavePage() {
     const staff = staffList.find((s) => s.id === selectedStaffId);
     if (!staff) { toast.error('Staff not found'); return; }
 
-    // OVERLAP CHECK
     const overlap = requests.some(r => 
       r.staffId === selectedStaffId && 
       r.status === 'approved' && 

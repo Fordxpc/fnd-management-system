@@ -17,6 +17,12 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
   const fillNow = (id: string) => {
     if (!isManager) return;
+    
+    // Ask for confirmation
+    if (!window.confirm('Are you sure you want to insert the current time?')) {
+      return;
+    }
+
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');

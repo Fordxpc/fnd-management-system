@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from '../auth';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import FlightRadarWidget from './FlightRadarWidget';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6', '#06b6d4'];
@@ -64,6 +65,12 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const displayName = profile?.name || user?.email?.split('@')[0] || 'User';
 
+  const isDev = profile?.role === 'developer';
+  const isManagerRole = profile?.role === 'manager';
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const isManager = isDev || isManagerRole || isSMT || ['owner', 'admin'].includes(profile?.role || '');
+  const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
+
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'staff'), (s) => setStaff(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u2 = onSnapshot(collection(db, 'roster_entries'), (s) => setRoster(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
@@ -100,7 +107,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
   const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
 
-  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   const todayShifts = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
@@ -184,21 +190,41 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div style={{ fontSize: '40px' }}>✈️</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '20px' }}>
-        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none', display: 'flex', flexDirection: 'column' }}>
+      {/* ROW 1: FULL WIDTH FLIGHT & WEATHER */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
+        
+        {/* FLIGHT CARD */}
+        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
             {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '12px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '12px' }}>
                 <div style={{ fontSize: '36px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
                 <div style={{ fontSize: '14px', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
                 <div style={{ fontSize: '12px', background: '#3b82f6', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
               </div>
+              
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
+
+              {/* ETA / ATA / ATD Grid (Responsive) */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.arrivalTime || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div>
+                </div>
+              </div>
             </div>
           ) : (
             <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px', textAlign: 'center' }}>No upcoming flights scheduled.</div>
@@ -211,58 +237,77 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
           )}
         </div>
 
-        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <h3 style={{ color: '#e0f2fe', margin: '0 0 12px', fontSize: '14px' }}>🌤️ Weather</h3>
-          {weather ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ fontSize: '40px' }}>{getWeatherInfo(weather.weathercode).icon}</span>
-              <div>
-                <div style={{ fontSize: '28px', fontWeight: 900 }}>{weather.temperature}°C</div>
-                <div style={{ fontSize: '12px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weathercode).text}</div>
-                <div style={{ fontSize: '11px', color: '#bae6fd' }}>Wind: {weather.windspeed} km/h</div>
+        {/* WEATHER CARD */}
+        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
+          <div>
+            <h3 style={{ color: '#e0f2fe', margin: '0 0 8px', fontSize: '14px' }}>🌤️ Weather</h3>
+            {weather ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '40px' }}>{getWeatherInfo(weather.weathercode).icon}</span>
+                <div>
+                  <div style={{ fontSize: '28px', fontWeight: 900 }}>{weather.temperature}°C</div>
+                  <div style={{ fontSize: '12px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weathercode).text}</div>
+                  <div style={{ fontSize: '11px', color: '#bae6fd' }}>Wind: {weather.windspeed} km/h</div>
+                </div>
               </div>
-            </div>
-          ) : <div style={{ fontSize: '13px' }}>Loading...</div>}
+            ) : <div style={{ fontSize: '13px' }}>Loading...</div>}
+          </div>
         </div>
       </div>
 
-      <div className="dash-stats">
-        <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>
-          <div className="stat-icon" style={{ background: '#dbeafe', color: '#1e40af' }}>👥</div>
-          <div><div className="stat-value">{activeStaff.length}</div><div className="stat-label">Active Staff</div></div>
-        </div>
+      {/* LIVE TRACKING WIDGET (Displays if nextFlight exists) */}
+      {nextFlight && <FlightRadarWidget flightNumber={nextFlight.flightNo} />}
+
+      {/* ... Rest of the Dashboard (Stats, Quick Access, etc.) ... */}
+      <div className="dash-stats" style={{ marginTop: '20px' }}>
+        {isManager && (
+          <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>
+            <div className="stat-icon" style={{ background: '#dbeafe', color: '#1e40af' }}>👥</div>
+            <div><div className="stat-value">{activeStaff.length}</div><div className="stat-label">Active Staff</div></div>
+          </div>
+        )}
         <div className="stat-card" onClick={() => onNavigate && onNavigate('leave')}>
           <div className="stat-icon" style={{ background: '#fef3c7', color: '#92400e' }}>🌴</div>
           <div><div className="stat-value">{pendingLeave.length}</div><div className="stat-label">Pending Leave</div></div>
         </div>
-        <div className="stat-card" onClick={() => onNavigate && onNavigate('opsboard')}>
-          <div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>🪨</div>
-          <div><div className="stat-value">{totalFODGrams}g</div><div className="stat-label">FOD Today</div></div>
-        </div>
-        <div className="stat-card" onClick={() => onNavigate && onNavigate('wildlife')}>
-          <div className="stat-icon" style={{ background: '#f3e8ff', color: '#6b21a8' }}>🦅</div>
-          <div><div className="stat-value">{todayBirdCount}</div><div className="stat-label">Birds Today</div></div>
-        </div>
+        {(isManager || isOpsOrSafety) && (
+          <div className="stat-card" onClick={() => onNavigate && onNavigate('opsboard')}>
+            <div className="stat-icon" style={{ background: '#fee2e2', color: '#991b1b' }}>🪨</div>
+            <div><div className="stat-value">{totalFODGrams}g</div><div className="stat-label">FOD Today</div></div>
+          </div>
+        )}
+        {(isManager || isOpsOrSafety) && (
+          <div className="stat-card" onClick={() => onNavigate && onNavigate('wildlife')}>
+            <div className="stat-icon" style={{ background: '#f3e8ff', color: '#6b21a8' }}>🦅</div>
+            <div><div className="stat-value">{todayBirdCount}</div><div className="stat-label">Birds Today</div></div>
+          </div>
+        )}
       </div>
 
+      {/* QUICK ACCESS */}
       <div className="dash-card" style={{ marginBottom: '20px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
         <h3 style={{ margin: '0 0 12px' }}>🚀 Quick Access</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('opsboard')}>
-            <span style={{ fontSize: '24px' }}>📋</span> Daily Ops Board
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('roster')}>
+            <span style={{ fontSize: '24px' }}>📅</span> My Roster
           </button>
-          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('rampcheck')}>
-            <span style={{ fontSize: '24px' }}>✈️</span> Ramp Check
+          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('leave')}>
+            <span style={{ fontSize: '24px' }}>🌴</span> Request Leave
           </button>
-          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('wildlife')}>
-            <span style={{ fontSize: '24px' }}>🦅</span> Wildlife
-          </button>
-          <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('reports')}>
-            <span style={{ fontSize: '24px' }}>📊</span> Reports
-          </button>
+          {(isManager || isOpsOrSafety) && (
+            <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('opsboard')}>
+              <span style={{ fontSize: '24px' }}>📋</span> Ops Board
+            </button>
+          )}
+          {isManager && (
+            <button className="quick-btn" style={{ padding: '16px', background: 'white', border: '1px solid #cbd5e1', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }} onClick={() => onNavigate && onNavigate('rampcheck')}>
+              <span style={{ fontSize: '24px' }}>✈️</span> Ramp Check
+            </button>
+          )}
         </div>
       </div>
 
+      {/* ... Rest of the Dashboard elements (Leave Balance, OT, Zone Map, Duty Lists) ... */}
       {isManager && pendingLeave.length > 0 && (
         <div className="dash-card" style={{ marginBottom: '20px', borderLeft: '4px solid #f59e0b' }}>
           <h3>⚠️ Awaiting Approvals ({pendingLeave.length})</h3>
@@ -310,38 +355,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
             )}
           </div>
         )}
-      </div>
-
-      <div className="dash-grid" style={{ marginBottom: '20px' }}>
-        <div className="dash-card">
-          <h3>🏢 Staff by Department</h3>
-          <div style={{ width: '100%', height: 200 }}>
-            <ResponsiveContainer>
-              <BarChart data={staffDeptData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#2563eb" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="dash-card">
-          <h3>🌴 Approved Leave Types</h3>
-          <div style={{ width: '100%', height: 200 }}>
-            {leaveTypeData.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8', marginTop: '40px' }}>No approved leaves yet.</p> : (
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={leaveTypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label>
-                    {leaveTypeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </div>
       </div>
 
       <div className="dash-card" style={{ marginBottom: '20px', textAlign: 'center' }}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, onSnapshot, query, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
 import { toast } from 'sonner';
@@ -6,7 +6,10 @@ import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../auth';
 
-const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL'];
+const DEFAULT_STAFF = [
+  'ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 
+  'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL', 'MOHAMED IBRAHIM', 'ZIMLA AYYOOB', 'AMINATH MOOSA'
+];
 
 const DEFAULT_TASKS = [
   { id: 'chocks-on', label: 'CHOCKS ON', color: 'linear-gradient(135deg, #ec407a, #ad1457)', text: '#fff' },
@@ -19,6 +22,7 @@ const DEFAULT_TASKS = [
   { id: 'cone-pickup', label: 'CONE PICK UP', color: 'linear-gradient(135deg, #ffca28, #ff8f00)', text: '#1a1a1a' },
   { id: 'chocks-off', label: 'CHOCKS OFF', color: 'linear-gradient(135deg, #7e57c2, #4527a0)', text: '#fff' },
   { id: 'door', label: 'DOOR OPEN / CLOSE', color: 'linear-gradient(135deg, #26a69a, #00695c)', text: '#fff' },
+  { id: 'aircraft-cleaning', label: 'AIRCRAFT CLEANING', color: 'linear-gradient(135deg, #64748b, #475569)', text: '#fff' },
   { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' },
   { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' },
 ];
@@ -28,21 +32,27 @@ const formatDate = (date: Date) => date.toISOString().split('T')[0];
 function OpsBoardPage() {
   const { profile, user } = useAuth();
   
-  // Access Control
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager';
+  const isManager = profile?.role === 'manager' || profile?.role === 'owner' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const dept = profile?.department || '';
   const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
   
-  // Can edit if Dev, Manager, or Ops/Safety SMT
   const canEdit = isDev || isManager || (isSMT && isOpsOrSafety);
-  // Can view if Dev, Manager, SMT, or Ops/Safety regular staff
   const canView = canEdit || isSMT || isOpsOrSafety;
 
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
-  const [staffPool, setStaffPool] = useState<string[]>(DEFAULT_STAFF);
+  
+  // Persistent Staff Pool
+  const [staffPool, setStaffPool] = useState<string[]>(() => {
+    const saved = localStorage.getItem('ops_staff_pool');
+    return saved ? JSON.parse(saved) : DEFAULT_STAFF;
+  });
   const [newStaff, setNewStaff] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool));
+  }, [staffPool]);
 
   const [rwy19, setRwy19] = useState<string[]>([]);
   const [rwy01, setRwy01] = useState<string[]>([]);
@@ -62,7 +72,7 @@ function OpsBoardPage() {
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
-  // --- LOAD DRAFT FROM LOCAL STORAGE ---
+  // Load Draft from LocalStorage
   useEffect(() => {
     const saved = localStorage.getItem('ops_board_draft');
     if (saved) {
@@ -78,7 +88,7 @@ function OpsBoardPage() {
     }
   }, []);
 
-  // --- SAVE DRAFT TO LOCAL STORAGE ---
+  // Save Draft to LocalStorage
   useEffect(() => {
     localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
   }, [rwy19, rwy01, lights, groundAssign]);
@@ -123,6 +133,11 @@ function OpsBoardPage() {
     if (staffPool.includes(name)) { toast.error('Staff already in pool'); return; }
     setStaffPool([...staffPool, name]);
     setNewStaff('');
+  };
+
+  const handleRemoveStaff = (name: string) => {
+    if (!window.confirm(`Remove ${name} permanently from the staff list?`)) return;
+    setStaffPool(prev => prev.filter(s => s !== name));
   };
 
   const saveRunwayData = async () => {
@@ -311,7 +326,10 @@ function OpsBoardPage() {
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
                 {staffPool.map(s => (
                   <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                    <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
+                      <button onClick={() => handleRemoveStaff(s)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}>✖</button>
+                    </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy19.includes(s)} onChange={() => toggleRunway('19', s)} disabled={rwy01.includes(s) || lights.includes(s)} /> RWY 19</label>
                       <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy01.includes(s)} onChange={() => toggleRunway('01', s)} disabled={rwy19.includes(s) || lights.includes(s)} /> RWY 01</label>
@@ -400,7 +418,13 @@ function OpsBoardPage() {
                     <div key={t.id} className="ops-card">
                       <div className="ops-card-header" style={{ background: t.color, color: t.text }}>{t.label}</div>
                       <div className="ops-card-body">
-                        {assigned.length ? assigned.map(n => <div key={n} className="ops-name-row">{n}</div>) : <div className="ops-name-row empty">—</div>}
+                        {assigned.length ? (
+                          assigned.map((n, idx) => (
+                            <div key={n} className="ops-name-row">
+                              {idx === 0 ? '⭐ ' : ''} {n}
+                            </div>
+                          ))
+                        ) : <div className="ops-name-row empty">—</div>}
                       </div>
                     </div>
                   );
