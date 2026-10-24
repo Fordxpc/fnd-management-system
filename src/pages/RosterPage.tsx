@@ -107,7 +107,7 @@ function RosterPage() {
   const { profile } = useAuth();
   
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const userDepartment = profile?.department;
   const isAdmin = isDev || isManager || isSMT;
