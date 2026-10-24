@@ -18,28 +18,47 @@ export function AuthProvider({ children }: any) {
         const email = (currentUser.email || "").toLowerCase();
         
         try {
-          // 1. Get the real department from the STAFF collection
-          let staffDept = "Ground Operations";
+          // 1. Get the real data from the STAFF collection
+          let staffData: any = null;
           try {
             const staffQ = query(collection(db, "staff"), where("email", "==", email));
             const staffSnap = await getDocs(staffQ);
             if (!staffSnap.empty) {
-              staffDept = staffSnap.docs[0].data().department || "Ground Operations";
+              staffData = staffSnap.docs[0].data();
             }
           } catch (e) { console.warn("Staff lookup failed", e); }
+
+          const staffDept = staffData?.department || "Ground Operations";
+          const isSMT = staffData?.isSMT === true;
+          const isManagerPos = (staffData?.position || '').toLowerCase().includes('manager');
 
           const userRef = doc(db, "users", currentUser.uid);
           const userSnap = await getDoc(userRef);
 
           if (userSnap.exists()) {
             const userData = userSnap.data();
-            // Self-heal: If user's department doesn't match staff department, fix it!
+            let updates: any = {};
+            let needsUpdate = false;
+
+            // Auto-heal Department
             if (userData.department !== staffDept) {
-              await updateDoc(userRef, { department: staffDept });
-              setProfile({ ...userData, department: staffDept });
+              updates.department = staffDept;
+              needsUpdate = true;
+            }
+
+            // Auto-heal Role (Upgrade to SMT/Manager if staff record says so)
+            if (userData.role === 'staff') {
+              if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
+              else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }
+            }
+
+            if (needsUpdate) {
+              await updateDoc(userRef, updates);
+              setProfile({ ...userData, ...updates });
             } else {
               setProfile(userData);
             }
+
           } else {
             // New user - check for preset
             let presetDoc: any = null;
@@ -56,9 +75,18 @@ export function AuthProvider({ children }: any) {
               console.warn("Could not look up preset:", presetErr);
             }
 
-            const newProfile = presetDoc
-              ? { email: currentUser.email, role: presetDoc.role || "staff", department: presetDoc.department || staffDept, createdAt: new Date().toISOString(), presetApplied: true }
-              : { email: currentUser.email, role: "staff", department: staffDept, createdAt: new Date().toISOString() };
+            // Determine initial role based on Staff record or Preset
+            let initialRole = presetDoc?.role || "staff";
+            if (initialRole === "staff" && isSMT) initialRole = "smt";
+            if (initialRole === "staff" && isManagerPos) initialRole = "manager";
+
+            const newProfile = {
+              email: currentUser.email,
+              role: initialRole,
+              department: presetDoc?.department || staffDept,
+              createdAt: new Date().toISOString(),
+              ...(presetDoc && { presetApplied: true })
+            };
 
             await setDoc(userRef, newProfile);
             setProfile(newProfile);

@@ -68,16 +68,19 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const nowTime = new Date().toTimeString().slice(0, 5);
   const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
-  // Role Checks
+  const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+  
+  // --- ROBUST ROLE RECOGNITION ---
   const isDev = profile?.role === 'developer';
-  const isManagerRole = profile?.role === 'manager';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const isAdminOrOwner = ['owner', 'admin'].includes(profile?.role || '');
+  const isManagerRole = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
   
-  // SMT AND ABOVE SEE ALL DEPARTMENTS
-  const canSeeAllDepartments = isDev || isManagerRole || isSMT || isAdminOrOwner;
+  // Check Auth Role OR Staff Record (isSMT flag or Position)
+  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true;
+  const hasManagerPosition = (myStaff?.position || '').toLowerCase().includes('manager');
   
-  // Ops Board & Quick Access permissions
+  // If ANY of these are true, they see all departments
+  const canSeeAllDepartments = isDev || isManagerRole || isSMT || hasManagerPosition;
+  
   const isManager = canSeeAllDepartments; 
   const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
 
@@ -117,9 +120,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
   const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
 
-  const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
-  
-  // Use actual Staff Name
   const firstName = myStaff?.name ? myStaff.name.split(' ')[0] : (profile?.name || user?.email?.split('@')[0] || 'User');
   const displayName = firstName;
 
@@ -130,7 +130,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const userDept = profile?.department;
   
-  // SMT & Above see ALL shifts/leaves. Employees see only THEIR department.
   const todayShifts = canSeeAllDepartments ? todayShiftsAll : todayShiftsAll.filter(r => r.staffDepartment === userDept);
   const todayLeave = canSeeAllDepartments ? todayLeaveAll : todayLeaveAll.filter(r => r.staffDepartment === userDept);
 
@@ -388,7 +387,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
       <div className="dash-grid">
         <div className="dash-card">
-          {/* SMT AND ABOVE WILL SEE "ALL DEPTS" */}
           <h3>📅 Today's Duty {canSeeAllDepartments ? '(All Depts)' : `(${userDept})`}</h3>
           {Object.keys(dutyByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No scheduled shifts today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -417,7 +415,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
 
         <div className="dash-card">
-          {/* SMT AND ABOVE WILL SEE "ALL DEPTS" */}
           <h3>🌴 On Leave Today {canSeeAllDepartments ? '(All Depts)' : `(${userDept})`}</h3>
           {Object.keys(leaveByDept).length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>No one is on leave today.</p> : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
