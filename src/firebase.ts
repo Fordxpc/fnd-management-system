@@ -2,7 +2,6 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-// Hardcoded for testing to bypass Cloudflare environment variable issues
 const firebaseConfig = {
   apiKey: "AIzaSyD6SjiszP7dtr02gmaawr-JOZQxIAUGHS8I",
   authDomain: "fnd-ops-management.firebaseapp.com",

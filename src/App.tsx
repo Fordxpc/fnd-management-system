@@ -3,14 +3,14 @@ import { useAuth } from './auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import Dashboard from './Dashboard';
-import PublicLiveView from './pages/PublicLiveView'; // Import public page
+import PublicLiveView from './pages/PublicLiveView';
 import './App.css';
+import { toast } from 'sonner';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 function App() {
-  // Check if the URL is for the public live view
   if (window.location.pathname === '/live') {
     return <PublicLiveView />;
   }
@@ -28,7 +28,7 @@ function App() {
 
     try {
       if (tab === 'employee' && !department) {
-        alert('Please select your department.');
+        toast.error('Please select your department.');
         setChecking(false);
         return;
       }
@@ -45,26 +45,27 @@ function App() {
 
       if (tab === 'management' && !isManagement) {
         await logout();
-        alert('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
+        toast.error('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
         setChecking(false);
         return;
       }
 
       if (tab === 'employee' && isManagement) {
         await logout();
-        alert('This is an SMT / Manager account. Please use the "SMT / MANAGER" tab to sign in.');
+        toast.error('This is an SMT / Manager account. Please use the "SMT / MANAGER" tab to sign in.');
         setChecking(false);
         return;
       }
 
       if (tab === 'employee' && userDept && userDept !== department) {
         await logout();
-        alert(`Your account is registered under "${userDept}". Please select "${userDept}" in the department dropdown.`);
+        toast.error(`Your account is registered under "${userDept}". Please select "${userDept}" in the dropdown.`);
         setChecking(false);
         return;
       }
     } catch (error: any) {
-      alert('Error: ' + error.message);
+      console.error(error);
+      toast.error('Error: ' + error.message);
     } finally {
       setChecking(false);
     }
@@ -79,7 +80,7 @@ function App() {
       <div className="login-box">
         <div className="header">
           <h1>Funadhoo Airport</h1>
-          <p>Staff Duty & Leave Management</p>
+          <p>FND Management System</p>
         </div>
 
         <div className="role-toggle">
