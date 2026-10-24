@@ -37,6 +37,11 @@ const getWeatherInfo = (code: number) => {
   return { text: 'Clear', icon: '☀️' };
 };
 
+const getWindDirection = (deg: number) => {
+  const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  return dirs[Math.round(deg / 22.5) % 16];
+};
+
 interface DashboardProps {
   onNavigate?: (page: string) => void;
 }
@@ -96,7 +101,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       setTodayBirdCount(total);
     });
 
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&timezone=auto')
+    // Expanded Weather API
+    fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,visibility,surface_pressure&timezone=auto')
       .then(res => res.json())
       .then(data => setWeather(data.current))
       .catch(err => console.error("Weather fetch failed", err));
@@ -191,6 +197,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
+        
+        {/* FLIGHT WIDGET */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
@@ -205,43 +213,60 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div style={{ fontSize: '12px', background: '#3b82f6', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
               </div>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                <div><div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div><div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div></div>
-                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)', borderRight: '1px solid rgba(255,255,255,0.1)' }}><div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div><div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.arrivalTime || '—'}</div></div>
-                <div><div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div><div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div></div>
+              
+              {/* 4-Column Grid for Times */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>CHECK-IN</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>STA/ETA</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{nextFlight.eta || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.ata || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.atd || '—'}</div>
+                </div>
               </div>
             </div>
           ) : (
             <div style={{ color: '#94a3b8', fontSize: '14px', marginTop: '20px', textAlign: 'center' }}>No upcoming flights scheduled.</div>
           )}
-          
-          {isManager && (
-            <button className="quick-btn" style={{ marginTop: '16px', background: '#3b82f6', color: 'white', border: 'none', width: '100%' }} onClick={() => onNavigate && onNavigate('flights')}>
-              Manage Flight Schedule
-            </button>
-          )}
         </div>
 
-        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px' }}>
-          <div>
-            <h3 style={{ color: '#e0f2fe', margin: '0 0 8px', fontSize: '14px' }}>🌤️ Weather</h3>
-            {weather ? (
+        {/* EXPANDED WEATHER WIDGET */}
+        <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', padding: '16px 20px' }}>
+          <h3 style={{ color: '#e0f2fe', margin: '0 0 12px', fontSize: '14px' }}>🌤️ Detailed Weather (Funadhoo)</h3>
+          {weather ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '40px' }}>{getWeatherInfo(weather.weather_code).icon}</span>
+                <span style={{ fontSize: '48px' }}>{getWeatherInfo(weather.weather_code).icon}</span>
                 <div>
-                  <div style={{ fontSize: '28px', fontWeight: 900 }}>{weather.temperature_2m}°C</div>
-                  <div style={{ fontSize: '12px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weather_code).text}</div>
-                  <div style={{ fontSize: '11px', color: '#bae6fd' }}>Feels like: {weather.apparent_temperature}°C · Wind: {weather.wind_speed_10m} km/h</div>
-                  <div style={{ fontSize: '11px', color: '#bae6fd' }}>Humidity: {weather.relative_humidity_2m}% · Rain: {weather.precipitation} mm</div>
+                  <div style={{ fontSize: '32px', fontWeight: 900 }}>{weather.temperature_2m}°C</div>
+                  <div style={{ fontSize: '13px', color: '#bae6fd', fontWeight: 600 }}>{getWeatherInfo(weather.weather_code).text}</div>
                 </div>
               </div>
-            ) : <div style={{ fontSize: '13px' }}>Loading...</div>}
-          </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', flex: 1, background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '8px', fontSize: '12px' }}>
+                <div><strong>Feels Like:</strong> <br/>{weather.apparent_temperature}°C</div>
+                <div><strong>Humidity:</strong> <br/>{weather.relative_humidity_2m}%</div>
+                <div><strong>Visibility:</strong> <br/>{(weather.visibility / 1000).toFixed(1)} km</div>
+                <div><strong>Wind:</strong> <br/>{getWindDirection(weather.wind_direction_10m)} @ {weather.wind_speed_10m} km/h</div>
+                <div><strong>Pressure:</strong> <br/>{weather.surface_pressure} hPa</div>
+                <div><strong>Precipitation:</strong> <br/>{weather.precipitation} mm</div>
+              </div>
+            </div>
+          ) : <div style={{ fontSize: '13px' }}>Loading weather data...</div>}
         </div>
       </div>
 
       {nextFlight && <FlightRadarWidget flightNumber={nextFlight.flightNo} />}
 
+      {/* Rest of the dashboard (Stats, Quick Access, etc.) - Kept exactly as before */}
       <div className="dash-stats" style={{ marginTop: '20px' }}>
         {isManager && (
           <div className="stat-card" onClick={() => onNavigate && onNavigate('staff')}>

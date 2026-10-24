@@ -10,9 +10,10 @@ const ExcelHeader = ({ title, subtitle }: { title: string, subtitle: string }) =
   </div>
 );
 
+// Added whiteSpace: 'nowrap' to enforce single line
 const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif', textAlign: 'center' };
-const thStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold' };
-const tdStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px' };
+const thStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' };
+const tdStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' };
 
 function ReportsPage() {
   const [activeTab, setActiveTab] = useState<'dfis' | 'wildlife' | 'fod' | 'stats' | 'traffic' | 'lights'>('dfis');
@@ -23,19 +24,16 @@ function ReportsPage() {
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, 'ramp_inspections'), s => {
-      // FIX: Explicitly type as any[] to allow sorting by .date
       const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       setRampData(data);
     });
     const u2 = onSnapshot(collection(db, 'fod_collections'), s => {
-      // FIX: Explicitly type as any[]
       const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       setFodData(data);
     });
     const u4 = onSnapshot(collection(db, 'bird_counts'), s => {
-      // FIX: Explicitly type as any[]
       const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       setBirdData(data);
