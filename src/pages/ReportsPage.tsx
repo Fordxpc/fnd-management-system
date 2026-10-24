@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useAuth } from '../auth';
@@ -11,9 +11,10 @@ const ExcelHeader = ({ title, subtitle }: { title: string, subtitle: string }) =
   </div>
 );
 
-const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'Arial, sans-serif', textAlign: 'center' };
-const thStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' };
-const tdStyle: React.CSSProperties = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' };
+// REMOVED React.CSSProperties TO PREVENT BUILD ERRORS
+const tableStyle = { width: '100%', borderCollapse: 'collapse' as const, fontSize: '10px', fontFamily: 'Arial, sans-serif', textAlign: 'center' as const };
+const thStyle = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' as const };
+const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' as const };
 
 function ReportsPage() {
   const { profile } = useAuth();
