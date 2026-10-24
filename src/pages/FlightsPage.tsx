@@ -35,7 +35,7 @@ function FlightsPage() {
   const [departure, setDeparture] = useState('');
   const [route, setRoute] = useState('MLE/FND/MLE');
   const [originDep, setOriginDep] = useState('');
-  const [status, setStatus] = useState('Scheduled'); // Changed from 'On Time'
+  const [status, setStatus] = useState('Scheduled');
   const [remarks, setRemarks] = useState('');
 
   useEffect(() => {
@@ -106,7 +106,8 @@ function FlightsPage() {
     setDeparture(f.departureTime || '');
     setRoute(f.route || '');
     setOriginDep(f.originDepTime || '');
-    setStatus(f.status || 'Scheduled');
+    // Convert old 'On Time' to 'Scheduled' when editing
+    setStatus(f.status === 'On Time' ? 'Scheduled' : (f.status || 'Scheduled')); 
     setRemarks(f.remarks || '');
     setShowForm(true);
   };
@@ -122,6 +123,9 @@ function FlightsPage() {
 
   const todayStr = formatDate(new Date());
   
+  // Helper to map old statuses to new
+  const displayStatus = (s: string) => s === 'On Time' ? 'Scheduled' : s;
+
   const sortedFlights = [...flights].sort((a, b) => {
     const dateCompare = (a.date || '').localeCompare(b.date || '');
     if (dateCompare !== 0) return dateCompare;
@@ -129,11 +133,11 @@ function FlightsPage() {
   });
 
   const completedStatuses = ['Departed', 'Landed', 'Cancelled'];
-  const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(f.status));
-  const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(f.status)).reverse();
+  const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(displayStatus(f.status)));
+  const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(displayStatus(f.status))).reverse();
 
   const FlightCard = ({ f }: { f: any }) => (
-    <div className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0' }}>
+    <div className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0', marginBottom: '16px' }}>
       <div style={{ background: f.type === 'Air Ambulance' ? '#fef2f2' : f.type === 'Additional' ? '#fef3c7' : '#eff6ff', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h3 style={{ margin: 0, fontSize: '22px', color: f.type === 'Air Ambulance' ? '#991b1b' : f.type === 'Additional' ? '#92400e' : '#1e40af' }}>{f.flightNo}</h3>
@@ -161,7 +165,7 @@ function FlightsPage() {
         <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>STATUS</div>
-            <span className="status-badge" style={{ fontSize: '14px', padding: '6px 12px', background: f.status === 'Delayed' ? '#fef3c7' : f.status === 'Cancelled' ? '#fee2e2' : f.status === 'Departed' || f.status === 'Landed' ? '#e2e8f0' : '#dcfce7', color: f.status === 'Delayed' ? '#92400e' : f.status === 'Cancelled' ? '#991b1b' : f.status === 'Departed' || f.status === 'Landed' ? '#475569' : '#065f46' }}>{f.status}</span>
+            <span className="status-badge" style={{ fontSize: '14px', padding: '6px 12px', background: displayStatus(f.status) === 'Delayed' ? '#fef3c7' : displayStatus(f.status) === 'Cancelled' ? '#fee2e2' : displayStatus(f.status) === 'Departed' || displayStatus(f.status) === 'Landed' ? '#e2e8f0' : '#dcfce7', color: displayStatus(f.status) === 'Delayed' ? '#92400e' : displayStatus(f.status) === 'Cancelled' ? '#991b1b' : displayStatus(f.status) === 'Departed' || displayStatus(f.status) === 'Landed' ? '#475569' : '#065f46' }}>{displayStatus(f.status)}</span>
           </div>
           {isManager && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
@@ -227,8 +231,31 @@ function FlightsPage() {
         <div>
           <h3 style={{ color: '#2563eb', borderBottom: '2px solid #bfdbfe', paddingBottom: '8px', marginBottom: '16px' }}>🕒 Upcoming & Active Flights</h3>
           {upcomingFlights.length === 0 ? <div className="empty-state"><p>No upcoming flights.</p></div> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {upcomingFlights.map(f => <FlightCard key={f.id} f={f} />)}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {upcomingFlights.map((f, index) => {
+                const prevFlight = index > 0 ? upcomingFlights[index - 1] : null;
+                const showDateHeader = !prevFlight || prevFlight.date !== f.date;
+                
+                const fDate = new Date(f.date + 'T00:00:00');
+                const tDate = new Date(todayStr + 'T00:00:00');
+                const diffTime = fDate.getTime() - tDate.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
+                
+                let dateLabel = formatDisplayDate(f.date);
+                if (diffDays === 0) dateLabel = 'TODAY';
+                else if (diffDays === 1) dateLabel = 'TOMORROW';
+
+                return (
+                  <div key={f.id}>
+                    {showDateHeader && (
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#475569', margin: '16px 0 12px 0', paddingBottom: '4px', borderBottom: '1px dashed #cbd5e1' }}>
+                        📅 {dateLabel} ({formatDisplayDate(f.date)})
+                      </div>
+                    )}
+                    <FlightCard f={f} />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -236,8 +263,21 @@ function FlightsPage() {
         <div>
           <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Past & Departed Flights</h3>
           {pastFlights.length === 0 ? <div className="empty-state"><p>No past flights.</p></div> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', opacity: 0.8 }}>
-              {pastFlights.map(f => <FlightCard key={f.id} f={f} />)}
+            <div style={{ display: 'flex', flexDirection: 'column', opacity: 0.8 }}>
+              {pastFlights.map((f, index) => {
+                const prevFlight = index > 0 ? pastFlights[index - 1] : null;
+                const showDateHeader = !prevFlight || prevFlight.date !== f.date;
+                return (
+                  <div key={f.id}>
+                    {showDateHeader && (
+                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#64748b', margin: '16px 0 12px 0', paddingBottom: '4px', borderBottom: '1px dashed #cbd5e1' }}>
+                        📅 {formatDisplayDate(f.date)}
+                      </div>
+                    )}
+                    <FlightCard f={f} />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -135,7 +135,9 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
-  let liveStatus = nextFlight?.status || 'Scheduled';
+  let baseStatus = nextFlight?.status || 'Scheduled';
+  if (baseStatus === 'On Time') baseStatus = 'Scheduled';
+  let liveStatus = baseStatus;
   if (nextFlight && liveRamp && liveRamp.fltNo === nextFlight.flightNo) {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
