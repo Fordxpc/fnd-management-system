@@ -666,3 +666,65 @@
   .week-grid .col-name { width: 90px !important; min-width: 90px !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
   .week-grid .col-date { min-width: 65px !important; padding: 0 2px !important; }
 }
+/* (Keep all your existing CSS at the top... just update the Mobile Responsive section at the very bottom) */
+
+/* =========================================================
+   MOBILE RESPONSIVE LAYOUT (STRICTLY SCREEN ONLY)
+   ========================================================= */
+@media screen and (max-width: 1024px) {
+  .dashboard-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+  }
+
+  .sidebar, .main-content { display: contents !important; }
+
+  .top-tabs-container {
+    display: flex !important; order: 2 !important; width: 100% !important;
+    overflow-x: auto !important; background: #fff !important; border-bottom: 2px solid #e2e8f0 !important;
+  }
+  .top-tab {
+    flex: 1 !important; padding: 12px 10px !important; font-size: 13px !important;
+    white-space: nowrap !important; text-align: center !important;
+  }
+
+  .sidebar-nav {
+    display: flex !important; flex-direction: row !important; order: 3 !important;
+    width: 100% !important; overflow-x: auto !important; padding: 10px !important;
+    background: #f8fafc !important; border-bottom: 1px solid #e2e8f0 !important; gap: 8px !important;
+    flex-wrap: nowrap !important; /* Prevent wrapping */
+  }
+  .sidebar-section-title { display: none !important; }
+  
+  .nav-item {
+    white-space: nowrap !important; padding: 8px 16px !important; font-size: 13px !important;
+    border: 1px solid #cbd5e1 !important; background: #fff !important;
+    border-radius: 20px !important; color: #475569 !important; margin: 0 !important;
+    flex-shrink: 0 !important; /* FIX: Prevents stretching */
+  }
+  .nav-item.active {
+    background: #2563eb !important; color: #fff !important; border-color: #2563eb !important;
+  }
+
+  .page-wrapper {
+    display: block !important; order: 4 !important; width: 100% !important;
+    padding: 15px !important; flex: 1 !important;
+  }
+
+  .sidebar-footer {
+    display: flex !important; flex-direction: column !important; order: 5 !important;
+    width: 100% !important; background: #0f172a !important; padding: 20px !important; margin-top: auto !important;
+  }
+  .sidebar-footer button { width: 100% !important; padding: 12px !important; font-size: 14px !important; }
+
+  .bulk-form-grid { grid-template-columns: 1fr !important; }
+  .bulk-field-full { grid-column: span 1 !important; }
+
+  .week-grid th, .week-grid td { font-size: 10px !important; padding: 4px 2px !important; }
+  .week-grid .col-sn { width: 45px !important; min-width: 45px !important; }
+  .week-grid .col-name { width: 90px !important; min-width: 90px !important; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; }
+  .week-grid .col-date { min-width: 65px !important; padding: 0 2px !important; }
+}
