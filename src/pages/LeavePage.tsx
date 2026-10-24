@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
 
 const LEAVE_TYPES = [
-  'ANNUAL LEAVE', 'ABSENT','SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE',
+  'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'ABSENT',
   'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE',
   'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL',
 ];
@@ -17,14 +17,14 @@ const LEAVE_TYPES = [
 const ENTITLEMENTS: { [key: string]: number } = {
   'ANNUAL LEAVE': 30, 'SICK LEAVE': 15, 'SICK LEAVE / MC': 15,
   'FAMILY RESPONSIBILITY LEAVE (FRL)': 10, 'PRE-MATERNITY LEAVE': 15,
-  'MATERNITY LEAVE': 180, 'PATERNITY LEAVE': 30, 'NO PAY LEAVE': 365, 'DUTY TRAVEL': 0,
+  'MATERNITY LEAVE': 180, 'PATERNITY LEAVE': 30, 'NO PAY LEAVE': 365, 'DUTY TRAVEL': 0, 'ABSENT': 0
 };
 
 const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
 const MALE_ONLY = ['PATERNITY LEAVE'];
 const COUNTS_FRIDAY_AND_OFF_DAYS = [
   'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'NO PAY LEAVE',
-  'SICK LEAVE', 'SICK LEAVE / MC', 'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL',
+  'SICK LEAVE', 'SICK LEAVE / MC', 'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL', 'ABSENT'
 ];
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
@@ -35,7 +35,6 @@ const APPROVER_DESIGNATIONS = [
   'Assistant Security Officer', 'Assistant Administrative Officer', 'Leading Fireman',
 ];
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
-const DEVELOPER_ROLES = ['developer'];
 
 const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
@@ -136,7 +135,6 @@ function LeavePage() {
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const userDept = profile?.department || '';
   const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
 
   const [requests, setRequests] = useState<any[]>([]);
@@ -236,11 +234,11 @@ function LeavePage() {
   const usedDays: { [key: string]: number } = {};
   LEAVE_TYPES.forEach((t) => { usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0; });
 
+  // FIX: Only show staff this user can actually approve/manage
   const deptBalanceStaff = staffList
     .filter((s: any) => {
-      if (s.isSMT === true || s.department === 'Administration' || s.department === 'Safety') return false;
-      if (isDev || isManager || canApproveAnyDept) return true;
-      return myStaff?.department ? s.department === myStaff.department : false;
+      if (s.isSMT === true || s.department === 'Administration') return false;
+      return canApproveThisDept(s.department);
     })
     .sort((a: any, b: any) => (a.sn || '').localeCompare(b.sn || ''));
 

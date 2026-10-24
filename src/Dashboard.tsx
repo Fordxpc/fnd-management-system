@@ -29,8 +29,8 @@ function Dashboard(_props: any) {
   const isManager = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const dept = profile?.department || '';
-  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
   
+  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
   const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
   const canManageUsers = isDev || isManager;
   
@@ -38,7 +38,7 @@ function Dashboard(_props: any) {
   const canSeeRampCheck = isDev || isManager || isSMT;
   const canSeeStaffList = isDev || isManager || isSMT;
   
-  // Hide Reports and Wildlife for normal staff
+  // FIX: SMT can now see Reports
   const canSeeReports = !isStaff; 
   const canSeeWildlife = !isStaff;
 

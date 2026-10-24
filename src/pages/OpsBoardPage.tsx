@@ -43,7 +43,6 @@ function OpsBoardPage() {
 
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
   
-  // Persistent Staff Pool
   const [staffPool, setStaffPool] = useState<string[]>(() => {
     const saved = localStorage.getItem('ops_staff_pool');
     return saved ? JSON.parse(saved) : DEFAULT_STAFF;
@@ -72,7 +71,6 @@ function OpsBoardPage() {
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
-  // Load Draft from LocalStorage
   useEffect(() => {
     const saved = localStorage.getItem('ops_board_draft');
     if (saved) {
@@ -88,7 +86,6 @@ function OpsBoardPage() {
     }
   }, []);
 
-  // Save Draft to LocalStorage
   useEffect(() => {
     localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
   }, [rwy19, rwy01, lights, groundAssign]);
@@ -341,13 +338,6 @@ function OpsBoardPage() {
             </div>
           )}
 
-          {canEdit && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
-              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
-              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
-            </div>
-          )}
-
           <div className="ops-board-export-area">
             <div className="ops-board-fixed-width" ref={runwayRef}>
               <div className="ops-board-title">FND RUNWAY INSPECTION BOARD</div>
@@ -374,19 +364,20 @@ function OpsBoardPage() {
               <div style={{ textAlign: 'center', color: '#aaa', marginTop: '20px', fontSize: '14px' }}>{new Date().toLocaleString()}</div>
             </div>
           </div>
+
+          {/* MOVED BUTTONS TO BOTTOM */}
+          {canEdit && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
+              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
+            </div>
+          )}
         </div>
       )}
 
       {/* ===== GROUND TAB ===== */}
       {activeTab === 'ground' && (
         <div>
-          {canEdit && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginBottom: '12px' }}>
-              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
-              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
-            </div>
-          )}
-
           {canEdit && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff to Tasks</h3>
@@ -395,11 +386,11 @@ function OpsBoardPage() {
                   <div key={t.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
                     <span style={{ width: '250px', fontWeight: 700, fontSize: '12px', marginTop: '4px' }}>{t.label}</span>
                     
-                    {/* MOBILE FIX: Wrapping Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '6px', flex: 1 }}>
+                    {/* 3-COLUMN MOBILE GRID */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', flex: 1 }}>
                       {staffPool.map(s => (
                         <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '4px', borderRadius: '4px', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
-                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '12px', height: '12px' }} />
+                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '12px', height: '12px', flexShrink: 0 }} />
                           <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s}</span>
                         </label>
                       ))}
@@ -443,6 +434,14 @@ function OpsBoardPage() {
               <div style={{ textAlign: 'center', color: '#aaa', marginTop: '20px', fontSize: '14px' }}>{new Date().toLocaleString()}</div>
             </div>
           </div>
+
+          {/* MOVED BUTTONS TO BOTTOM */}
+          {canEdit && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
+              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
+            </div>
+          )}
         </div>
       )}
 
