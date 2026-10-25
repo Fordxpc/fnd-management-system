@@ -1,8 +1,11 @@
 name = "fnd-management-system"
 compatibility_date = "2024-03-01"
-pages_build_output_dir = "dist"
+
+# Tell Cloudflare to look for the built assets in the dist folder
+[assets]
+directory = "./dist"
 
 [[d1_databases]]
-binding = "fnd_ops_database"
+binding = "DB"
 database_name = "fnd-ops-database"
 database_id = "d6a25af5-0090-48a2-9943-dd7eb7b3946c"
