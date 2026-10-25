@@ -133,7 +133,7 @@ function LeavePage() {
   const { profile, user } = useAuth();
   
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
 
@@ -193,11 +193,23 @@ function LeavePage() {
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   
+  // FIXED: Bulletproof SMT Approval Logic
   const canApproveThisDept = (dept: string) => {
     if (isDev || isManager || canApproveAnyDept) return true;
-    if (myStaff?.department === 'Safety' && dept === 'Security') return true;
-    if (isSMT && myStaff?.department === dept) return true;
-    if (isDeptManager && myStaff?.department === dept) return true;
+    
+    const targetDept = (dept || '').trim().toLowerCase();
+    const currentDept = (myStaff?.department || '').trim().toLowerCase();
+    const isActuallySMT = isSMT || myStaff?.isSMT === true;
+
+    // Safety can approve Security
+    if (currentDept === 'safety' && targetDept === 'security') return true;
+    
+    // SMT can approve their own department
+    if (isActuallySMT && currentDept === targetDept) return true;
+    
+    // Dept Managers can approve their own department
+    if (isDeptManager && currentDept === targetDept) return true;
+    
     return false;
   };
 
@@ -205,7 +217,7 @@ function LeavePage() {
   const canSeeMyBalance = !isStaff || myStaff?.balanceVisible === true || isSMT || isManager;
 
   const canApproveRequest = (r: any): boolean => {
-    if (r.staffId === myStaff?.id) return false;
+    if (r.staffId === myStaff?.id) return false; 
     if (isDev || isManager || canApproveAnyDept) return true;
     return canApproveThisDept(r.staffDepartment);
   };
@@ -234,7 +246,6 @@ function LeavePage() {
   const usedDays: { [key: string]: number } = {};
   LEAVE_TYPES.forEach((t) => { usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0; });
 
-  // FIX: Only show staff this user can actually approve/manage
   const deptBalanceStaff = staffList
     .filter((s: any) => {
       if (s.isSMT === true || s.department === 'Administration') return false;

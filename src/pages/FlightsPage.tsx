@@ -148,7 +148,7 @@ function FlightsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', padding: '20px' }}>
+      <div className="flight-card-details">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>SCHEDULED ARR</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
