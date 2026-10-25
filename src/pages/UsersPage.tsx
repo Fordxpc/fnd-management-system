@@ -14,7 +14,6 @@ import { useAuth } from '../auth';
 const ADMIN_ROLES = ['developer', 'manager'];
 const ALL_ROLES = ['developer', 'manager', 'admin', 'smt', 'staff'];
 
-// FIX: Added 'Safety' to the list
 const DEPARTMENTS = [
   'Ground Operations',
   'Maintenance',
@@ -30,6 +29,7 @@ function UsersPage() {
 
   const [users, setUsers] = useState<any[]>([]);
   const [presets, setPresets] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]); // NEW: Staff data
   const [loading, setLoading] = useState<boolean>(true);
 
   // Pre-register form
@@ -44,16 +44,27 @@ function UsersPage() {
       setLoading(false);
       return;
     }
+    
+    // Listen to Active Users
     const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
       setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
+    
+    // Listen to Pre-registered Users
     const unsubPresets = onSnapshot(collection(db, 'user_presets'), (snap) => {
       setPresets(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
+
+    // Listen to Staff Database (to get real names)
+    const unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
+      setStaffList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+
     return () => {
       unsubUsers();
       unsubPresets();
+      unsubStaff();
     };
   }, [isAllowed]);
 
@@ -65,6 +76,13 @@ function UsersPage() {
       </div>
     );
   }
+
+  // Helper to find the staff name by email
+  const getStaffName = (email: string) => {
+    if (!email) return '—';
+    const s = staffList.find((st) => (st.email || '').toLowerCase() === email.toLowerCase());
+    return s ? s.name : '—';
+  };
 
   const handleChangeRole = async (userId: string, value: string) => {
     try {
@@ -279,6 +297,7 @@ function UsersPage() {
             <table>
               <thead>
                 <tr>
+                  <th>Name</th> {/* NEW HEADER */}
                   <th>Email</th>
                   <th>Role</th>
                   <th>Department</th>
@@ -289,9 +308,8 @@ function UsersPage() {
               <tbody>
                 {presets.map((p) => (
                   <tr key={p.id}>
-                    <td>
-                      <strong>{p.email}</strong>
-                    </td>
+                    <td><strong>{getStaffName(p.email)}</strong></td> {/* NEW CELL */}
+                    <td>{p.email}</td>
                     <td>
                       <span
                         style={{
@@ -368,6 +386,7 @@ function UsersPage() {
               <table>
                 <thead>
                   <tr>
+                    <th>Name</th> {/* NEW HEADER */}
                     <th>Email</th>
                     <th>Role</th>
                     <th>Department</th>
@@ -377,9 +396,8 @@ function UsersPage() {
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id}>
-                      <td>
-                        <strong>{u.email}</strong>
-                      </td>
+                      <td><strong>{getStaffName(u.email)}</strong></td> {/* NEW CELL */}
+                      <td>{u.email}</td>
                       <td>
                         <select
                           value={u.role || 'staff'}
