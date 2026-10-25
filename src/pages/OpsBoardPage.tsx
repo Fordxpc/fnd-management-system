@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, query, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -75,12 +74,34 @@ function OpsBoardPage() {
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
-  // Calculate base scale to fit screen, then user zoom scales on top
+  // Fetch Data via API
+  const fetchData = useCallback(async () => {
+    try {
+      const [rwData, grData, fodData] = await Promise.all([
+        apiFetch('/ops/runway'),
+        apiFetch('/ops/ground'),
+        apiFetch('/fod')
+      ]);
+      setRunwayHistory(rwData);
+      setGroundHistory(grData);
+      setFodList(fodData);
+    } catch (err: any) {
+      console.error(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
+  // Calculate base scale to fit screen
   useEffect(() => {
     if (!showPreview) return;
     const handleResize = () => {
       const screenWidth = window.innerWidth - 40; 
-      const targetWidth = 700; // Export width
+      const targetWidth = 700;
       setPreviewBaseScale(screenWidth < targetWidth ? screenWidth / targetWidth : 1);
     };
     handleResize();
@@ -88,6 +109,7 @@ function OpsBoardPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, [showPreview]);
 
+  // Draft Saving
   useEffect(() => {
     const saved = localStorage.getItem('ops_board_draft');
     if (saved) {
@@ -97,28 +119,13 @@ function OpsBoardPage() {
         setRwy01(parsed.rwy01 || []);
         setLights(parsed.lights || []);
         setGroundAssign(parsed.groundAssign || {});
-      } catch (e) {
-        console.error("Failed to load draft", e);
-      }
+      } catch (e) { console.error("Failed to load draft", e); }
     }
   }, []);
 
   useEffect(() => {
     localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
   }, [rwy19, rwy01, lights, groundAssign]);
-
-  useEffect(() => {
-    const qRunway = query(collection(db, 'ops_runway_history'), orderBy('createdAt', 'desc'), limit(200));
-    const unsubR = onSnapshot(qRunway, (snap) => setRunwayHistory(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-    const qGround = query(collection(db, 'ops_ground_history'), orderBy('createdAt', 'desc'), limit(200));
-    const unsubG = onSnapshot(qGround, (snap) => setGroundHistory(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-    const qFod = query(collection(db, 'fod_collections'), orderBy('date', 'desc'), limit(200));
-    const unsubF = onSnapshot(qFod, (snap) => setFodList(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-    return () => { unsubR(); unsubG(); unsubF(); };
-  }, []);
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
     if (!canEdit) return;
@@ -155,36 +162,42 @@ function OpsBoardPage() {
   };
 
   const handleClearBoard = () => {
-    if (!window.confirm("Are you sure you want to clear all selections? This will reset the current board.")) return;
+    if (!window.confirm("Are you sure you want to clear all selections?")) return;
     setRwy19([]);
     setRwy01([]);
     setLights([]);
     setGroundAssign({});
     localStorage.removeItem('ops_board_draft');
-    toast.success('Board cleared and ready for new assignments.');
+    toast.success('Board cleared.');
   };
 
   const saveRunwayData = async () => {
     try {
-      await addDoc(collection(db, 'ops_runway_history'), {
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString(),
-        createdAt: new Date().toISOString(),
-        rwy19, rwy01, lights
+      await apiFetch('/ops/runway', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toLocaleTimeString(),
+          rwy19, rwy01, lights
+        })
       });
       toast.success('Runway board saved to history!');
+      fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
 
   const saveGroundData = async () => {
     try {
-      await addDoc(collection(db, 'ops_ground_history'), {
-        date: new Date().toISOString().split('T')[0],
-        time: new Date().toLocaleTimeString(),
-        createdAt: new Date().toISOString(),
-        assignments: groundAssign
+      await apiFetch('/ops/ground', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: new Date().toISOString().split('T')[0],
+          time: new Date().toLocaleTimeString(),
+          assignments: groundAssign
+        })
       });
       toast.success('Ground board saved to history!');
+      fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -193,14 +206,17 @@ function OpsBoardPage() {
     if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; }
     setFodSubmitting(true);
     try {
-      await addDoc(collection(db, 'fod_collections'), {
-        ...fodForm,
-        grams: Number(fodForm.grams),
-        loggedBy: user?.email || '',
-        createdAt: new Date().toISOString()
+      await apiFetch('/fod', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...fodForm,
+          grams: Number(fodForm.grams),
+          loggedBy: user?.email || ''
+        })
       });
       toast.success('FOD entry recorded!');
       setFodForm({ date: formatDate(new Date()), grams: '', remarks: '' });
+      fetchData();
     } catch (err: any) { toast.error(err.message); }
     setFodSubmitting(false);
   };
@@ -208,8 +224,9 @@ function OpsBoardPage() {
   const handleDeleteFOD = async (id: string) => {
     if (!window.confirm('Delete this FOD record?')) return;
     try {
-      await deleteDoc(doc(db, 'fod_collections', id));
+      await apiFetch(`/fod/${id}`, { method: 'DELETE' });
       toast.success('FOD record deleted');
+      fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -221,9 +238,9 @@ function OpsBoardPage() {
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
     wrapper.style.top = '0';
-    wrapper.style.width = '700px'; // Reduced width
+    wrapper.style.width = '700px';
     wrapper.style.background = '#141414';
-    wrapper.style.padding = '20px'; // Reduced padding
+    wrapper.style.padding = '20px';
 
     const clone = ref.current.cloneNode(true) as HTMLElement;
     clone.style.width = '100%';
@@ -236,7 +253,7 @@ function OpsBoardPage() {
       el.style.display = 'grid';
       el.style.gridTemplateColumns = 'repeat(3, 1fr)';
       el.style.gridAutoFlow = 'row';
-      el.style.gap = '8px'; // Reduced gap
+      el.style.gap = '8px';
       el.style.overflow = 'visible';
       el.style.width = '100%';
     });
@@ -257,7 +274,7 @@ function OpsBoardPage() {
       const canvas = await html2canvas(wrapper, {
         scale: 2,
         backgroundColor: '#141414',
-        width: 700, // Match wrapper width
+        width: 700,
         height: wrapper.scrollHeight,
         windowWidth: 700,
         windowHeight: wrapper.scrollHeight
@@ -425,15 +442,9 @@ function OpsBoardPage() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                       {staffPool.map(s => (
                         <label key={s} style={{ 
-                          fontSize: '10px', 
-                          display: 'flex', 
-                          alignItems: 'flex-start', 
-                          gap: '4px', 
+                          fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', 
                           background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', 
-                          padding: '6px', 
-                          borderRadius: '4px', 
-                          border: '1px solid #cbd5e1',
-                          cursor: 'pointer'
+                          padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer'
                         }}>
                           <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
                           <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
@@ -471,7 +482,6 @@ function OpsBoardPage() {
                 })}
               </div>
 
-              {/* NOTES SECTION */}
               <div style={{ background: '#111', borderLeft: '3px solid #fbc02d', borderRadius: '6px', padding: '12px', marginTop: '16px' }}>
                 <h4 style={{ color: '#fbc02d', margin: '0 0 8px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES</h4>
                 <ol style={{ color: '#e2e8f0', fontSize: '10px', paddingLeft: '16px', margin: 0, lineHeight: 1.4 }}>
@@ -665,7 +675,7 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* PREVIEW MODAL - FIXED SIZE 700px WITH SCALING AND ZOOM */}
+      {/* PREVIEW MODAL */}
       {showPreview && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
           
@@ -673,24 +683,14 @@ function OpsBoardPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <h3 style={{ margin: 0 }}>👁️ Export Preview</h3>
               
-              {/* ZOOM CONTROLS */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#222', padding: '4px 8px', borderRadius: '6px' }}>
-                <button 
-                  onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.25))}
-                  style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                >-</button>
+                <button onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.25))} style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
                 <span style={{ fontSize: '12px', minWidth: '40px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
-                <button 
-                  onClick={() => setPreviewZoom(z => Math.min(3, z + 0.25))}
-                  style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                >+</button>
+                <button onClick={() => setPreviewZoom(z => Math.min(3, z + 0.25))} style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
               </div>
             </div>
 
-            <button 
-              onClick={() => setShowPreview(false)}
-              style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
-            >
+            <button onClick={() => setShowPreview(false)} style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
               ✕ Close
             </button>
           </div>
@@ -698,8 +698,7 @@ function OpsBoardPage() {
           <div style={{ flex: 1, overflow: 'auto', background: '#222', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
             
             <div style={{ 
-              width: '700px', 
-              height: 'max-content',
+              width: '700px', height: 'max-content',
               transform: `scale(${previewBaseScale * previewZoom})`, 
               transformOrigin: 'top center', 
               transition: 'transform 0.2s ease-out',

@@ -1,15 +1,9 @@
-import { useState, useEffect } from 'react';
-import {
-  collection,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  addDoc,
-} from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { db, auth } from '../firebase';
+import { auth } from '../firebase';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
 
 const VIEW_ROLES = ['developer', 'manager', 'admin', 'owner', 'smt'];
 const EDIT_ROLES = ['developer', 'manager', 'admin', 'owner'];
@@ -42,31 +36,35 @@ function UsersPage() {
   const [presetDept, setPresetDept] = useState<string>('Ground Operations');
   const [savingPreset, setSavingPreset] = useState<boolean>(false);
 
-  useEffect(() => {
+  // FETCH DATA FROM D1
+  const fetchData = useCallback(async () => {
     if (!canView) {
       setLoading(false);
       return;
     }
     
-    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
-      setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    
-    const unsubPresets = onSnapshot(collection(db, 'user_presets'), (snap) => {
-      setPresets(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    try {
+      const [usersData, presetsData, staffData] = await Promise.all([
+        apiFetch('/users'),
+        apiFetch('/user-presets'),
+        apiFetch('/staff')
+      ]);
+      
+      setUsers(usersData);
+      setPresets(presetsData);
+      setStaffList(staffData);
       setLoading(false);
-    });
-
-    const unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
-      setStaffList(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-
-    return () => {
-      unsubUsers();
-      unsubPresets();
-      unsubStaff();
-    };
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
   }, [canView]);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   if (!canView) {
     return (
@@ -86,52 +84,45 @@ function UsersPage() {
   const handleChangeRole = async (userId: string, value: string) => {
     if (!canEdit) return;
     try {
-      await updateDoc(doc(db, 'users', userId), { role: value });
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+      await apiFetch(`/users/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ role: value, department: users.find(u => u.id === userId)?.department || 'Ground Operations' })
+      });
+      toast.success('Role updated');
+      fetchData();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
   const handleChangeDept = async (userId: string, value: string) => {
     if (!canEdit) return;
     try {
-      await updateDoc(doc(db, 'users', userId), { department: value });
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+      await apiFetch(`/users/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ role: users.find(u => u.id === userId)?.role || 'staff', department: value })
+      });
+      toast.success('Department updated');
+      fetchData();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
   const handleDelete = async (userId: string, email: string) => {
     if (!canEdit) return;
-    const ok = window.confirm(
-      `Remove ${email} from the access list?\n\n` +
-      `To fully delete their login, use Firebase Console → Authentication.`
-    );
-    if (!ok) return;
+    if (!window.confirm(`Remove ${email} from the access list?`)) return;
     try {
-      await deleteDoc(doc(db, 'users', userId));
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+      await apiFetch(`/users/${userId}`, { method: 'DELETE' });
+      toast.success('User removed.');
+      fetchData();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
   const handleSendReset = async (email: string) => {
     if (!canEdit) return;
-    const ok = window.confirm(
-      `Send password reset email to ${email}?\n\n` +
-      `They will receive a link to reset their password.`
-    );
-    if (!ok) return;
-
+    if (!window.confirm(`Send password reset email to ${email}?`)) return;
     try {
       await sendPasswordResetEmail(auth, email);
-      alert(`✅ Reset email sent to ${email}.`);
+      toast.success(`Reset email sent to ${email}.`);
     } catch (err: any) {
-      if (err.code === 'auth/user-not-found') {
-        alert('This user is not in Firebase Authentication.\nCreate them first via Firebase Console.');
-      } else {
-        alert('Error: ' + err.message);
-      }
+      toast.error(err.code === 'auth/user-not-found' ? 'User not in Firebase Auth.' : err.message);
     }
   };
 
@@ -140,48 +131,47 @@ function UsersPage() {
     if (!canEdit) return;
     
     const email = presetEmail.trim().toLowerCase();
-    if (!email) { alert('Email is required'); return; }
-    if (!email.includes('@')) { alert('Please enter a valid email address'); return; }
+    if (!email) { toast.error('Email is required'); return; }
+    if (!email.includes('@')) { toast.error('Please enter a valid email address'); return; }
 
     if (users.some((u) => (u.email || '').toLowerCase() === email)) {
-      alert('This user has already logged in and has an active account.');
+      toast.error('This user has already logged in and has an active account.');
       return;
     }
     if (presets.some((p) => (p.email || '').toLowerCase() === email)) {
-      alert('This email is already pre-registered.');
+      toast.error('This email is already pre-registered.');
       return;
     }
 
     setSavingPreset(true);
     try {
-      await addDoc(collection(db, 'user_presets'), {
-        email,
-        role: presetRole,
-        department: presetDept,
-        createdAt: new Date().toISOString(),
-        createdBy: profile?.email || '',
+      await apiFetch('/user-presets', {
+        method: 'POST',
+        body: JSON.stringify({
+          email, role: presetRole, department: presetDept, createdBy: profile?.email || ''
+        })
       });
-      alert(`✅ Pre-registered!`);
+      toast.success(`Pre-registered!`);
       setPresetEmail('');
       setPresetRole('staff');
       setPresetDept('Ground Operations');
       setShowPresetForm(false);
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+      fetchData();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingPreset(false);
   };
 
   const handleDeletePreset = async (id: string, email: string) => {
     if (!canEdit) return;
-    const ok = window.confirm(`Remove pre-registration for ${email}?`);
-    if (!ok) return;
+    if (!window.confirm(`Remove pre-registration for ${email}?`)) return;
     try {
-      await deleteDoc(doc(db, 'user_presets', id));
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    }
+      await apiFetch(`/user-presets/${id}`, { method: 'DELETE' });
+      toast.success('Pre-registration removed.');
+      fetchData();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
+
+  if (loading) return <div className="page-content"><p>Loading Users...</p></div>;
 
   return (
     <div className="page-content">
@@ -203,10 +193,10 @@ function UsersPage() {
             ➕ Pre-register User (before they log in)
           </div>
           <input type="email" placeholder="Email (must match their Firebase login) *" value={presetEmail} onChange={(e) => setPresetEmail(e.target.value)} required />
-          <select value={presetRole} onChange={(e) => setPresetRole(e.target.value)}>
+          <select value={presetRole} onChange={(e) => setPresetRole(e.target.value)} style={{ color: '#1e293b' }}>
             {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={presetDept} onChange={(e) => setPresetDept(e.target.value)}>
+          <select value={presetDept} onChange={(e) => setPresetDept(e.target.value)} style={{ color: '#1e293b' }}>
             {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
           <button type="submit" disabled={savingPreset}>{savingPreset ? 'Saving...' : 'Pre-register User'}</button>
@@ -251,9 +241,7 @@ function UsersPage() {
           <span><strong>👥 Active Users</strong></span>
         </div>
         <div className="collapsible-body">
-          {loading ? (
-            <p style={{ color: '#64748b' }}>Loading...</p>
-          ) : users.length === 0 ? (
+          {users.length === 0 ? (
             <div className="empty-state"><p>No users have logged in yet.</p></div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -274,7 +262,7 @@ function UsersPage() {
                           value={u.role || 'staff'}
                           onChange={(e) => handleChangeRole(u.id, e.target.value)}
                           disabled={!canEdit}
-                          style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', background: canEdit ? '#fff' : '#f1f5f9' }}
+                          style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', background: canEdit ? '#fff' : '#f1f5f9', color: '#1e293b' }}
                         >
                           {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                         </select>
@@ -284,7 +272,7 @@ function UsersPage() {
                           value={u.department || 'Ground Operations'}
                           onChange={(e) => handleChangeDept(u.id, e.target.value)}
                           disabled={!canEdit}
-                          style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', background: canEdit ? '#fff' : '#f1f5f9' }}
+                          style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', background: canEdit ? '#fff' : '#f1f5f9', color: '#1e293b' }}
                         >
                           {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                         </select>

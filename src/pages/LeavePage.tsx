@@ -1,9 +1,5 @@
-import { useState, useEffect } from 'react';
-import {
-  collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc,
-  query, where, getDocs
-} from 'firebase/firestore';
-import { db } from '../firebase';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
@@ -22,10 +18,7 @@ const ENTITLEMENTS: { [key: string]: number } = {
 
 const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
 const MALE_ONLY = ['PATERNITY LEAVE'];
-const COUNTS_FRIDAY_AND_OFF_DAYS = [
-  'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'NO PAY LEAVE',
-  'SICK LEAVE', 'SICK LEAVE / MC', 'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL', 'ABSENT'
-];
+
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
 
@@ -150,7 +143,7 @@ function LeavePage() {
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
-  const [selectedFormDept, setSelectedFormDept] = useState<string>('');
+  const [selectedFormDept, setSelectedFormDept] = useState<string>('Ground Operations');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [leaveType, setLeaveType] = useState<string>('ANNUAL LEAVE');
   const [startDate, setStartDate] = useState<string>(formatDate(new Date()));
@@ -160,56 +153,52 @@ function LeavePage() {
 
   const [approveTarget, setApproveTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'staff'), (snap) => {
-      const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setStaffList(list);
-      const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+  const fetchData = useCallback(async () => {
+    try {
+      const [staffData, leaveData, holidaysData] = await Promise.all([
+        apiFetch('/staff'),
+        apiFetch('/leave-requests'),
+        apiFetch('/holidays')
+      ]);
+
+      setStaffList(staffData);
+      setRequests(leaveData);
+      setHolidays(holidaysData);
+
+      const mine = staffData.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
-      if (mine) { setSelectedStaffId(mine.id); setSelectedFormDept(mine.department || 'Ground Operations'); }
-      else setSelectedFormDept('Ground Operations');
+      if (mine && !selectedStaffId) { 
+        setSelectedStaffId(mine.id); 
+        setSelectedFormDept(mine.department || 'Ground Operations'); 
+      }
       setLoading(false);
-    });
-    return () => unsub();
-  }, [user]);
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
+  }, [user, selectedStaffId]);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'leave_requests'), (snap) => {
-      setRequests(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'holidays'), (snap) => {
-      setHolidays(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, []);
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
   
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   
-  // FIXED: Bulletproof SMT Approval Logic
   const canApproveThisDept = (dept: string) => {
     if (isDev || isManager || canApproveAnyDept) return true;
-    
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (myStaff?.department || '').trim().toLowerCase();
     const isActuallySMT = isSMT || myStaff?.isSMT === true;
-
-    // Safety can approve Security
     if (currentDept === 'safety' && targetDept === 'security') return true;
-    
-    // SMT can approve their own department
     if (isActuallySMT && currentDept === targetDept) return true;
-    
-    // Dept Managers can approve their own department
     if (isDeptManager && currentDept === targetDept) return true;
-    
     return false;
   };
 
@@ -233,8 +222,7 @@ function LeavePage() {
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })
-    .filter((r: any) => (isStaff ? r.status === 'approved' || r.status === 'pending' : (tab === 'all' ? true : r.status === tab)))
-    .sort((a: any, b: any) => (b.requestedAt || '').localeCompare(a.requestedAt || ''));
+    .filter((r: any) => (isStaff ? r.status === 'approved' || r.status === 'pending' : (tab === 'all' ? true : r.status === tab)));
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
@@ -257,87 +245,77 @@ function LeavePage() {
     e.preventDefault();
     if (!selectedStaffId) { toast.error('Please select a staff member'); return; }
     if (endDate < startDate) { toast.error('End date cannot be before start date'); return; }
-    const staff = staffList.find((s) => s.id === selectedStaffId);
-    if (!staff) { toast.error('Staff not found'); return; }
+    
+    const staffMemberToSubmit = staffList.find((s) => s.id === selectedStaffId);
+    if (!staffMemberToSubmit) { toast.error('Staff member not found'); return; }
 
     const overlap = requests.some(r => 
-      r.staffId === selectedStaffId && 
-      r.status === 'approved' && 
-      r.startDate <= endDate && 
-      r.endDate >= startDate
+      r.staffId === selectedStaffId && r.status === 'approved' && r.startDate <= endDate && r.endDate >= startDate
     );
-    if (overlap) {
-      toast.error('This request overlaps with an already approved leave. Please check the dates.');
-      return;
-    }
-
-    const g = (staff.gender || '').toLowerCase();
-    if (g === 'female' && MALE_ONLY.includes(leaveType)) { toast.error(`${leaveType} is only available for male staff.`); return; }
-    if (g === 'male' && FEMALE_ONLY.includes(leaveType)) { toast.error(`${leaveType} is only available for female staff.`); return; }
-
-    if (leaveType === 'ANNUAL LEAVE') {
-      if (!staff.joinDate) { toast.error(`${staff.name} does not have a Join Date set.`); return; }
-      const daysForRequest = countAnnualLeaveDays(startDate, endDate, holidaySet).countable;
-      const usedAnnual = computeUsedDays(staff.id, staff.joinDate, 'ANNUAL LEAVE', requests);
-      if (usedAnnual + daysForRequest > ANNUAL_LEAVE_TOTAL) { toast.error(`Exceeds annual leave limit.`); return; }
-    }
+    if (overlap) { toast.error('Overlaps with approved leave.'); return; }
 
     let days = leaveType === 'ANNUAL LEAVE'
       ? countAnnualLeaveDays(startDate, endDate, holidaySet).countable
       : allDatesInRange(startDate, endDate).length;
-    if (days === 0) { toast.error('No countable days in this range.'); return; }
+    if (days === 0) { toast.error('No countable days.'); return; }
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'leave_requests'), {
-        staffId: selectedStaffId, staffName: staff.name, staffDepartment: staff.department,
-        staffSN: staff.sn || '', staffGender: staff.gender || '', staffIsSMT: staff.isSMT === true,
-        leaveType, startDate, endDate, days, reason, status: 'pending',
-        requestedAt: new Date().toISOString(), requestedBy: user?.email || '',
+      await apiFetch('/leave-requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          staffId: selectedStaffId, 
+          staffName: staffMemberToSubmit.name,
+          staffDepartment: staffMemberToSubmit.department,
+          staffSN: staffMemberToSubmit.sn || '',
+          staffGender: staffMemberToSubmit.gender || '',
+          staffIsSMT: staffMemberToSubmit.isSMT === true,
+          leaveType, startDate, endDate, days, reason, requestedBy: user?.email || ''
+        })
       });
       toast.success(`Leave request submitted.`);
       setShowForm(false); setReason('');
-    } catch (error: any) { toast.error('Error: ' + error.message); }
-    setSubmitting(false);
+      fetchData();
+    } catch (error: any) { 
+      toast.error('Error: ' + error.message); 
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const confirmApprove = async () => {
     if (!approveTarget) return;
-    const r = approveTarget;
     try {
-      await updateDoc(doc(db, 'leave_requests', r.id), { status: 'approved', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString() });
-      const dates = allDatesInRange(r.startDate, r.endDate);
-      for (const d of dates) {
-        const q = query(collection(db, 'roster_entries'), where('staffId', '==', r.staffId), where('date', '==', d));
-        const existing = await getDocs(q);
-        for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-        await addDoc(collection(db, 'roster_entries'), {
-          staffId: r.staffId, staffName: r.staffName, staffDepartment: r.staffDepartment,
-          date: d, shiftTime: '', status: r.leaveType, leaveRequestId: r.id, createdAt: new Date().toISOString(),
-        });
-      }
-      toast.success('Leave approved.');
+      await apiFetch(`/leave-requests/${approveTarget.id}/approve`, {
+        method: 'PUT',
+        body: JSON.stringify({ reviewedBy: user?.email || '' })
+      });
+      toast.success('Leave approved and written to roster.');
       setApproveTarget(null);
+      fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
   const confirmReject = async (note: string) => {
     if (!rejectTarget) return;
     try {
-      await updateDoc(doc(db, 'leave_requests', rejectTarget.id), { status: 'rejected', reviewedBy: user?.email || '', reviewedAt: new Date().toISOString(), reviewNotes: note || '' });
+      await apiFetch(`/leave-requests/${rejectTarget.id}/reject`, {
+        method: 'PUT',
+        body: JSON.stringify({ reviewedBy: user?.email || '', reviewNotes: note || '' })
+      });
       toast.success('Leave rejected.');
       setRejectTarget(null);
+      fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
-  const handleDelete = async (r: any) => {
-    if (!window.confirm(`DELETE this leave request permanently?`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const q = query(collection(db, 'roster_entries'), where('leaveRequestId', '==', r.id));
-      const linkedRoster = await getDocs(q);
-      for (const docSnap of linkedRoster.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-      await deleteDoc(doc(db, 'leave_requests', r.id));
+      await apiFetch(`/leave-requests/${deleteTarget.id}`, { method: 'DELETE' });
       toast.success('Leave request deleted.');
+      setDeleteTarget(null); // Close the modal
+      fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
@@ -349,7 +327,7 @@ function LeavePage() {
     } else { previewDays = allDatesInRange(startDate, endDate).length; }
   }
 
-  if (loading) return <div className="page-content"><p>Loading...</p></div>;
+  if (loading) return <div className="page-content"><p>Loading from D1...</p></div>;
 
   return (
     <div className="page-content">
@@ -402,39 +380,6 @@ function LeavePage() {
                   );
                 })}
               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {canSeeDeptBalances && deptBalanceStaff.length > 0 && (
-        <div className="collapsible-card">
-          <button className="collapsible-header" onClick={() => setShowDeptBalances(!showDeptBalances)}>
-            <span><strong>{canApproveAnyDept || isDev ? '👥 All Staff Leave Balances' : `👥 ${myStaff?.department || ''} — Staff Balances`}</strong></span>
-            <span className="collapsible-toggle">{showDeptBalances ? '▼' : '▶'}</span>
-          </button>
-          {showDeptBalances && (
-            <div className="collapsible-body">
-              <table className="dept-balance-table">
-                <thead><tr><th>SN</th><th>Name</th><th>Dept</th><th>Annual</th><th>Sick</th><th>FRL</th></tr></thead>
-                <tbody>
-                  {deptBalanceStaff.map((s: any) => {
-                    const aUsed = computeUsedDays(s.id, s.joinDate || '', 'ANNUAL LEAVE', requests);
-                    const sUsed = computeUsedDays(s.id, s.joinDate || '', 'SICK LEAVE', requests);
-                    const fUsed = computeUsedDays(s.id, s.joinDate || '', 'FAMILY RESPONSIBILITY LEAVE (FRL)', requests);
-                    return (
-                      <tr key={s.id}>
-                        <td>{s.sn || '—'}</td>
-                        <td><strong>{s.name}</strong></td>
-                        <td style={{ fontSize: '12px' }}>{s.department}</td>
-                        <td style={{ fontWeight: 600 }}>{ANNUAL_LEAVE_TOTAL - aUsed} / 30</td>
-                        <td style={{ fontWeight: 600 }}>{15 - sUsed} / 15</td>
-                        <td style={{ fontWeight: 600 }}>{10 - fUsed} / 10</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
             </div>
           )}
         </div>
@@ -521,7 +466,7 @@ function LeavePage() {
                           <button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button>
                         </>
                       )}
-                      {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => handleDelete(r)}>🗑</button>}
+                      {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => setDeleteTarget(r)}>🗑</button>}
                     </td>
                   </tr>
                 );
@@ -530,7 +475,15 @@ function LeavePage() {
           </table>
         )}
       </div>
-
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Leave Request?"
+        message={`Are you sure you want to permanently delete this leave request for ${deleteTarget?.staffName}?`}
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
       <ConfirmDialog
         isOpen={!!approveTarget}
         title="Approve Leave?"

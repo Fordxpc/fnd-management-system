@@ -1,22 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { db, auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
-
-interface MergedUser {
-  email: string;
-  name: string;
-  password: string;
-  role: string;
-  department: string;
-  status: string;
-  id: string | null;
-}
 
 const STAFF_CREDENTIALS = [
   { email: 'sn-0034@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Adam' },
@@ -74,33 +64,38 @@ function SettingsPage() {
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
-  const [preRegs, setPreRegs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [resetting, setResetting] = useState<string | null>(null);
   
   const currentUser = auth.currentUser;
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      const snap = await getDoc(doc(db, 'settings', 'ot_rules'));
-      if (snap.exists()) setOtRules(snap.data() as any);
-    };
-    loadSettings();
+  // FETCH DATA FROM D1
+  const fetchSettings = useCallback(async () => {
+    try {
+      const rulesData = await apiFetch('/settings/ot_rules');
+      if (rulesData) setOtRules(rulesData);
 
-    const unsubUsers = onSnapshot(collection(db, 'users'), (s) => {
-      setActiveUsers(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    const unsubPresets = onSnapshot(collection(db, 'user_presets'), (s) => {
-      setPreRegs(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => { unsubUsers(); unsubPresets(); };
+      const usersData = await apiFetch('/users');
+      setActiveUsers(usersData);
+    } catch (err: any) {
+      console.error("Failed to load settings", err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchSettings();
+    const interval = setInterval(fetchSettings, 15000);
+    return () => clearInterval(interval);
+  }, [fetchSettings]);
 
   const saveRules = async (e: any) => {
     e.preventDefault();
     setSavingRules(true);
     try {
-      await setDoc(doc(db, 'settings', 'ot_rules'), otRules);
+      await apiFetch('/settings/ot_rules', {
+        method: 'POST',
+        body: JSON.stringify(otRules)
+      });
       toast.success('System rules updated!');
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingRules(false);
@@ -125,33 +120,20 @@ function SettingsPage() {
     setResetting(null);
   };
 
-  const handleRemoveUser = async (email: string) => {
+  const handleRemoveUser = async (userId: string, email: string) => {
     if (!window.confirm(`Are you sure you want to remove ${email} from the database?`)) return;
     try {
-      const activeMatch = activeUsers.find(u => u.email === email);
-      if (activeMatch && activeMatch.id) await deleteDoc(doc(db, 'users', activeMatch.id));
-
-      const regMatch = preRegs.find(u => u.email === email);
-      if (regMatch && regMatch.id) await deleteDoc(doc(db, 'user_presets', regMatch.id));
-
+      await apiFetch(`/users/${userId}`, { method: 'DELETE' });
       toast.success(`${email} removed from lists.`);
+      fetchSettings(); // Refresh
     } catch (err: any) {
       toast.error('Error: ' + err.message);
     }
   };
 
-  let allMergedUsers: MergedUser[] = STAFF_CREDENTIALS.map(c => ({
+  let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({
     email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null
   }));
-
-  preRegs.forEach(p => {
-    const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (p.email || '').toLowerCase());
-    if (idx >= 0) {
-      allMergedUsers[idx] = { ...allMergedUsers[idx], role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered', id: p.id };
-    } else {
-      allMergedUsers.push({ email: p.email || '', name: (p.email || '').split('@')[0], password: '—', role: p.role || 'staff', department: p.department || '—', status: 'Pre-registered', id: p.id });
-    }
-  });
 
   activeUsers.forEach(a => {
     const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase());
@@ -162,10 +144,10 @@ function SettingsPage() {
     }
   });
 
-  const filteredUsers = allMergedUsers.filter((u: MergedUser) => 
+  const filteredUsers = allMergedUsers.filter((u: any) => 
     (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
     (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())
-  ).sort((a: MergedUser, b: MergedUser) => (a.email || '').localeCompare(b.email || ''));
+  ).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -277,8 +259,8 @@ function SettingsPage() {
                         <td>
                           <span style={{ 
                             fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px',
-                            background: u.status === 'Active' ? '#dcfce7' : u.status === 'Pre-registered' ? '#fef3c7' : '#f1f5f9',
-                            color: u.status === 'Active' ? '#166534' : u.status === 'Pre-registered' ? '#92400e' : '#475569'
+                            background: u.status === 'Active' ? '#dcfce7' : '#f1f5f9',
+                            color: u.status === 'Active' ? '#166534' : '#475569'
                           }}>
                             {u.status.toUpperCase()}
                           </span>
@@ -295,13 +277,15 @@ function SettingsPage() {
                           >
                             {resetting === u.email ? '...' : '📧 Reset'}
                           </button>
-                          <button 
-                            className="delete-btn"
-                            onClick={() => handleRemoveUser(u.email)}
-                            style={{ padding: '4px 8px', fontSize: '11px' }}
-                          >
-                            Remove
-                          </button>
+                          {u.id && (
+                            <button 
+                              className="delete-btn"
+                              onClick={() => handleRemoveUser(u.id!, u.email)}
+                              style={{ padding: '4px 8px', fontSize: '11px' }}
+                            >
+                              Remove
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -333,10 +317,9 @@ function SettingsPage() {
         <div className="dash-card border-l-4 border-slate-800" style={{ background: '#0f172a', color: '#e2e8f0', fontFamily: 'monospace' }}>
           <h3 style={{ color: '#38bdf8' }}>💻 System Console</h3>
           <div style={{ maxHeight: '400px', overflowY: 'auto', fontSize: '12px' }}>
-            <p><span style={{ color: '#4ade80' }}>[OK]</span> Firebase initialized (Project: {import.meta.env.VITE_FIREBASE_PROJECT_ID || 'fnd-ops-management'})</p>
+            <p><span style={{ color: '#4ade80' }}>[OK]</span> Cloudflare D1 Database Connected</p>
             <p><span style={{ color: '#4ade80' }}>[OK]</span> Auth Provider loaded</p>
             <p><span style={{ color: '#facc15' }}>[INFO]</span> Active Staff Records: {activeUsers.length}</p>
-            <p><span style={{ color: '#facc15' }}>[INFO]</span> Active Pre-registrations: {preRegs.length}</p>
             <p><span style={{ color: '#facc15' }}>[INFO]</span> UID: {currentUser?.uid}</p>
             <p><span style={{ color: '#facc15' }}>[INFO]</span> Current Token Expiry: {currentUser?.metadata?.lastSignInTime}</p>
             <p><span style={{ color: '#38bdf8' }}>[LOG]</span> Waiting for developer input...</p>

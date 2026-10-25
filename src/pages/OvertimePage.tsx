@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs'; // <-- Imported custom dialog
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
 
@@ -69,34 +69,43 @@ function OvertimePage() {
   const [formNotes, setFormNotes] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchRules = async () => {
-      const snap = await getDoc(doc(db, 'settings', 'ot_rules'));
-      if (snap.exists()) setOtRules(snap.data() as any);
-    };
-    fetchRules();
+  // Custom Delete State
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-    const unsubStaff = onSnapshot(collection(db, 'staff'), (snap) => {
-      // FIX: Explicitly type list as any[] to stop the red squiggly
-      const list: any[] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setStaff(list);
-      const mine = list.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+  // FETCH ALL DATA VIA API
+  const fetchData = useCallback(async () => {
+    try {
+      const [otData, staffData, leaveData, rulesData] = await Promise.all([
+        apiFetch('/overtime'),
+        apiFetch('/staff'),
+        apiFetch('/leave-requests'),
+        apiFetch('/settings/ot_rules')
+      ]);
+      
+      setEntries(otData);
+      setStaff(staffData);
+      setLeaveReqs(leaveData);
+      if (rulesData) setOtRules(rulesData);
+
+      const mine = staffData.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
-      if (mine) {
+      if (mine && !formStaffId) {
         setFormStaffId(mine.id);
         setFilterDept(mine.department);
         setFormDept(mine.department);
       }
       setLoading(false);
-    });
-    const unsubOT = onSnapshot(collection(db, 'overtime_entries'), (snap) => {
-      setEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    const unsubLeave = onSnapshot(collection(db, 'leave_requests'), (snap) => {
-      setLeaveReqs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => { unsubStaff(); unsubOT(); unsubLeave(); };
-  }, [user]);
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
+  }, [user, formStaffId]);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000); // Poll every 15s
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager';
@@ -134,7 +143,7 @@ function OvertimePage() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    if (!formStaffId) { alert('Please select a staff member'); return; }
+    if (!formStaffId) { toast.error('Please select a staff member'); return; }
     const staffMember = staff.find((s) => s.id === formStaffId);
     if (!staffMember) return;
 
@@ -144,28 +153,37 @@ function OvertimePage() {
     }
 
     const hours = computeHours(formStart, formEnd);
-    if (hours <= 0) { alert('End time must be after start time'); return; }
+    if (hours <= 0) { toast.error('End time must be after start time'); return; }
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, 'overtime_entries'), {
-        staffId: formStaffId, staffName: staffMember.name, staffSN: staffMember.sn || '',
-        staffDepartment: staffMember.department, date: formDate, startTime: formStart, endTime: formEnd,
-        hours, notes: formNotes, createdAt: new Date().toISOString(), createdBy: user?.email || '',
+      await apiFetch('/overtime', {
+        method: 'POST',
+        body: JSON.stringify({
+          staffId: formStaffId, staffName: staffMember.name, staffSN: staffMember.sn || '',
+          staffDepartment: staffMember.department, date: formDate, startTime: formStart, endTime: formEnd,
+          hours, notes: formNotes, createdBy: user?.email || ''
+        })
       });
       setFormNotes('');
       setShowForm(false);
       toast.success(`✅ Logged ${hours} hour(s).`);
+      fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setSubmitting(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this overtime entry?')) return;
-    await deleteDoc(doc(db, 'overtime_entries', id));
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiFetch(`/overtime/${deleteTarget}`, { method: 'DELETE' });
+      toast.success('Entry deleted.');
+      setDeleteTarget(null);
+      fetchData();
+    } catch (err: any) { toast.error(err.message); }
   };
 
-  if (loading) return <div className="page-content"><p>Loading...</p></div>;
+  if (loading) return <div className="page-content"><p>Loading Overtime...</p></div>;
 
   return (
     <div className="page-content">
@@ -286,7 +304,7 @@ function OvertimePage() {
                         {canApprove && viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
                         <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
                         <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
-                        <td><button className="delete-btn" onClick={() => handleDelete(e.id)}>Delete</button></td>
+                        <td><button className="delete-btn" onClick={() => setDeleteTarget(e.id)}>Delete</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -296,6 +314,17 @@ function OvertimePage() {
           );
         })
       )}
+
+      {/* CUSTOM DELETE DIALOG */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Overtime Entry?"
+        message="Are you sure you want to permanently delete this overtime entry? This action cannot be undone."
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

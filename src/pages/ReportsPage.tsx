@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
 
 const ExcelHeader = ({ title, subtitle }: { title: string, subtitle: string }) => (
   <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
@@ -11,7 +11,6 @@ const ExcelHeader = ({ title, subtitle }: { title: string, subtitle: string }) =
   </div>
 );
 
-// REMOVED React.CSSProperties TO PREVENT BUILD ERRORS
 const tableStyle = { width: '100%', borderCollapse: 'collapse' as const, fontSize: '10px', fontFamily: 'Arial, sans-serif', textAlign: 'center' as const };
 const thStyle = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' as const };
 const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' as const };
@@ -19,6 +18,7 @@ const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap'
 function ReportsPage() {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'dfis' | 'wildlife' | 'fod' | 'stats' | 'traffic' | 'lights' | 'custom'>('dfis');
+  const [loading, setLoading] = useState(true);
   
   // Data State
   const [rampData, setRampData] = useState<any[]>([]);
@@ -36,34 +36,63 @@ function ReportsPage() {
   const [endDate, setEndDate] = useState('');
   const [generatedReport, setGeneratedReport] = useState<any>(null);
 
-  useEffect(() => {
-    const u1 = onSnapshot(collection(db, 'ramp_inspections'), s => {
-      const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      setRampData(data);
-    });
-    const u2 = onSnapshot(collection(db, 'fod_collections'), s => {
-      const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      setFodData(data);
-    });
-    const u3 = onSnapshot(collection(db, 'bird_counts'), s => {
-      const data: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      setBirdData(data);
-    });
-    const u4 = onSnapshot(collection(db, 'staff'), s => setStaffData(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const u5 = onSnapshot(collection(db, 'roster_entries'), s => setRosterData(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const u6 = onSnapshot(collection(db, 'flights'), s => setFlightData(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); };
+  // FETCH ALL DATA FROM D1 SAFELY
+  const fetchData = useCallback(async () => {
+    try {
+      const results = await Promise.allSettled([
+        apiFetch('/ramp/reports'),
+        apiFetch('/fod'),
+        apiFetch('/wildlife'),
+        apiFetch('/staff'),
+        apiFetch('/roster'),
+        apiFetch('/flights')
+      ]);
+
+      // Helper to extract data or return empty array if one fails
+      const getData = (index: number) => {
+        if (results[index].status === 'fulfilled') {
+          const data = (results[index] as PromiseFulfilledResult<any>).value;
+          console.log(`API Endpoint ${index} returned:`, data); // <-- DEBUG LOG
+          return data;
+        }
+        console.error(`API Endpoint ${index} FAILED:`, (results[index] as PromiseRejectedResult).reason);
+        return [];
+      };
+
+      const rampRes = getData(0);
+      const fodRes = getData(1);
+      const birdRes = getData(2);
+      const staffRes = getData(3);
+      const rosterRes = getData(4);
+      const flightsRes = getData(5);
+
+      // Sort by date descending for reports
+      setRampData([...rampRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
+      setFodData([...fodRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
+      setBirdData([...birdRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
+      
+      setStaffData(staffRes);
+      setRosterData(rosterRes);
+      setFlightData(flightsRes);
+      
+      setLoading(false);
+    } catch (err: any) {
+      toast.error('Failed to load reports data: ' + err.message);
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000); // Poll every 15s
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   const generateCustomReport = () => {
-    if (!startDate || !endDate) { alert("Please select Start and End dates"); return; }
+    if (!startDate || !endDate) { toast.error("Please select Start and End dates"); return; }
 
     if (reportType === 'staff') {
-      if (!selectedStaff) { alert("Please select a staff member"); return; }
+      if (!selectedStaff) { toast.error("Please select a staff member"); return; }
       const staffInfo = staffData.find(s => s.id === selectedStaff);
       
       const entries = rosterData.filter(r => r.staffId === selectedStaff && r.date >= startDate && r.date <= endDate);
@@ -91,7 +120,7 @@ function ReportsPage() {
       const filteredBirds = birdData.filter(b => b.date >= startDate && b.date <= endDate);
       const speciesCount: { [key: string]: number } = {};
       filteredBirds.forEach(b => {
-        b.rows.forEach((r: any) => {
+        b.rows?.forEach((r: any) => {
           if (r.bird) {
             const qty = r.zones.reduce((a:any,c:any)=>a+c,0);
             speciesCount[r.bird] = (speciesCount[r.bird] || 0) + qty;
@@ -106,6 +135,8 @@ function ReportsPage() {
   if (isStaff) {
     return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2><p>You do not have permission to view Reports.</p></div></div>;
   }
+
+  if (loading) return <div className="page-content"><p>Loading Reports from D1...</p></div>;
 
   return (
     <div className="page-content">
@@ -278,7 +309,7 @@ function ReportsPage() {
                     <td style={tdStyle}>{r.route?.split('/')[0] || 'MLE'}</td>
                     <td style={tdStyle}>{r.route?.split('/')[1] || 'FND'}</td>
                     <td style={tdStyle}>{r.route?.split('/')[2] || 'MLE'}</td>
-                    <td style={tdStyle}>{r.fltNo.replace('2', '3')}</td>
+                    <td style={tdStyle}>{r.fltNo?.replace('2', '3')}</td>
                     <td style={tdStyle}>{r.atd}</td>
                     <td style={tdStyle}>2</td>
                     <td style={tdStyle}>{r.paxInAdult || 0}</td>
@@ -299,7 +330,7 @@ function ReportsPage() {
                     <td style={tdStyle}>{r.bagIn || 0}</td>
                     <td style={tdStyle}>{r.bagOut || 0}</td>
                     <td style={tdStyle}>{r.bagTrans || 0}</td>
-                    <td style={tdStyle}>{r.checkedBy}</td>
+                    <td style={tdStyle}>{r.checkedBy || r.observer}</td>
                     <td style={tdStyle}>{r.remarks || 'NIL'}</td>
                   </tr>
                 ))}
@@ -392,14 +423,14 @@ function ReportsPage() {
               <tbody>
                 {birdData.map(b => {
                   let highest = 'LOW RISK';
-                  b.rows.forEach((r: any) => {
+                  b.rows?.forEach((r: any) => {
                     if (r.zones && r.zones.reduce((a:any, c:any)=>a+c,0) > 5) highest = 'HIGH RISK';
                   });
                   return (
                     <tr key={b.id}>
                       <td style={tdStyle}>{b.date}</td>
                       <td style={tdStyle}>{b.refNo}</td>
-                      <td style={tdStyle}>{b.rows.length} species</td>
+                      <td style={tdStyle}>{b.rows?.length || 0} species</td>
                       <td style={tdStyle}><strong>{highest}</strong></td>
                       <td style={tdStyle}>{b.observer}</td>
                     </tr>

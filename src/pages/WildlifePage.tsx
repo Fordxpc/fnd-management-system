@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs'; // Import custom dialog
 
 const BIRD_DB = [
   { name: 'Kiru Bondana', common: 'Kentish Plover', mass: 44, rshb: 1.5 },
@@ -35,7 +35,11 @@ function WildlifePage() {
   
   const [activeTab, setActiveTab] = useState<'form' | 'records' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
+  // Custom Delete State
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [refNo, setRefNo] = useState(`RACL-FND-WHP-${new Date().getFullYear()}-01`);
   const [wind, setWind] = useState('');
@@ -49,12 +53,22 @@ function WildlifePage() {
     Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] }))
   );
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'bird_counts'), (snap) => {
-      setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a:any, b:any) => b.createdAt.localeCompare(a.createdAt)));
-    });
-    return () => unsub();
+  const fetchRecords = useCallback(async () => {
+    try {
+      const data = await apiFetch('/wildlife');
+      setRecords(data);
+      setLoading(false);
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchRecords();
+    const interval = setInterval(fetchRecords, 15000);
+    return () => clearInterval(interval);
+  }, [fetchRecords]);
 
   const handleRowChange = (index: number, field: string, value: any, zoneIdx?: number) => {
     setRows(prev => {
@@ -91,17 +105,32 @@ function WildlifePage() {
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
 
     try {
-      await addDoc(collection(db, 'bird_counts'), {
-        date, refNo, wind, temp, cloud, rain, startTime, endTime,
-        rows: validRows,
-        observer: user?.email || profile?.name || 'User',
-        createdAt: new Date().toISOString()
+      await apiFetch('/wildlife', {
+        method: 'POST',
+        body: JSON.stringify({
+          date, refNo, wind, temp, cloud, rain, startTime, endTime,
+          rows: validRows,
+          observer: user?.email || profile?.name || 'User'
+        })
       });
       toast.success('Bird count saved successfully!');
       setActiveTab('records');
       setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
+      fetchRecords();
     } catch (err: any) { toast.error(err.message); }
   };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiFetch(`/wildlife/${deleteTarget}`, { method: 'DELETE' });
+      toast.success('Record deleted.');
+      setDeleteTarget(null);
+      fetchRecords();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  if (loading) return <div className="page-content"><p>Loading Wildlife Data...</p></div>;
 
   return (
     <div className="page-content">
@@ -228,7 +257,7 @@ function WildlifePage() {
                   <td>{r.observer}</td>
                   <td>{r.rows?.length || 0}</td>
                   <td>
-                    <button className="delete-btn" onClick={() => deleteDoc(doc(db, 'bird_counts', r.id))}>Delete</button>
+                    <button className="delete-btn" onClick={() => setDeleteTarget(r.id)}>Delete</button>
                   </td>
                 </tr>
               ))}
@@ -246,6 +275,17 @@ function WildlifePage() {
           </div>
         </div>
       )}
+
+      {/* CUSTOM DELETE DIALOG */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Bird Count?"
+        message="Are you sure you want to delete this bird count record? This action cannot be undone."
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

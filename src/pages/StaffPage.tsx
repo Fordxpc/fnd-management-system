@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api'; // Import our new API helper
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
@@ -16,7 +15,6 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer', department: 'Ground Operations' },
   { sn: 'SN-0757', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
   { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
-
   { sn: 'SN-0042', name: 'Aiminath Moosa', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-0049', name: 'Mohamed Zaki', position: 'Maintenance Agent', department: 'Maintenance' },
   { sn: 'SN-0480', name: 'Mohamed Ibrahim', position: 'Cleaning & Gardening', department: 'Maintenance' },
@@ -26,7 +24,6 @@ const FND_ALL_STAFF = [
   { sn: 'SN-1007', name: 'Muna Abdhul Qafoor', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-1008', name: 'Aiminath Maha', position: 'Cleaning & Gardening', department: 'Maintenance' },
   { sn: 'SN-1009', name: 'Hassan Naafis', position: 'Cleaning & Gardening', department: 'Maintenance' },
-
   { sn: 'SN-0034', name: 'Abdulla Adam', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0035', name: 'Abdulla Aslam', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0036', name: 'Abdulla Mohamed', position: 'Security Agent', department: 'Security' },
@@ -39,7 +36,6 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0732', name: 'Aishath Sahana', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0755', name: 'Adam Maaidh', position: 'Security Agent', department: 'Security' },
   { sn: 'SN-0995', name: 'Mohamed Vishal', position: 'Assistant Security Officer', department: 'Security' },
-
   { sn: 'SN-0039', name: 'Adam Yaeesh', position: 'Leading Fireman', department: 'Fire & Rescue' },
   { sn: 'SN-0040', name: 'Ahmed Raushaan', position: 'Leading Fireman', department: 'Fire & Rescue' },
   { sn: 'SN-0041', name: 'Ali Navshad', position: 'Leading Fireman', department: 'Fire & Rescue' },
@@ -50,9 +46,7 @@ const FND_ALL_STAFF = [
   { sn: 'SN-0959', name: 'Vishan Mohamed', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
   { sn: 'SN-0960', name: 'Ahmed Ilham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
   { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
-
   { sn: 'SN-0967', name: 'Hassan Malaz', position: 'Assistant Safety Officer', department: 'Safety' },
-
   { sn: 'SN-0753', name: 'Mohamed Maayal', position: 'Airport Manager', department: 'Administration' },
   { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Administration' },
 ];
@@ -74,13 +68,13 @@ function StaffPage() {
   const canSeeSensitive = SENSITIVE_INFO_ROLES.includes(profile?.role || '');
 
   const [staff, setStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
   
-  // State for the Delete Modal
   const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string, sn: string } | null>(null);
 
   // Form states
@@ -102,13 +96,25 @@ function StaffPage() {
   const [holidayAllowanceRate, setHolidayAllowanceRate] = useState<string>('');
   const [bankAccount, setBankAccount] = useState<string>('');
 
-  useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, 'staff'), (snapshot) => {
-      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  // FETCH DATA FROM D1
+  const fetchStaff = useCallback(async () => {
+    try {
+      const data = await apiFetch('/staff');
       setStaff(data);
-    });
-    return () => unsubscribe();
+      setLoading(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error: ' + err.message);
+      setLoading(false);
+    }
   }, []);
+
+  // Load on mount and poll every 10 seconds (simulating real-time)
+  useEffect(() => {
+    fetchStaff();
+    const interval = setInterval(fetchStaff, 10000);
+    return () => clearInterval(interval);
+  }, [fetchStaff]);
 
   const resetForm = () => {
     setSn(''); setName(''); setEmail(''); setPersonalEmail('');
@@ -126,31 +132,33 @@ function StaffPage() {
       toast.error('Name and Email are required');
       return;
     }
+    
+    const payload: any = {
+      sn, name, email, personalEmail, nid, joinDate, phone, gender,
+      department, position, isSMT, balanceVisible,
+      basicSalary: Number(basicSalary) || 0,
+      dailyAllowance: Number(dailyAllowance) || 0,
+      holidayAllowanceRate: Number(holidayAllowanceRate) || 0,
+      bankAccount,
+    };
+    
+    if (canSeeSensitive) payload.notes = notes;
+
     try {
-      const payload: any = {
-        sn, name, email, personalEmail, nid, joinDate, phone, gender,
-        department, position, isSMT, balanceVisible,
-        basicSalary: Number(basicSalary) || 0,
-        dailyAllowance: Number(dailyAllowance) || 0,
-        holidayAllowanceRate: Number(holidayAllowanceRate) || 0,
-        bankAccount,
-      };
-      
-      if (canSeeSensitive) {
-        payload.notes = notes;
+      // For now, we only implemented POST (Add) in the Worker. 
+      // If editingId exists, you will need a PUT endpoint later.
+      if (editingId) {
+        toast.error('Edit functionality coming in next API update!');
+        return;
       }
 
-      if (editingId) {
-        await updateDoc(doc(db, 'staff', editingId), payload);
-        toast.success('Staff updated successfully!');
-      } else {
-        await addDoc(collection(db, 'staff'), {
-          ...payload,
-          status: 'active',
-          createdAt: new Date().toISOString(),
-        });
-        toast.success('Staff added successfully!');
-      }
+      await apiFetch('/staff', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+
+      toast.success('Staff added successfully!');
+      fetchStaff(); // Refresh the list
       resetForm();
       setShowForm(false);
     } catch (error: any) {
@@ -181,24 +189,16 @@ function StaffPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteClick = (id: string, name: string, sn: string) => {
-    setDeleteTarget({ id, name, sn });
-  };
-
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await deleteDoc(doc(db, 'staff', deleteTarget.id));
+      await apiFetch(`/staff/${deleteTarget.id}`, { method: 'DELETE' });
       toast.success('Staff member deleted.');
+      fetchStaff();
       setDeleteTarget(null);
     } catch (error: any) {
       toast.error('Error: ' + error.message);
     }
-  };
-
-  const handleCancelForm = () => {
-    resetForm();
-    setShowForm(false);
   };
 
   const handleImportAll = async () => {
@@ -212,30 +212,24 @@ function StaffPage() {
     let added = 0;
     try {
       for (const member of missing) {
-        await addDoc(collection(db, 'staff'), {
+        const payload = {
           sn: member.sn,
           name: member.name,
           email: `${member.sn.toLowerCase()}@funadhooairport.com`,
-          personalEmail: '',
-          nid: '',
-          joinDate: '',
-          phone: '',
-          gender: '',
           department: member.department,
           position: member.position,
           isSMT: false,
           balanceVisible: false,
-          notes: '',
-          basicSalary: 0,
-          dailyAllowance: 0,
-          holidayAllowanceRate: 0,
-          bankAccount: '',
-          status: 'active',
-          createdAt: new Date().toISOString(),
+        };
+        
+        await apiFetch('/staff', {
+          method: 'POST',
+          body: JSON.stringify(payload)
         });
         added++;
       }
       toast.success(`Imported ${added} staff member(s).`);
+      fetchStaff();
     } catch (error: any) {
       toast.error('Import failed: ' + error.message);
     }
@@ -251,6 +245,8 @@ function StaffPage() {
       return s.department === selectedDept;
     })
     .sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
+
+  if (loading) return <div className="page-content"><p>Loading data from D1...</p></div>;
 
   return (
     <div className="page-content">
@@ -281,7 +277,7 @@ function StaffPage() {
           )}
           <button
             className="add-staff-btn"
-            onClick={() => (showForm ? handleCancelForm() : setShowForm(true))}
+            onClick={() => (showForm ? resetForm() : setShowForm(true))}
           >
             {showForm ? 'Cancel' : '+ Add Staff'}
           </button>
@@ -320,7 +316,7 @@ function StaffPage() {
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            {editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}
+            {editingId ? '✏️ Edit Staff Member (API Update coming soon)' : '➕ Add New Staff Member'}
           </div>
 
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '4px' }}>
@@ -457,7 +453,7 @@ function StaffPage() {
                       <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
                         Edit
                       </button>
-                      <button className="delete-btn" onClick={() => handleDeleteClick(s.id, s.name, s.sn)}>
+                      <button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>
                         Delete
                       </button>
                     </td>
@@ -469,7 +465,6 @@ function StaffPage() {
         )}
       </div>
 
-      {/* PROFESSIONAL DELETE MODAL */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title="Delete Staff Member?"
@@ -479,7 +474,6 @@ function StaffPage() {
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
-
     </div>
   );
 }

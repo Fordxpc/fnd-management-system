@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import RampReportsPage from './RampReportsPage';
@@ -26,7 +25,6 @@ const INITIAL_FORM = {
 function RampCheckSheetPage() {
   const { profile } = useAuth();
   
-  // STRICT ACCESS BLOCK FOR STAFF
   const role = profile?.role || '';
   const isSMTOrAbove = ['developer', 'manager', 'admin', 'owner', 'smt'].includes(role) || profile?.isSMT === true;
   
@@ -35,7 +33,7 @@ function RampCheckSheetPage() {
       <div className="page-content">
         <div className="empty-state">
           <h2>Access Denied</h2>
-          <p>You do not have permission to view the Flight Operation sheet. Please use the public live link if provided.</p>
+          <p>You do not have permission to view the Flight Operation sheet.</p>
         </div>
       </div>
     );
@@ -59,18 +57,17 @@ function RampCheckSheetPage() {
     setRouteCodes([...new Set([...DEFAULT_ROUTE_CODES, ...savedRoutes])]);
   }, []);
 
+  // Load live draft on mount
   useEffect(() => {
-    const liveDoc = doc(db, 'ramp_live_draft', 'current');
-    const unsub = onSnapshot(liveDoc, (docSnap) => {
-      if (docSnap.exists() && !isManager) {
-        setFormData(prev => ({ ...prev, ...docSnap.data() }));
-      } else if (docSnap.exists() && isManager) {
-        if (!typingTimer.current) {
-          setFormData(prev => ({ ...prev, ...docSnap.data() }));
+    const loadDraft = async () => {
+      try {
+        const draft = await apiFetch('/ramp/draft');
+        if (draft && Object.keys(draft).length > 0) {
+          setFormData(prev => ({ ...prev, ...draft }));
         }
-      }
-    });
-    return () => unsub();
+      } catch (err) { console.error("Failed to load draft", err); }
+    };
+    if (isManager) loadDraft();
   }, [isManager]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -109,7 +106,14 @@ function RampCheckSheetPage() {
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(async () => {
       try {
-        await setDoc(doc(db, 'ramp_live_draft', 'current'), { ...formData, [id]: finalValue }, { merge: true });
+        // Send the merged state to the API
+        setFormData(current => {
+          apiFetch('/ramp/draft', {
+            method: 'POST',
+            body: JSON.stringify(current)
+          }).catch(err => console.error("Draft save failed", err));
+          return current;
+        });
       } catch (err) { console.error(err); }
       typingTimer.current = null;
     }, 800);
@@ -151,20 +155,23 @@ function RampCheckSheetPage() {
       const { id: _id, ...rest } = formData as any;
 
       if (currentDocId) {
-        await setDoc(doc(db, 'ramp_inspections', currentDocId), {
-          ...rest,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        await apiFetch(`/ramp/reports/${currentDocId}`, {
+          method: 'PUT',
+          body: JSON.stringify(rest)
+        });
         toast.success('Record updated!');
       } else {
-        const ref = await addDoc(collection(db, 'ramp_inspections'), {
-          ...rest,
-          createdAt: new Date().toISOString(),
+        const res = await apiFetch('/ramp/reports', {
+          method: 'POST',
+          body: JSON.stringify(rest)
         });
-        setCurrentDocId(ref.id);
+        setCurrentDocId(res.id);
         toast.success('Record saved!');
       }
-      await setDoc(doc(db, 'ramp_live_draft', 'current'), {});
+      
+      // Clear the live draft after saving
+      await apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
+      
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -172,7 +179,7 @@ function RampCheckSheetPage() {
     if (!isManager) return;
     setFormData(INITIAL_FORM);
     setCurrentDocId(null);
-    setDoc(doc(db, 'ramp_live_draft', 'current'), {});
+    apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
     toast.success('Form cleared');
   };
 
@@ -206,16 +213,10 @@ function RampCheckSheetPage() {
       </div>
 
       <div className="ops-tabs no-print">
-        <button
-          className={`ops-tab-btn ${activeSubTab === 'form' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('form')}
-        >
+        <button className={`ops-tab-btn ${activeSubTab === 'form' ? 'active' : ''}`} onClick={() => setActiveSubTab('form')}>
           📝 Ramp Supervisor Check Sheet
         </button>
-        <button
-          className={`ops-tab-btn ${activeSubTab === 'reports' ? 'active' : ''}`}
-          onClick={() => setActiveSubTab('reports')}
-        >
+        <button className={`ops-tab-btn ${activeSubTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveSubTab('reports')}>
           📁 Saved Reports
         </button>
       </div>

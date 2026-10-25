@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
+import { toast } from 'sonner';
 
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-const CALENDARIFIC_KEY = import.meta.env.VITE_CALENDARIFIC_KEY;
+const CALENDARIFIC_KEY = import.meta.env.VITE_CALENDARIFIC_KEY || 'YOUR_API_KEY_HERE';
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -23,46 +23,62 @@ function HolidaysPage() {
   const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
 
   const [holidays, setHolidays] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [date, setDate] = useState<string>(formatDate(new Date()));
   const [name, setName] = useState<string>('');
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [showFridays, setShowFridays] = useState<boolean>(false);
   const [syncing, setSyncing] = useState<boolean>(false);
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'holidays'), (snap) => {
-      setHolidays(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
+  // FETCH DATA FROM D1
+  const fetchHolidays = useCallback(async () => {
+    try {
+      const data = await apiFetch('/holidays');
+      setHolidays(data);
+      setLoading(false);
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchHolidays();
+    const interval = setInterval(fetchHolidays, 15000); // Poll every 15s
+    return () => clearInterval(interval);
+  }, [fetchHolidays]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
-    if (!date || !name) { alert('Please enter date and name'); return; }
+    if (!date || !name) { toast.error('Please enter date and name'); return; }
     if (holidays.some((h) => h.date === date)) {
-      alert('A holiday already exists on that date.');
+      toast.error('A holiday already exists on that date.');
       return;
     }
     try {
-      await addDoc(collection(db, 'holidays'), {
-        date,
-        name,
-        createdAt: new Date().toISOString(),
+      await apiFetch('/holidays', {
+        method: 'POST',
+        body: JSON.stringify({ date, name })
       });
       setName('');
-      alert('Holiday added!');
-    } catch (err: any) { alert('Error: ' + err.message); }
+      toast.success('Holiday added!');
+      fetchHolidays();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this holiday?')) return;
-    await deleteDoc(doc(db, 'holidays', id));
+    try {
+      await apiFetch(`/holidays/${id}`, { method: 'DELETE' });
+      toast.success('Holiday deleted.');
+      fetchHolidays();
+    } catch (err: any) { toast.error(err.message); }
   };
 
-  // NEW: Automatic sync from Calendarific API
+  // Automatic sync from Calendarific API to D1
   const handleAutoSync = async () => {
-    if (!CALENDARIFIC_KEY) {
-      alert('API key not found. Please add VITE_CALENDARIFIC_KEY to your Cloudflare Build Variables and redeploy.');
+    if (!CALENDARIFIC_KEY || CALENDARIFIC_KEY === 'YOUR_API_KEY_HERE') {
+      toast.error('API key not found. Please add VITE_CALENDARIFIC_KEY to your .env file.');
       return;
     }
 
@@ -78,7 +94,7 @@ function HolidaysPage() {
       const apiHolidays = data.response?.holidays || [];
 
       if (apiHolidays.length === 0) {
-        alert(`No holidays found for ${year}.`);
+        toast.info(`No holidays found for ${year}.`);
         setSyncing(false);
         return;
       }
@@ -89,18 +105,18 @@ function HolidaysPage() {
       for (const h of apiHolidays) {
         const holidayDate = h.date.iso;
         if (!existingDates.has(holidayDate)) {
-          await addDoc(collection(db, 'holidays'), {
-            date: holidayDate,
-            name: `🌐 ${h.name}`,
-            createdAt: new Date().toISOString(),
+          await apiFetch('/holidays', {
+            method: 'POST',
+            body: JSON.stringify({ date: holidayDate, name: `🌐 ${h.name}` })
           });
           addedCount++;
         }
       }
 
-      alert(`✅ Sync complete! Added ${addedCount} new holidays for ${year}.`);
+      toast.success(`Sync complete! Added ${addedCount} new holidays for ${year}.`);
+      fetchHolidays();
     } catch (err: any) {
-      alert('Sync failed: ' + err.message);
+      toast.error('Sync failed: ' + err.message);
     }
     setSyncing(false);
   };
@@ -135,6 +151,8 @@ function HolidaysPage() {
   const displayedRows = showFridays
     ? [...fridayRows, ...customRows].sort((a, b) => a.date.localeCompare(b.date))
     : customRows;
+
+  if (loading) return <div className="page-content"><p>Loading Holidays...</p></div>;
 
   return (
     <div className="page-content">

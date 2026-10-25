@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
+import { apiFetch } from './lib/api'; // <-- Import API helper
 
 const AuthContext = createContext<any>({});
 
@@ -21,7 +22,6 @@ export function AuthProvider({ children }: any) {
           // 1. Get the real data from the STAFF collection
           let staffData: any = null;
           try {
-            // Fetch all staff and filter client-side to prevent case-sensitivity issues in Firestore
             const staffSnap = await getDocs(collection(db, "staff"));
             const match = staffSnap.docs.find(d => (d.data().email || "").trim().toLowerCase() === email);
             if (match) {
@@ -31,7 +31,6 @@ export function AuthProvider({ children }: any) {
             console.warn("Staff lookup failed", e); 
           }
 
-          // ONLY use the staff department if a match was actually found
           const staffDept = staffData?.department || ""; 
           const isSMT = staffData?.isSMT === true;
           const isManagerPos = (staffData?.position || '').toLowerCase().includes('manager');
@@ -39,18 +38,18 @@ export function AuthProvider({ children }: any) {
           const userRef = doc(db, "users", currentUser.uid);
           const userSnap = await getDoc(userRef);
 
+          let finalProfile: any = null;
+
           if (userSnap.exists()) {
             const userData = userSnap.data();
             let updates: any = {};
             let needsUpdate = false;
 
-            // Auto-heal Department: ONLY overwrite if we found a staff record
             if (staffDept && userData.department !== staffDept) {
               updates.department = staffDept;
               needsUpdate = true;
             }
 
-            // Auto-heal Role (Upgrade to SMT/Manager if staff record says so)
             if (userData.role === 'staff') {
               if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
               else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }
@@ -58,9 +57,11 @@ export function AuthProvider({ children }: any) {
 
             if (needsUpdate) {
               await updateDoc(userRef, updates);
-              setProfile({ ...userData, ...updates });
+              finalProfile = { ...userData, ...updates };
+              setProfile(finalProfile);
             } else {
-              setProfile(userData);
+              finalProfile = userData;
+              setProfile(finalProfile);
             }
 
           } else {
@@ -79,7 +80,6 @@ export function AuthProvider({ children }: any) {
               console.warn("Could not look up preset:", presetErr);
             }
 
-            // Determine initial role based on Staff record or Preset
             let initialRole = presetDoc?.role || "staff";
             if (initialRole === "staff" && isSMT) initialRole = "smt";
             if (initialRole === "staff" && isManagerPos) initialRole = "manager";
@@ -93,12 +93,31 @@ export function AuthProvider({ children }: any) {
             };
 
             await setDoc(userRef, newProfile);
+            finalProfile = newProfile;
             setProfile(newProfile);
 
             if (presetId) {
               try { await deleteDoc(doc(db, "user_presets", presetId)); } catch (cleanupErr) { console.warn("Could not delete preset:", cleanupErr); }
             }
           }
+
+          // 🔥 SYNC TO CLOUDFLARE D1 🔥
+          if (finalProfile) {
+            try {
+              await apiFetch('/users/sync', {
+                method: 'POST',
+                body: JSON.stringify({
+                  uid: currentUser.uid,
+                  email: currentUser.email,
+                  role: finalProfile.role || 'staff',
+                  department: finalProfile.department || 'Ground Operations'
+                })
+              });
+            } catch (d1Err) {
+              console.error("Failed to sync user to D1:", d1Err);
+            }
+          }
+
         } catch (err) {
           console.error("Failed to load user profile:", err);
           setProfile({ email: currentUser.email, role: "staff", department: "Ground Operations" });

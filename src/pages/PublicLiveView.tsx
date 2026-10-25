@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { apiFetch } from '../lib/api';
 import RampForm from './RampForm';
 import '../styles/RampCheck.css';
 
@@ -8,13 +7,18 @@ export default function PublicLiveView() {
   const [formData, setFormData] = useState<any>({});
 
   useEffect(() => {
-    const liveDoc = doc(db, 'ramp_live_draft', 'current');
-    const unsub = onSnapshot(liveDoc, (docSnap) => {
-      if (docSnap.exists()) {
-        setFormData(docSnap.data());
+    const fetchDraft = async () => {
+      try {
+        const data = await apiFetch('/ramp/draft');
+        setFormData(data);
+      } catch (err) {
+        console.error("Failed to load live draft", err);
       }
-    });
-    return () => unsub();
+    };
+
+    fetchDraft();
+    const interval = setInterval(fetchDraft, 3000); // Poll every 3 seconds for near real-time
+    return () => clearInterval(interval);
   }, []);
 
   return (

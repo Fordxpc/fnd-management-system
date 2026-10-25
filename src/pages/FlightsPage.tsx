@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs'; // <-- Imported custom dialog
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
@@ -21,10 +21,15 @@ function FlightsPage() {
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
   
   const [flights, setFlights] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(formatDate(new Date()));
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Custom Delete State
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+  // Form States
   const [flightNo, setFlightNo] = useState('Q2-');
   const [type, setType] = useState('Scheduled');
   const [aircraft, setAircraft] = useState('DH-8/300');
@@ -38,12 +43,23 @@ function FlightsPage() {
   const [status, setStatus] = useState('Scheduled');
   const [remarks, setRemarks] = useState('');
 
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'flights'), (snap) => {
-      setFlights(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
+  // FETCH DATA FROM D1
+  const fetchFlights = useCallback(async () => {
+    try {
+      const data = await apiFetch('/flights');
+      setFlights(data);
+      setLoading(false);
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchFlights();
+    const interval = setInterval(fetchFlights, 15000); // Poll every 15s
+    return () => clearInterval(interval);
+  }, [fetchFlights]);
 
   const resetForm = () => {
     setFlightNo('Q2-'); setType('Scheduled'); setAircraft('DH-8/300');
@@ -66,23 +82,30 @@ function FlightsPage() {
       return;
     }
 
-    try {
-      const payload = {
-        date: dateFilter, flightNo, type, aircraft: finalAircraft,
-        bookedFigure, checkInTime: checkIn, arrivalTime: arrival, 
-        departureTime: departure, route, originDepTime: originDep, 
-        status, remarks, updatedAt: new Date().toISOString()
-      };
+    const payload = {
+      date: dateFilter, flightNo, type, aircraft: finalAircraft,
+      bookedFigure, checkInTime: checkIn, arrivalTime: arrival, 
+      departureTime: departure, route, originDepTime: originDep, 
+      status, remarks
+    };
 
+    try {
       if (editingId) {
-        await updateDoc(doc(db, 'flights', editingId), payload);
+        await apiFetch(`/flights/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
         toast.success('Flight updated successfully');
       } else {
-        await addDoc(collection(db, 'flights'), { ...payload, createdAt: new Date().toISOString() });
+        await apiFetch('/flights', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
         toast.success('Flight added successfully');
       }
       setShowForm(false);
       resetForm();
+      fetchFlights();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -111,17 +134,17 @@ function FlightsPage() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Delete this flight?')) {
-      try {
-        await deleteDoc(doc(db, 'flights', id));
-        toast.success('Flight deleted');
-      } catch (err: any) { toast.error(err.message); }
-    }
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiFetch(`/flights/${deleteTarget.id}`, { method: 'DELETE' });
+      toast.success('Flight deleted');
+      setDeleteTarget(null);
+      fetchFlights();
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const todayStr = formatDate(new Date());
-  
   const displayStatus = (s: string) => s === 'On Time' ? 'Scheduled' : s;
 
   const sortedFlights = [...flights].sort((a, b) => {
@@ -168,13 +191,15 @@ function FlightsPage() {
           {isManager && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
               <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
-              <button className="delete-btn" onClick={() => handleDelete(f.id)}>Delete</button>
+              <button className="delete-btn" onClick={() => setDeleteTarget(f)}>Delete</button>
             </div>
           )}
         </div>
       </div>
     </div>
   );
+
+  if (loading) return <div className="page-content"><p>Loading Flights...</p></div>;
 
   return (
     <div className="page-content">
@@ -280,6 +305,17 @@ function FlightsPage() {
           )}
         </div>
       </div>
+
+      {/* CUSTOM DELETE DIALOG */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Flight?"
+        message={`Are you sure you want to delete flight ${deleteTarget?.flightNo}? This action cannot be undone.`}
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

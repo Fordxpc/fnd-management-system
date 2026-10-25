@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import FlightRadarWidget from '../FlightRadarWidget';
@@ -57,6 +56,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [todayFOD, setTodayFOD] = useState<any[]>([]);
   const [todayBirdCount, setTodayBirdCount] = useState<number>(0);
   const [weather, setWeather] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
@@ -70,52 +70,80 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
   
-  // --- ROBUST ROLE RECOGNITION ---
   const isDev = profile?.role === 'developer';
   const isManagerRole = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
-  
-  // Check Auth Role OR Staff Record (isSMT flag or Position)
   const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true;
   const hasManagerPosition = (myStaff?.position || '').toLowerCase().includes('manager');
   
-  // If ANY of these are true, they see all departments
   const canSeeAllDepartments = isDev || isManagerRole || isSMT || hasManagerPosition;
-  
   const isManager = canSeeAllDepartments; 
   const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
 
-  useEffect(() => {
-    const u1 = onSnapshot(collection(db, 'staff'), (s) => setStaff(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    const u2 = onSnapshot(collection(db, 'roster_entries'), (s) => setRoster(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    const u3 = onSnapshot(collection(db, 'leave_requests'), (s) => setLeaveReqs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    const u4 = onSnapshot(collection(db, 'overtime_entries'), (s) => setOtEntries(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    const u5 = onSnapshot(collection(db, 'flights'), (s) => setFlights(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    const u6 = onSnapshot(doc(db, 'ramp_live_draft', 'current'), (docSnap) => {
-      if (docSnap.exists()) setLiveRamp(docSnap.data());
-      else setLiveRamp(null);
-    });
-    const u7 = onSnapshot(collection(db, 'fod_collections'), (s) => {
-      const allFod: any[] = s.docs.map(d => ({ id: d.id, ...d.data() }));
-      setTodayFOD(allFod.filter((f: any) => f.date === todayStr));
-    });
-    const u8 = onSnapshot(collection(db, 'bird_counts'), (s) => {
-      const todayBirds: any[] = s.docs.map(d => ({ id: d.id, ...d.data() })).filter((b: any) => b.date === todayStr);
-      let total = 0;
-      todayBirds.forEach(record => {
+  // FETCH ALL DATA FROM D1
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const [
+        staffData, rosterData, leaveData, otData, 
+        flightsData, rampDraft, fodData, birdData
+      ] = await Promise.all([
+        apiFetch('/staff'),
+        apiFetch('/roster'),
+        apiFetch('/leave-requests'),
+        apiFetch('/overtime'),
+        apiFetch('/flights'),
+        apiFetch('/ramp/draft'),
+        apiFetch('/fod'),
+        apiFetch('/wildlife')
+      ]);
+
+      setStaff(staffData);
+      setRoster(rosterData);
+      setLeaveReqs(leaveData);
+      setOtEntries(otData);
+      setFlights(flightsData);
+      setLiveRamp(rampDraft);
+      
+      // Filter today's FOD
+      setTodayFOD(fodData.filter((f: any) => f.date === todayStr));
+      
+      // Calculate today's birds
+      const todayBirds = birdData.filter((b: any) => b.date === todayStr);
+      let totalBirds = 0;
+      todayBirds.forEach((record: any) => {
         record.rows?.forEach((row: any) => {
-          total += row.zones.reduce((a: number, b: number) => a + b, 0);
+          totalBirds += row.zones.reduce((a: number, b: number) => a + b, 0);
         });
       });
-      setTodayBirdCount(total);
-    });
-
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,visibility,surface_pressure&timezone=auto')
-      .then(res => res.json())
-      .then(data => setWeather(data.current))
-      .catch(err => console.error("Weather fetch failed", err));
-
-    return () => { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
+      setTodayBirdCount(totalBirds);
+      
+      setLoading(false);
+    } catch (err: any) {
+      console.error(err);
+      setLoading(false);
+    }
   }, [todayStr]);
+
+  // Fetch Weather separately (External API)
+  const fetchWeather = useCallback(async () => {
+    try {
+      const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,visibility,surface_pressure&timezone=auto');
+      const data = await res.json();
+      setWeather(data.current);
+    } catch (err) { console.error("Weather fetch failed", err); }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+    fetchWeather();
+    
+    // Poll every 30 seconds
+    const interval = setInterval(() => {
+      fetchDashboardData();
+      fetchWeather();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [fetchDashboardData, fetchWeather]);
 
   const toggleDept = (dept: string) => setOpenDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
   const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
@@ -177,18 +205,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const myOTHoliday = myOTThisMonth.filter(e => e.otType === 'Holiday OT').reduce((sum, e) => sum + (e.hours || 0), 0);
   const myOTTotal = myOTWeekday + myOTFriday + myOTHoliday;
 
-  const staffDeptData = DEPARTMENTS.map(dept => ({
-    name: dept.replace(' Operations', '').replace(' & Rescue', ''),
-    count: activeStaff.filter(s => s.department === dept).length
-  }));
-
-  const leaveTypeData = Object.entries(
-    leaveReqs.filter(r => r.status === 'approved').reduce((acc: any, r) => {
-      acc[r.leaveType] = (acc[r.leaveType] || 0) + 1;
-      return acc;
-    }, {})
-  ).map(([name, value]) => ({ name, value }));
-
   const dutyByDept: { [key: string]: any[] } = {};
   todayShifts.forEach(r => {
     const d = r.staffDepartment || 'Unknown';
@@ -202,6 +218,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     if (!leaveByDept[d]) leaveByDept[d] = [];
     leaveByDept[d].push(r);
   });
+
+  if (loading) return <div className="page-content"><p>Loading Dashboard...</p></div>;
 
   return (
     <div className="page-content">

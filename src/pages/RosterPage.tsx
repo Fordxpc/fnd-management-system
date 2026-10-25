@@ -1,9 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
-import {
-  collection, addDoc, onSnapshot, doc, writeBatch,
-  query, where, getDocs, deleteDoc
-} from 'firebase/firestore';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { apiFetch } from '../lib/api';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
@@ -52,8 +48,8 @@ const chunkIntoWeeks = (start: Date, end: Date): Date[][] => {
 };
 
 const sortStaff = (a: any, b: any): number => {
-  const aOrder = typeof a.order === 'number' ? a.order : 9999;
-  const bOrder = typeof b.order === 'number' ? b.order : 9999;
+  const aOrder = typeof a.orderIndex === 'number' ? a.orderIndex : 9999;
+  const bOrder = typeof b.orderIndex === 'number' ? b.orderIndex : 9999;
   if (aOrder !== bOrder) return aOrder - bOrder;
   return (a.sn || '').localeCompare(b.sn || '');
 };
@@ -114,7 +110,7 @@ function RosterPage() {
   const [staff, setStaff] = useState<any[]>([]);
   const [holidays, setHolidays] = useState<any[]>([]);
   const [periodStart, setPeriodStart] = useState<Date>(getPeriodStart(new Date()));
-  const [exporting, setExporting] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
   const [reorderMode, setReorderMode] = useState<boolean>(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -143,32 +139,22 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-  // Find the current user's staff record to get the TRUE department and SMT status
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (profile?.email || '').toLowerCase());
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
-  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true; // Checks both Auth Role and Staff Record
+  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true; 
   
   const userDepartment = myStaff?.department || profile?.department;
   const isAdmin = isDev || isManager || isSMT;
 
   const canEditDept = (dept: string) => {
-    // 1. Dev, Manager, Admin get full access
     if (isDev || isManager) return true;
-    
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (userDepartment || '').trim().toLowerCase();
-
-    // 2. Safety Officer gets access to Security
     if (currentDept === 'safety' && targetDept === 'security') return true;
-    
-    // 3. If not SMT, they can't edit anything else
     if (!isSMT) return false;
-    
-    // 4. SMT can edit their own department
     if (currentDept === targetDept) return true;
-    
     return false;
   };
 
@@ -189,6 +175,30 @@ function RosterPage() {
 
   const holidayDateSet = new Set<string>(holidays.map((h: any) => h.date));
 
+  // FETCH DATA
+  const fetchData = useCallback(async () => {
+    try {
+      const [staffData, rosterData, holidaysData] = await Promise.all([
+        apiFetch('/staff'),
+        apiFetch('/roster'),
+        apiFetch('/holidays')
+      ]);
+      setStaff(staffData);
+      setEntries(rosterData);
+      setHolidays(holidaysData);
+      setLoading(false);
+    } catch (err: any) {
+      toast.error(err.message);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 15000); // Poll every 15s
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   useEffect(() => {
     document.body.classList.remove('print-all', 'print-large', 'print-small');
     if (selectedDept === 'all' && isAdmin) document.body.classList.add('print-all');
@@ -196,20 +206,10 @@ function RosterPage() {
     else document.body.classList.add('print-small');
   }, [weeks.length, selectedDept, visibleStaff.length, isAdmin]);
 
-  useEffect(() => {
-    const unsubStaff = onSnapshot(collection(db, 'staff'), (snapshot) => {
-      setStaff(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    const unsubRoster = onSnapshot(collection(db, 'roster_entries'), (snapshot) => {
-      setEntries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    const unsubHolidays = onSnapshot(collection(db, 'holidays'), (snapshot) => {
-      setHolidays(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => { unsubStaff(); unsubRoster(); unsubHolidays(); };
-  }, []);
-
-  useEffect(() => { setBulkStartDate(formatDate(periodStart)); setBulkEndDate(formatDate(periodEnd)); }, [periodStart]);
+  useEffect(() => { 
+    setBulkStartDate(formatDate(periodStart)); 
+    setBulkEndDate(formatDate(periodEnd)); 
+  }, [periodStart]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
@@ -220,9 +220,8 @@ function RosterPage() {
       toast.error('You do not have permission to edit this department.');
       return;
     }
-
     if (isApprovedLeaveStatus(status)) {
-      toast.error('Use Leave Requests page to apply for leave. You cannot manually write approved leave here.');
+      toast.error('Use Leave Requests page to apply for leave.');
       return;
     }
 
@@ -231,22 +230,18 @@ function RosterPage() {
       finalShiftTime = shiftTime === 'CUSTOM' ? customShift : shiftTime;
       if (!finalShiftTime) { toast.error('Please enter the custom shift time'); return; }
     }
+    
     try {
-      const q = query(collection(db, 'roster_entries'), where('staffId', '==', staffId), where('date', '==', date));
-      const existing = await getDocs(q);
-      if (existing.docs.some((d) => isApprovedLeaveStatus(d.data().status) || d.data().leaveRequestId)) {
-        toast.error('This date already has approved leave. Change it from Leave Requests.');
-        return;
-      }
-      for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-
-      await addDoc(collection(db, 'roster_entries'), {
-        staffId, staffName: staffMember?.name || 'Unknown', staffDepartment: staffMember?.department || '',
-        date, shiftTime: finalShiftTime, status: status === 'scheduled' ? 'scheduled' : status,
-        createdAt: new Date().toISOString(),
+      await apiFetch('/roster', {
+        method: 'POST',
+        body: JSON.stringify({
+          staffId, staffName: staffMember.name, staffDepartment: staffMember.department,
+          date, shiftTime: finalShiftTime, status: status === 'scheduled' ? 'scheduled' : status
+        })
       });
       toast.success('Roster entry added!');
       setShowForm(false); setCustomShift('');
+      fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
@@ -256,28 +251,19 @@ function RosterPage() {
       toast.error('You do not have permission to edit this department.');
       return;
     }
-    if (isApprovedLeaveStatus(editStatus)) {
-      toast.error('Leave cannot be written manually. Approve it in Leave Requests.');
-      return;
-    }
+    
     const finalShift = editStatus === 'scheduled' ? editShift : '';
     try {
-      const q = query(collection(db, 'roster_entries'), where('staffId', '==', editCell.staffId), where('date', '==', editCell.date));
-      const existing = await getDocs(q);
-      if (existing.docs.some((d) => isApprovedLeaveStatus(d.data().status) || d.data().leaveRequestId)) {
-        toast.error('Approved leave cannot be overwritten from the roster.');
-        return;
-      }
-      for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-
-      if (editStatus !== 'clear') {
-        await addDoc(collection(db, 'roster_entries'), {
-          staffId: editCell.staffId, staffName: editCell.staffName, staffDepartment: selectedDept === 'all' ? '' : selectedDept,
-          date: editCell.date, shiftTime: finalShift, status: editStatus, createdAt: new Date().toISOString(),
-        });
-      }
+      await apiFetch('/roster', {
+        method: 'POST',
+        body: JSON.stringify({
+          staffId: editCell.staffId, staffName: editCell.staffName, staffDepartment: editCell.dept,
+          date: editCell.date, shiftTime: finalShift, status: editStatus
+        })
+      });
       toast.success('Cell updated!');
       setEditCell(null);
+      fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -295,18 +281,13 @@ function RosterPage() {
   };
 
   const toggleBulkDay = (day: number) => setBulkDaysOfWeek((prev) => prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day].sort());
-  
-  const toggleBulkStaff = (id: string) => {
-    setBulkStaffIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
+  const toggleBulkStaff = (id: string) => { setBulkStaffIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]); };
 
   const handleBulkAssign = async () => {
     if (bulkStaffIds.length === 0) { toast.error('Please select at least one staff member'); return; }
-    
     const dates = previewBulkDates();
     if (dates.length === 0) { toast.error('No dates match the selected days'); return; }
-    if (dates.length * bulkStaffIds.length > 200) { toast.error(`Too many entries being created. Please reduce the selection.`); return; }
-
+    
     let finalShiftTime = '';
     if (bulkType === 'scheduled') {
       finalShiftTime = bulkShift === 'CUSTOM' ? bulkCustomShift : bulkShift;
@@ -315,35 +296,28 @@ function RosterPage() {
 
     setBulkSubmitting(true);
     try {
-      const skipDates = new Set<string>();
-      let created = 0;
-
+      const newEntries: any[] = [];
       for (const selectedStaffId of bulkStaffIds) {
         const staffMember = staff.find((s) => s.id === selectedStaffId);
         if (!staffMember || !canEditDept(staffMember.department)) continue;
 
         for (const d of dates) {
-          const q = query(collection(db, 'roster_entries'), where('staffId', '==', selectedStaffId), where('date', '==', d));
-          const existing = await getDocs(q);
-          
-          if (existing.docs.some((docSnap) => isApprovedLeaveStatus(docSnap.data().status) || docSnap.data().leaveRequestId)) {
-            skipDates.add(d);
-            continue;
-          }
-          for (const docSnap of existing.docs) await deleteDoc(doc(db, 'roster_entries', docSnap.id));
-
-          await addDoc(collection(db, 'roster_entries'), {
+          newEntries.push({
             staffId: selectedStaffId, staffName: staffMember.name, staffDepartment: staffMember.department,
-            date: d, shiftTime: finalShiftTime, status: bulkType === 'scheduled' ? 'scheduled' : bulkType,
-            createdAt: new Date().toISOString(),
+            date: d, shiftTime: finalShiftTime, status: bulkType === 'scheduled' ? 'scheduled' : bulkType
           });
-          created++;
         }
       }
       
-      toast.success(`Created ${created} roster entries!`);
+      await apiFetch('/roster/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ entries: newEntries })
+      });
+      
+      toast.success(`Created ${newEntries.length} roster entries!`);
       setShowBulkForm(false);
       setBulkStaffIds([]);
+      fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setBulkSubmitting(false);
   };
@@ -352,7 +326,6 @@ function RosterPage() {
     const prevStart = new Date(periodStart); prevStart.setMonth(prevStart.getMonth() - 1);
     const prevEnd = new Date(periodEnd); prevEnd.setMonth(prevEnd.getMonth() - 1);
     const prevStartStr = formatDate(prevStart); const prevEndStr = formatDate(prevEnd);
-    const curStartStr = formatDate(periodStart); const curEndStr = formatDate(periodEnd);
 
     const prevEntries = entries.filter((e) =>
       e.date >= prevStartStr && e.date <= prevEndStr && !isApprovedLeaveStatus(e.status) && !e.leaveRequestId
@@ -361,31 +334,28 @@ function RosterPage() {
 
     setCopying(true);
     try {
-      const current = entries.filter((e) =>
-        e.date >= curStartStr && e.date <= curEndStr && !isApprovedLeaveStatus(e.status) && !e.leaveRequestId
-      );
-      for (const e of current) await deleteDoc(doc(db, 'roster_entries', e.id));
-
-      const protectedKeys = new Set(
-        entries
-          .filter((e) => e.date >= curStartStr && e.date <= curEndStr && (isApprovedLeaveStatus(e.status) || e.leaveRequestId))
-          .map((e) => `${e.staffId}|${e.date}`)
-      );
-
-      let created = 0;
+      const newEntries: any[] = [];
       for (const e of prevEntries) {
         const oldDate = new Date(e.date + 'T00:00:00'); const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
         const newDateStr = formatDate(newDate);
-        if (protectedKeys.has(`${e.staffId}|${newDateStr}`)) continue;
+        
+        // Skip if there's currently approved leave on this new date
+        const isProtected = entries.some(curr => curr.staffId === e.staffId && curr.date === newDateStr && (isApprovedLeaveStatus(curr.status) || curr.leaveRequestId));
+        if (isProtected) continue;
 
-        await addDoc(collection(db, 'roster_entries'), {
+        newEntries.push({
           staffId: e.staffId, staffName: e.staffName, staffDepartment: e.staffDepartment,
-          date: newDateStr, shiftTime: e.shiftTime || '', status: e.status || 'scheduled',
-          createdAt: new Date().toISOString(),
+          date: newDateStr, shiftTime: e.shiftTime || '', status: e.status || 'scheduled'
         });
-        created++;
       }
-      toast.success(`Copied ${created} entries!`);
+      
+      await apiFetch('/roster/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ entries: newEntries })
+      });
+      
+      toast.success(`Copied ${newEntries.length} entries!`);
+      fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setCopying(false);
   };
@@ -399,11 +369,15 @@ function RosterPage() {
     if (index === -1) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= list.length) return;
+    
     [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
+    
     try {
-      const batch = writeBatch(db);
-      list.forEach((s, i) => batch.update(doc(db, 'staff', s.id), { order: i }));
-      await batch.commit();
+      await apiFetch('/staff/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ orderedIds: list.map(s => s.id) })
+      });
+      fetchData();
     } catch (err: any) { toast.error('Reorder failed: ' + err.message); }
   };
 
@@ -427,18 +401,15 @@ function RosterPage() {
   };
 
   const exportToJPG = async () => {
-    setExporting(true);
     try {
       const canvas = await captureCanvas(); if (!canvas) return;
       const link = document.createElement('a'); link.download = `FND-Roster-${formatDate(periodStart)}.jpg`;
       link.href = canvas.toDataURL('image/jpeg', 0.95); link.click();
       toast.success('JPG downloaded!');
     } catch (err: any) { toast.error('Export failed: ' + err.message); }
-    setExporting(false);
   };
 
   const exportToPDF = async () => {
-    setExporting(true);
     try {
       const canvas = await captureCanvas(); if (!canvas) return;
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -452,7 +423,6 @@ function RosterPage() {
       pdf.save(`FND-Roster-${formatDate(periodStart)}.pdf`);
       toast.success('PDF downloaded!');
     } catch (err: any) { toast.error('Export failed: ' + err.message); }
-    setExporting(false);
   };
 
   const handlePrint = () => {
@@ -461,6 +431,8 @@ function RosterPage() {
   };
 
   const editableStaffList = visibleStaff.filter(s => canEditDept(s.department));
+
+  if (loading) return <div className="page-content"><p>Loading Roster...</p></div>;
 
   return (
     <div className="page-content">
@@ -477,6 +449,8 @@ function RosterPage() {
           </div>
 
           <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
+          <button className="export-btn jpg-btn" onClick={exportToJPG}>📸 JPG</button>
+          <button className="export-btn pdf-btn" onClick={exportToPDF}>📄 PDF</button>
           
           {isAdmin && (
              <button className="export-btn bulk-btn" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}</button>
@@ -529,11 +503,7 @@ function RosterPage() {
               <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #c4b5fd', borderRadius: '6px', padding: '8px', background: '#fff' }}>
                 {editableStaffList.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer', fontSize: '13px' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={bulkStaffIds.includes(s.id)} 
-                      onChange={() => toggleBulkStaff(s.id)} 
-                    />
+                    <input type="checkbox" checked={bulkStaffIds.includes(s.id)} onChange={() => toggleBulkStaff(s.id)} />
                     {s.name} ({s.sn || 'No SN'})
                   </label>
                 ))}
@@ -577,6 +547,7 @@ function RosterPage() {
         <button onClick={() => changePeriod(-1)}>← Previous Month</button>
         <span>{formatLongDate(periodStart)} — {formatLongDate(periodEnd)}</span>
         <button onClick={() => changePeriod(1)}>Next Month →</button>
+        {isAdmin && <button onClick={handleCopyPreviousPeriod} disabled={copying} style={{ background: '#8b5cf6' }}>{copying ? 'Copying...' : '📋 Copy Previous Period'}</button>}
       </div>
 
       <div ref={gridRef} className="roster-export-area" style={{ zoom: zoom }}>
