@@ -70,6 +70,7 @@ const getShortLeave = (status: string) => {
   if (status === 'PRE-MATERNITY LEAVE') return 'PML';
   if (status === 'FAMILY RESPONSIBILITY LEAVE (FRL)') return 'FRL';
   if (status === 'OFF DAY') return 'OFF';
+  if (status === 'ABSENT') return 'AB';
   return status;
 };
 
@@ -90,36 +91,23 @@ const getLeaveColorClass = (status: string) => {
   if (status.includes('PATERNITY')) return 'leave-pat';
   if (status.includes('MATERNITY')) return 'leave-mat';
   if (status.includes('FAMILY')) return 'leave-frl';
+  if (status === 'ABSENT') return 'leave-absent';
   return 'leave-other';
 };
 
 const SHIFT_OPTIONS = ['06:00 - 14:00', '08:00 - 16:00', '16:00 - 00:00', '00:00 - 08:00', 'CUSTOM'];
 const ROSTER_STATUS_OPTIONS = [
-  'OFF DAY', 'ABSENT','ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL',
+  'OFF DAY', 'ABSENT', 'ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL',
   'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'
 ];
 
-const APPROVED_LEAVE_STATUSES = ROSTER_STATUS_OPTIONS.filter(o => o !== 'OFF DAY');
+const APPROVED_LEAVE_STATUSES = ROSTER_STATUS_OPTIONS.filter(o => o !== 'OFF DAY' && o !== 'ABSENT');
 const isApprovedLeaveStatus = (status?: string) => !!status && APPROVED_LEAVE_STATUSES.includes(status);
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function RosterPage() {
   const { profile } = useAuth();
   
-  const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const userDepartment = profile?.department;
-  const isAdmin = isDev || isManager || isSMT;
-
-  const canEditDept = (dept: string) => {
-    if (isDev || isManager) return true;
-    if (!isSMT) return false;
-    if (userDepartment === dept) return true;
-    if (userDepartment === 'Safety' && dept === 'Security') return true;
-    return false;
-  };
-
   const [zoom, setZoom] = useState(1);
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [entries, setEntries] = useState<any[]>([]);
@@ -154,6 +142,35 @@ function RosterPage() {
 
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
+
+  // Find the current user's staff record to get the TRUE department and SMT status
+  const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (profile?.email || '').toLowerCase());
+  
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
+  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true; // Checks both Auth Role and Staff Record
+  
+  const userDepartment = myStaff?.department || profile?.department;
+  const isAdmin = isDev || isManager || isSMT;
+
+  const canEditDept = (dept: string) => {
+    // 1. Dev, Manager, Admin get full access
+    if (isDev || isManager) return true;
+    
+    const targetDept = (dept || '').trim().toLowerCase();
+    const currentDept = (userDepartment || '').trim().toLowerCase();
+
+    // 2. Safety Officer gets access to Security
+    if (currentDept === 'safety' && targetDept === 'security') return true;
+    
+    // 3. If not SMT, they can't edit anything else
+    if (!isSMT) return false;
+    
+    // 4. SMT can edit their own department
+    if (currentDept === targetDept) return true;
+    
+    return false;
+  };
 
   const activeDeptName = isAdmin
     ? (selectedDept === 'all' ? '' : selectedDept.toUpperCase())
