@@ -74,42 +74,46 @@
   html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; height: auto !important; }
   
   /* Hide normal app UI */
-  .sidebar, .top-tab, .staff-header, .ops-tabs, .toolbar, .no-print, .modal-header {
+  .sidebar, .top-tabs-container, .main-app-header, .staff-header, .ops-tabs, .toolbar, .no-print, .modal-header {
     display: none !important;
   }
   
-  /* Remove layout constraints */
   .dashboard-layout, .main-content, .page-content { 
-    display: block !important; 
-    padding: 0 !important; 
-    margin: 0 !important; 
-    background: #fff !important; 
-    overflow: visible !important; 
-    height: auto !important; 
+    display: block !important; padding: 0 !important; margin: 0 !important; 
+    background: #fff !important; overflow: visible !important; height: auto !important;
+  }
+
+  /* 1. PRINTING THE MAIN FORM (Normal Print) */
+  body:not(.printing-modal) .ramp-container {
+    display: block !important;
+    padding: 0 !important; background: #fff !important; border: none !important; box-shadow: none !important; overflow: visible !important;
+  }
+  body:not(.printing-modal) .ramp-sheet {
+    box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 auto !important; max-width: 100% !important; width: 100% !important; page-break-inside: avoid;
+  }
+
+  /* 2. PRINTING THE MODAL (View/Print Report) */
+  body.printing-modal .modal-backdrop { 
+    display: block !important;
+    position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: auto !important;
+    padding: 0 !important; margin: 0 !important; background: transparent !important; overflow: visible !important;
+  }
+  body.printing-modal .modal-content {
+    display: block !important; position: static !important; width: 100% !important; max-width: 100% !important; max-height: none !important;
+    padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; background: transparent !important; overflow: visible !important;
+  }
+  body.printing-modal .modal-scrollable-body {
+    display: block !important; padding: 0 !important; margin: 0 !important; max-height: none !important; height: auto !important; overflow: visible !important; background: transparent !important;
   }
   
-  .ramp-container { 
-    padding: 0 !important; 
-    background: #fff !important; 
-    border: none !important; 
-    box-shadow: none !important; 
-    overflow: visible !important;
+  /* Hide the background content (the table) when the modal is open */
+  body.printing-modal .page-content > div > *:not(.modal-backdrop) {
+    display: none !important;
   }
-  .ramp-sheet { 
-    box-shadow: none !important; 
-    border: none !important; 
-    padding: 0 !important; 
-    margin: 0 !important; 
-    max-width: 100% !important; 
-    width: 100% !important; 
-    page-break-inside: avoid;
-  }
-  .ramp-sheet .flight-form { border: none !important; padding: 0 !important; }
-  .ramp-sheet .route-select, .ramp-sheet .btn-plus { display: none !important; }
-  .ramp-sheet .route-wrapper { display: block !important; padding: 0 !important; }
 
-  /* Scale down to fit exactly on A4 */
+  /* 3. SCALE & FORMATTING FOR BOTH MODES */
   .ramp-sheet { font-size: 9px !important; }
+  .ramp-sheet .flight-form { border: none !important; padding: 0 !important; }
   .ramp-sheet .company-header img { height: 50px !important; }
   .ramp-sheet .title { margin: 5px 0 !important; font-size: 12px !important; }
   .ramp-sheet .main-grid { gap: 5px !important; margin-bottom: 5px !important; }
@@ -117,59 +121,12 @@
   .ramp-sheet .bottom-section-2 { gap: 5px !important; margin-bottom: 5px !important; }
   .ramp-sheet .header-row { margin-bottom: 2px !important; }
   .ramp-sheet .header-label { font-size: 10px !important; width: 65px !important; }
-
   .ramp-sheet .inner-table th, .ramp-sheet .inner-table td { padding: 1px 2px !important; font-size: 8px !important; }
   .ramp-sheet input, .ramp-sheet textarea { border: none !important; background: transparent !important; color: #000 !important; padding: 0 2px !important; height: 16px !important; line-height: 16px !important; font-size: 9px !important; }
   .ramp-sheet .header-value { border-bottom: 1px solid #000 !important; }
-  
   .ramp-sheet .footer-section { padding-top: 5px !important; gap: 5px !important; }
   .ramp-sheet .footer-box label { font-size: 9px !important; margin-bottom: 2px !important; }
   .ramp-sheet .footer-box textarea { height: 30px !important; padding: 2px !important; }
-
-  /* ==========================================
-     THE FIX FOR MODAL PRINTING
-     ========================================== */
-  
-  /* When printing the modal, hide EVERYTHING else on the page */
-  body.printing-modal .page-content > *:not(.modal-backdrop) {
-    display: none !important;
-  }
-
-  body.printing-modal .modal-backdrop { 
-    display: block !important;
-    position: absolute !important; 
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: transparent !important;
-    overflow: visible !important;
-  }
-
-  body.printing-modal .modal-content {
-    display: block !important;
-    position: static !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    max-height: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
-    background: transparent !important;
-    overflow: visible !important;
-  }
-
-  /* Remove the scroll wrapper inside the modal */
-  body.printing-modal .modal-scrollable-body {
-    display: block !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    max-height: none !important;
-    height: auto !important;
-    overflow: visible !important;
-    background: transparent !important;
-  }
+  .ramp-sheet .route-select, .ramp-sheet .btn-plus { display: none !important; }
+  .ramp-sheet .route-wrapper { display: block !important; padding: 0 !important; }
 }
