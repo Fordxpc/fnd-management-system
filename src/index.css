@@ -109,3 +109,27 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+/* Force all inputs to have dark text on white background globally */
+input, select, textarea {
+  color: #1e293b !important;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #1e293b !important;
+  color-scheme: light !important;
+}
+
+/* Keep readonly/disabled fields looking slightly different */
+input:read-only, textarea:read-only, input:disabled, select:disabled {
+  background-color: #f1f5f9 !important;
+  color: #64748b !important;
+  -webkit-text-fill-color: #64748b !important;
+}
+
+/* Fix for the Ramp Sheet specifically */
+.ramp-sheet input, .ramp-sheet textarea, .ramp-sheet select {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}
+.ramp-sheet input[readonly], .ramp-sheet textarea[readonly] {
+  color: #475569 !important;
+  -webkit-text-fill-color: #475569 !important;
+}
