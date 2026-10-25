@@ -79,13 +79,10 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const isManager = canSeeAllDepartments; 
   const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
 
-  // FETCH ALL DATA FROM D1
+  // FETCH ALL DATA SAFELY (Fixes the Flight Schedule crash)
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [
-        staffData, rosterData, leaveData, otData, 
-        flightsData, rampDraft, fodData, birdData
-      ] = await Promise.all([
+      const results = await Promise.allSettled([
         apiFetch('/staff'),
         apiFetch('/roster'),
         apiFetch('/leave-requests'),
@@ -96,6 +93,20 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         apiFetch('/wildlife')
       ]);
 
+      const getData = (index: number) => {
+        if (results[index].status === 'fulfilled') return (results[index] as PromiseFulfilledResult<any>).value;
+        return []; // Return empty array if an endpoint fails
+      };
+
+      const staffData = getData(0);
+      const rosterData = getData(1);
+      const leaveData = getData(2);
+      const otData = getData(3);
+      const flightsData = getData(4);
+      const rampDraft = getData(5);
+      const fodData = getData(6);
+      const birdData = getData(7);
+
       setStaff(staffData);
       setRoster(rosterData);
       setLeaveReqs(leaveData);
@@ -103,10 +114,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       setFlights(flightsData);
       setLiveRamp(rampDraft);
       
-      // Filter today's FOD
       setTodayFOD(fodData.filter((f: any) => f.date === todayStr));
       
-      // Calculate today's birds
       const todayBirds = birdData.filter((b: any) => b.date === todayStr);
       let totalBirds = 0;
       todayBirds.forEach((record: any) => {
@@ -123,7 +132,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     }
   }, [todayStr]);
 
-  // Fetch Weather separately (External API)
   const fetchWeather = useCallback(async () => {
     try {
       const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=6.1614&longitude=73.2864&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,visibility,surface_pressure&timezone=auto');
@@ -136,7 +144,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     fetchDashboardData();
     fetchWeather();
     
-    // Poll every 30 seconds
     const interval = setInterval(() => {
       fetchDashboardData();
       fetchWeather();

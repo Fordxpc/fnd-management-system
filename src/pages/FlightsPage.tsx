@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import { ConfirmDialog } from '../components/Dialogs'; // <-- Imported custom dialog
+import { ConfirmDialog } from '../components/Dialogs';
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
@@ -16,6 +16,15 @@ const formatDisplayDate = (dateStr: string) => {
   return `${d}${months[parseInt(m) - 1]}${y}`;
 };
 
+// Helper function to format text to HH:MM (24h format)
+const formatTimeInput = (val: string) => {
+  const clean = val.replace(/\D/g, '');
+  if (clean.length >= 3) {
+    return `${clean.slice(0, 2)}:${clean.slice(2, 4)}`;
+  }
+  return clean;
+};
+
 function FlightsPage() {
   const { profile } = useAuth();
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
@@ -26,10 +35,8 @@ function FlightsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Custom Delete State
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
-  // Form States
   const [flightNo, setFlightNo] = useState('Q2-');
   const [type, setType] = useState('Scheduled');
   const [aircraft, setAircraft] = useState('DH-8/300');
@@ -43,7 +50,6 @@ function FlightsPage() {
   const [status, setStatus] = useState('Scheduled');
   const [remarks, setRemarks] = useState('');
 
-  // FETCH DATA FROM D1
   const fetchFlights = useCallback(async () => {
     try {
       const data = await apiFetch('/flights');
@@ -57,7 +63,7 @@ function FlightsPage() {
 
   useEffect(() => {
     fetchFlights();
-    const interval = setInterval(fetchFlights, 15000); // Poll every 15s
+    const interval = setInterval(fetchFlights, 15000);
     return () => clearInterval(interval);
   }, [fetchFlights]);
 
@@ -232,9 +238,19 @@ function FlightsPage() {
 
           {aircraft === 'CUSTOM' && <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>}
 
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time</label><input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (FND)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (FND)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
+          {/* THE TIME INPUTS ARE NOW TEXT INPUTS TO FORCE 24H FORMAT */}
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time (24h)</label>
+            <input type="text" placeholder="HH:MM" maxLength={5} value={checkIn} onChange={e => setCheckIn(formatTimeInput(e.target.value))} />
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (24h)</label>
+            <input type="text" placeholder="HH:MM" maxLength={5} value={arrival} onChange={e => setArrival(formatTimeInput(e.target.value))} />
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (24h)</label>
+            <input type="text" placeholder="HH:MM" maxLength={5} value={departure} onChange={e => setDeparture(formatTimeInput(e.target.value))} />
+          </div>
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
           
@@ -306,7 +322,6 @@ function FlightsPage() {
         </div>
       </div>
 
-      {/* CUSTOM DELETE DIALOG */}
       <ConfirmDialog
         isOpen={!!deleteTarget}
         title="Delete Flight?"
