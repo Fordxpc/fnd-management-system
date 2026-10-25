@@ -166,11 +166,14 @@ function LeavePage() {
       };
 
       const staffData = getData(0);
-      const leaveData = getData(1);
+      const rawLeaveData = getData(1);
       const holidaysData = getData(2);
 
+      // SAFETY NET: Remove duplicates from the UI
+      const uniqueLeaves = Array.from(new Map(rawLeaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}-${item.leaveType}`, item])).values());
+
       setStaffList(staffData);
-      setRequests(leaveData);
+      setRequests(uniqueLeaves);
       setHolidays(holidaysData);
 
       const mine = staffData.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
@@ -220,7 +223,6 @@ function LeavePage() {
     return myStaff && r.staffId === myStaff.id;
   };
 
-  // FIXED: Case-insensitive status matching
   const visibleRequests = requests
     .filter((r: any) => {
       if (isStaff) return myStaff && r.staffId === myStaff.id;
@@ -354,7 +356,6 @@ function LeavePage() {
                       <div key={t} className="balance-item">
                         <span className="balance-label">{t}</span>
                         <span className="balance-value">{ANNUAL_LEAVE_TOTAL - used} / {ANNUAL_LEAVE_TOTAL} days</span>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>One-time allocation</span>
                       </div>
                     );
                   }

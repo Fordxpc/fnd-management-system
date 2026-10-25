@@ -123,6 +123,35 @@ export const onRequest = async (context: any) => {
       context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/holidays/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    
+    // CREATE LEAVE REQUEST
+    if (url.pathname === "/api/leave-requests" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      const requestedAt = new Date().toISOString();
+      const finalStatus = body.status || 'pending';
+
+      // Prevent duplicates
+      const existing = await env.DB.prepare(`
+        SELECT id FROM leave_requests 
+        WHERE staffId = ? AND startDate = ? AND endDate = ? AND leaveType = ?
+      `).bind(body.staffId, body.startDate, body.endDate, body.leaveType).first();
+
+      if (existing) {
+        return new Response(JSON.stringify({ success: true, id: existing.id, message: "Already exists" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      await env.DB.prepare(`
+        INSERT INTO leave_requests (id, staffId, staffName, staffDepartment, staffSN, staffGender, staffIsSMT, leaveType, startDate, endDate, days, reason, status, requestedAt, requestedBy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        id, body.staffId, body.staffName, body.staffDepartment, body.staffSN || '', body.staffGender || '', body.staffIsSMT ? 1 : 0,
+        body.leaveType, body.startDate, body.endDate, body.days, body.reason || '', finalStatus, requestedAt, body.requestedBy || ''
+      ).run();
+
+      context.waitUntil(backupToFirebase('leave_requests', id, { ...body, status: finalStatus, requestedAt }));
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // ==========================================
     // LEAVE REQUESTS MODULE

@@ -175,7 +175,6 @@ function RosterPage() {
 
   const holidayDateSet = new Set<string>(holidays.map((h: any) => h.date));
 
-  // FETCH DATA (SAFELY)
   const fetchData = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
@@ -185,15 +184,17 @@ function RosterPage() {
       ]);
 
       const getData = (index: number) => {
-        if (results[index].status === 'fulfilled') {
-          return (results[index] as PromiseFulfilledResult<any>).value;
-        }
-        console.error(`API endpoint ${index} failed:`, (results[index] as PromiseRejectedResult).reason);
-        return []; // Return empty array so the page still loads
+        if (results[index].status === 'fulfilled') return (results[index] as PromiseFulfilledResult<any>).value;
+        return []; 
       };
 
+      const rawRoster = getData(1);
+      
+      // SAFETY NET: Deduplicate roster entries by Staff Name + Date
+      const uniqueRoster = Array.from(new Map(rawRoster.map((item: any) => [`${item.staffName}-${item.date}`, item])).values());
+
       setStaff(getData(0));
-      setEntries(getData(1));
+      setEntries(uniqueRoster);
       setHolidays(getData(2));
       setLoading(false);
     } catch (err: any) {
@@ -204,7 +205,7 @@ function RosterPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000); // Poll every 15s
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -348,7 +349,6 @@ function RosterPage() {
         const oldDate = new Date(e.date + 'T00:00:00'); const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
         const newDateStr = formatDate(newDate);
         
-        // Skip if there's currently approved leave on this new date
         const isProtected = entries.some(curr => curr.staffId === e.staffId && curr.date === newDateStr && (isApprovedLeaveStatus(curr.status) || curr.leaveRequestId));
         if (isProtected) continue;
 
@@ -583,7 +583,6 @@ function RosterPage() {
                       const isInPeriod = dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
                       if (!isInPeriod) return <td key={dStr} className="out-of-period-cell">&nbsp;</td>;
 
-                      // FIX: Match by ID first, then fallback to Name for migrated data
                       let entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
                       if (!entry) {
                         entry = entries.find((e) => e.staffName === s.name && e.date === dStr);
