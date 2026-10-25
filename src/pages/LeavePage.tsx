@@ -18,7 +18,6 @@ const ENTITLEMENTS: { [key: string]: number } = {
 
 const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
 const MALE_ONLY = ['PATERNITY LEAVE'];
-
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
 
@@ -28,16 +27,9 @@ const APPROVER_DESIGNATIONS = [
   'Assistant Security Officer', 'Assistant Administrative Officer', 'Leading Fireman',
 ];
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
-
 const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
-const selectStyle = {
-  padding: '10px', 
-  borderRadius: '6px', 
-  border: '1px solid #cbd5e1',
-  color: '#1e293b',
-  backgroundColor: '#ffffff'
-};
+const selectStyle = { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff' };
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -60,9 +52,7 @@ const allDatesInRange = (start: string, end: string): string[] => {
   const e = new Date(end + 'T00:00:00');
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || e < s) return dates;
   const cur = new Date(s);
-  while (cur <= e) {
-    dates.push(formatDate(cur)); cur.setDate(cur.getDate() + 1);
-  }
+  while (cur <= e) { dates.push(formatDate(cur)); cur.setDate(cur.getDate() + 1); }
   return dates;
 };
 
@@ -162,7 +152,6 @@ function LeavePage() {
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
-  // FETCH DATA SAFELY
   const fetchData = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
@@ -204,7 +193,6 @@ function LeavePage() {
   }, [fetchData]);
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
-  
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   
@@ -258,9 +246,7 @@ function LeavePage() {
     const staffMemberToSubmit = staffList.find((s) => s.id === selectedStaffId);
     if (!staffMemberToSubmit) { toast.error('Staff member not found'); return; }
 
-    const overlap = requests.some(r => 
-      r.staffId === selectedStaffId && r.status === 'approved' && r.startDate <= endDate && r.endDate >= startDate
-    );
+    const overlap = requests.some(r => r.staffId === selectedStaffId && r.status === 'approved' && r.startDate <= endDate && r.endDate >= startDate);
     if (overlap) { toast.error('Overlaps with approved leave.'); return; }
 
     let days = leaveType === 'ANNUAL LEAVE'
@@ -273,33 +259,23 @@ function LeavePage() {
       await apiFetch('/leave-requests', {
         method: 'POST',
         body: JSON.stringify({
-          staffId: selectedStaffId, 
-          staffName: staffMemberToSubmit.name,
-          staffDepartment: staffMemberToSubmit.department,
-          staffSN: staffMemberToSubmit.sn || '',
-          staffGender: staffMemberToSubmit.gender || '',
-          staffIsSMT: staffMemberToSubmit.isSMT === true,
+          staffId: selectedStaffId, staffName: staffMemberToSubmit.name,
+          staffDepartment: staffMemberToSubmit.department, staffSN: staffMemberToSubmit.sn || '',
+          staffGender: staffMemberToSubmit.gender || '', staffIsSMT: staffMemberToSubmit.isSMT === true,
           leaveType, startDate, endDate, days, reason, requestedBy: user?.email || ''
         })
       });
       toast.success(`Leave request submitted.`);
       setShowForm(false); setReason('');
       fetchData();
-    } catch (error: any) { 
-      toast.error('Error: ' + error.message); 
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (error: any) { toast.error('Error: ' + error.message); } finally { setSubmitting(false); }
   };
 
   const confirmApprove = async () => {
     if (!approveTarget) return;
     try {
-      await apiFetch(`/leave-requests/${approveTarget.id}/approve`, {
-        method: 'PUT',
-        body: JSON.stringify({ reviewedBy: user?.email || '' })
-      });
-      toast.success('Leave approved and written to roster.');
+      await apiFetch(`/leave-requests/${approveTarget.id}/approve`, { method: 'PUT', body: JSON.stringify({ reviewedBy: user?.email || '' }) });
+      toast.success('Leave approved.');
       setApproveTarget(null);
       fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
@@ -308,10 +284,7 @@ function LeavePage() {
   const confirmReject = async (note: string) => {
     if (!rejectTarget) return;
     try {
-      await apiFetch(`/leave-requests/${rejectTarget.id}/reject`, {
-        method: 'PUT',
-        body: JSON.stringify({ reviewedBy: user?.email || '', reviewNotes: note || '' })
-      });
+      await apiFetch(`/leave-requests/${rejectTarget.id}/reject`, { method: 'PUT', body: JSON.stringify({ reviewedBy: user?.email || '', reviewNotes: note || '' }) });
       toast.success('Leave rejected.');
       setRejectTarget(null);
       fetchData();
@@ -370,13 +343,11 @@ function LeavePage() {
                   const isAnnual = t === 'ANNUAL LEAVE';
                   const entitlement = ENTITLEMENTS[t] || 0;
                   const used = usedDays[t] || 0;
-                  
                   if (isAnnual && !myIsAnnualRenewing && myStaff.joinDate) {
                     return (
                       <div key={t} className="balance-item">
                         <span className="balance-label">{t}</span>
                         <span className="balance-value">{ANNUAL_LEAVE_TOTAL - used} / {ANNUAL_LEAVE_TOTAL} days</span>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>One-time allocation</span>
                       </div>
                     );
                   }
@@ -397,13 +368,11 @@ function LeavePage() {
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
-          
           {!isStaff && (
             <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>
               {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
-
           {!isStaff ? (
             <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required style={selectStyle}>
               <option value="">Select Staff Member...</option>
@@ -412,12 +381,10 @@ function LeavePage() {
           ) : (
             <input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />
           )}
-
           <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={selectStyle}>
             {allowedLeaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
-          
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Start Date</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
@@ -426,18 +393,10 @@ function LeavePage() {
             <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>End Date</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
           </div>
-
           <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#475569' }}>
             <strong>Countable days:</strong> {previewDays}
-            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (
-              <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
-                ℹ️ {previewFridays} Friday(s) will show on the roster but will not be deducted from the balance.
-              </div>
-            )}
           </div>
-          <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>
-            {submitting ? 'Submitting...' : 'Submit Leave Request'}
-          </button>
+          <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>{submitting ? 'Submitting...' : 'Submit Leave Request'}</button>
         </form>
       )}
 
@@ -485,32 +444,9 @@ function LeavePage() {
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={!!approveTarget}
-        title="Approve Leave?"
-        message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?`}
-        confirmText="Yes, Approve"
-        isDanger={false}
-        onConfirm={confirmApprove}
-        onCancel={() => setApproveTarget(null)}
-      />
-      <PromptDialog
-        isOpen={!!rejectTarget}
-        title="Reject Leave?"
-        message="Please provide a reason for rejection (optional):"
-        placeholder="e.g. Operational requirements"
-        onSubmit={confirmReject}
-        onCancel={() => setRejectTarget(null)}
-      />
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        title="Delete Leave Request?"
-        message={`Are you sure you want to permanently delete this leave request for ${deleteTarget?.staffName}?`}
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      <ConfirmDialog isOpen={!!approveTarget} title="Approve Leave?" message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?`} confirmText="Yes, Approve" isDanger={false} onConfirm={confirmApprove} onCancel={() => setApproveTarget(null)} />
+      <PromptDialog isOpen={!!rejectTarget} title="Reject Leave?" message="Please provide a reason for rejection (optional):" placeholder="e.g. Operational requirements" onSubmit={confirmReject} onCancel={() => setRejectTarget(null)} />
+      <ConfirmDialog isOpen={!!deleteTarget} title="Delete Leave Request?" message={`Are you sure you want to permanently delete this leave request for ${deleteTarget?.staffName}?`} confirmText="Delete" isDanger={true} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   );
 }
