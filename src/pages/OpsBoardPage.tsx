@@ -48,7 +48,9 @@ function OpsBoardPage() {
     return saved ? JSON.parse(saved) : DEFAULT_STAFF;
   });
   const [newStaff, setNewStaff] = useState('');
+  
   const [showPreview, setShowPreview] = useState(false);
+  const [previewScale, setPreviewScale] = useState(1);
 
   useEffect(() => {
     localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool));
@@ -71,6 +73,19 @@ function OpsBoardPage() {
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
+
+  // Calculate scale for mobile preview
+  useEffect(() => {
+    if (!showPreview) return;
+    const handleResize = () => {
+      const screenWidth = window.innerWidth - 40; // padding
+      const targetWidth = 900; // export board width
+      setPreviewScale(screenWidth < targetWidth ? screenWidth / targetWidth : 1);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [showPreview]);
 
   useEffect(() => {
     const saved = localStorage.getItem('ops_board_draft');
@@ -200,11 +215,13 @@ function OpsBoardPage() {
   const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
+    
+    // Create a wrapper with a fixed width of 900px
     const wrapper = document.createElement('div');
     wrapper.style.position = 'fixed';
     wrapper.style.left = '-9999px';
     wrapper.style.top = '0';
-    wrapper.style.width = '1200px';
+    wrapper.style.width = '900px';
     wrapper.style.background = '#141414';
     wrapper.style.padding = '40px';
 
@@ -213,13 +230,14 @@ function OpsBoardPage() {
     clone.style.background = 'transparent';
     clone.style.overflow = 'visible';
 
+    // Force 3-column grid on all grids
     const grids = clone.querySelectorAll('.ops-grid-3');
     grids.forEach(g => {
       const el = g as HTMLElement;
       el.style.display = 'grid';
       el.style.gridTemplateColumns = 'repeat(3, 1fr)';
       el.style.gridAutoFlow = 'row';
-      el.style.gap = '16px';
+      el.style.gap = '12px';
       el.style.overflow = 'visible';
       el.style.width = '100%';
     });
@@ -240,9 +258,9 @@ function OpsBoardPage() {
       const canvas = await html2canvas(wrapper, {
         scale: 2,
         backgroundColor: '#141414',
-        width: wrapper.scrollWidth,
+        width: 900,
         height: wrapper.scrollHeight,
-        windowWidth: wrapper.scrollWidth,
+        windowWidth: 900,
         windowHeight: wrapper.scrollHeight
       });
       document.body.removeChild(wrapper);
@@ -349,13 +367,12 @@ function OpsBoardPage() {
             </div>
           )}
 
-          <div className="ops-board-export-area" style={{ background: '#141414', padding: '30px', borderRadius: '12px' }}>
-            <div className="ops-board-fixed-width" ref={runwayRef}>
+          <div className="ops-board-export-area" style={{ background: '#141414', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
+            <div className="ops-board-fixed-width" ref={runwayRef} style={{ minWidth: '900px' }}>
               <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
                 FND RUNWAY INSPECTION BOARD
               </div>
-              <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                {/* RWY 19 */}
+              <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
                   <div style={{ background: '#e53935', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px' }}>RWY 19</div>
                   <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
@@ -364,7 +381,6 @@ function OpsBoardPage() {
                     )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                   </div>
                 </div>
-                {/* RWY 01 */}
                 <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
                   <div style={{ background: '#1e88e5', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px' }}>RWY 01</div>
                   <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
@@ -373,7 +389,6 @@ function OpsBoardPage() {
                     )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                   </div>
                 </div>
-                {/* LIGHTS */}
                 <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
                   <div style={{ background: '#fdd835', color: '#111', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px', lineHeight: 1.1 }}>LIGHT INSPECTION</div>
                   <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
@@ -432,12 +447,12 @@ function OpsBoardPage() {
             </div>
           )}
 
-          <div className="ops-board-export-area" style={{ background: '#141414', padding: '30px', borderRadius: '12px' }}>
-            <div className="ops-board-fixed-width" ref={groundRef}>
+          <div className="ops-board-export-area" style={{ background: '#141414', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
+            <div className="ops-board-fixed-width" ref={groundRef} style={{ minWidth: '900px' }}>
               <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
                 FND FLIGHT OPERATIONS — GROUND TASK BOARD
               </div>
-              <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 {tasks.map(t => {
                   const assigned = groundAssign[t.id] || [];
                   return (
@@ -651,12 +666,12 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* PREVIEW MODAL - FIXED SIZE FOR EXPORT PREVIEW */}
+      {/* PREVIEW MODAL - FIXED SIZE 900px WITH SCALING */}
       {showPreview && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
           
           <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#141414', color: 'white', borderBottom: '1px solid #333', flexShrink: 0 }}>
-            <h3 style={{ margin: 0 }}>👁️ Export Preview (1200px Size)</h3>
+            <h3 style={{ margin: 0 }}>👁️ Export Preview</h3>
             <button 
               onClick={() => setShowPreview(false)}
               style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
@@ -665,79 +680,88 @@ function OpsBoardPage() {
             </button>
           </div>
           
-          <div style={{ flex: 1, overflow: 'auto', background: '#333', padding: '40px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, overflow: 'auto', background: '#222', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
             
-            {/* EXACT 1200px WIDE CANVAS */}
-            <div style={{ width: '1200px', background: '#141414', padding: '40px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', flexShrink: 0 }}>
+            {/* The scaled wrapper allows the fixed 900px board to fit mobile screens */}
+            <div style={{ 
+              width: '900px', 
+              height: 'max-content',
+              transform: `scale(${previewScale})`, 
+              transformOrigin: 'top center', 
+              transition: 'transform 0.2s ease-out',
+              marginBottom: previewScale < 1 ? `-${800 * (1 - previewScale)}px` : '0' // Adjust layout spacing to prevent empty scroll space
+            }}>
               
-              {activeTab === 'runway' ? (
-                <div>
-                  <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
-                    FND RUNWAY INSPECTION BOARD
-                  </div>
-                  <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
-                      <div style={{ background: '#e53935', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px' }}>RWY 19</div>
-                      <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
-                        {rwy19.length ? rwy19.map(n => (
-                          <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>{n}</div>
-                        )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
-                      </div>
+              <div style={{ width: '900px', background: '#141414', padding: '40px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                {activeTab === 'runway' ? (
+                  <div>
+                    <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
+                      FND RUNWAY INSPECTION BOARD
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
-                      <div style={{ background: '#1e88e5', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px' }}>RWY 01</div>
-                      <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
-                        {rwy01.length ? rwy01.map(n => (
-                          <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>{n}</div>
-                        )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
-                      <div style={{ background: '#fdd835', color: '#111', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px', lineHeight: 1.1 }}>LIGHT INSPECTION</div>
-                      <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
-                        {lights.length ? lights.map(n => (
-                          <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>{n}</div>
-                        )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center', color: '#777', marginTop: '24px', fontSize: '12px' }}>{new Date().toLocaleString()}</div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
-                    FND FLIGHT OPERATIONS — GROUND TASK BOARD
-                  </div>
-                  <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                    {tasks.map(t => {
-                      const assigned = groundAssign[t.id] || [];
-                      return (
-                        <div key={t.id} style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
-                          <div style={{ background: t.color, color: t.text, padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px', letterSpacing: '0.5px' }}>{t.label}</div>
-                          <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
-                            {assigned.length ? (
-                              assigned.map(n => (
-                                <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>
-                                  {n}
-                                </div>
-                              ))
-                            ) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
-                          </div>
+                    <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ background: '#e53935', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px' }}>RWY 19</div>
+                        <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
+                          {rwy19.length ? rwy19.map(n => (
+                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>{n}</div>
+                          )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                         </div>
-                      );
-                    })}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ background: '#1e88e5', color: '#fff', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px' }}>RWY 01</div>
+                        <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
+                          {rwy01.length ? rwy01.map(n => (
+                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>{n}</div>
+                          )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                        <div style={{ background: '#fdd835', color: '#111', padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', lineHeight: 1.1 }}>LIGHT INSPECTION</div>
+                        <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
+                          {lights.length ? lights.map(n => (
+                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>{n}</div>
+                          )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#777', marginTop: '24px', fontSize: '12px' }}>{new Date().toLocaleString()}</div>
                   </div>
-                  <div style={{ background: '#111', borderLeft: '4px solid #fbc02d', borderRadius: '8px', padding: '16px 20px', marginTop: '24px' }}>
-                    <h4 style={{ color: '#fbc02d', margin: '0 0 12px', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES & STANDING INSTRUCTIONS</h4>
-                    <ol style={{ color: '#e2e8f0', fontSize: '12px', paddingLeft: '20px', margin: 0, lineHeight: 1.6 }}>
-                      <li>Aircraft cabin cleaning shall commence only after complete passenger disembarkation.</li>
-                      <li>WCHR passengers shall be transported to the aircraft door during the departure phase.</li>
-                      <li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door. Exit from the terminal area is prohibited until the aircraft is airborne.</li>
-                    </ol>
+                ) : (
+                  <div>
+                    <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
+                      FND FLIGHT OPERATIONS — GROUND TASK BOARD
+                    </div>
+                    <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                      {tasks.map(t => {
+                        const assigned = groundAssign[t.id] || [];
+                        return (
+                          <div key={t.id} style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                            <div style={{ background: t.color, color: t.text, padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>{t.label}</div>
+                            <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none' }}>
+                              {assigned.length ? (
+                                assigned.map(n => (
+                                  <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '8px 2px', borderBottom: '1px solid #222', whiteSpace: 'nowrap' }}>
+                                    {n}
+                                  </div>
+                                ))
+                              ) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ background: '#111', borderLeft: '4px solid #fbc02d', borderRadius: '8px', padding: '16px 20px', marginTop: '24px' }}>
+                      <h4 style={{ color: '#fbc02d', margin: '0 0 12px', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES & STANDING INSTRUCTIONS</h4>
+                      <ol style={{ color: '#e2e8f0', fontSize: '12px', paddingLeft: '20px', margin: 0, lineHeight: 1.6 }}>
+                        <li>Aircraft cabin cleaning shall commence only after complete passenger disembarkation.</li>
+                        <li>WCHR passengers shall be transported to the aircraft door during the departure phase.</li>
+                        <li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door. Exit from the terminal area is prohibited until the aircraft is airborne.</li>
+                      </ol>
+                    </div>
+                    <div style={{ textAlign: 'center', color: '#777', marginTop: '24px', fontSize: '12px' }}>{new Date().toLocaleString()}</div>
                   </div>
-                  <div style={{ textAlign: 'center', color: '#777', marginTop: '24px', fontSize: '12px' }}>{new Date().toLocaleString()}</div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
 
