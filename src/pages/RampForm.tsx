@@ -15,35 +15,28 @@ interface RampFormProps {
 
 export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
 
-  // State to hold which field is waiting for confirmation
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  
-  // State to hold the editable time in the popup (split into hours and minutes to force 24h format)
   const [tempHour, setTempHour] = useState<string>('00');
   const [tempMin, setTempMin] = useState<string>('00');
 
   const executeFillNow = () => {
     if (!confirmId) return;
-    
     const finalTime = `${tempHour}:${tempMin}`;
-    
-    // Trigger the actual change with the edited time
     handleChange({ target: { id: confirmId, value: finalTime } } as any);
-    
-    // Close the popup
     setConfirmId(null);
   };
 
   const handleTimeClick = (id: string) => {
     if (!isManager) return;
-    
-    // Get current time and pre-fill the dropdowns
     const now = new Date();
     setTempHour(String(now.getHours()).padStart(2, '0'));
     setTempMin(String(now.getMinutes()).padStart(2, '0'));
-    
-    // Open the popup
     setConfirmId(id);
+  };
+
+  // Helper to prevent mobile keyboard
+  const preventKeyboard = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.blur();
   };
 
   return (
@@ -70,27 +63,27 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <datalist id="acTypeOptions">{acTypes.map(t => <option key={t} value={t} />)}</datalist>
               </div>
               <div className="header-row"><span className="header-label">FLT.NO :</span><input className="header-value" id="fltNo" type="text" value={formData.fltNo} onChange={handleChange} autoComplete="off" readOnly={!isManager} /></div>
-              <div className="header-row"><span className="header-label">ATA:</span><input className="header-value" id="ata" type="text" value={formData.ata} onChange={handleChange} onClick={() => handleTimeClick('ata')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
-              <div className="header-row"><span className="header-label">STA:</span><input className="header-value" id="sta" type="text" value={formData.sta} onChange={handleChange} onClick={() => handleTimeClick('sta')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
+              <div className="header-row"><span className="header-label">ATA:</span><input className="header-value" id="ata" type="text" value={formData.ata} onChange={handleChange} onClick={() => handleTimeClick('ata')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
+              <div className="header-row"><span className="header-label">STA:</span><input className="header-value" id="sta" type="text" value={formData.sta} onChange={handleChange} onClick={() => handleTimeClick('sta')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
 
               <table className="inner-table" style={{ marginTop: '15px' }}>
                 <thead><tr><th colSpan={3}>IN BOUND</th></tr><tr><th style={{ textAlign: 'left', paddingLeft: '8px' }}></th><th>START</th><th>STOP</th></tr></thead>
                 <tbody>
                   <tr><td>CHOCKS</td>
-                    <td><input type="text" id="chocksStart" value={formData.chocksStart} onChange={handleChange} onClick={() => handleTimeClick('chocksStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="chocksStop" value={formData.chocksStop} onChange={handleChange} onClick={() => handleTimeClick('chocksStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="chocksStart" value={formData.chocksStart} onChange={handleChange} onClick={() => handleTimeClick('chocksStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="chocksStop" value={formData.chocksStop} onChange={handleChange} onClick={() => handleTimeClick('chocksStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
                   <tr><td>PAX OFF</td>
-                    <td><input type="text" id="paxOffStart" value={formData.paxOffStart} onChange={handleChange} onClick={() => handleTimeClick('paxOffStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="paxOffStop" value={formData.paxOffStop} onChange={handleChange} onClick={() => handleTimeClick('paxOffStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="paxOffStart" value={formData.paxOffStart} onChange={handleChange} onClick={() => handleTimeClick('paxOffStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="paxOffStop" value={formData.paxOffStop} onChange={handleChange} onClick={() => handleTimeClick('paxOffStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
                   <tr><td>PAX ON</td>
-                    <td><input type="text" id="paxOnStart" value={formData.paxOnStart} onChange={handleChange} onClick={() => handleTimeClick('paxOnStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="paxOnStop" value={formData.paxOnStop} onChange={handleChange} onClick={() => handleTimeClick('paxOnStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="paxOnStart" value={formData.paxOnStart} onChange={handleChange} onClick={() => handleTimeClick('paxOnStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="paxOnStop" value={formData.paxOnStop} onChange={handleChange} onClick={() => handleTimeClick('paxOnStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
                   <tr><td>CLEANING</td>
-                    <td><input type="text" id="cleanStart" value={formData.cleanStart} onChange={handleChange} onClick={() => handleTimeClick('cleanStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="cleanStop" value={formData.cleanStop} onChange={handleChange} onClick={() => handleTimeClick('cleanStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="cleanStart" value={formData.cleanStart} onChange={handleChange} onClick={() => handleTimeClick('cleanStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="cleanStop" value={formData.cleanStop} onChange={handleChange} onClick={() => handleTimeClick('cleanStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
                 </tbody>
               </table>
@@ -98,32 +91,32 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
             <div>
               <div className="header-row"><span className="header-label">DATE :</span><input className="header-value" id="date" type="date" value={formData.date} onChange={handleChange} readOnly={!isManager} /></div>
-              <div className="header-row"><span className="header-label">ETA :</span><input className="header-value" id="eta" type="text" value={formData.eta} onChange={handleChange} onClick={() => handleTimeClick('eta')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
-              <div className="header-row"><span className="header-label">ATD :</span><input className="header-value" id="atd" type="text" value={formData.atd} onChange={handleChange} onClick={() => handleTimeClick('atd')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
+              <div className="header-row"><span className="header-label">ETA :</span><input className="header-value" id="eta" type="text" value={formData.eta} onChange={handleChange} onClick={() => handleTimeClick('eta')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
+              <div className="header-row"><span className="header-label">ATD :</span><input className="header-value" id="atd" type="text" value={formData.atd} onChange={handleChange} onClick={() => handleTimeClick('atd')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></div>
 
               <table className="inner-table" style={{ marginTop: '15px' }}>
                 <thead><tr><th colSpan={3}>OUT BOUND / SERVICES</th></tr><tr><th style={{ textAlign: 'left', paddingLeft: '8px' }}></th><th>START</th><th>STOP</th></tr></thead>
                 <tbody>
                   <tr><td>BAGGAGE ON</td>
-                    <td><input type="text" id="bagOnStart" value={formData.bagOnStart} onChange={handleChange} onClick={() => handleTimeClick('bagOnStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="bagOnStop" value={formData.bagOnStop} onChange={handleChange} onClick={() => handleTimeClick('bagOnStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="bagOnStart" value={formData.bagOnStart} onChange={handleChange} onClick={() => handleTimeClick('bagOnStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="bagOnStop" value={formData.bagOnStop} onChange={handleChange} onClick={() => handleTimeClick('bagOnStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
                   <tr><td>BAGGAGE OFF</td>
-                    <td><input type="text" id="bagOffStart" value={formData.bagOffStart} onChange={handleChange} onClick={() => handleTimeClick('bagOffStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="bagOffStop" value={formData.bagOffStop} onChange={handleChange} onClick={() => handleTimeClick('bagOffStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="bagOffStart" value={formData.bagOffStart} onChange={handleChange} onClick={() => handleTimeClick('bagOffStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="bagOffStop" value={formData.bagOffStop} onChange={handleChange} onClick={() => handleTimeClick('bagOffStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
-                  <tr><td>BOARDING</td><td colSpan={2}><input type="text" id="boarding" value={formData.boarding} onChange={handleChange} onClick={() => handleTimeClick('boarding')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td></tr>
+                  <tr><td>BOARDING</td><td colSpan={2}><input type="text" id="boarding" value={formData.boarding} onChange={handleChange} onClick={() => handleTimeClick('boarding')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td></tr>
                   <tr><td>DOOR</td>
-                    <td><input type="text" id="doorStart" value={formData.doorStart} onChange={handleChange} onClick={() => handleTimeClick('doorStart')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
-                    <td><input type="text" id="doorStop" value={formData.doorStop} onChange={handleChange} onClick={() => handleTimeClick('doorStop')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="doorStart" value={formData.doorStart} onChange={handleChange} onClick={() => handleTimeClick('doorStart')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
+                    <td><input type="text" id="doorStop" value={formData.doorStop} onChange={handleChange} onClick={() => handleTimeClick('doorStop')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td>
                   </tr>
-                  <tr><td>START- UP</td><td colSpan={2}><input type="text" id="startup" value={formData.startup} onChange={handleChange} onClick={() => handleTimeClick('startup')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td></tr>
+                  <tr><td>START- UP</td><td colSpan={2}><input type="text" id="startup" value={formData.startup} onChange={handleChange} onClick={() => handleTimeClick('startup')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td></tr>
                 </tbody>
               </table>
 
               <table className="inner-table info-table" style={{ marginTop: '15px' }}>
                 <tbody>
-                  <tr><td>CHECK-IN</td><td><input type="text" id="checkIn" value={formData.checkIn} onChange={handleChange} onClick={() => handleTimeClick('checkIn')} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td></tr>
+                  <tr><td>CHECK-IN</td><td><input type="text" id="checkIn" value={formData.checkIn} onChange={handleChange} onClick={() => handleTimeClick('checkIn')} onFocus={preventKeyboard} autoComplete="off" readOnly={!isManager} title="Click to insert current time" /></td></tr>
                   <tr><td>ROUTE</td><td>
                     <div className="route-wrapper">
                       <input type="text" id="route" style={{ flex: 1 }} value={formData.route} onChange={handleChange} autoComplete="off" readOnly={!isManager} />
@@ -235,7 +228,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
         </div>
       </div>
 
-      {/* Custom Time Confirmation Popup */}
       {confirmId && (
         <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>

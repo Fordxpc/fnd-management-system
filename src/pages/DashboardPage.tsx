@@ -155,10 +155,11 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
 
+  // FIX: Keep flight visible unless officially Departed, Landed or Cancelled
   const upcomingFlights = flights
     .filter(f => {
-      const fTime = f.departureTime || f.arrivalTime || '00:00';
-      return f.date > todayStr || (f.date === todayStr && fTime >= nowTime);
+      const isCompleted = ['Departed', 'Landed', 'Cancelled'].includes(f.status);
+      return f.date >= todayStr && !isCompleted;
     })
     .sort((a, b) => {
       const dateCompare = a.date.localeCompare(b.date);
@@ -175,7 +176,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   
   const cleanFlightStr = (str: string) => (str || '').replace(/\s+/g, '').toUpperCase();
   
-  // UPDATED FLIGHT STATUS LOGIC HERE
   if (nextFlight && liveRamp && cleanFlightStr(liveRamp.fltNo) === cleanFlightStr(nextFlight.flightNo)) {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
@@ -251,7 +251,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>SCHED / ETA</div>
-                  {/* UPDATED TO SHOW LIVE ETA IF AVAILABLE */}
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{liveRamp?.eta || nextFlight.arrivalTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>

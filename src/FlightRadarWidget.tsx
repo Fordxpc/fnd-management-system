@@ -8,9 +8,16 @@ const FlightRadarWidget: React.FC<FlightRadarWidgetProps> = ({ flightNumber }) =
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Check if the user is on a mobile device
-    const checkMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    setIsMobile(checkMobile);
+    // Aggressive mobile check (width < 1024 or touch device)
+    const checkMobile = () => {
+      const isSmallScreen = window.innerWidth < 1024;
+      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      setIsMobile(isSmallScreen || isTouch);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   if (!flightNumber) return null;
@@ -24,17 +31,10 @@ const FlightRadarWidget: React.FC<FlightRadarWidgetProps> = ({ flightNumber }) =
       <h3 style={{ margin: '0 0 12px', fontSize: '16px' }}>📡 Live Flight Tracking</h3>
       
       {isMobile ? (
-        // MOBILE VIEW: Beautiful card with a button
         <div style={{ 
           background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', 
-          borderRadius: '8px', 
-          padding: '24px', 
-          textAlign: 'center',
-          color: 'white',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '16px'
+          borderRadius: '8px', padding: '24px', textAlign: 'center', color: 'white',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px'
         }}>
           <div style={{ fontSize: '40px' }}>✈️</div>
           <div>
@@ -44,26 +44,16 @@ const FlightRadarWidget: React.FC<FlightRadarWidgetProps> = ({ flightNumber }) =
             </p>
           </div>
           <a 
-            href={trackUrl} 
-            target="_blank" 
-            rel="noreferrer"
+            href={trackUrl} target="_blank" rel="noreferrer"
             style={{ 
-              background: '#2563eb', 
-              color: 'white', 
-              padding: '12px 24px', 
-              borderRadius: '6px', 
-              textDecoration: 'none', 
-              fontWeight: 600,
-              display: 'inline-block',
-              width: '100%',
-              maxWidth: '300px'
+              background: '#2563eb', color: 'white', padding: '12px 24px', borderRadius: '6px', 
+              textDecoration: 'none', fontWeight: 600, display: 'inline-block', width: '100%', maxWidth: '300px'
             }}
           >
             Track on FlightRadar24
           </a>
         </div>
       ) : (
-        // DESKTOP VIEW: The embedded iframe
         <div style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
           <iframe
             src={src}
