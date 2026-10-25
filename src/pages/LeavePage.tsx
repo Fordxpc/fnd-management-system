@@ -109,7 +109,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
   let used = 0;
   const ly = getCurrentLeaveYear(joinDate);
 
-  requests.filter((r: any) => r.staffId === staffId && r.status === 'approved' && r.leaveType === leaveType)
+  requests.filter((r: any) => r.staffId === staffId && r.status?.toLowerCase() === 'approved' && r.leaveType === leaveType)
     .forEach((r: any) => {
       if (isAnnual && !renews) used += r.days || 0;
       else if (ly) {
@@ -220,13 +220,18 @@ function LeavePage() {
     return myStaff && r.staffId === myStaff.id;
   };
 
+  // FIXED: Case-insensitive status matching
   const visibleRequests = requests
     .filter((r: any) => {
       if (isStaff) return myStaff && r.staffId === myStaff.id;
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
     })
-    .filter((r: any) => (isStaff ? r.status === 'approved' || r.status === 'pending' : (tab === 'all' ? true : r.status === tab)));
+    .filter((r: any) => {
+      if (isStaff) return r.status?.toLowerCase() === 'approved' || r.status?.toLowerCase() === 'pending';
+      if (tab === 'all') return true;
+      return (r.status || '').toLowerCase() === tab;
+    });
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
@@ -246,7 +251,7 @@ function LeavePage() {
     const staffMemberToSubmit = staffList.find((s) => s.id === selectedStaffId);
     if (!staffMemberToSubmit) { toast.error('Staff member not found'); return; }
 
-    const overlap = requests.some(r => r.staffId === selectedStaffId && r.status === 'approved' && r.startDate <= endDate && r.endDate >= startDate);
+    const overlap = requests.some(r => r.staffId === selectedStaffId && r.status?.toLowerCase() === 'approved' && r.startDate <= endDate && r.endDate >= startDate);
     if (overlap) { toast.error('Overlaps with approved leave.'); return; }
 
     let days = leaveType === 'ANNUAL LEAVE'
@@ -343,11 +348,13 @@ function LeavePage() {
                   const isAnnual = t === 'ANNUAL LEAVE';
                   const entitlement = ENTITLEMENTS[t] || 0;
                   const used = usedDays[t] || 0;
+                  
                   if (isAnnual && !myIsAnnualRenewing && myStaff.joinDate) {
                     return (
                       <div key={t} className="balance-item">
                         <span className="balance-label">{t}</span>
                         <span className="balance-value">{ANNUAL_LEAVE_TOTAL - used} / {ANNUAL_LEAVE_TOTAL} days</span>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>One-time allocation</span>
                       </div>
                     );
                   }
@@ -368,11 +375,13 @@ function LeavePage() {
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
+          
           {!isStaff && (
             <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>
               {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
+
           {!isStaff ? (
             <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required style={selectStyle}>
               <option value="">Select Staff Member...</option>
@@ -381,10 +390,12 @@ function LeavePage() {
           ) : (
             <input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />
           )}
+
           <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={selectStyle}>
             {allowedLeaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
+          
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Start Date</label>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
@@ -393,10 +404,18 @@ function LeavePage() {
             <label style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>End Date</label>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
           </div>
+
           <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#475569' }}>
             <strong>Countable days:</strong> {previewDays}
+            {leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (
+              <div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>
+                ℹ️ {previewFridays} Friday(s) will show on the roster but will not be deducted from the balance.
+              </div>
+            )}
           </div>
-          <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>{submitting ? 'Submitting...' : 'Submit Leave Request'}</button>
+          <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>
+            {submitting ? 'Submitting...' : 'Submit Leave Request'}
+          </button>
         </form>
       )}
 
@@ -417,7 +436,7 @@ function LeavePage() {
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleRequests.map((r: any) => {
-                const canApprove = canApproveRequest(r) && r.status === 'pending';
+                const canApprove = canApproveRequest(r) && r.status?.toLowerCase() === 'pending';
                 return (
                   <tr key={r.id}>
                     <td><strong>{r.staffName}</strong></td>
@@ -426,7 +445,7 @@ function LeavePage() {
                     <td>{formatDisplay(r.startDate)}</td>
                     <td>{formatDisplay(r.endDate)}</td>
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
-                    <td><span className={`status-badge status-${r.status}`}>{r.status.toUpperCase()}</span></td>
+                    <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span></td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {canApprove && (
                         <>
