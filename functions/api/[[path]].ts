@@ -463,57 +463,39 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/holidays/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    // ==========================================
-    // LEAVE REQUESTS MODULE
-    // ==========================================
-
-    if (url.pathname === "/api/leave-requests" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM leave_requests ORDER BY requestedAt DESC").all();
-      const formattedResults = results.map((row: any) => ({
-        ...row,
-        staffIsSMT: row.staffIsSMT === 1
-      }));
-      return new Response(JSON.stringify(formattedResults), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname === "/api/leave-requests" && method === "POST") {
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      const requestedAt = new Date().toISOString();
-
-      await env.DB.prepare(`
-        INSERT INTO leave_requests (id, staffId, staffName, staffDepartment, staffSN, staffGender, staffIsSMT, leaveType, startDate, endDate, days, reason, status, requestedAt, requestedBy)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-      `).bind(
-        id, body.staffId, body.staffName, body.staffDepartment, body.staffSN || '', body.staffGender || '', body.staffIsSMT ? 1 : 0,
-        body.leaveType, body.startDate, body.endDate, body.days, body.reason || '', requestedAt, body.requestedBy || ''
-      ).run();
-
-      context.waitUntil(backupToFirebase('leave_requests', id, { ...body, status: 'pending', requestedAt }));
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
+    
+    // APPROVE LEAVE REQUEST (And write to Roster)
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/approve") && method === "PUT") {
       const id = url.pathname.split("/")[3];
       const body: any = await request.json();
       const reviewedAt = new Date().toISOString();
 
+      // 1. Update Request Status
       await env.DB.prepare(`UPDATE leave_requests SET status = 'approved', reviewedBy = ?, reviewedAt = ? WHERE id = ?`)
         .bind(body.reviewedBy, reviewedAt, id).run();
 
+      // 2. Fetch the request details
       const reqData: any = await env.DB.prepare("SELECT * FROM leave_requests WHERE id = ?").bind(id).first();
       
       if (reqData) {
+        // CRUCIAL FIX: Look up the real D1 staff ID to handle old Firebase IDs
+        const staffRec: any = await env.DB.prepare("SELECT id FROM staff WHERE name = ?").bind(reqData.staffName).first();
+        const actualStaffId = staffRec ? staffRec.id : reqData.staffId;
+
         const start = new Date(reqData.startDate + 'T00:00:00');
         const end = new Date(reqData.endDate + 'T00:00:00');
         
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toISOString().split('T')[0];
-          await env.DB.prepare("DELETE FROM roster_entries WHERE staffId = ? AND date = ?").bind(reqData.staffId, dateStr).run();
+          
+          // Delete existing roster entry for this day
+          await env.DB.prepare("DELETE FROM roster_entries WHERE staffId = ? AND date = ?").bind(actualStaffId, dateStr).run();
+          
+          // Insert new leave entry with the CORRECT D1 staff ID
           await env.DB.prepare(`
             INSERT INTO roster_entries (id, staffId, staffName, staffDepartment, date, shiftTime, status, leaveRequestId, createdAt)
             VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
-          `).bind(crypto.randomUUID(), reqData.staffId, reqData.staffName, reqData.staffDepartment, dateStr, reqData.leaveType, id, new Date().toISOString()).run();
+          `).bind(crypto.randomUUID(), actualStaffId, reqData.staffName, reqData.staffDepartment, dateStr, reqData.leaveType, id, new Date().toISOString()).run();
         }
       }
 
@@ -521,27 +503,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/reject") && method === "PUT") {
-      const id = url.pathname.split("/")[3];
-      const body: any = await request.json();
-      const reviewedAt = new Date().toISOString();
-
-      await env.DB.prepare(`UPDATE leave_requests SET status = 'rejected', reviewedBy = ?, reviewedAt = ?, reviewNotes = ? WHERE id = ?`)
-        .bind(body.reviewedBy, reviewedAt, body.reviewNotes || '', id).run();
-
-      context.waitUntil(backupToFirebase('leave_requests', id, { status: 'rejected', reviewedBy: body.reviewedBy, reviewedAt, reviewNotes: body.reviewNotes }));
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname.startsWith("/api/leave-requests/") && method === "DELETE") {
-      const id = url.pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM leave_requests WHERE id = ?").bind(id).run();
-      await env.DB.prepare("DELETE FROM roster_entries WHERE leaveRequestId = ?").bind(id).run();
-
-      context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/leave_requests/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-        // ==========================================
+    // ==========================================
     // OVERTIME MODULE
     // ==========================================
 

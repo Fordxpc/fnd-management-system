@@ -31,6 +31,14 @@ const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 
 const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
+const selectStyle = {
+  padding: '10px', 
+  borderRadius: '6px', 
+  border: '1px solid #cbd5e1',
+  color: '#1e293b',
+  backgroundColor: '#ffffff'
+};
+
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -140,7 +148,6 @@ function LeavePage() {
 
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
   const [balanceTab, setBalanceTab] = useState<'annual' | 'sick' | 'other'>('annual');
-  const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
   const [selectedFormDept, setSelectedFormDept] = useState<string>('Ground Operations');
@@ -155,13 +162,23 @@ function LeavePage() {
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+  // FETCH DATA SAFELY
   const fetchData = useCallback(async () => {
     try {
-      const [staffData, leaveData, holidaysData] = await Promise.all([
+      const results = await Promise.allSettled([
         apiFetch('/staff'),
         apiFetch('/leave-requests'),
         apiFetch('/holidays')
       ]);
+
+      const getData = (index: number) => {
+        if (results[index].status === 'fulfilled') return (results[index] as PromiseFulfilledResult<any>).value;
+        return [];
+      };
+
+      const staffData = getData(0);
+      const leaveData = getData(1);
+      const holidaysData = getData(2);
 
       setStaffList(staffData);
       setRequests(leaveData);
@@ -202,7 +219,6 @@ function LeavePage() {
     return false;
   };
 
-  const canSeeDeptBalances = isDev || isManager || isSMT;
   const canSeeMyBalance = !isStaff || myStaff?.balanceVisible === true || isSMT || isManager;
 
   const canApproveRequest = (r: any): boolean => {
@@ -233,13 +249,6 @@ function LeavePage() {
 
   const usedDays: { [key: string]: number } = {};
   LEAVE_TYPES.forEach((t) => { usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0; });
-
-  const deptBalanceStaff = staffList
-    .filter((s: any) => {
-      if (s.isSMT === true || s.department === 'Administration') return false;
-      return canApproveThisDept(s.department);
-    })
-    .sort((a: any, b: any) => (a.sn || '').localeCompare(b.sn || ''));
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
@@ -314,7 +323,7 @@ function LeavePage() {
     try {
       await apiFetch(`/leave-requests/${deleteTarget.id}`, { method: 'DELETE' });
       toast.success('Leave request deleted.');
-      setDeleteTarget(null); // Close the modal
+      setDeleteTarget(null);
       fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
@@ -390,13 +399,13 @@ function LeavePage() {
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
           
           {!isStaff && (
-            <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required>
+            <select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>
               {FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
 
           {!isStaff ? (
-            <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required>
+            <select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required style={selectStyle}>
               <option value="">Select Staff Member...</option>
               {formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
             </select>
@@ -404,7 +413,7 @@ function LeavePage() {
             <input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />
           )}
 
-          <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)}>
+          <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={selectStyle}>
             {allowedLeaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
           <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -475,15 +484,7 @@ function LeavePage() {
           </table>
         )}
       </div>
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        title="Delete Leave Request?"
-        message={`Are you sure you want to permanently delete this leave request for ${deleteTarget?.staffName}?`}
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
+
       <ConfirmDialog
         isOpen={!!approveTarget}
         title="Approve Leave?"
@@ -500,6 +501,15 @@ function LeavePage() {
         placeholder="e.g. Operational requirements"
         onSubmit={confirmReject}
         onCancel={() => setRejectTarget(null)}
+      />
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Leave Request?"
+        message={`Are you sure you want to permanently delete this leave request for ${deleteTarget?.staffName}?`}
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
     </div>
   );
