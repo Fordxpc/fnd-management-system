@@ -651,22 +651,25 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* PREVIEW MODAL */}
+      {/* PREVIEW MODAL - FIXED SIZE FOR EXPORT PREVIEW */}
       {showPreview && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#141414', zIndex: 9999, overflowY: 'auto', padding: '20px' }}>
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ color: '#fff', margin: 0 }}>👁️ Export Preview</h3>
-              <button 
-                onClick={() => setShowPreview(false)}
-                style={{ background: '#333', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
-              >
-                ✕ Close
-              </button>
-            </div>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
+          
+          <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#141414', color: 'white', borderBottom: '1px solid #333', flexShrink: 0 }}>
+            <h3 style={{ margin: 0 }}>👁️ Export Preview (1200px Size)</h3>
+            <button 
+              onClick={() => setShowPreview(false)}
+              style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}
+            >
+              ✕ Close
+            </button>
+          </div>
+          
+          <div style={{ flex: 1, overflow: 'auto', background: '#333', padding: '40px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
             
-            <div style={{ background: '#0a0a0a', padding: '30px', borderRadius: '12px', border: '1px solid #333' }}>
-              {/* Render the active board for preview */}
+            {/* EXACT 1200px WIDE CANVAS */}
+            <div style={{ width: '1200px', background: '#141414', padding: '40px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', flexShrink: 0 }}>
+              
               {activeTab === 'runway' ? (
                 <div>
                   <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
@@ -736,18 +739,18 @@ function OpsBoardPage() {
                 </div>
               )}
             </div>
+          </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
-              <button 
-                onClick={() => {
-                  exportBoard(activeTab === 'runway' ? runwayRef : groundRef, activeTab === 'runway' ? 'FND_Runway_Board' : 'FND_Ground_Board');
-                }} 
-                className="add-staff-btn" 
-                style={{ background: '#059669', padding: '12px 24px', fontSize: '16px' }}
-              >
-                📸 Download JPG
-              </button>
-            </div>
+          <div style={{ padding: '16px', background: '#141414', textAlign: 'center', borderTop: '1px solid #333', flexShrink: 0 }}>
+            <button 
+              onClick={() => {
+                exportBoard(activeTab === 'runway' ? runwayRef : groundRef, activeTab === 'runway' ? 'FND_Runway_Board' : 'FND_Ground_Board');
+              }} 
+              className="add-staff-btn" 
+              style={{ background: '#059669', padding: '12px 24px', fontSize: '16px' }}
+            >
+              📸 Download JPG
+            </button>
           </div>
         </div>
       )}
