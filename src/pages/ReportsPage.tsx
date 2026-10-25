@@ -15,6 +15,35 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse' as const, fontSiz
 const thStyle = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' as const };
 const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' as const };
 
+// Helper function to get background color based on aircraft type
+const getAircraftColor = (type: string) => {
+  if (!type) return '#ffffff';
+  const t = type.toUpperCase();
+  if (t.includes('ATR-72')) return '#e0f2fe'; // Light Blue
+  if (t.includes('ATR-42')) return '#dcfce7'; // Light Green
+  if (t.includes('DH-8/300') || t.includes('DASH8-C')) return '#fef3c7'; // Light Yellow
+  if (t.includes('DH-8/200') || t.includes('DASH8-B')) return '#f3e8ff'; // Light Purple
+  return '#f8fafc'; // Default very light gray
+};
+
+// Legend Component
+const AircraftLegend = () => (
+  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '16px', flexWrap: 'wrap', fontSize: '11px', fontFamily: 'Arial, sans-serif' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ width: '12px', height: '12px', background: '#e0f2fe', border: '1px solid #000', display: 'inline-block' }}></span> ATR-72
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ width: '12px', height: '12px', background: '#dcfce7', border: '1px solid #000', display: 'inline-block' }}></span> ATR-42
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ width: '12px', height: '12px', background: '#fef3c7', border: '1px solid #000', display: 'inline-block' }}></span> DH-8/300 (Dash 8-C)
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <span style={{ width: '12px', height: '12px', background: '#f3e8ff', border: '1px solid #000', display: 'inline-block' }}></span> DH-8/200 (Dash 8-B)
+    </div>
+  </div>
+);
+
 function ReportsPage() {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'dfis' | 'wildlife' | 'fod' | 'stats' | 'traffic' | 'lights' | 'custom'>('dfis');
@@ -48,14 +77,8 @@ function ReportsPage() {
         apiFetch('/flights')
       ]);
 
-      // Helper to extract data or return empty array if one fails
       const getData = (index: number) => {
-        if (results[index].status === 'fulfilled') {
-          const data = (results[index] as PromiseFulfilledResult<any>).value;
-          console.log(`API Endpoint ${index} returned:`, data); // <-- DEBUG LOG
-          return data;
-        }
-        console.error(`API Endpoint ${index} FAILED:`, (results[index] as PromiseRejectedResult).reason);
+        if (results[index].status === 'fulfilled') return (results[index] as PromiseFulfilledResult<any>).value;
         return [];
       };
 
@@ -66,7 +89,6 @@ function ReportsPage() {
       const rosterRes = getData(4);
       const flightsRes = getData(5);
 
-      // Sort by date descending for reports
       setRampData([...rampRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
       setFodData([...fodRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
       setBirdData([...birdRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
@@ -74,7 +96,6 @@ function ReportsPage() {
       setStaffData(staffRes);
       setRosterData(rosterRes);
       setFlightData(flightsRes);
-      
       setLoading(false);
     } catch (err: any) {
       toast.error('Failed to load reports data: ' + err.message);
@@ -84,7 +105,7 @@ function ReportsPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000); // Poll every 15s
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -270,6 +291,7 @@ function ReportsPage() {
         {activeTab === 'dfis' && (
           <div>
             <ExcelHeader title="AIRCRAFT TURNAROUND LOG" subtitle="Funadhoo Airport" />
+            <AircraftLegend />
             <table style={tableStyle}>
               <thead>
                 <tr>
@@ -296,12 +318,12 @@ function ReportsPage() {
               </thead>
               <tbody>
                 {rampData.map((r, i) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} style={{ backgroundColor: getAircraftColor(r.acType) }}>
                     <td style={tdStyle}>{i + 1}</td>
                     <td style={tdStyle}>{r.date}</td>
                     <td style={tdStyle}>{r.checkIn}</td>
                     <td style={tdStyle}>{r.acReg}</td>
-                    <td style={tdStyle}>{r.acType}</td>
+                    <td style={tdStyle}><strong>{r.acType}</strong></td>
                     <td style={tdStyle}>Island Aviations Services</td>
                     <td style={tdStyle}>{r.fltNo}</td>
                     <td style={tdStyle}>{r.eta}</td>
@@ -342,6 +364,7 @@ function ReportsPage() {
         {activeTab === 'stats' && (
           <div>
             <ExcelHeader title="FUNADHOO AIRPORT" subtitle="Statistics Report" />
+            <AircraftLegend />
             <table style={tableStyle}>
               <thead>
                 <tr>
@@ -354,10 +377,10 @@ function ReportsPage() {
               </thead>
               <tbody>
                 {rampData.map(r => (
-                  <tr key={r.id}>
+                  <tr key={r.id} style={{ backgroundColor: getAircraftColor(r.acType) }}>
                     <td style={tdStyle}>{r.date}</td>
                     <td style={tdStyle}>MALDIVIAN</td>
-                    <td style={tdStyle}>{r.acType}</td>
+                    <td style={tdStyle}><strong>{r.acType}</strong></td>
                     <td style={tdStyle}>2</td>
                     <td style={tdStyle}>{r.paxInAdult || 0}</td>
                     <td style={tdStyle}>{r.paxInInf || 0}</td>
@@ -377,6 +400,7 @@ function ReportsPage() {
         {activeTab === 'traffic' && (
           <div>
             <ExcelHeader title="TRAFFIC MONTHLY REPORT (FUNADHOO AIRPORT)" subtitle="2026" />
+            <AircraftLegend />
             <table style={tableStyle}>
               <thead>
                 <tr>
@@ -394,8 +418,8 @@ function ReportsPage() {
                 {['DASH8-B', 'DASH8-C', 'ATR-72', 'ATR-42'].map(type => {
                   const flights = rampData.filter(r => r.acType?.includes(type) || (type === 'ATR-72' && r.acType?.includes('ATR-72')));
                   return (
-                    <tr key={type}>
-                      <td style={tdStyle}>1</td><td style={tdStyle}>Maldivian</td><td style={tdStyle}>{type}</td>
+                    <tr key={type} style={{ backgroundColor: getAircraftColor(type) }}>
+                      <td style={tdStyle}>1</td><td style={tdStyle}>Maldivian</td><td style={tdStyle}><strong>{type}</strong></td>
                       <td style={tdStyle}>{flights.length * 2}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxInAdult || 0), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxInInf || 0), 0)}</td>
