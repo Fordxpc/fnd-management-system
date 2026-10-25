@@ -18,6 +18,18 @@ const DEPARTMENTS = [
   'Safety', 
 ];
 
+// BULLETPROOF SELECT STYLE FOR MOBILE DARK MODE
+const selectStyle = {
+  padding: '6px',
+  border: '1px solid #cbd5e1',
+  borderRadius: '4px',
+  fontSize: '12px',
+  background: '#ffffff',
+  color: '#1e293b',
+  colorScheme: 'light' as const, // Forces browser to use light mode (dark text)
+  WebkitTextFillColor: '#1e293b', // iOS specific fix
+};
+
 function UsersPage() {
   const { profile } = useAuth();
   const role = profile?.role || '';
@@ -193,10 +205,10 @@ function UsersPage() {
             ➕ Pre-register User (before they log in)
           </div>
           <input type="email" placeholder="Email (must match their Firebase login) *" value={presetEmail} onChange={(e) => setPresetEmail(e.target.value)} required />
-          <select value={presetRole} onChange={(e) => setPresetRole(e.target.value)} style={{ color: '#1e293b' }}>
+          <select value={presetRole} onChange={(e) => setPresetRole(e.target.value)} style={selectStyle}>
             {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={presetDept} onChange={(e) => setPresetDept(e.target.value)} style={{ color: '#1e293b' }}>
+          <select value={presetDept} onChange={(e) => setPresetDept(e.target.value)} style={selectStyle}>
             {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
           <button type="submit" disabled={savingPreset}>{savingPreset ? 'Saving...' : 'Pre-register User'}</button>
@@ -208,7 +220,7 @@ function UsersPage() {
           <div className="collapsible-header" style={{ cursor: 'default' }}>
             <span><strong>⏳ Pre-registered (awaiting first login)</strong></span>
           </div>
-          <div className="collapsible-body">
+          <div className="collapsible-body" style={{ overflowX: 'auto' }}>
             <table>
               <thead>
                 <tr>
@@ -240,11 +252,11 @@ function UsersPage() {
         <div className="collapsible-header" style={{ cursor: 'default' }}>
           <span><strong>👥 Active Users</strong></span>
         </div>
-        <div className="collapsible-body">
+        <div className="collapsible-body" style={{ overflowX: 'auto' }}>
           {users.length === 0 ? (
             <div className="empty-state"><p>No users have logged in yet.</p></div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ minWidth: '600px' }}>
               <table>
                 <thead>
                   <tr>
@@ -262,7 +274,7 @@ function UsersPage() {
                           value={u.role || 'staff'}
                           onChange={(e) => handleChangeRole(u.id, e.target.value)}
                           disabled={!canEdit}
-                          style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', background: canEdit ? '#fff' : '#f1f5f9', color: '#1e293b' }}
+                          style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}
                         >
                           {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                         </select>
@@ -272,7 +284,7 @@ function UsersPage() {
                           value={u.department || 'Ground Operations'}
                           onChange={(e) => handleChangeDept(u.id, e.target.value)}
                           disabled={!canEdit}
-                          style={{ padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px', background: canEdit ? '#fff' : '#f1f5f9', color: '#1e293b' }}
+                          style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}
                         >
                           {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                         </select>
