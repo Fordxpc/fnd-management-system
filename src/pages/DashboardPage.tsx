@@ -96,8 +96,18 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
       const fodData = getData(6); const birdData = getData(7);
 
-      setStaff(staffData); setRoster(rosterData); setLeaveReqs(leaveData); setOtEntries(otData);
-      setFlights(flightsData); setLiveRamp(rampDraft);
+      // SAFETY NET: Deduplicate roster entries by Staff ID + Date
+      const uniqueRoster = Array.from(new Map(rosterData.map((item: any) => [`${item.staffId}-${item.date}`, item])).values());
+
+      // SAFETY NET: Deduplicate leave requests by Staff ID + Start Date + End Date
+      const uniqueLeaves = Array.from(new Map(leaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}`, item])).values());
+
+      setStaff(staffData); 
+      setRoster(uniqueRoster); 
+      setLeaveReqs(uniqueLeaves); 
+      setOtEntries(otData);
+      setFlights(flightsData); 
+      setLiveRamp(rampDraft);
       
       setTodayFOD(fodData.filter((f: any) => f.date === todayStr));
       
@@ -155,7 +165,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
 
-  // FIX: Keep flight visible unless officially Departed, Landed or Cancelled
   const upcomingFlights = flights
     .filter(f => {
       const isCompleted = ['Departed', 'Landed', 'Cancelled'].includes(f.status);
