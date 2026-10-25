@@ -195,7 +195,7 @@ function OpsBoardPage() {
     wrapper.style.top = '0';
     wrapper.style.width = '1200px';
     wrapper.style.background = '#141414';
-    wrapper.style.padding = '20px';
+    wrapper.style.padding = '40px';
 
     const clone = ref.current.cloneNode(true) as HTMLElement;
     clone.style.width = '100%';
@@ -208,7 +208,7 @@ function OpsBoardPage() {
       el.style.display = 'grid';
       el.style.gridTemplateColumns = 'repeat(3, 1fr)';
       el.style.gridAutoFlow = 'row';
-      el.style.gap = '12px';
+      el.style.gap = '16px';
       el.style.overflow = 'visible';
       el.style.width = '100%';
     });
@@ -338,30 +338,41 @@ function OpsBoardPage() {
             </div>
           )}
 
-          <div className="ops-board-export-area">
+          <div className="ops-board-export-area" style={{ background: '#141414', padding: '30px', borderRadius: '12px' }}>
             <div className="ops-board-fixed-width" ref={runwayRef}>
-              <div className="ops-board-title">FND RUNWAY INSPECTION BOARD</div>
-              <div className="ops-grid-3">
-                <div className="ops-card">
-                  <div className="ops-card-header" style={{ background: 'linear-gradient(135deg, #ef5350, #c62828)', color: 'white' }}>RWY 19</div>
-                  <div className="ops-card-body">
-                    {rwy19.length ? rwy19.map(n => <div key={n} className="ops-name-row">{n}</div>) : <div className="ops-name-row empty">—</div>}
+              <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
+                FND RUNWAY INSPECTION BOARD
+              </div>
+              <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                {/* RWY 19 */}
+                <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ background: '#e53935', color: '#fff', padding: '12px', textAlign: 'center', fontWeight: 'bold', fontSize: '14px', letterSpacing: '0.5px' }}>RWY 19</div>
+                  <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                    {rwy19.length ? rwy19.map(n => (
+                      <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, padding: '10px 4px', borderBottom: '1px solid #222' }}>{n}</div>
+                    )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                   </div>
                 </div>
-                <div className="ops-card">
-                  <div className="ops-card-header" style={{ background: 'linear-gradient(135deg, #42a5f5, #1565c0)', color: 'white' }}>RWY 01</div>
-                  <div className="ops-card-body">
-                    {rwy01.length ? rwy01.map(n => <div key={n} className="ops-name-row">{n}</div>) : <div className="ops-name-row empty">—</div>}
+                {/* RWY 01 */}
+                <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ background: '#1e88e5', color: '#fff', padding: '12px', textAlign: 'center', fontWeight: 'bold', fontSize: '14px', letterSpacing: '0.5px' }}>RWY 01</div>
+                  <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                    {rwy01.length ? rwy01.map(n => (
+                      <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, padding: '10px 4px', borderBottom: '1px solid #222' }}>{n}</div>
+                    )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                   </div>
                 </div>
-                <div className="ops-card">
-                  <div className="ops-card-header" style={{ background: 'linear-gradient(135deg, #ffee58, #fbc02d)', color: '#1a1a1a' }}>LIGHT INSPECTION</div>
-                  <div className="ops-card-body">
-                    {lights.length ? lights.map(n => <div key={n} className="ops-name-row">{n}</div>) : <div className="ops-name-row empty">—</div>}
+                {/* LIGHTS */}
+                <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ background: '#fdd835', color: '#111', padding: '12px', textAlign: 'center', fontWeight: 'bold', fontSize: '14px', letterSpacing: '0.5px' }}>LIGHT INSPECTION</div>
+                  <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
+                    {lights.length ? lights.map(n => (
+                      <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '12px', fontWeight: 700, padding: '10px 4px', borderBottom: '1px solid #222' }}>{n}</div>
+                    )) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                   </div>
                 </div>
               </div>
-              <div style={{ textAlign: 'center', color: '#aaa', marginTop: '20px', fontSize: '14px' }}>{new Date().toLocaleString()}</div>
+              <div style={{ textAlign: 'center', color: '#777', marginTop: '24px', fontSize: '12px' }}>{new Date().toLocaleString()}</div>
             </div>
           </div>
 
@@ -383,10 +394,7 @@ function OpsBoardPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
                 {tasks.map(t => (
                   <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-                    {/* Task Label on top for mobile, full width */}
                     <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
-                    
-                    {/* 3 Column Grid on mobile, flex-grow on desktop */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                       {staffPool.map(s => (
                         <label key={s} style={{ 
@@ -411,37 +419,42 @@ function OpsBoardPage() {
             </div>
           )}
 
-          <div className="ops-board-export-area">
+          <div className="ops-board-export-area" style={{ background: '#141414', padding: '30px', borderRadius: '12px' }}>
             <div className="ops-board-fixed-width" ref={groundRef}>
-              <div className="ops-board-title">FND FLIGHT OPERATIONS — GROUND TASK BOARD</div>
-              <div className="ops-grid-3">
+              <div style={{ textAlign: 'center', color: '#fff', fontSize: '16px', fontWeight: 900, letterSpacing: '1px', marginBottom: '24px', textTransform: 'uppercase' }}>
+                FND FLIGHT OPERATIONS — GROUND TASK BOARD
+              </div>
+              <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 {tasks.map(t => {
                   const assigned = groundAssign[t.id] || [];
                   return (
-                    <div key={t.id} className="ops-card">
-                      <div className="ops-card-header" style={{ background: t.color, color: t.text }}>{t.label}</div>
-                      <div className="ops-card-body">
+                    <div key={t.id} style={{ display: 'flex', flexDirection: 'column', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div style={{ background: t.color, color: t.text, padding: '12px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', letterSpacing: '0.5px' }}>{t.label}</div>
+                      <div style={{ background: '#0a0a0a', flex: 1, padding: '8px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
                         {assigned.length ? (
-                          assigned.map((n, idx) => (
-                            <div key={n} className="ops-name-row">
-                              {idx === 0 ? '⭐ ' : ''} {n}
+                          assigned.map(n => (
+                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '8px 4px', borderBottom: '1px solid #222' }}>
+                              {n}
                             </div>
                           ))
-                        ) : <div className="ops-name-row empty">—</div>}
+                        ) : <div style={{ textAlign: 'center', color: '#444', padding: '10px' }}>—</div>}
                       </div>
                     </div>
                   );
                 })}
               </div>
-              <div className="ops-notes">
-                <h4>📋 Operational Notes & Standing Instructions</h4>
-                <ol>
+
+              {/* NOTES SECTION */}
+              <div style={{ background: '#111', borderLeft: '4px solid #fbc02d', borderRadius: '8px', padding: '16px 20px', marginTop: '24px' }}>
+                <h4 style={{ color: '#fbc02d', margin: '0 0 12px', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES & STANDING INSTRUCTIONS</h4>
+                <ol style={{ color: '#e2e8f0', fontSize: '12px', paddingLeft: '20px', margin: 0, lineHeight: 1.6 }}>
                   <li>Aircraft cabin cleaning shall commence only after complete passenger disembarkation.</li>
                   <li>WCHR passengers shall be transported to the aircraft door during the departure phase.</li>
                   <li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door. Exit from the terminal area is prohibited until the aircraft is airborne.</li>
                 </ol>
               </div>
-              <div style={{ textAlign: 'center', color: '#aaa', marginTop: '20px', fontSize: '14px' }}>{new Date().toLocaleString()}</div>
+
+              <div style={{ textAlign: 'center', color: '#777', marginTop: '24px', fontSize: '12px' }}>{new Date().toLocaleString()}</div>
             </div>
           </div>
 
