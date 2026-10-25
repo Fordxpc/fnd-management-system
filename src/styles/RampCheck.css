@@ -65,7 +65,6 @@
   .no-print .quick-btn { flex: 1; min-width: 45%; font-size: 12px; }
 }
 
-
 /* ==========================================
    PRINT STYLES (MUST BE AT THE VERY BOTTOM)
    ========================================== */
@@ -130,6 +129,12 @@
   /* ==========================================
      THE FIX FOR MODAL PRINTING
      ========================================== */
+  
+  /* When printing the modal, hide EVERYTHING else on the page */
+  body.printing-modal .page-content > *:not(.modal-backdrop) {
+    display: none !important;
+  }
+
   body.printing-modal .modal-backdrop { 
     display: block !important;
     position: absolute !important; 

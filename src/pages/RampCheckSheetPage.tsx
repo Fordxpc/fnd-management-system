@@ -250,7 +250,9 @@ function RampCheckSheetPage() {
       )}
 
       {activeSubTab === 'reports' && (
-        <RampReportsPage onEdit={handleEditReport} />
+        <div className="no-print">
+          <RampReportsPage onEdit={handleEditReport} />
+        </div>
       )}
     </div>
   );
