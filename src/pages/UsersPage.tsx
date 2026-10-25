@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebase';
 import { apiFetch } from '../lib/api';
@@ -18,16 +18,15 @@ const DEPARTMENTS = [
   'Safety', 
 ];
 
-// BULLETPROOF SELECT STYLE FOR MOBILE DARK MODE
-const selectStyle = {
+// Safely typed CSS object
+const selectStyle: React.CSSProperties = {
   padding: '6px',
   border: '1px solid #cbd5e1',
   borderRadius: '4px',
   fontSize: '12px',
   background: '#ffffff',
   color: '#1e293b',
-  colorScheme: 'light' as const, // Forces browser to use light mode (dark text)
-  WebkitTextFillColor: '#1e293b', // iOS specific fix
+  colorScheme: 'light', // Fixes mobile dark mode text
 };
 
 function UsersPage() {
@@ -48,7 +47,6 @@ function UsersPage() {
   const [presetDept, setPresetDept] = useState<string>('Ground Operations');
   const [savingPreset, setSavingPreset] = useState<boolean>(false);
 
-  // FETCH DATA FROM D1
   const fetchData = useCallback(async () => {
     if (!canView) {
       setLoading(false);
