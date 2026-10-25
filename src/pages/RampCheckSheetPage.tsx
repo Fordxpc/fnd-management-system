@@ -25,8 +25,24 @@ const INITIAL_FORM = {
 
 function RampCheckSheetPage() {
   const { profile } = useAuth();
-  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
+  
+  // STRICT ACCESS BLOCK FOR STAFF
+  const role = profile?.role || '';
+  const isSMTOrAbove = ['developer', 'manager', 'admin', 'owner', 'smt'].includes(role) || profile?.isSMT === true;
+  
+  if (!isSMTOrAbove) {
+    return (
+      <div className="page-content">
+        <div className="empty-state">
+          <h2>Access Denied</h2>
+          <p>You do not have permission to view the Flight Operation sheet. Please use the public live link if provided.</p>
+        </div>
+      </div>
+    );
+  }
 
+  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(role);
+  
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
   const [formData, setFormData] = useState<Record<string, string>>(INITIAL_FORM);
   const [acTypes, setAcTypes] = useState<string[]>([]);
@@ -148,8 +164,7 @@ function RampCheckSheetPage() {
         setCurrentDocId(ref.id);
         toast.success('Record saved!');
       }
-      // REMOVED: await setDoc(doc(db, 'ramp_live_draft', 'current'), {}); 
-      // Draft stays live for external parties.
+      await setDoc(doc(db, 'ramp_live_draft', 'current'), {});
     } catch (err: any) { toast.error(err.message); }
   };
 
@@ -157,7 +172,6 @@ function RampCheckSheetPage() {
     if (!isManager) return;
     setFormData(INITIAL_FORM);
     setCurrentDocId(null);
-    // Clears live draft only when explicitly resetting to new record
     setDoc(doc(db, 'ramp_live_draft', 'current'), {});
     toast.success('Form cleared');
   };
@@ -217,7 +231,6 @@ function RampCheckSheetPage() {
                 <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
               </>
             )}
-            {!isManager && <span style={{ color: '#dc2626', fontWeight: 600, alignSelf: 'center' }}>🔒 View Only (Live Sync)</span>}
           </div>
 
           <div className="ramp-container">
