@@ -175,17 +175,26 @@ function RosterPage() {
 
   const holidayDateSet = new Set<string>(holidays.map((h: any) => h.date));
 
-  // FETCH DATA
+  // FETCH DATA (SAFELY)
   const fetchData = useCallback(async () => {
     try {
-      const [staffData, rosterData, holidaysData] = await Promise.all([
+      const results = await Promise.allSettled([
         apiFetch('/staff'),
         apiFetch('/roster'),
         apiFetch('/holidays')
       ]);
-      setStaff(staffData);
-      setEntries(rosterData);
-      setHolidays(holidaysData);
+
+      const getData = (index: number) => {
+        if (results[index].status === 'fulfilled') {
+          return (results[index] as PromiseFulfilledResult<any>).value;
+        }
+        console.error(`API endpoint ${index} failed:`, (results[index] as PromiseRejectedResult).reason);
+        return []; // Return empty array so the page still loads
+      };
+
+      setStaff(getData(0));
+      setEntries(getData(1));
+      setHolidays(getData(2));
       setLoading(false);
     } catch (err: any) {
       toast.error(err.message);
@@ -566,7 +575,7 @@ function RosterPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff.</td></tr> : visibleStaff.map((s) => (
+                {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff found for this department.</td></tr> : visibleStaff.map((s) => (
                   <tr key={s.id}>
                     <td className="col-sn">{s.sn || '—'}</td><td className="col-name">{s.name}</td>
                     {week.map((d) => {
@@ -574,7 +583,12 @@ function RosterPage() {
                       const isInPeriod = dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
                       if (!isInPeriod) return <td key={dStr} className="out-of-period-cell">&nbsp;</td>;
 
-                      const entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
+                      // FIX: Match by ID first, then fallback to Name for migrated data
+                      let entry = entries.find((e) => e.staffId === s.id && e.date === dStr);
+                      if (!entry) {
+                        entry = entries.find((e) => e.staffName === s.name && e.date === dStr);
+                      }
+
                       let displayValue = ''; let cellClass = 'empty-cell';
                       let cellEditable = canEditDept(s.department);
 
