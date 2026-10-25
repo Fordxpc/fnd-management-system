@@ -17,15 +17,14 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
   // State to hold which field is waiting for confirmation
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  // State to hold the editable time in the popup
+  const [tempTime, setTempTime] = useState<string>('');
 
   const executeFillNow = () => {
-    if (!confirmId) return;
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
+    if (!confirmId || !tempTime) return;
     
-    // Trigger the actual change
-    handleChange({ target: { id: confirmId, value: `${hh}:${mm}` } } as any);
+    // Trigger the actual change with the edited time
+    handleChange({ target: { id: confirmId, value: tempTime } } as any);
     
     // Close the popup
     setConfirmId(null);
@@ -33,7 +32,14 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
   const handleTimeClick = (id: string) => {
     if (!isManager) return;
-    // Open the popup instead of filling immediately
+    
+    // Get current time and pre-fill the input
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    setTempTime(`${hh}:${mm}`);
+    
+    // Open the popup
     setConfirmId(id);
   };
 
@@ -230,10 +236,30 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
       {confirmId && (
         <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>
-            <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Insert Current Time?</h3>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '24px' }}>
-              This will fill the field with the current system time.
+            <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time</h3>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
+              Edit the time below if needed.
             </p>
+            
+            <input 
+              type="time" 
+              value={tempTime} 
+              onChange={(e) => setTempTime(e.target.value)} 
+              style={{ 
+                fontSize: '24px', 
+                padding: '10px', 
+                textAlign: 'center', 
+                borderRadius: '8px', 
+                border: '2px solid #cbd5e1',
+                width: '160px',
+                margin: '0 auto 24px auto',
+                display: 'block',
+                color: '#1e293b',
+                backgroundColor: '#ffffff',
+                colorScheme: 'light'
+              }} 
+            />
+
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
               <button 
                 onClick={() => setConfirmId(null)} 
