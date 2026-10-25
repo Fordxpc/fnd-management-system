@@ -79,40 +79,25 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const isManager = canSeeAllDepartments; 
   const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
 
-  // FETCH ALL DATA SAFELY (Fixes the Flight Schedule crash)
   const fetchDashboardData = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
-        apiFetch('/staff'),
-        apiFetch('/roster'),
-        apiFetch('/leave-requests'),
-        apiFetch('/overtime'),
-        apiFetch('/flights'),
-        apiFetch('/ramp/draft'),
-        apiFetch('/fod'),
-        apiFetch('/wildlife')
+        apiFetch('/staff'), apiFetch('/roster'), apiFetch('/leave-requests'),
+        apiFetch('/overtime'), apiFetch('/flights'), apiFetch('/ramp/draft'),
+        apiFetch('/fod'), apiFetch('/wildlife')
       ]);
 
       const getData = (index: number) => {
         if (results[index].status === 'fulfilled') return (results[index] as PromiseFulfilledResult<any>).value;
-        return []; // Return empty array if an endpoint fails
+        return [];
       };
 
-      const staffData = getData(0);
-      const rosterData = getData(1);
-      const leaveData = getData(2);
-      const otData = getData(3);
-      const flightsData = getData(4);
-      const rampDraft = getData(5);
-      const fodData = getData(6);
-      const birdData = getData(7);
+      const staffData = getData(0); const rosterData = getData(1); const leaveData = getData(2);
+      const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
+      const fodData = getData(6); const birdData = getData(7);
 
-      setStaff(staffData);
-      setRoster(rosterData);
-      setLeaveReqs(leaveData);
-      setOtEntries(otData);
-      setFlights(flightsData);
-      setLiveRamp(rampDraft);
+      setStaff(staffData); setRoster(rosterData); setLeaveReqs(leaveData); setOtEntries(otData);
+      setFlights(flightsData); setLiveRamp(rampDraft);
       
       setTodayFOD(fodData.filter((f: any) => f.date === todayStr));
       
@@ -147,7 +132,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     const interval = setInterval(() => {
       fetchDashboardData();
       fetchWeather();
-    }, 30000);
+    }, 5000);
     
     return () => clearInterval(interval);
   }, [fetchDashboardData, fetchWeather]);
@@ -161,7 +146,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
   const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
-  const pendingLeave = leaveReqs.filter((r) => r.status === 'pending');
+  const pendingLeave = leaveReqs.filter((r) => r.status?.toLowerCase() === 'pending');
 
   const userDept = profile?.department;
   
@@ -188,18 +173,21 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   if (baseStatus === 'On Time') baseStatus = 'Scheduled';
   let liveStatus = baseStatus;
   
-  if (nextFlight && liveRamp && liveRamp.fltNo === nextFlight.flightNo) {
+  const cleanFlightStr = (str: string) => (str || '').replace(/\s+/g, '').toUpperCase();
+  
+  // UPDATED FLIGHT STATUS LOGIC HERE
+  if (nextFlight && liveRamp && cleanFlightStr(liveRamp.fltNo) === cleanFlightStr(nextFlight.flightNo)) {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
     else if (liveRamp.ata) liveStatus = 'Landed';
-    else if (liveRamp.eta || liveRamp.sta) liveStatus = 'Expected';
+    else if (liveRamp.eta) liveStatus = 'En Route'; 
   }
 
   let myLeaveUsed = 0;
   if (myStaff) {
     const years = getYearsOfService(myStaff.joinDate || '');
     const renews = years >= 2;
-    leaveReqs.filter(r => r.staffId === myStaff.id && r.status === 'approved' && r.leaveType === 'ANNUAL LEAVE').forEach(r => {
+    leaveReqs.filter(r => r.staffId === myStaff.id && r.status?.toLowerCase() === 'approved' && r.leaveType === 'ANNUAL LEAVE').forEach(r => {
       if (!renews) myLeaveUsed += r.days || 0; 
       else if ((r.startDate || '').startsWith(new Date().getFullYear().toString())) myLeaveUsed += r.days || 0;
     });
@@ -244,7 +232,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
+            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : liveStatus === 'En Route' ? '#8b5cf6' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
@@ -262,8 +250,9 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>SCHEDULED</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{nextFlight.arrivalTime || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>SCHED / ETA</div>
+                  {/* UPDATED TO SHOW LIVE ETA IF AVAILABLE */}
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{liveRamp?.eta || nextFlight.arrivalTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ARRIVAL</div>

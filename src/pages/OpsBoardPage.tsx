@@ -74,20 +74,17 @@ function OpsBoardPage() {
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
-  // Fetch Data via API
   const fetchData = useCallback(async () => {
     try {
-      const [rwData, grData, fodData] = await Promise.all([
-        apiFetch('/ops/runway'),
-        apiFetch('/ops/ground'),
-        apiFetch('/fod')
+      const results = await Promise.allSettled([
+        apiFetch('/ops/runway'), apiFetch('/ops/ground'), apiFetch('/fod')
       ]);
-      setRunwayHistory(rwData);
-      setGroundHistory(grData);
-      setFodList(fodData);
-    } catch (err: any) {
-      console.error(err);
-    }
+      const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
+      
+      setRunwayHistory(getData(0));
+      setGroundHistory(getData(1));
+      setFodList(getData(2));
+    } catch (err: any) { console.error(err); }
   }, []);
 
   useEffect(() => {
@@ -96,7 +93,6 @@ function OpsBoardPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  // Calculate base scale to fit screen
   useEffect(() => {
     if (!showPreview) return;
     const handleResize = () => {
@@ -109,7 +105,6 @@ function OpsBoardPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, [showPreview]);
 
-  // Draft Saving
   useEffect(() => {
     const saved = localStorage.getItem('ops_board_draft');
     if (saved) {
@@ -129,20 +124,53 @@ function OpsBoardPage() {
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
     if (!canEdit) return;
-    if (zone !== '19' && rwy19.includes(name)) { toast.error('Already assigned to RWY 19'); return; }
-    if (zone !== '01' && rwy01.includes(name)) { toast.error('Already assigned to RWY 01'); return; }
-    if (zone !== 'lights' && lights.includes(name)) { toast.error('Already assigned to Lights'); return; }
+    
+    const has19 = rwy19.some(n => n.replace('⭐ ', '') === name);
+    const has01 = rwy01.some(n => n.replace('⭐ ', '') === name);
+    const hasLights = lights.some(n => n.replace('⭐ ', '') === name);
 
-    if (zone === '19') setRwy19(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
-    if (zone === '01') setRwy01(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
-    if (zone === 'lights') setLights(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+    if (zone !== '19' && has19) { toast.error('Already assigned to RWY 19'); return; }
+    if (zone !== '01' && has01) { toast.error('Already assigned to RWY 01'); return; }
+    if (zone !== 'lights' && hasLights) { toast.error('Already assigned to Lights'); return; }
+
+    if (zone === '19') setRwy19(prev => has19 ? prev.filter(n => n.replace('⭐ ', '') !== name) : [...prev, name]);
+    if (zone === '01') setRwy01(prev => has01 ? prev.filter(n => n.replace('⭐ ', '') !== name) : [...prev, name]);
+    if (zone === 'lights') setLights(prev => hasLights ? prev.filter(n => n.replace('⭐ ', '') !== name) : [...prev, name]);
+  };
+
+  const toggleRunwayLeader = (zone: '19' | '01' | 'lights', name: string) => {
+    const applyStar = (arr: string[]) => arr.map(n => {
+      if (n.replace('⭐ ', '') === name) {
+        return n.startsWith('⭐ ') ? name : `⭐ ${name}`;
+      }
+      return n;
+    });
+    if (zone === '19') setRwy19(prev => applyStar(prev));
+    if (zone === '01') setRwy01(prev => applyStar(prev));
+    if (zone === 'lights') setLights(prev => applyStar(prev));
   };
 
   const toggleGround = (taskId: string, name: string) => {
     if (!canEdit) return;
     setGroundAssign(prev => {
       const current = prev[taskId] || [];
-      const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name];
+      const isAssigned = current.some(n => n.replace('⭐ ', '') === name);
+      const updated = isAssigned 
+        ? current.filter(n => n.replace('⭐ ', '') !== name) 
+        : [...current, name];
+      return { ...prev, [taskId]: updated };
+    });
+  };
+
+  const toggleGroundLeader = (taskId: string, name: string) => {
+    setGroundAssign(prev => {
+      const current = prev[taskId] || [];
+      const updated = current.map(n => {
+        if (n.replace('⭐ ', '') === name) {
+          return n.startsWith('⭐ ') ? name : `⭐ ${name}`;
+        }
+        return n;
+      });
       return { ...prev, [taskId]: updated };
     });
   };
@@ -163,10 +191,7 @@ function OpsBoardPage() {
 
   const handleClearBoard = () => {
     if (!window.confirm("Are you sure you want to clear all selections?")) return;
-    setRwy19([]);
-    setRwy01([]);
-    setLights([]);
-    setGroundAssign({});
+    setRwy19([]); setRwy01([]); setLights([]); setGroundAssign({});
     localStorage.removeItem('ops_board_draft');
     toast.success('Board cleared.');
   };
@@ -175,11 +200,7 @@ function OpsBoardPage() {
     try {
       await apiFetch('/ops/runway', {
         method: 'POST',
-        body: JSON.stringify({
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toLocaleTimeString(),
-          rwy19, rwy01, lights
-        })
+        body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), rwy19, rwy01, lights })
       });
       toast.success('Runway board saved to history!');
       fetchData();
@@ -190,11 +211,7 @@ function OpsBoardPage() {
     try {
       await apiFetch('/ops/ground', {
         method: 'POST',
-        body: JSON.stringify({
-          date: new Date().toISOString().split('T')[0],
-          time: new Date().toLocaleTimeString(),
-          assignments: groundAssign
-        })
+        body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), assignments: groundAssign })
       });
       toast.success('Ground board saved to history!');
       fetchData();
@@ -208,11 +225,7 @@ function OpsBoardPage() {
     try {
       await apiFetch('/fod', {
         method: 'POST',
-        body: JSON.stringify({
-          ...fodForm,
-          grams: Number(fodForm.grams),
-          loggedBy: user?.email || ''
-        })
+        body: JSON.stringify({ ...fodForm, grams: Number(fodForm.grams), loggedBy: user?.email || '' })
       });
       toast.success('FOD entry recorded!');
       setFodForm({ date: formatDate(new Date()), grams: '', remarks: '' });
@@ -235,55 +248,31 @@ function OpsBoardPage() {
     toast.info('Generating high-quality image...');
     
     const wrapper = document.createElement('div');
-    wrapper.style.position = 'fixed';
-    wrapper.style.left = '-9999px';
-    wrapper.style.top = '0';
-    wrapper.style.width = '700px';
-    wrapper.style.background = '#141414';
-    wrapper.style.padding = '20px';
+    wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; wrapper.style.top = '0';
+    wrapper.style.width = '700px'; wrapper.style.background = '#141414'; wrapper.style.padding = '20px';
 
     const clone = ref.current.cloneNode(true) as HTMLElement;
-    clone.style.width = '100%';
-    clone.style.background = 'transparent';
-    clone.style.overflow = 'visible';
+    clone.style.width = '100%'; clone.style.background = 'transparent'; clone.style.overflow = 'visible';
 
     const grids = clone.querySelectorAll('.ops-grid-3');
     grids.forEach(g => {
       const el = g as HTMLElement;
-      el.style.display = 'grid';
-      el.style.gridTemplateColumns = 'repeat(3, 1fr)';
-      el.style.gridAutoFlow = 'row';
-      el.style.gap = '8px';
-      el.style.overflow = 'visible';
-      el.style.width = '100%';
+      el.style.display = 'grid'; el.style.gridTemplateColumns = 'repeat(3, 1fr)';
+      el.style.gridAutoFlow = 'row'; el.style.gap = '8px'; el.style.overflow = 'visible'; el.style.width = '100%';
     });
 
     clone.querySelectorAll('.ops-card').forEach(c => {
       const el = c as HTMLElement;
-      el.style.width = '100%';
-      el.style.minWidth = '0';
-      el.style.overflow = 'hidden';
-      (el.style as any).breakInside = 'avoid';
+      el.style.width = '100%'; el.style.minWidth = '0'; el.style.overflow = 'hidden'; (el.style as any).breakInside = 'avoid';
     });
 
-    wrapper.appendChild(clone);
-    document.body.appendChild(wrapper);
-    void wrapper.offsetHeight;
+    wrapper.appendChild(clone); document.body.appendChild(wrapper); void wrapper.offsetHeight;
 
     try {
-      const canvas = await html2canvas(wrapper, {
-        scale: 2,
-        backgroundColor: '#141414',
-        width: 700,
-        height: wrapper.scrollHeight,
-        windowWidth: 700,
-        windowHeight: wrapper.scrollHeight
-      });
+      const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: '#141414', width: 700, height: wrapper.scrollHeight, windowWidth: 700, windowHeight: wrapper.scrollHeight });
       document.body.removeChild(wrapper);
       const link = document.createElement('a');
-      link.download = `${filename}.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.95);
-      link.click();
+      link.download = `${filename}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.95); link.click();
       toast.success('Downloaded successfully!');
     } catch (err: any) {
       document.body.removeChild(wrapper);
@@ -359,26 +348,45 @@ function OpsBoardPage() {
         <button className={`ops-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📊 History & Reports</button>
       </div>
 
-      {/* ===== RUNWAY TAB ===== */}
       {activeTab === 'runway' && (
         <div>
           {canEdit && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff (Cannot be in multiple zones)</h3>
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
-                {staffPool.map(s => (
-                  <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
-                      <button onClick={() => handleRemoveStaff(s)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}>✖</button>
+                {staffPool.map(s => {
+                  const is19 = rwy19.some(n => n.replace('⭐ ', '') === s);
+                  const is19Leader = rwy19.includes(`⭐ ${s}`);
+                  const is01 = rwy01.some(n => n.replace('⭐ ', '') === s);
+                  const is01Leader = rwy01.includes(`⭐ ${s}`);
+                  const isLights = lights.some(n => n.replace('⭐ ', '') === s);
+                  const isLightsLeader = lights.includes(`⭐ ${s}`);
+
+                  return (
+                    <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
+                        <button onClick={() => handleRemoveStaff(s)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}>✖</button>
+                      </div>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <label style={{ fontSize: '11px' }}><input type="checkbox" checked={is19} onChange={() => toggleRunway('19', s)} disabled={is01 || isLights} /> RWY 19</label>
+                          {is19 && <button onClick={(e) => { e.preventDefault(); toggleRunwayLeader('19', s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '12px' }}>{is19Leader ? '⭐' : '☆'}</button>}
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <label style={{ fontSize: '11px' }}><input type="checkbox" checked={is01} onChange={() => toggleRunway('01', s)} disabled={is19 || isLights} /> RWY 01</label>
+                          {is01 && <button onClick={(e) => { e.preventDefault(); toggleRunwayLeader('01', s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '12px' }}>{is01Leader ? '⭐' : '☆'}</button>}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          <label style={{ fontSize: '11px' }}><input type="checkbox" checked={isLights} onChange={() => toggleRunway('lights', s)} disabled={is19 || is01} /> Lights</label>
+                          {isLights && <button onClick={(e) => { e.preventDefault(); toggleRunwayLeader('lights', s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '12px' }}>{isLightsLeader ? '⭐' : '☆'}</button>}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy19.includes(s)} onChange={() => toggleRunway('19', s)} disabled={rwy01.includes(s) || lights.includes(s)} /> RWY 19</label>
-                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy01.includes(s)} onChange={() => toggleRunway('01', s)} disabled={rwy19.includes(s) || lights.includes(s)} /> RWY 01</label>
-                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={lights.includes(s)} onChange={() => toggleRunway('lights', s)} disabled={rwy19.includes(s) || rwy01.includes(s)} /> Lights</label>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -421,7 +429,7 @@ function OpsBoardPage() {
           {canEdit && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
               <button className="quick-btn" style={{ background: '#dc2626', color: 'white' }} onClick={handleClearBoard}>🔄 Refresh</button>
-              <button className="quick-btn" style={{ background: '#3b82f6', color: 'white' }} onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>👁️ Export View</button>
+              <button className="quick-btn" style={{ background: '#3b82f6', color: 'white' }} onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>⭐ View & Export Board</button>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
               <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
             </div>
@@ -429,7 +437,6 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* ===== GROUND TAB ===== */}
       {activeTab === 'ground' && (
         <div>
           {canEdit && (
@@ -440,16 +447,25 @@ function OpsBoardPage() {
                   <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
                     <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
-                      {staffPool.map(s => (
-                        <label key={s} style={{ 
-                          fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', 
-                          background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', 
-                          padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer'
-                        }}>
-                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
-                          <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
-                        </label>
-                      ))}
+                      {staffPool.map(s => {
+                        const isAssigned = (groundAssign[t.id] || []).some(n => n.replace('⭐ ', '') === s);
+                        const isLeader = (groundAssign[t.id] || []).includes(`⭐ ${s}`);
+                        return (
+                          <label key={s} style={{ 
+                            fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', 
+                            background: isAssigned ? '#dbeafe' : '#f8fafc', 
+                            padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer'
+                          }}>
+                            <input type="checkbox" checked={isAssigned} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
+                            <span style={{ lineHeight: '1.2', wordBreak: 'break-word', flex: 1 }}>{s}</span>
+                            {isAssigned && (
+                              <button onClick={(e) => { e.preventDefault(); toggleGroundLeader(t.id, s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '14px' }} title="Mark as Leader">
+                                {isLeader ? '⭐' : '☆'}
+                              </button>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -498,7 +514,7 @@ function OpsBoardPage() {
           {canEdit && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
               <button className="quick-btn" style={{ background: '#dc2626', color: 'white' }} onClick={handleClearBoard}>🔄 Refresh</button>
-              <button className="quick-btn" style={{ background: '#3b82f6', color: 'white' }} onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>👁️ Export View</button>
+              <button className="quick-btn" style={{ background: '#3b82f6', color: 'white' }} onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>⭐ View & Export Board</button>
               <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
               <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
             </div>
@@ -506,27 +522,15 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* ===== FOD TAB ===== */}
       {activeTab === 'fod' && (
         <div className="dash-grid">
           <div className="dash-card">
             <h3>🪨 Log FOD Collection</h3>
             <form onSubmit={handleSaveFOD} className="staff-form" style={{ gridTemplateColumns: '1fr', padding: 0, boxShadow: 'none' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date</label>
-                <input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} required />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Stone Count (grams)</label>
-                <input type="number" placeholder="e.g. 15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Remarks / Details</label>
-                <input placeholder="e.g. Small rocks found near RWY 19" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required />
-              </div>
-              <button type="submit" disabled={fodSubmitting} style={{ gridColumn: 'span 1' }}>
-                {fodSubmitting ? 'Saving...' : 'Save FOD Entry'}
-              </button>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date</label><input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} required /></div>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Stone Count (grams)</label><input type="number" placeholder="e.g. 15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required /></div>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Remarks / Details</label><input placeholder="e.g. Small rocks found near RWY 19" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required /></div>
+              <button type="submit" disabled={fodSubmitting} style={{ gridColumn: 'span 1' }}>{fodSubmitting ? 'Saving...' : 'Save FOD Entry'}</button>
             </form>
           </div>
 
@@ -544,9 +548,7 @@ function OpsBoardPage() {
                       <td style={{ fontWeight: 800, color: '#dc2626' }}>{f.grams}g</td>
                       <td style={{ fontSize: '12px' }}>{f.remarks}</td>
                       <td style={{ fontSize: '11px', color: '#64748b' }}>{f.loggedBy.split('@')[0]}</td>
-                      <td>
-                        {canEdit && <button className="delete-btn" onClick={() => handleDeleteFOD(f.id)}>Delete</button>}
-                      </td>
+                      <td>{canEdit && <button className="delete-btn" onClick={() => handleDeleteFOD(f.id)}>Delete</button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -556,7 +558,6 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* ===== HISTORY TAB ===== */}
       {activeTab === 'history' && (
         <div>
           <div className="dash-stats" style={{ marginBottom: '20px' }}>
@@ -675,13 +676,12 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* PREVIEW MODAL */}
       {showPreview && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
           
           <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#141414', color: 'white', borderBottom: '1px solid #333', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <h3 style={{ margin: 0 }}>👁️ Export Preview</h3>
+              <h3 style={{ margin: 0 }}>⭐ Export Preview</h3>
               
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#222', padding: '4px 8px', borderRadius: '6px' }}>
                 <button onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.25))} style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
