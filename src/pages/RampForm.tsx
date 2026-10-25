@@ -17,14 +17,18 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
   // State to hold which field is waiting for confirmation
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // State to hold the editable time in the popup
-  const [tempTime, setTempTime] = useState<string>('');
+  
+  // State to hold the editable time in the popup (split into hours and minutes to force 24h format)
+  const [tempHour, setTempHour] = useState<string>('00');
+  const [tempMin, setTempMin] = useState<string>('00');
 
   const executeFillNow = () => {
-    if (!confirmId || !tempTime) return;
+    if (!confirmId) return;
+    
+    const finalTime = `${tempHour}:${tempMin}`;
     
     // Trigger the actual change with the edited time
-    handleChange({ target: { id: confirmId, value: tempTime } } as any);
+    handleChange({ target: { id: confirmId, value: finalTime } } as any);
     
     // Close the popup
     setConfirmId(null);
@@ -33,11 +37,10 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
   const handleTimeClick = (id: string) => {
     if (!isManager) return;
     
-    // Get current time and pre-fill the input
+    // Get current time and pre-fill the dropdowns
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    setTempTime(`${hh}:${mm}`);
+    setTempHour(String(now.getHours()).padStart(2, '0'));
+    setTempMin(String(now.getMinutes()).padStart(2, '0'));
     
     // Open the popup
     setConfirmId(id);
@@ -236,29 +239,36 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
       {confirmId && (
         <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>
-            <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time</h3>
+            <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time (24h)</h3>
             <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
-              Edit the time below if needed.
+              Adjust the time below.
             </p>
             
-            <input 
-              type="time" 
-              value={tempTime} 
-              onChange={(e) => setTempTime(e.target.value)} 
-              style={{ 
-                fontSize: '24px', 
-                padding: '10px', 
-                textAlign: 'center', 
-                borderRadius: '8px', 
-                border: '2px solid #cbd5e1',
-                width: '160px',
-                margin: '0 auto 24px auto',
-                display: 'block',
-                color: '#1e293b',
-                backgroundColor: '#ffffff',
-                colorScheme: 'light'
-              }} 
-            />
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', margin: '0 auto 24px auto' }}>
+              <select 
+                value={tempHour} 
+                onChange={(e) => setTempHour(e.target.value)} 
+                style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}
+              >
+                {Array.from({ length: 24 }).map((_, i) => {
+                  const h = String(i).padStart(2, '0');
+                  return <option key={h} value={h}>{h}</option>;
+                })}
+              </select>
+              
+              <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>:</span>
+              
+              <select 
+                value={tempMin} 
+                onChange={(e) => setTempMin(e.target.value)} 
+                style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}
+              >
+                {Array.from({ length: 60 }).map((_, i) => {
+                  const m = String(i).padStart(2, '0');
+                  return <option key={m} value={m}>{m}</option>;
+                })}
+              </select>
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
               <button 
