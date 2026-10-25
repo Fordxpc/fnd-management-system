@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from './auth';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
 import Dashboard from './Dashboard';
 import PublicLiveView from './pages/PublicLiveView';
@@ -36,13 +36,14 @@ function App() {
       // 1. Log in first
       const cred = await login(email, password);
 
-      // 2. Fetch the TRUE department from the STAFF collection
+      // 2. Fetch the TRUE department from the STAFF collection (client-side filtering for accuracy)
       let staffDept = "";
       try {
-        const staffQ = query(collection(db, "staff"), where("email", "==", email.toLowerCase()));
-        const staffSnap = await getDocs(staffQ);
-        if (!staffSnap.empty) {
-          staffDept = staffSnap.docs[0].data().department || "";
+        const emailLower = email.trim().toLowerCase();
+        const staffSnap = await getDocs(collection(db, "staff"));
+        const match = staffSnap.docs.find(d => (d.data().email || "").trim().toLowerCase() === emailLower);
+        if (match) {
+          staffDept = match.data().department || "";
         }
       } catch (e) { console.warn(e); }
 

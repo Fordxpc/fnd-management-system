@@ -15,20 +15,24 @@ export function AuthProvider({ children }: any) {
       setUser(currentUser);
 
       if (currentUser) {
-        const email = (currentUser.email || "").toLowerCase();
+        const email = (currentUser.email || "").trim().toLowerCase();
         
         try {
           // 1. Get the real data from the STAFF collection
           let staffData: any = null;
           try {
-            const staffQ = query(collection(db, "staff"), where("email", "==", email));
-            const staffSnap = await getDocs(staffQ);
-            if (!staffSnap.empty) {
-              staffData = staffSnap.docs[0].data();
+            // Fetch all staff and filter client-side to prevent case-sensitivity issues in Firestore
+            const staffSnap = await getDocs(collection(db, "staff"));
+            const match = staffSnap.docs.find(d => (d.data().email || "").trim().toLowerCase() === email);
+            if (match) {
+              staffData = match.data();
             }
-          } catch (e) { console.warn("Staff lookup failed", e); }
+          } catch (e) { 
+            console.warn("Staff lookup failed", e); 
+          }
 
-          const staffDept = staffData?.department || "Ground Operations";
+          // ONLY use the staff department if a match was actually found
+          const staffDept = staffData?.department || ""; 
           const isSMT = staffData?.isSMT === true;
           const isManagerPos = (staffData?.position || '').toLowerCase().includes('manager');
 
@@ -40,8 +44,8 @@ export function AuthProvider({ children }: any) {
             let updates: any = {};
             let needsUpdate = false;
 
-            // Auto-heal Department
-            if (userData.department !== staffDept) {
+            // Auto-heal Department: ONLY overwrite if we found a staff record
+            if (staffDept && userData.department !== staffDept) {
               updates.department = staffDept;
               needsUpdate = true;
             }
@@ -83,7 +87,7 @@ export function AuthProvider({ children }: any) {
             const newProfile = {
               email: currentUser.email,
               role: initialRole,
-              department: presetDoc?.department || staffDept,
+              department: presetDoc?.department || staffDept || "Ground Operations",
               createdAt: new Date().toISOString(),
               ...(presetDoc && { presetApplied: true })
             };
