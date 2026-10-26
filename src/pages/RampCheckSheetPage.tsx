@@ -23,7 +23,7 @@ const INITIAL_FORM = {
 };
 
 function RampCheckSheetPage() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   
   const role = profile?.role || '';
   const isSMTOrAbove = ['developer', 'manager', 'admin', 'owner', 'smt'].includes(role) || profile?.isSMT === true;
@@ -57,7 +57,6 @@ function RampCheckSheetPage() {
     setRouteCodes([...new Set([...DEFAULT_ROUTE_CODES, ...savedRoutes])]);
   }, []);
 
-  // Load live draft on mount
   useEffect(() => {
     const loadDraft = async () => {
       try {
@@ -106,7 +105,6 @@ function RampCheckSheetPage() {
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(async () => {
       try {
-        // Send the merged state to the API
         setFormData(current => {
           apiFetch('/ramp/draft', {
             method: 'POST',
@@ -153,23 +151,28 @@ function RampCheckSheetPage() {
     if (!isManager) return;
     try {
       const { id: _id, ...rest } = formData as any;
+      
+      // Attach the current user's email to the payload
+      const payload = {
+        ...rest,
+        checkedBy: user?.email || rest.checkedBy || rest.observer || 'System'
+      };
 
       if (currentDocId) {
         await apiFetch(`/ramp/reports/${currentDocId}`, {
           method: 'PUT',
-          body: JSON.stringify(rest)
+          body: JSON.stringify(payload)
         });
         toast.success('Record updated!');
       } else {
         const res = await apiFetch('/ramp/reports', {
           method: 'POST',
-          body: JSON.stringify(rest)
+          body: JSON.stringify(payload)
         });
         setCurrentDocId(res.id);
         toast.success('Record saved!');
       }
       
-      // Clear the live draft after saving
       await apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
       
     } catch (err: any) { toast.error(err.message); }
@@ -177,6 +180,7 @@ function RampCheckSheetPage() {
 
   const handleReset = () => {
     if (!isManager) return;
+    if (!window.confirm("Are you sure you want to clear the form? Unsaved data will be lost.")) return;
     setFormData(INITIAL_FORM);
     setCurrentDocId(null);
     apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
@@ -207,7 +211,7 @@ function RampCheckSheetPage() {
         <h2>✈️ Flight Operation</h2>
         {currentDocId && (
           <span style={{ fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '6px 12px', borderRadius: '6px', fontWeight: 700 }}>
-            ✏️ Editing existing report — click <strong>New Record</strong> to start fresh
+            ✏️ Editing existing report — click <strong>Clear Form</strong> to start fresh
           </span>
         )}
       </div>
@@ -228,7 +232,7 @@ function RampCheckSheetPage() {
               <>
                 <button className="quick-btn" style={{ background: '#2563eb', color: 'white' }} onClick={handleSave}>💾 Save Record</button>
                 <button className="quick-btn" style={{ background: '#dcfce7', color: '#166534' }} onClick={handlePrint}>🖨️ Print / PDF</button>
-                <button className="quick-btn" style={{ background: '#f1f5f9', color: '#334155' }} onClick={handleReset}>➕ New Record</button>
+                <button className="quick-btn" style={{ background: '#fee2e2', color: '#991b1b' }} onClick={handleReset}>🗑️ Clear Form</button>
                 <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
               </>
             )}

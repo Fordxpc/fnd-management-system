@@ -53,7 +53,7 @@ function ReportsPage() {
   const [staffData, setStaffData] = useState<any[]>([]);
   const [rosterData, setRosterData] = useState<any[]>([]);
   const [flightData, setFlightData] = useState<any[]>([]);
-  const [lightsData, setLightsData] = useState<any[]>([]); // New state
+  const [lightsData, setLightsData] = useState<any[]>([]);
 
   const [reportType, setReportType] = useState<'staff' | 'ops' | 'wildlife'>('staff');
   const [selectedStaff, setSelectedStaff] = useState('');
@@ -67,7 +67,7 @@ function ReportsPage() {
       const results = await Promise.allSettled([
         apiFetch('/ramp/reports'), apiFetch('/fod'), apiFetch('/wildlife'),
         apiFetch('/staff'), apiFetch('/roster'), apiFetch('/flights'),
-        apiFetch('/lights') // Fetch lights
+        apiFetch('/lights')
       ]);
 
       const getData = (index: number) => {
@@ -147,6 +147,13 @@ function ReportsPage() {
   }
 
   if (loading) return <div className="page-content"><p>Loading Reports from D1...</p></div>;
+
+  // Filter out Air Ambulance flights for Stats and Traffic
+  const validFlightsForStats = rampData.filter(r => {
+    const c = (r.comments || '').toLowerCase();
+    const rem = (r.remarks || '').toLowerCase();
+    return !c.includes('air ambulance') && !rem.includes('air ambulance');
+  });
 
   return (
     <div className="page-content">
@@ -338,8 +345,9 @@ function ReportsPage() {
                     <td style={tdStyle}>{r.bagIn || 0}</td>
                     <td style={tdStyle}>{r.bagOut || 0}</td>
                     <td style={tdStyle}>{r.bagTrans || 0}</td>
-                    <td style={tdStyle}>{r.checkedBy || r.observer}</td>
-                    <td style={tdStyle}>{r.remarks || 'NIL'}</td>
+                    {/* FIXED: Show CheckedBy and Comments here */}
+                    <td style={tdStyle}>{r.checkedBy || r.observer || '—'}</td>
+                    <td style={tdStyle}>{r.comments || 'NIL'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -349,7 +357,7 @@ function ReportsPage() {
 
         {activeTab === 'stats' && (
           <div>
-            <ExcelHeader title="FUNADHOO AIRPORT" subtitle="Statistics Report" />
+            <ExcelHeader title="FUNADHOO AIRPORT" subtitle="Statistics Report (Excludes Air Ambulance)" />
             <AircraftLegend />
             <table style={tableStyle}>
               <thead>
@@ -362,7 +370,8 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rampData.map(r => (
+                {/* USING FILTERED DATA HERE */}
+                {validFlightsForStats.map(r => (
                   <tr key={r.id} style={{ backgroundColor: getAircraftColor(r.acType) }}>
                     <td style={tdStyle}>{r.date}</td>
                     <td style={tdStyle}>MALDIVIAN</td>
@@ -385,7 +394,7 @@ function ReportsPage() {
 
         {activeTab === 'traffic' && (
           <div>
-            <ExcelHeader title="TRAFFIC MONTHLY REPORT (FUNADHOO AIRPORT)" subtitle="2026" />
+            <ExcelHeader title="TRAFFIC MONTHLY REPORT (FUNADHOO AIRPORT)" subtitle="2026 (Excludes Air Ambulance)" />
             <AircraftLegend />
             <table style={tableStyle}>
               <thead>
@@ -402,8 +411,8 @@ function ReportsPage() {
               </thead>
               <tbody>
                 {['DH-8/200', 'DH-8/300', 'ATR-72', 'ATR-42'].map(type => {
-                  // Filter logic handles variations in naming
-                  const flights = rampData.filter(r => {
+                  // USING FILTERED DATA HERE
+                  const flights = validFlightsForStats.filter(r => {
                     const ac = (r.acType || '').toUpperCase().replace(/\s+/g, '');
                     if (type === 'DH-8/300') return ac.includes('DH-8/300') || ac.includes('DASH8-C');
                     if (type === 'DH-8/200') return ac.includes('DH-8/200') || ac.includes('DASH8-B');
