@@ -200,3 +200,79 @@ input:read-only, textarea:read-only, input:disabled, select:disabled {
     margin-bottom: 10px !important;
   }
 }
+/* ==========================================
+   REPORTS PRINT STYLES
+   ========================================== */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 2mm; /* Reduced margin to give more space */
+  }
+
+  body.printing-report * {
+    visibility: hidden;
+  }
+  
+  body.printing-report .page-content,
+  body.printing-report .page-content * {
+    visibility: visible;
+  }
+
+  body.printing-report .page-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.printing-report .no-print,
+  body.printing-report .staff-header,
+  body.printing-report .ops-tabs,
+  body.printing-report .sidebar,
+  body.printing-report .main-app-header,
+  body.printing-report .top-tabs-container {
+    display: none !important;
+  }
+
+  body.printing-report .dash-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  /* General Table Styles for Print */
+  body.printing-report table {
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 8px !important; 
+  }
+
+  body.printing-report th,
+  body.printing-report td {
+    border: 1px solid #000 !important;
+    padding: 2px 4px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    white-space: normal !important; 
+  }
+
+  /* DFIS SPECIFIC FIX: Make it ultra-small to fit on one page */
+  body.printing-report .dfis-print-table table {
+    font-size: 5.5px !important; /* Extremely small to fit 35 columns */
+  }
+  
+  body.printing-report .dfis-print-table th,
+  body.printing-report .dfis-print-table td {
+    padding: 0px 1px !important; /* Almost no padding */
+    word-break: break-all !important;
+  }
+
+  /* Ensure the logo and title print well */
+  body.printing-report .roster-title,
+  body.printing-report .title-container {
+    margin-bottom: 10px !important;
+  }
+}

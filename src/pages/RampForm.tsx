@@ -44,30 +44,30 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     e.target.blur();
   };
 
-  // Reusable component for the split inputs
+  // Reusable component for the split inputs with larger font
   const SplitInput = ({ prefix, label }: { prefix: string, label: string }) => (
     <table className="inner-table">
       <thead><tr><th colSpan={3}>{label}</th></tr><tr><th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th></tr></thead>
       <tbody><tr>
         <td>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-            <input type="text" id={`${prefix}InPcs`} value={formData[`${prefix}InPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-            <span style={{ fontWeight: 'bold' }}>/</span>
-            <input type="text" id={`${prefix}InKg`} value={formData[`${prefix}InKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+            <input type="text" id={`${prefix}InPcs`} value={formData[`${prefix}InPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
+            <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
+            <input type="text" id={`${prefix}InKg`} value={formData[`${prefix}InKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
           </div>
         </td>
         <td>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-            <input type="text" id={`${prefix}OutPcs`} value={formData[`${prefix}OutPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-            <span style={{ fontWeight: 'bold' }}>/</span>
-            <input type="text" id={`${prefix}OutKg`} value={formData[`${prefix}OutKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+            <input type="text" id={`${prefix}OutPcs`} value={formData[`${prefix}OutPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
+            <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
+            <input type="text" id={`${prefix}OutKg`} value={formData[`${prefix}OutKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
           </div>
         </td>
         <td>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-            <input type="text" id={`${prefix}TransPcs`} value={formData[`${prefix}TransPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-            <span style={{ fontWeight: 'bold' }}>/</span>
-            <input type="text" id={`${prefix}TransKg`} value={formData[`${prefix}TransKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+            <input type="text" id={`${prefix}TransPcs`} value={formData[`${prefix}TransPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
+            <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
+            <input type="text" id={`${prefix}TransKg`} value={formData[`${prefix}TransKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
           </div>
         </td>
       </tr></tbody>
@@ -205,7 +205,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
               </tr></tbody>
             </table>
             
-            {/* USING THE SPLIT INPUT COMPONENT FOR ALL KG FIELDS */}
             <SplitInput prefix="cargo" label="CARGO" />
             <SplitInput prefix="mail" label="MAIL" />
             <SplitInput prefix="bag" label="BAGGAGE" />

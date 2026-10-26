@@ -353,7 +353,7 @@ function ReportsPage() {
         )}
 
         {activeTab === 'dfis' && (
-          <div>
+          <div className="dfis-print-table"> {/* CLASS ADDED FOR PRINT CSS */}
             <ExcelHeader title="AIRCRAFT TURNAROUND LOG" subtitle="Funadhoo Airport" />
             <AircraftLegend />
             <table style={tableStyle}>
@@ -524,7 +524,7 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {['DH-8/200', 'DH-8/300', 'ATR-72', 'ATR-42'].map(type => {
+                {['DH-8/200', 'DH-8/300', 'ATR-72', 'ATR-42'].map((type, idx) => {
                   const flights = validFlightsForStats.filter(r => {
                     const ac = (r.acType || '').toUpperCase().replace(/\s+/g, '');
                     if (type === 'DH-8/300') return ac.includes('DH-8/300') || ac.includes('DASH-8/300') || ac.includes('DASH8-C');
@@ -536,7 +536,7 @@ function ReportsPage() {
                   
                   return (
                     <tr key={type} style={{ backgroundColor: getAircraftColor(type) }}>
-                      <td style={tdStyle}>1</td><td style={tdStyle}>Maldivian</td><td style={tdStyle}><strong>{type}</strong></td>
+                      <td style={tdStyle}>{idx + 1}</td><td style={tdStyle}>Maldivian</td><td style={tdStyle}><strong>{type}</strong></td>
                       <td style={tdStyle}>{flights.length * 2}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxInAdult || 0), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxInInf || 0), 0)}</td>
