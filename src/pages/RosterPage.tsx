@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const ADMIN_DEPARTMENTS = ['Administration'];
@@ -111,8 +112,11 @@ function RosterPage() {
   const [holidays, setHolidays] = useState<any[]>([]);
   const [periodStart, setPeriodStart] = useState<Date>(getPeriodStart(new Date()));
   const [loading, setLoading] = useState(true);
-  const [reorderMode, setReorderMode] = useState<boolean>(false);
   const gridRef = useRef<HTMLDivElement>(null);
+
+  // Custom Dialog States
+  const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
   const [staffId, setStaffId] = useState<string>('');
@@ -178,9 +182,7 @@ function RosterPage() {
   const fetchData = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
-        apiFetch('/staff'),
-        apiFetch('/roster'),
-        apiFetch('/holidays')
+        apiFetch('/staff'), apiFetch('/roster'), apiFetch('/holidays')
       ]);
 
       const getData = (index: number) => {
@@ -189,8 +191,6 @@ function RosterPage() {
       };
 
       const rawRoster = getData(1);
-      
-      // SAFETY NET: Deduplicate roster entries by Staff Name + Date
       const uniqueRoster = Array.from(new Map(rawRoster.map((item: any) => [`${item.staffName}-${item.date}`, item])).values());
 
       setStaff(getData(0));
@@ -371,23 +371,6 @@ function RosterPage() {
 
   const changePeriod = (direction: number) => {
     const newDate = new Date(periodStart); newDate.setMonth(newDate.getMonth() + direction); setPeriodStart(newDate);
-  };
-
-  const moveStaff = async (id: string, direction: 'up' | 'down') => {
-    const list = [...visibleStaff]; const index = list.findIndex((s) => s.id === id);
-    if (index === -1) return;
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= list.length) return;
-    
-    [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
-    
-    try {
-      await apiFetch('/staff/reorder', {
-        method: 'PUT',
-        body: JSON.stringify({ orderedIds: list.map(s => s.id) })
-      });
-      fetchData();
-    } catch (err: any) { toast.error('Reorder failed: ' + err.message); }
   };
 
   const captureCanvas = async () => {
@@ -650,6 +633,26 @@ function RosterPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog 
+        isOpen={!!deleteStaffTarget}
+        title="Remove Staff?"
+        message="Are you sure you want to remove this staff member from the active pool?"
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={() => setDeleteStaffTarget(null)}
+        onCancel={() => setDeleteStaffTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={showClearConfirm}
+        title="Clear All Selections?"
+        message="Are you sure you want to clear all selections for this board?"
+        confirmText="Clear"
+        isDanger={true}
+        onConfirm={() => setShowClearConfirm(false)}
+        onCancel={() => setShowClearConfirm(false)}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import RampReportsPage from './RampReportsPage';
 import RampForm from './RampForm';
+import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
 import '../styles/RampCheck.css';
 
 const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
@@ -21,7 +22,6 @@ const INITIAL_FORM = {
   mailInPcs: '', mailInKg: '', mailOutPcs: '', mailOutKg: '', mailTransPcs: '', mailTransKg: '',
   bagInPcs: '', bagInKg: '', bagOutPcs: '', bagOutKg: '', bagTransPcs: '', bagTransKg: '',
   otherInPcs: '', otherInKg: '', otherOutPcs: '', otherOutKg: '', otherTransPcs: '', otherTransKg: '',
-  // Legacy keys for DB compatibility
   cargoIn: '', cargoOut: '', cargoTrans: '', mailIn: '', mailOut: '', mailTrans: '',
   bagIn: '', bagOut: '', bagTrans: '', otherIn: '', otherOut: '', otherTrans: '',
   specialLoad: '', comments: '', delayTime: '', medicalEmergency: ''
@@ -54,6 +54,10 @@ function RampCheckSheetPage() {
 
   const typingTimer = useRef<any>(null);
 
+  // Custom Dialog States
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [promptAction, setPromptAction] = useState<'acType' | 'routeCode' | null>(null);
+
   useEffect(() => {
     const savedAc = JSON.parse(localStorage.getItem('acTypes') || '[]');
     setAcTypes([...new Set([...DEFAULT_AC_TYPES, ...savedAc])]);
@@ -85,7 +89,6 @@ function RampCheckSheetPage() {
     setFormData(prev => {
       const updated = { ...prev, [id]: finalValue };
 
-      // Auto-calculate PAX totals
       if (id.includes('paxIn')) {
         const a = parseInt(updated.paxInAdult) || 0;
         const i = parseInt(updated.paxInInf) || 0;
@@ -106,7 +109,6 @@ function RampCheckSheetPage() {
         updated.paxTransTotal = String(a + i);
       }
 
-      // Combine split fields into single string for DB
       const prefixes = ['cargo', 'mail', 'bag', 'other'];
       prefixes.forEach(prefix => {
         if (id.startsWith(`${prefix}InPcs`) || id.startsWith(`${prefix}InKg`)) updated[`${prefix}In`] = `${updated[`${prefix}InPcs`] || ''}/${updated[`${prefix}InKg`] || ''}`;
@@ -121,10 +123,7 @@ function RampCheckSheetPage() {
     typingTimer.current = setTimeout(async () => {
       try {
         setFormData(current => {
-          apiFetch('/ramp/draft', {
-            method: 'POST',
-            body: JSON.stringify(current)
-          }).catch(err => console.error("Draft save failed", err));
+          apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify(current) }).catch(err => console.error("Draft save failed", err));
           return current;
         });
       } catch (err) { console.error(err); }
@@ -132,25 +131,24 @@ function RampCheckSheetPage() {
     }, 800);
   };
 
-  const handleAddAcType = () => {
-    const newType = prompt('Enter new A/C Type:');
-    if (newType) {
-      const t = newType.trim().toUpperCase();
-      const updated = [...new Set([...acTypes, t])];
+  const handleAddAcType = () => setPromptAction('acType');
+  const handleAddRoute = () => setPromptAction('routeCode');
+
+  const executePrompt = (val: string) => {
+    if (!val.trim()) return;
+    const uppercaseVal = val.trim().toUpperCase();
+
+    if (promptAction === 'acType') {
+      const updated = [...new Set([...acTypes, uppercaseVal])];
       setAcTypes(updated);
       localStorage.setItem('acTypes', JSON.stringify(updated));
-      setFormData(prev => ({ ...prev, acType: t }));
-    }
-  };
-
-  const handleAddRoute = () => {
-    const newCode = prompt('Enter Airport Code:');
-    if (newCode) {
-      const c = newCode.trim().toUpperCase();
-      const updated = [...new Set([...routeCodes, c])];
+      setFormData(prev => ({ ...prev, acType: uppercaseVal }));
+    } else if (promptAction === 'routeCode') {
+      const updated = [...new Set([...routeCodes, uppercaseVal])];
       setRouteCodes(updated);
       localStorage.setItem('routeCodes', JSON.stringify(updated));
     }
+    setPromptAction(null);
   };
 
   const appendRoute = (code: string) => {
@@ -165,7 +163,6 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
-      // Remove temporary split fields before saving to DB
       const payload = { ...formData } as any;
       delete payload.cargoInPcs; delete payload.cargoInKg; delete payload.cargoOutPcs; delete payload.cargoOutKg; delete payload.cargoTransPcs; delete payload.cargoTransKg;
       delete payload.mailInPcs; delete payload.mailInKg; delete payload.mailOutPcs; delete payload.mailOutKg; delete payload.mailTransPcs; delete payload.mailTransKg;
@@ -175,16 +172,10 @@ function RampCheckSheetPage() {
       payload.checkedBy = user?.email || formData.checkedBy || formData.observer || 'System';
 
       if (currentDocId) {
-        await apiFetch(`/ramp/reports/${currentDocId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload)
-        });
+        await apiFetch(`/ramp/reports/${currentDocId}`, { method: 'PUT', body: JSON.stringify(payload) });
         toast.success('Record updated!');
       } else {
-        const res = await apiFetch('/ramp/reports', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
+        const res = await apiFetch('/ramp/reports', { method: 'POST', body: JSON.stringify(payload) });
         setCurrentDocId(res.id);
         toast.success('Record saved!');
       }
@@ -194,14 +185,7 @@ function RampCheckSheetPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleReset = () => {
-    if (!isManager) return;
-    if (!window.confirm("Are you sure you want to clear the form? Unsaved data will be lost.")) return;
-    setFormData(INITIAL_FORM);
-    setCurrentDocId(null);
-    apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
-    toast.success('Form cleared');
-  };
+  const handleReset = () => setShowClearConfirm(true);
 
   const handlePrint = () => window.print();
 
@@ -213,7 +197,6 @@ function RampCheckSheetPage() {
   const handleEditReport = (report: any) => {
     const { id, createdAt: _c, updatedAt: _u, ...rest } = report;
     
-    // Split combined strings back into Pcs/Kg for the form
     const parsedReport = { ...rest };
     const prefixes = ['cargo', 'mail', 'bag', 'other'];
     prefixes.forEach(prefix => {
@@ -292,6 +275,31 @@ function RampCheckSheetPage() {
       {activeSubTab === 'reports' && (
         <RampReportsPage onEdit={handleEditReport} />
       )}
+
+      <ConfirmDialog 
+        isOpen={showClearConfirm}
+        title="Clear Form?"
+        message="Are you sure you want to clear the form? Unsaved data will be lost."
+        confirmText="Clear Form"
+        isDanger={true}
+        onConfirm={() => {
+          setFormData(INITIAL_FORM);
+          setCurrentDocId(null);
+          apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
+          toast.success('Form cleared');
+          setShowClearConfirm(false);
+        }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
+
+      <PromptDialog 
+        isOpen={!!promptAction}
+        title={promptAction === 'acType' ? "Add A/C Type" : "Add Route Code"}
+        message={promptAction === 'acType' ? "Enter new A/C Type (e.g. B737-800)" : "Enter new Airport Code (e.g. MLE)"}
+        placeholder="Type here..."
+        onSubmit={executePrompt}
+        onCancel={() => setPromptAction(null)}
+      />
     </div>
   );
 }

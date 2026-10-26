@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const CALENDARIFIC_KEY = import.meta.env.VITE_CALENDARIFIC_KEY || 'YOUR_API_KEY_HERE';
@@ -30,7 +31,9 @@ function HolidaysPage() {
   const [showFridays, setShowFridays] = useState<boolean>(false);
   const [syncing, setSyncing] = useState<boolean>(false);
 
-  // FETCH DATA FROM D1
+  // Custom Dialog State
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
   const fetchHolidays = useCallback(async () => {
     try {
       const data = await apiFetch('/holidays');
@@ -44,7 +47,7 @@ function HolidaysPage() {
 
   useEffect(() => {
     fetchHolidays();
-    const interval = setInterval(fetchHolidays, 15000); // Poll every 15s
+    const interval = setInterval(fetchHolidays, 15000);
     return () => clearInterval(interval);
   }, [fetchHolidays]);
 
@@ -56,26 +59,15 @@ function HolidaysPage() {
       return;
     }
     try {
-      await apiFetch('/holidays', {
-        method: 'POST',
-        body: JSON.stringify({ date, name })
-      });
+      await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ date, name }) });
       setName('');
       toast.success('Holiday added!');
       fetchHolidays();
     } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this holiday?')) return;
-    try {
-      await apiFetch(`/holidays/${id}`, { method: 'DELETE' });
-      toast.success('Holiday deleted.');
-      fetchHolidays();
-    } catch (err: any) { toast.error(err.message); }
-  };
+  const handleDelete = (id: string) => setDeleteTarget(id);
 
-  // Automatic sync from Calendarific API to D1
   const handleAutoSync = async () => {
     if (!CALENDARIFIC_KEY || CALENDARIFIC_KEY === 'YOUR_API_KEY_HERE') {
       toast.error('API key not found. Please add VITE_CALENDARIFIC_KEY to your .env file.');
@@ -84,12 +76,8 @@ function HolidaysPage() {
 
     setSyncing(true);
     try {
-      const res = await fetch(
-        `https://calendarific.com/api/v2/holidays?api_key=${CALENDARIFIC_KEY}&country=MV&year=${year}`
-      );
-      
+      const res = await fetch(`https://calendarific.com/api/v2/holidays?api_key=${CALENDARIFIC_KEY}&country=MV&year=${year}`);
       if (!res.ok) throw new Error('Failed to fetch from Calendarific API');
-      
       const data = await res.json();
       const apiHolidays = data.response?.holidays || [];
 
@@ -105,10 +93,7 @@ function HolidaysPage() {
       for (const h of apiHolidays) {
         const holidayDate = h.date.iso;
         if (!existingDates.has(holidayDate)) {
-          await apiFetch('/holidays', {
-            method: 'POST',
-            body: JSON.stringify({ date: holidayDate, name: `🌐 ${h.name}` })
-          });
+          await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ date: holidayDate, name: `🌐 ${h.name}` }) });
           addedCount++;
         }
       }
@@ -130,27 +115,10 @@ function HolidaysPage() {
     cur.setDate(cur.getDate() + 1);
   }
 
-  const customHolidaysThisYear = holidays
-    .filter((h) => h.date.startsWith(String(year)))
-    .sort((a: any, b: any) => a.date.localeCompare(b.date));
-
-  const customRows = customHolidaysThisYear.map((h: any) => ({
-    date: h.date,
-    name: h.name,
-    isFriday: false,
-    id: h.id,
-  }));
-
-  const fridayRows = fridaysOfYear.map((d) => ({
-    date: d,
-    name: 'Friday',
-    isFriday: true,
-    id: '',
-  }));
-
-  const displayedRows = showFridays
-    ? [...fridayRows, ...customRows].sort((a, b) => a.date.localeCompare(b.date))
-    : customRows;
+  const customHolidaysThisYear = holidays.filter((h) => h.date.startsWith(String(year))).sort((a: any, b: any) => a.date.localeCompare(b.date));
+  const customRows = customHolidaysThisYear.map((h: any) => ({ date: h.date, name: h.name, isFriday: false, id: h.id }));
+  const fridayRows = fridaysOfYear.map((d) => ({ date: d, name: 'Friday', isFriday: true, id: '' }));
+  const displayedRows = showFridays ? [...fridayRows, ...customRows].sort((a, b) => a.date.localeCompare(b.date)) : customRows;
 
   if (loading) return <div className="page-content"><p>Loading Holidays...</p></div>;
 
@@ -164,42 +132,23 @@ function HolidaysPage() {
           </span>
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          
           {isAdmin && (
-            <button 
-              className="export-btn" 
-              onClick={handleAutoSync} 
-              disabled={syncing}
-              style={{ backgroundColor: '#8b5cf6', color: 'white' }}
-            >
+            <button className="export-btn" onClick={handleAutoSync} disabled={syncing} style={{ backgroundColor: '#8b5cf6', color: 'white' }}>
               {syncing ? '⏳ Syncing...' : `🌐 Auto-Sync Maldives ${year}`}
             </button>
           )}
-
-          <button
-            className={showFridays ? 'export-btn pdf-btn' : 'export-btn jpg-btn'}
-            onClick={() => setShowFridays(!showFridays)}
-          >
+          <button className={showFridays ? 'export-btn pdf-btn' : 'export-btn jpg-btn'} onClick={() => setShowFridays(!showFridays)}>
             {showFridays ? '🙈 Hide Fridays' : '📅 Show Fridays'}
           </button>
-          
-          <select
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit', fontSize: '14px' }}
-          >
-            {[year - 1, year, year + 1, year + 2, year + 3].map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit', fontSize: '14px', color: '#1e293b' }}>
+            {[year - 1, year, year + 1, year + 2, year + 3].map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
       </div>
 
       {isAdmin && (
         <form className="staff-form" onSubmit={handleAdd}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            ➕ Add Custom Holiday
-          </div>
+          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>➕ Add Custom Holiday</div>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
           <input placeholder="Holiday name" value={name} onChange={(e) => setName(e.target.value)} required />
           <button type="submit">Add Holiday</button>
@@ -211,9 +160,7 @@ function HolidaysPage() {
           <div className="empty-state"><p>No holidays for {year}.</p></div>
         ) : (
           <table>
-            <thead>
-              <tr><th>Date</th><th>Day</th><th>Name</th><th>Type</th>{isAdmin && <th></th>}</tr>
-            </thead>
+            <thead><tr><th>Date</th><th>Day</th><th>Name</th><th>Type</th>{isAdmin && <th></th>}</tr></thead>
             <tbody>
               {displayedRows.map((h: any) => (
                 <tr key={h.date + h.name}>
@@ -221,17 +168,11 @@ function HolidaysPage() {
                   <td>{getDayName(h.date)}</td>
                   <td>{h.name}</td>
                   <td>
-                    {h.isFriday ? (
-                      <span className="status-badge status-approved">FRIDAY (AUTO)</span>
-                    ) : (
-                      <span className="status-badge status-pending">CUSTOM</span>
-                    )}
+                    {h.isFriday ? <span className="status-badge status-approved">FRIDAY (AUTO)</span> : <span className="status-badge status-pending">CUSTOM</span>}
                   </td>
                   {isAdmin && (
                     <td>
-                      {!h.isFriday && h.id && (
-                        <button className="delete-btn" onClick={() => handleDelete(h.id)}>Delete</button>
-                      )}
+                      {!h.isFriday && h.id && <button className="delete-btn" onClick={() => handleDelete(h.id)}>Delete</button>}
                     </td>
                   )}
                 </tr>
@@ -240,6 +181,24 @@ function HolidaysPage() {
           </table>
         )}
       </div>
+
+      <ConfirmDialog 
+        isOpen={!!deleteTarget}
+        title="Delete Holiday?"
+        message="Are you sure you want to delete this holiday?"
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          try {
+            await apiFetch(`/holidays/${deleteTarget}`, { method: 'DELETE' });
+            toast.success('Holiday deleted.');
+            fetchHolidays();
+          } catch (err: any) { toast.error(err.message); }
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

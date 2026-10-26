@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../auth';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const DEFAULT_STAFF = [
   'ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 
@@ -51,6 +52,11 @@ function OpsBoardPage() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewBaseScale, setPreviewBaseScale] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(1);
+
+  // Custom Dialog States
+  const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [deleteFodTarget, setDeleteFodTarget] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool));
@@ -124,53 +130,20 @@ function OpsBoardPage() {
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
     if (!canEdit) return;
-    
-    const has19 = rwy19.some(n => n.replace('⭐ ', '') === name);
-    const has01 = rwy01.some(n => n.replace('⭐ ', '') === name);
-    const hasLights = lights.some(n => n.replace('⭐ ', '') === name);
+    if (zone !== '19' && rwy19.includes(name)) { toast.error('Already assigned to RWY 19'); return; }
+    if (zone !== '01' && rwy01.includes(name)) { toast.error('Already assigned to RWY 01'); return; }
+    if (zone !== 'lights' && lights.includes(name)) { toast.error('Already assigned to Lights'); return; }
 
-    if (zone !== '19' && has19) { toast.error('Already assigned to RWY 19'); return; }
-    if (zone !== '01' && has01) { toast.error('Already assigned to RWY 01'); return; }
-    if (zone !== 'lights' && hasLights) { toast.error('Already assigned to Lights'); return; }
-
-    if (zone === '19') setRwy19(prev => has19 ? prev.filter(n => n.replace('⭐ ', '') !== name) : [...prev, name]);
-    if (zone === '01') setRwy01(prev => has01 ? prev.filter(n => n.replace('⭐ ', '') !== name) : [...prev, name]);
-    if (zone === 'lights') setLights(prev => hasLights ? prev.filter(n => n.replace('⭐ ', '') !== name) : [...prev, name]);
-  };
-
-  const toggleRunwayLeader = (zone: '19' | '01' | 'lights', name: string) => {
-    const applyStar = (arr: string[]) => arr.map(n => {
-      if (n.replace('⭐ ', '') === name) {
-        return n.startsWith('⭐ ') ? name : `⭐ ${name}`;
-      }
-      return n;
-    });
-    if (zone === '19') setRwy19(prev => applyStar(prev));
-    if (zone === '01') setRwy01(prev => applyStar(prev));
-    if (zone === 'lights') setLights(prev => applyStar(prev));
+    if (zone === '19') setRwy19(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+    if (zone === '01') setRwy01(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+    if (zone === 'lights') setLights(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
   };
 
   const toggleGround = (taskId: string, name: string) => {
     if (!canEdit) return;
     setGroundAssign(prev => {
       const current = prev[taskId] || [];
-      const isAssigned = current.some(n => n.replace('⭐ ', '') === name);
-      const updated = isAssigned 
-        ? current.filter(n => n.replace('⭐ ', '') !== name) 
-        : [...current, name];
-      return { ...prev, [taskId]: updated };
-    });
-  };
-
-  const toggleGroundLeader = (taskId: string, name: string) => {
-    setGroundAssign(prev => {
-      const current = prev[taskId] || [];
-      const updated = current.map(n => {
-        if (n.replace('⭐ ', '') === name) {
-          return n.startsWith('⭐ ') ? name : `⭐ ${name}`;
-        }
-        return n;
-      });
+      const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name];
       return { ...prev, [taskId]: updated };
     });
   };
@@ -184,17 +157,9 @@ function OpsBoardPage() {
     setNewStaff('');
   };
 
-  const handleRemoveStaff = (name: string) => {
-    if (!window.confirm(`Remove ${name} permanently from the staff list?`)) return;
-    setStaffPool(prev => prev.filter(s => s !== name));
-  };
+  const handleRemoveStaff = (name: string) => setDeleteStaffTarget(name);
 
-  const handleClearBoard = () => {
-    if (!window.confirm("Are you sure you want to clear all selections?")) return;
-    setRwy19([]); setRwy01([]); setLights([]); setGroundAssign({});
-    localStorage.removeItem('ops_board_draft');
-    toast.success('Board cleared.');
-  };
+  const handleClearBoard = () => setShowClearConfirm(true);
 
   const saveRunwayData = async () => {
     try {
@@ -234,14 +199,7 @@ function OpsBoardPage() {
     setFodSubmitting(false);
   };
 
-  const handleDeleteFOD = async (id: string) => {
-    if (!window.confirm('Delete this FOD record?')) return;
-    try {
-      await apiFetch(`/fod/${id}`, { method: 'DELETE' });
-      toast.success('FOD record deleted');
-      fetchData();
-    } catch (err: any) { toast.error(err.message); }
-  };
+  const handleDeleteFOD = (id: string) => setDeleteFodTarget(id);
 
   const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
@@ -354,39 +312,19 @@ function OpsBoardPage() {
             <div className="dash-card" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff (Cannot be in multiple zones)</h3>
               <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
-                {staffPool.map(s => {
-                  const is19 = rwy19.some(n => n.replace('⭐ ', '') === s);
-                  const is19Leader = rwy19.includes(`⭐ ${s}`);
-                  const is01 = rwy01.some(n => n.replace('⭐ ', '') === s);
-                  const is01Leader = rwy01.includes(`⭐ ${s}`);
-                  const isLights = lights.some(n => n.replace('⭐ ', '') === s);
-                  const isLightsLeader = lights.includes(`⭐ ${s}`);
-
-                  return (
-                    <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
-                        <button onClick={() => handleRemoveStaff(s)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}>✖</button>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                          <label style={{ fontSize: '11px' }}><input type="checkbox" checked={is19} onChange={() => toggleRunway('19', s)} disabled={is01 || isLights} /> RWY 19</label>
-                          {is19 && <button onClick={(e) => { e.preventDefault(); toggleRunwayLeader('19', s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '12px' }}>{is19Leader ? '⭐' : '☆'}</button>}
-                        </div>
-                        
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                          <label style={{ fontSize: '11px' }}><input type="checkbox" checked={is01} onChange={() => toggleRunway('01', s)} disabled={is19 || isLights} /> RWY 01</label>
-                          {is01 && <button onClick={(e) => { e.preventDefault(); toggleRunwayLeader('01', s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '12px' }}>{is01Leader ? '⭐' : '☆'}</button>}
-                        </div>
-
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-                          <label style={{ fontSize: '11px' }}><input type="checkbox" checked={isLights} onChange={() => toggleRunway('lights', s)} disabled={is19 || is01} /> Lights</label>
-                          {isLights && <button onClick={(e) => { e.preventDefault(); toggleRunwayLeader('lights', s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '12px' }}>{isLightsLeader ? '⭐' : '☆'}</button>}
-                        </div>
-                      </div>
+                {staffPool.map(s => (
+                  <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
+                      <button onClick={() => handleRemoveStaff(s)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}>✖</button>
                     </div>
-                  );
-                })}
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy19.includes(s)} onChange={() => toggleRunway('19', s)} disabled={rwy01.includes(s) || lights.includes(s)} /> RWY 19</label>
+                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy01.includes(s)} onChange={() => toggleRunway('01', s)} disabled={rwy19.includes(s) || lights.includes(s)} /> RWY 01</label>
+                      <label style={{ fontSize: '11px' }}><input type="checkbox" checked={lights.includes(s)} onChange={() => toggleRunway('lights', s)} disabled={rwy19.includes(s) || rwy01.includes(s)} /> Lights</label>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -447,25 +385,16 @@ function OpsBoardPage() {
                   <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
                     <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
-                      {staffPool.map(s => {
-                        const isAssigned = (groundAssign[t.id] || []).some(n => n.replace('⭐ ', '') === s);
-                        const isLeader = (groundAssign[t.id] || []).includes(`⭐ ${s}`);
-                        return (
-                          <label key={s} style={{ 
-                            fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px', 
-                            background: isAssigned ? '#dbeafe' : '#f8fafc', 
-                            padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer'
-                          }}>
-                            <input type="checkbox" checked={isAssigned} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
-                            <span style={{ lineHeight: '1.2', wordBreak: 'break-word', flex: 1 }}>{s}</span>
-                            {isAssigned && (
-                              <button onClick={(e) => { e.preventDefault(); toggleGroundLeader(t.id, s); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '14px' }} title="Mark as Leader">
-                                {isLeader ? '⭐' : '☆'}
-                              </button>
-                            )}
-                          </label>
-                        );
-                      })}
+                      {staffPool.map(s => (
+                        <label key={s} style={{ 
+                          fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', 
+                          background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', 
+                          padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer'
+                        }}>
+                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
+                          <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                 ))}
@@ -791,6 +720,56 @@ function OpsBoardPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog 
+        isOpen={!!deleteStaffTarget}
+        title="Remove Staff?"
+        message={`Are you sure you want to permanently remove ${deleteStaffTarget} from the active staff pool?`}
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={() => {
+          setStaffPool(prev => prev.filter(s => s !== deleteStaffTarget));
+          setDeleteStaffTarget(null);
+          toast.success('Staff removed');
+        }}
+        onCancel={() => setDeleteStaffTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={showClearConfirm}
+        title="Clear Board?"
+        message="Are you sure you want to clear all selections? This will reset the current board."
+        confirmText="Clear Board"
+        isDanger={true}
+        onConfirm={() => {
+          setRwy19([]);
+          setRwy01([]);
+          setLights([]);
+          setGroundAssign({});
+          localStorage.removeItem('ops_board_draft');
+          setShowClearConfirm(false);
+          toast.success('Board cleared and ready for new assignments.');
+        }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!deleteFodTarget}
+        title="Delete FOD Record?"
+        message="Are you sure you want to permanently delete this FOD record?"
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteFodTarget) return;
+          try {
+            await apiFetch(`/fod/${deleteFodTarget}`, { method: 'DELETE' });
+            toast.success('FOD record deleted');
+            fetchData();
+          } catch (err: any) { toast.error(err.message); }
+          setDeleteFodTarget(null);
+        }}
+        onCancel={() => setDeleteFodTarget(null)}
+      />
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const VIEW_ROLES = ['developer', 'manager', 'admin', 'owner', 'smt'];
 const EDIT_ROLES = ['developer', 'manager', 'admin', 'owner'];
@@ -18,7 +19,6 @@ const DEPARTMENTS = [
   'Safety', 
 ];
 
-// Safely typed CSS object
 const selectStyle: React.CSSProperties = {
   padding: '6px',
   border: '1px solid #cbd5e1',
@@ -26,7 +26,7 @@ const selectStyle: React.CSSProperties = {
   fontSize: '12px',
   background: '#ffffff',
   color: '#1e293b',
-  colorScheme: 'light', // Fixes mobile dark mode text
+  colorScheme: 'light',
 };
 
 function UsersPage() {
@@ -40,6 +40,11 @@ function UsersPage() {
   const [presets, setPresets] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Custom Dialog States
+  const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<{ id: string, email: string } | null>(null);
+  const [deletePresetTarget, setDeletePresetTarget] = useState<{ id: string, email: string } | null>(null);
 
   const [showPresetForm, setShowPresetForm] = useState<boolean>(false);
   const [presetEmail, setPresetEmail] = useState<string>('');
@@ -55,15 +60,10 @@ function UsersPage() {
     
     try {
       const [usersData, presetsData, staffData] = await Promise.all([
-        apiFetch('/users'),
-        apiFetch('/user-presets'),
-        apiFetch('/staff')
+        apiFetch('/users'), apiFetch('/user-presets'), apiFetch('/staff')
       ]);
       
-      setUsers(usersData);
-      setPresets(presetsData);
-      setStaffList(staffData);
-      setLoading(false);
+      setUsers(usersData); setPresets(presetsData); setStaffList(staffData); setLoading(false);
     } catch (err: any) {
       toast.error(err.message);
       setLoading(false);
@@ -115,26 +115,9 @@ function UsersPage() {
     } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
-  const handleDelete = async (userId: string, email: string) => {
-    if (!canEdit) return;
-    if (!window.confirm(`Remove ${email} from the access list?`)) return;
-    try {
-      await apiFetch(`/users/${userId}`, { method: 'DELETE' });
-      toast.success('User removed.');
-      fetchData();
-    } catch (err: any) { toast.error('Error: ' + err.message); }
-  };
-
-  const handleSendReset = async (email: string) => {
-    if (!canEdit) return;
-    if (!window.confirm(`Send password reset email to ${email}?`)) return;
-    try {
-      await sendPasswordResetEmail(auth, email);
-      toast.success(`Reset email sent to ${email}.`);
-    } catch (err: any) {
-      toast.error(err.code === 'auth/user-not-found' ? 'User not in Firebase Auth.' : err.message);
-    }
-  };
+  const handleDelete = (userId: string, email: string) => setDeleteUserTarget({ id: userId, email });
+  const handleSendReset = (email: string) => setResetPwTarget(email);
+  const handleDeletePreset = (id: string, email: string) => setDeletePresetTarget({ id, email });
 
   const handleAddPreset = async (e: any) => {
     e.preventDefault();
@@ -157,28 +140,13 @@ function UsersPage() {
     try {
       await apiFetch('/user-presets', {
         method: 'POST',
-        body: JSON.stringify({
-          email, role: presetRole, department: presetDept, createdBy: profile?.email || ''
-        })
+        body: JSON.stringify({ email, role: presetRole, department: presetDept, createdBy: profile?.email || '' })
       });
       toast.success(`Pre-registered!`);
-      setPresetEmail('');
-      setPresetRole('staff');
-      setPresetDept('Ground Operations');
-      setShowPresetForm(false);
+      setPresetEmail(''); setPresetRole('staff'); setPresetDept('Ground Operations'); setShowPresetForm(false);
       fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingPreset(false);
-  };
-
-  const handleDeletePreset = async (id: string, email: string) => {
-    if (!canEdit) return;
-    if (!window.confirm(`Remove pre-registration for ${email}?`)) return;
-    try {
-      await apiFetch(`/user-presets/${id}`, { method: 'DELETE' });
-      toast.success('Pre-registration removed.');
-      fetchData();
-    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
   if (loading) return <div className="page-content"><p>Loading Users...</p></div>;
@@ -188,10 +156,7 @@ function UsersPage() {
       <div className="staff-header">
         <h2>User Management { !canEdit && <span style={{ fontSize: '14px', color: '#dc2626', fontWeight: 'normal' }}>(View Only)</span> }</h2>
         {canEdit && (
-          <button
-            className="add-staff-btn"
-            onClick={() => setShowPresetForm(!showPresetForm)}
-          >
+          <button className="add-staff-btn" onClick={() => setShowPresetForm(!showPresetForm)}>
             {showPresetForm ? 'Cancel' : '+ Pre-register User'}
           </button>
         )}
@@ -301,6 +266,61 @@ function UsersPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog 
+        isOpen={!!resetPwTarget}
+        title="Send Password Reset?"
+        message={`Send a password reset email to ${resetPwTarget}?`}
+        confirmText="Send"
+        isDanger={false}
+        onConfirm={async () => {
+          if (!resetPwTarget) return;
+          try {
+            await sendPasswordResetEmail(auth, resetPwTarget);
+            toast.success(`Reset email sent to ${resetPwTarget}.`);
+          } catch (err: any) {
+            toast.error(err.code === 'auth/user-not-found' ? 'User not in Firebase Auth.' : err.message);
+          }
+          setResetPwTarget(null);
+        }}
+        onCancel={() => setResetPwTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!deleteUserTarget}
+        title="Remove User?"
+        message={`Remove ${deleteUserTarget?.email} from the access list?`}
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteUserTarget) return;
+          try {
+            await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' });
+            toast.success('User removed.');
+            fetchData();
+          } catch (err: any) { toast.error('Error: ' + err.message); }
+          setDeleteUserTarget(null);
+        }}
+        onCancel={() => setDeleteUserTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!deletePresetTarget}
+        title="Remove Pre-registration?"
+        message={`Remove pre-registration for ${deletePresetTarget?.email}?`}
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deletePresetTarget) return;
+          try {
+            await apiFetch(`/user-presets/${deletePresetTarget.id}`, { method: 'DELETE' });
+            toast.success('Pre-registration removed.');
+            fetchData();
+          } catch (err: any) { toast.error('Error: ' + err.message); }
+          setDeletePresetTarget(null);
+        }}
+        onCancel={() => setDeletePresetTarget(null)}
+      />
     </div>
   );
 }

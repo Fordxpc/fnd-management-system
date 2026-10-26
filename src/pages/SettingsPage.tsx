@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
+import { ConfirmDialog } from '../components/Dialogs';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
@@ -69,7 +70,12 @@ function SettingsPage() {
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [resetting, setResetting] = useState<string | null>(null);
+  
+  // Custom Dialog States
+  const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
+  const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
+  const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
 
   // Temp Access State
   const [tempAccessList, setTempAccessList] = useState<any[]>([]);
@@ -87,20 +93,12 @@ function SettingsPage() {
   const fetchSettings = useCallback(async () => {
     try {
       const [rulesData, usersData, tempAccessData, staffData, inspectorsData] = await Promise.all([
-        apiFetch('/settings/ot_rules'),
-        apiFetch('/users'),
-        apiFetch('/temp-access'),
-        apiFetch('/staff'),
-        apiFetch('/lights-inspectors')
+        apiFetch('/settings/ot_rules'), apiFetch('/users'), apiFetch('/temp-access'), apiFetch('/staff'), apiFetch('/lights-inspectors')
       ]);
       if (rulesData) setOtRules(rulesData);
-      setActiveUsers(usersData);
-      setTempAccessList(tempAccessData);
-      setStaffList(staffData);
-      setInspectorList(inspectorsData);
-    } catch (err: any) {
-      console.error("Failed to load settings", err);
-    }
+      setActiveUsers(usersData); setTempAccessList(tempAccessData);
+      setStaffList(staffData); setInspectorList(inspectorsData);
+    } catch (err: any) { console.error("Failed to load settings", err); }
   }, []);
 
   useEffect(() => {
@@ -113,10 +111,7 @@ function SettingsPage() {
     e.preventDefault();
     setSavingRules(true);
     try {
-      await apiFetch('/settings/ot_rules', {
-        method: 'POST',
-        body: JSON.stringify(otRules)
-      });
+      await apiFetch('/settings/ot_rules', { method: 'POST', body: JSON.stringify(otRules) });
       toast.success('System rules updated!');
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingRules(false);
@@ -145,14 +140,7 @@ function SettingsPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleRemoveTempAccess = async (id: string) => {
-    if (!window.confirm("Remove this temporary access?")) return;
-    try {
-      await apiFetch(`/temp-access/${id}`, { method: 'DELETE' });
-      toast.success('Access removed');
-      fetchSettings();
-    } catch (err: any) { toast.error(err.message); }
-  };
+  const handleRemoveTempAccess = (id: string) => setDeleteTempTarget(id);
 
   const handleAddInspector = async (e: any) => {
     e.preventDefault();
@@ -170,35 +158,10 @@ function SettingsPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleRemoveInspector = async (staffId: string) => {
-    if (!window.confirm("Remove this inspector?")) return;
-    try {
-      await apiFetch(`/lights-inspectors/${staffId}`, { method: 'DELETE' });
-      toast.success('Inspector removed');
-      fetchSettings();
-    } catch (err: any) { toast.error(err.message); }
-  };
+  const handleRemoveInspector = (staffId: string) => setDeleteInspectorTarget(staffId);
 
-  const handleSendReset = async (email: string) => {
-    if (!window.confirm(`Send password reset email to ${email}?`)) return;
-    setResetting(email);
-    try {
-      await sendPasswordResetEmail(auth, email);
-      toast.success(`Password reset email sent to ${email}`);
-    } catch (err: any) {
-      toast.error(err.code === 'auth/user-not-found' ? 'No user found with this email.' : err.message);
-    }
-    setResetting(null);
-  };
-
-  const handleRemoveUser = async (userId: string, email: string) => {
-    if (!window.confirm(`Are you sure you want to remove ${email} from the database?`)) return;
-    try {
-      await apiFetch(`/users/${userId}`, { method: 'DELETE' });
-      toast.success(`${email} removed from lists.`);
-      fetchSettings();
-    } catch (err: any) { toast.error('Error: ' + err.message); }
-  };
+  const handleSendReset = (email: string) => setResetPwTarget(email);
+  const handleRemoveUser = (userId: string, email: string) => setDeleteUserTarget({ id: userId, email });
 
   let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({
     email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null
@@ -323,13 +286,7 @@ function SettingsPage() {
               <table className="mini-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Designation</th>
-                    <th>Email</th>
-                    <th>Target Dept</th>
-                    <th>Start</th>
-                    <th>End</th>
-                    <th>Actions</th>
+                    <th>Name</th><th>Designation</th><th>Email</th><th>Target Dept</th><th>Start</th><th>End</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -427,8 +384,8 @@ function SettingsPage() {
                           {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <button className="reset-pw-btn" disabled={resetting === u.email} onClick={() => handleSendReset(u.email)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>
-                            {resetting === u.email ? '...' : '📧 Reset'}
+                          <button className="reset-pw-btn" disabled={resetPwTarget === u.email} onClick={() => handleSendReset(u.email)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>
+                            {resetPwTarget === u.email ? '...' : '📧 Reset'}
                           </button>
                           {u.id && (
                             <button className="delete-btn" onClick={() => handleRemoveUser(u.id!, u.email)} style={{ padding: '4px 8px', fontSize: '11px' }}>Remove</button>
@@ -475,6 +432,80 @@ function SettingsPage() {
       )}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
+
+      {/* CUSTOM DIALOGS */}
+      <ConfirmDialog 
+        isOpen={!!deleteTempTarget}
+        title="Remove Temp Access?"
+        message="Are you sure you want to remove this temporary access?"
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteTempTarget) return;
+          try {
+            await apiFetch(`/temp-access/${deleteTempTarget}`, { method: 'DELETE' });
+            toast.success('Access removed');
+            fetchSettings();
+          } catch (err: any) { toast.error(err.message); }
+          setDeleteTempTarget(null);
+        }}
+        onCancel={() => setDeleteTempTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!deleteInspectorTarget}
+        title="Remove Inspector?"
+        message="Are you sure you want to remove this staff member from RWY Lights inspectors?"
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteInspectorTarget) return;
+          try {
+            await apiFetch(`/lights-inspectors/${deleteInspectorTarget}`, { method: 'DELETE' });
+            toast.success('Inspector removed');
+            fetchSettings();
+          } catch (err: any) { toast.error(err.message); }
+          setDeleteInspectorTarget(null);
+        }}
+        onCancel={() => setDeleteInspectorTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!resetPwTarget}
+        title="Send Password Reset?"
+        message={`Send a password reset email to ${resetPwTarget}?`}
+        confirmText="Send Email"
+        isDanger={false}
+        onConfirm={async () => {
+          if (!resetPwTarget) return;
+          try {
+            await sendPasswordResetEmail(auth, resetPwTarget);
+            toast.success(`Reset email sent to ${resetPwTarget}.`);
+          } catch (err: any) {
+            toast.error(err.code === 'auth/user-not-found' ? 'User not in Firebase Auth.' : err.message);
+          }
+          setResetPwTarget(null);
+        }}
+        onCancel={() => setResetPwTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!deleteUserTarget}
+        title="Remove User?"
+        message={`Are you sure you want to remove ${deleteUserTarget?.email} from the database?`}
+        confirmText="Remove"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteUserTarget) return;
+          try {
+            await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' });
+            toast.success(`${deleteUserTarget.email} removed from lists.`);
+            fetchSettings();
+          } catch (err: any) { toast.error('Error: ' + err.message); }
+          setDeleteUserTarget(null);
+        }}
+        onCancel={() => setDeleteUserTarget(null)}
+      />
     </div>
   );
 }

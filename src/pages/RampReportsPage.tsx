@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
 import RampForm from './RampForm';
+import { ConfirmDialog } from '../components/Dialogs';
 
 interface RampReportsPageProps {
   onEdit?: (report: any) => void;
@@ -10,6 +11,9 @@ interface RampReportsPageProps {
 function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const [reports, setReports] = useState<any[]>([]);
   const [viewingReport, setViewingReport] = useState<any>(null);
+  
+  // Custom Dialog State
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
     try {
@@ -24,14 +28,7 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
     return () => clearInterval(interval);
   }, [fetchReports]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this report permanently?')) return;
-    try {
-      await apiFetch(`/ramp/reports/${id}`, { method: 'DELETE' });
-      toast.success('Report deleted');
-      fetchReports();
-    } catch (err: any) { toast.error(err.message); }
-  };
+  const handleDelete = (id: string) => setDeleteTarget(id);
 
   const handlePrintModal = () => {
     document.body.classList.add('printing-modal');
@@ -105,6 +102,24 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog 
+        isOpen={!!deleteTarget}
+        title="Delete Report?"
+        message="Are you sure you want to permanently delete this report?"
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          try {
+            await apiFetch(`/ramp/reports/${deleteTarget}`, { method: 'DELETE' });
+            toast.success('Report deleted');
+            fetchReports();
+          } catch (err: any) { toast.error(err.message); }
+          setDeleteTarget(null);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
