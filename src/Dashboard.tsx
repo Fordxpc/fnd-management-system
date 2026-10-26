@@ -49,7 +49,8 @@ function Dashboard(_props: any) {
   const isLightsInspector = lightsInspectors.some((i: any) => 
     i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
   );
-  const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector;
+  const isGroundOpsSMT = isSMT && dept === 'Ground Operations';
+  const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector || isGroundOpsSMT;
 
   const navigate = (page: string) => {
     setCurrentPage(page);

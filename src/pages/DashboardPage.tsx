@@ -57,6 +57,9 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [weather, setWeather] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Live Time State
+  const [currentTime, setCurrentTime] = useState(new Date());
+
   const [openDepts, setOpenDepts] = useState<{ [key: string]: boolean }>({});
   const [openLeaveDepts, setOpenLeaveDepts] = useState<{ [key: string]: boolean }>({});
   const [showMyBalance, setShowMyBalance] = useState(true);
@@ -65,8 +68,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const todayStr = formatDate(new Date());
   const thisMonth = todayStr.slice(0, 7);
   const nowTime = new Date().toTimeString().slice(0, 5);
-  const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
-
+  
   const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
   
   const isDev = profile?.role === 'developer';
@@ -77,6 +79,12 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const canSeeAllDepartments = isDev || isManagerRole || isSMT || hasManagerPosition;
   const isManager = canSeeAllDepartments; 
   const isOpsOrSafety = profile?.department === 'Ground Operations' || profile?.department === 'Safety';
+
+  // Live Clock Effect
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -147,7 +155,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const toggleLeaveDept = (dept: string) => setOpenLeaveDepts(prev => ({ ...prev, [dept]: prev[dept] === false ? true : false }));
 
   const firstName = myStaff?.name ? myStaff.name.split(' ')[0] : (profile?.name || user?.email?.split('@')[0] || 'User');
-  const displayName = firstName;
+  const displayName = myStaff?.name || profile?.name || user?.email?.split('@')[0] || 'User';
 
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
@@ -221,14 +229,35 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   if (loading) return <div className="page-content"><p>Loading Dashboard...</p></div>;
 
+  // Time format helpers
+  const hour = currentTime.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const formattedDate = currentTime.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const formattedTime = currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
   return (
     <div className="page-content">
       <div className="dash-welcome" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2>{new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'}, {displayName}</h2>
-          <p>{todayName}, {todayStr} · <strong>{String(profile?.role || 'staff').toUpperCase()}</strong> · {profile?.department || 'All Depts'}</p>
+          <h2 style={{ fontSize: '24px', marginBottom: '4px' }}>{greeting}, {displayName}</h2>
+          
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '13px', color: '#cbd5e1', marginBottom: '8px', marginTop: '4px' }}>
+            <span style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+              {myStaff?.sn || profile?.sn || 'No SN'}
+            </span>
+            <span style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+              {myStaff?.position || profile?.role || 'Staff'}
+            </span>
+            <span style={{ background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+              {myStaff?.department || profile?.department || 'All Depts'}
+            </span>
+          </div>
+
+          <div style={{ fontSize: '14px', color: '#93c5fd', fontWeight: 500 }}>
+            {formattedDate} <span style={{ margin: '0 8px', opacity: 0.5 }}>|</span> {formattedTime}
+          </div>
         </div>
-        <div style={{ fontSize: '40px' }}>✈️</div>
+        <div style={{ fontSize: '48px', opacity: 0.8 }}>✈️</div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>

@@ -22,7 +22,8 @@ export default function RWYLightsPage() {
     i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
   );
 
-  const canEdit = isDev || isManager || isSelectedInspector;
+  const isGroundOpsSMT = isSMT && profile?.department === 'Ground Operations';
+  const canEdit = isDev || isManager || isSelectedInspector || isGroundOpsSMT;
   
   const [records, setRecords] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);

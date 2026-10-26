@@ -62,7 +62,7 @@ function SettingsPage() {
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const canManageAccess = isDev || isManager || isSMT;
+  const canManageAccess = isDev || isManager;
   
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
