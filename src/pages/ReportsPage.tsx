@@ -148,7 +148,6 @@ function ReportsPage() {
 
   if (loading) return <div className="page-content"><p>Loading Reports from D1...</p></div>;
 
-  // Filter out Air Ambulance flights for Stats and Traffic
   const validFlightsForStats = rampData.filter(r => {
     const c = (r.comments || '').toLowerCase();
     const rem = (r.remarks || '').toLowerCase();
@@ -310,46 +309,52 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rampData.map((r, i) => (
-                  <tr key={r.id} style={{ backgroundColor: getAircraftColor(r.acType) }}>
-                    <td style={tdStyle}>{i + 1}</td>
-                    <td style={tdStyle}>{r.date}</td>
-                    <td style={tdStyle}>{r.checkIn}</td>
-                    <td style={tdStyle}>{r.acReg}</td>
-                    <td style={tdStyle}><strong>{r.acType}</strong></td>
-                    <td style={tdStyle}>Island Aviations Services</td>
-                    <td style={tdStyle}>{r.fltNo}</td>
-                    <td style={tdStyle}>{r.eta}</td>
-                    <td style={tdStyle}>{r.ata}</td>
-                    <td style={tdStyle}>{r.route?.split('/')[0] || 'MLE'}</td>
-                    <td style={tdStyle}>{r.route?.split('/')[1] || 'FND'}</td>
-                    <td style={tdStyle}>{r.route?.split('/')[2] || 'MLE'}</td>
-                    <td style={tdStyle}>{r.fltNo?.replace('2', '3')}</td>
-                    <td style={tdStyle}>{r.atd}</td>
-                    <td style={tdStyle}>2</td>
-                    <td style={tdStyle}>{r.paxInAdult || 0}</td>
-                    <td style={tdStyle}>{r.paxInInf || 0}</td>
-                    <td style={tdStyle}>{r.paxOutAdult || 0}</td>
-                    <td style={tdStyle}>{r.paxOutInf || 0}</td>
-                    <td style={tdStyle}>{r.paxTransAdult || 0}</td>
-                    <td style={tdStyle}>{r.paxTransInf || 0}</td>
-                    <td style={tdStyle}>{r.mailIn || 0}</td>
-                    <td style={tdStyle}>{r.mailOut || 0}</td>
-                    <td style={tdStyle}>{r.mailTrans || 0}</td>
-                    <td style={tdStyle}>{r.cargoIn || 0}</td>
-                    <td style={tdStyle}>{r.cargoOut || 0}</td>
-                    <td style={tdStyle}>{r.cargoTrans || 0}</td>
-                    <td style={tdStyle}>{r.otherIn || 0}</td>
-                    <td style={tdStyle}>{r.otherOut || 0}</td>
-                    <td style={tdStyle}>{r.otherTrans || 0}</td>
-                    <td style={tdStyle}>{r.bagIn || 0}</td>
-                    <td style={tdStyle}>{r.bagOut || 0}</td>
-                    <td style={tdStyle}>{r.bagTrans || 0}</td>
-                    {/* FIXED: Show CheckedBy and Comments here */}
-                    <td style={tdStyle}>{r.checkedBy || r.observer || '—'}</td>
-                    <td style={tdStyle}>{r.comments || 'NIL'}</td>
-                  </tr>
-                ))}
+                {rampData.map((r, i) => {
+                  // Find the staff member to show the real name instead of email
+                  const rawEmail = (r.checkedBy || r.observer || '').toLowerCase();
+                  const staffMatch = staffData.find((s: any) => (s.email || '').toLowerCase() === rawEmail);
+                  const collectorName = staffMatch ? staffMatch.name : (r.checkedBy || r.observer || '—').split('@')[0];
+
+                  return (
+                    <tr key={r.id} style={{ backgroundColor: getAircraftColor(r.acType) }}>
+                      <td style={tdStyle}>{i + 1}</td>
+                      <td style={tdStyle}>{r.date}</td>
+                      <td style={tdStyle}>{r.checkIn}</td>
+                      <td style={tdStyle}>{r.acReg}</td>
+                      <td style={tdStyle}><strong>{r.acType}</strong></td>
+                      <td style={tdStyle}>Island Aviations Services</td>
+                      <td style={tdStyle}>{r.fltNo}</td>
+                      <td style={tdStyle}>{r.eta}</td>
+                      <td style={tdStyle}>{r.ata}</td>
+                      <td style={tdStyle}>{r.route?.split('/')[0] || 'MLE'}</td>
+                      <td style={tdStyle}>{r.route?.split('/')[1] || 'FND'}</td>
+                      <td style={tdStyle}>{r.route?.split('/')[2] || 'MLE'}</td>
+                      <td style={tdStyle}>{r.fltNo?.replace('2', '3')}</td>
+                      <td style={tdStyle}>{r.atd}</td>
+                      <td style={tdStyle}>2</td>
+                      <td style={tdStyle}>{r.paxInAdult || 0}</td>
+                      <td style={tdStyle}>{r.paxInInf || 0}</td>
+                      <td style={tdStyle}>{r.paxOutAdult || 0}</td>
+                      <td style={tdStyle}>{r.paxOutInf || 0}</td>
+                      <td style={tdStyle}>{r.paxTransAdult || 0}</td>
+                      <td style={tdStyle}>{r.paxTransInf || 0}</td>
+                      <td style={tdStyle}>{r.mailIn || 0}</td>
+                      <td style={tdStyle}>{r.mailOut || 0}</td>
+                      <td style={tdStyle}>{r.mailTrans || 0}</td>
+                      <td style={tdStyle}>{r.cargoIn || 0}</td>
+                      <td style={tdStyle}>{r.cargoOut || 0}</td>
+                      <td style={tdStyle}>{r.cargoTrans || 0}</td>
+                      <td style={tdStyle}>{r.otherIn || 0}</td>
+                      <td style={tdStyle}>{r.otherOut || 0}</td>
+                      <td style={tdStyle}>{r.otherTrans || 0}</td>
+                      <td style={tdStyle}>{r.bagIn || 0}</td>
+                      <td style={tdStyle}>{r.bagOut || 0}</td>
+                      <td style={tdStyle}>{r.bagTrans || 0}</td>
+                      <td style={tdStyle}>{collectorName}</td>
+                      <td style={tdStyle}>{r.comments || 'NIL'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -370,7 +375,6 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {/* USING FILTERED DATA HERE */}
                 {validFlightsForStats.map(r => (
                   <tr key={r.id} style={{ backgroundColor: getAircraftColor(r.acType) }}>
                     <td style={tdStyle}>{r.date}</td>
@@ -411,7 +415,6 @@ function ReportsPage() {
               </thead>
               <tbody>
                 {['DH-8/200', 'DH-8/300', 'ATR-72', 'ATR-42'].map(type => {
-                  // USING FILTERED DATA HERE
                   const flights = validFlightsForStats.filter(r => {
                     const ac = (r.acType || '').toUpperCase().replace(/\s+/g, '');
                     if (type === 'DH-8/300') return ac.includes('DH-8/300') || ac.includes('DASH8-C');
