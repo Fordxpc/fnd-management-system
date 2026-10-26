@@ -476,23 +476,28 @@ function ReportsPage() {
              <table style={tableStyle}>
               <thead>
                 <tr>
-                  <th style={thStyle}>Date</th><th style={thStyle}>Inspector</th>
-                  <th style={thStyle}>Edge (A/B)</th><th style={thStyle}>End (01/19)</th>
-                  <th style={thStyle}>Threshold</th><th style={thStyle}>Apron (Masts x Lts)</th>
-                  <th style={thStyle}>ROB</th><th style={thStyle}>Windcone</th>
+                  <th style={thStyle}>Date</th><th style={thStyle}>Time</th><th style={thStyle}>Inspector</th><th style={thStyle}>Weather</th>
+                  <th style={thStyle}>Edge (A/B)</th><th style={thStyle}>End (01/19)</th><th style={thStyle}>Thresh (01/19)</th>
+                  <th style={thStyle}>PAPI 01 (L/B)</th><th style={thStyle}>PAPI 19 (L/B)</th>
+                  <th style={thStyle}>Taxi (A/B)</th><th style={thStyle}>Apron</th><th style={thStyle}>ROB</th><th style={thStyle}>Windcone</th>
                   <th style={thStyle}>Remarks</th>
                 </tr>
               </thead>
               <tbody>
                 {lightsData.length === 0 ? (
-                  <tr><td colSpan={9} style={{ padding: '20px', textAlign: 'center' }}>No light records found.</td></tr>
+                  <tr><td colSpan={14} style={{ padding: '20px', textAlign: 'center' }}>No light records found.</td></tr>
                 ) : lightsData.map(r => (
                   <tr key={r.id}>
                     <td style={tdStyle}>{r.date}</td>
+                    <td style={tdStyle}>{r.time || '—'}</td>
                     <td style={tdStyle}>{r.inspectorName}</td>
+                    <td style={tdStyle}>{r.weather || '—'}</td>
                     <td style={tdStyle}>{r.data.edge?.sideA || 0} / {r.data.edge?.sideB || 0}</td>
-                    <td style={tdStyle}>{r.data.end?.sideA || 0} / {r.data.end?.sideB || 0}</td>
-                    <td style={tdStyle}>{r.data.threshold?.count || 0}</td>
+                    <td style={tdStyle}>{r.data.end?.rwy01 || 0} / {r.data.end?.rwy19 || 0}</td>
+                    <td style={tdStyle}>{r.data.threshold?.rwy01 || 0} / {r.data.threshold?.rwy19 || 0}</td>
+                    <td style={tdStyle}>{r.data.papi?.rwy01?.count || 0} / {r.data.papi?.rwy01?.brightness || '—'}</td>
+                    <td style={tdStyle}>{r.data.papi?.rwy19?.count || 0} / {r.data.papi?.rwy19?.brightness || '—'}</td>
+                    <td style={tdStyle}>{r.data.taxi?.boardA || 0} / {r.data.taxi?.boardB || 0}</td>
                     <td style={tdStyle}>{r.data.apron?.masts || 0} x {r.data.apron?.perMast || 0}</td>
                     <td style={tdStyle}><strong>{r.data.rob?.status || 'In Service'}</strong></td>
                     <td style={tdStyle}><strong>{r.data.windcone?.status || 'In Service'}</strong></td>
