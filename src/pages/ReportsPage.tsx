@@ -15,7 +15,6 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse' as const, fontSiz
 const thStyle = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' as const };
 const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' as const };
 
-// FIXED: Properly matches DASH-8/300 and DASH-8/200
 const getAircraftColor = (type: string) => {
   if (!type) return '#ffffff';
   const t = type.toUpperCase();
@@ -43,15 +42,24 @@ const AircraftLegend = () => (
   </div>
 );
 
-// Helper to extract just the kg part from strings like "2/30" or "30"
+// Parses "X/Y" and returns Y (kg). If just "Y", returns Y.
 const parseKg = (val: any) => {
   if (!val) return 0;
   const str = String(val);
   if (str.includes('/')) {
-    const parts = str.split('/');
-    return Number(parts[1]) || 0; // Takes the second number (kg)
+    return Number(str.split('/')[1]) || 0;
   }
-  return Number(str) || 0; // Fallback if they just typed the kg
+  return Number(str) || 0;
+};
+
+// Parses "X/Y" and returns X (pcs).
+const parsePcs = (val: any) => {
+  if (!val) return 0;
+  const str = String(val);
+  if (str.includes('/')) {
+    return Number(str.split('/')[0]) || 0;
+  }
+  return 0;
 };
 
 function ReportsPage() {
@@ -169,48 +177,36 @@ function ReportsPage() {
   // Calculate Totals for DFIS
   const dfisTotals = rampData.reduce((acc, r) => {
     acc.mvmnts += 2;
-    acc.paxInAd += Number(r.paxInAdult || 0);
-    acc.paxInInf += Number(r.paxInInf || 0);
-    acc.paxOutAd += Number(r.paxOutAdult || 0);
-    acc.paxOutInf += Number(r.paxOutInf || 0);
-    acc.paxTransAd += Number(r.paxTransAdult || 0);
-    acc.paxTransInf += Number(r.paxTransInf || 0);
-    acc.mailIn += parseKg(r.mailIn);
-    acc.mailOut += parseKg(r.mailOut);
-    acc.mailTrans += parseKg(r.mailTrans);
-    acc.cargoIn += parseKg(r.cargoIn);
-    acc.cargoOut += parseKg(r.cargoOut);
-    acc.cargoTrans += parseKg(r.cargoTrans);
-    acc.otherIn += parseKg(r.otherIn);
-    acc.otherOut += parseKg(r.otherOut);
-    acc.otherTrans += parseKg(r.otherTrans);
+    acc.paxInAd += Number(r.paxInAdult || 0); acc.paxInInf += Number(r.paxInInf || 0);
+    acc.paxOutAd += Number(r.paxOutAdult || 0); acc.paxOutInf += Number(r.paxOutInf || 0);
+    acc.paxTransAd += Number(r.paxTransAdult || 0); acc.paxTransInf += Number(r.paxTransInf || 0);
     
-    const inPcs = r.bagInPcs !== undefined ? Number(r.bagInPcs) : Number(r.bagIn?.split('/')[0] || 0);
-    const inKg = r.bagInKg !== undefined ? Number(r.bagInKg) : Number(r.bagIn?.split('/')[1] || 0);
-    acc.bagInPcs += inPcs; acc.bagInKg += inKg;
+    acc.mailInPcs += parsePcs(r.mailIn); acc.mailInKg += parseKg(r.mailIn);
+    acc.mailOutPcs += parsePcs(r.mailOut); acc.mailOutKg += parseKg(r.mailOut);
+    acc.mailTransPcs += parsePcs(r.mailTrans); acc.mailTransKg += parseKg(r.mailTrans);
 
-    const outPcs = r.bagOutPcs !== undefined ? Number(r.bagOutPcs) : Number(r.bagOut?.split('/')[0] || 0);
-    const outKg = r.bagOutKg !== undefined ? Number(r.bagOutKg) : Number(r.bagOut?.split('/')[1] || 0);
-    acc.bagOutPcs += outPcs; acc.bagOutKg += outKg;
+    acc.cargoInPcs += parsePcs(r.cargoIn); acc.cargoInKg += parseKg(r.cargoIn);
+    acc.cargoOutPcs += parsePcs(r.cargoOut); acc.cargoOutKg += parseKg(r.cargoOut);
+    acc.cargoTransPcs += parsePcs(r.cargoTrans); acc.cargoTransKg += parseKg(r.cargoTrans);
 
-    const transPcs = r.bagTransPcs !== undefined ? Number(r.bagTransPcs) : Number(r.bagTrans?.split('/')[0] || 0);
-    const transKg = r.bagTransKg !== undefined ? Number(r.bagTransKg) : Number(r.bagTrans?.split('/')[1] || 0);
-    acc.bagTransPcs += transPcs; acc.bagTransKg += transKg;
+    acc.otherInPcs += parsePcs(r.otherIn); acc.otherInKg += parseKg(r.otherIn);
+    acc.otherOutPcs += parsePcs(r.otherOut); acc.otherOutKg += parseKg(r.otherOut);
+    acc.otherTransPcs += parsePcs(r.otherTrans); acc.otherTransKg += parseKg(r.otherTrans);
+
+    acc.bagInPcs += parsePcs(r.bagIn); acc.bagInKg += parseKg(r.bagIn);
+    acc.bagOutPcs += parsePcs(r.bagOut); acc.bagOutKg += parseKg(r.bagOut);
+    acc.bagTransPcs += parsePcs(r.bagTrans); acc.bagTransKg += parseKg(r.bagTrans);
 
     return acc;
-  }, { mvmnts: 0, paxInAd: 0, paxInInf: 0, paxOutAd: 0, paxOutInf: 0, paxTransAd: 0, paxTransInf: 0, mailIn: 0, mailOut: 0, mailTrans: 0, cargoIn: 0, cargoOut: 0, cargoTrans: 0, otherIn: 0, otherOut: 0, otherTrans: 0, bagInPcs: 0, bagInKg: 0, bagOutPcs: 0, bagOutKg: 0, bagTransPcs: 0, bagTransKg: 0 });
+  }, { mvmnts: 0, paxInAd: 0, paxInInf: 0, paxOutAd: 0, paxOutInf: 0, paxTransAd: 0, paxTransInf: 0, mailInPcs: 0, mailInKg: 0, mailOutPcs: 0, mailOutKg: 0, mailTransPcs: 0, mailTransKg: 0, cargoInPcs: 0, cargoInKg: 0, cargoOutPcs: 0, cargoOutKg: 0, cargoTransPcs: 0, cargoTransKg: 0, otherInPcs: 0, otherInKg: 0, otherOutPcs: 0, otherOutKg: 0, otherTransPcs: 0, otherTransKg: 0, bagInPcs: 0, bagInKg: 0, bagOutPcs: 0, bagOutKg: 0, bagTransPcs: 0, bagTransKg: 0 });
 
   // Calculate Totals for Statistics
   const statsTotals = validFlightsForStats.reduce((acc, r) => {
     acc.mvmts += 2;
-    acc.paxInAd += Number(r.paxInAdult || 0);
-    acc.paxInInf += Number(r.paxInInf || 0);
-    acc.paxOutAd += Number(r.paxOutAdult || 0);
-    acc.paxOutInf += Number(r.paxOutInf || 0);
-    acc.cargoIn += parseKg(r.cargoIn);
-    acc.cargoOut += parseKg(r.cargoOut);
-    acc.mailIn += parseKg(r.mailIn);
-    acc.mailOut += parseKg(r.mailOut);
+    acc.paxInAd += Number(r.paxInAdult || 0); acc.paxInInf += Number(r.paxInInf || 0);
+    acc.paxOutAd += Number(r.paxOutAdult || 0); acc.paxOutInf += Number(r.paxOutInf || 0);
+    acc.cargoIn += parseKg(r.cargoIn); acc.cargoOut += parseKg(r.cargoOut);
+    acc.mailIn += parseKg(r.mailIn); acc.mailOut += parseKg(r.mailOut);
     return acc;
   }, { mvmts: 0, paxInAd: 0, paxInInf: 0, paxOutAd: 0, paxOutInf: 0, cargoIn: 0, cargoOut: 0, mailIn: 0, mailOut: 0 });
 
@@ -362,9 +358,9 @@ function ReportsPage() {
                   <th style={thStyle}>Flight No.</th><th style={thStyle}>Time (DT)</th>
                   <th style={thStyle}>Adult</th><th style={thStyle}>Inft.</th><th style={thStyle}>Adult</th><th style={thStyle}>Inft.</th>
                   <th style={thStyle}>Adult</th><th style={thStyle}>Inft.</th>
-                  <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
-                  <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
-                  <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
+                  <th style={thStyle}>In(pcs/kg)</th><th style={thStyle}>Out(pcs/kg)</th><th style={thStyle}>Tran(pcs/kg)</th>
+                  <th style={thStyle}>In(pcs/kg)</th><th style={thStyle}>Out(pcs/kg)</th><th style={thStyle}>Tran(pcs/kg)</th>
+                  <th style={thStyle}>In(pcs/kg)</th><th style={thStyle}>Out(pcs/kg)</th><th style={thStyle}>Tran(pcs/kg)</th>
                   <th style={thStyle}>In(pcs/kg)</th><th style={thStyle}>Out(pcs/kg)</th><th style={thStyle}>Tran(pcs/kg)</th>
                 </tr>
               </thead>
@@ -397,21 +393,18 @@ function ReportsPage() {
                       <td style={tdStyle}>{r.paxOutInf || 0}</td>
                       <td style={tdStyle}>{r.paxTransAdult || 0}</td>
                       <td style={tdStyle}>{r.paxTransInf || 0}</td>
-                      <td style={tdStyle}>{r.mailIn || 0}</td>
-                      <td style={tdStyle}>{r.mailOut || 0}</td>
-                      <td style={tdStyle}>{r.mailTrans || 0}</td>
-                      <td style={tdStyle}>{r.cargoIn || 0}</td>
-                      <td style={tdStyle}>{r.cargoOut || 0}</td>
-                      <td style={tdStyle}>{r.cargoTrans || 0}</td>
-                      <td style={tdStyle}>{r.otherIn || 0}</td>
-                      <td style={tdStyle}>{r.otherOut || 0}</td>
-                      <td style={tdStyle}>{r.otherTrans || 0}</td>
-                      
-                      {/* Shows just X/Y without 'pcs' and 'kg' */}
-                      <td style={tdStyle}>{r.bagInPcs !== undefined ? `${r.bagInPcs}/${r.bagInKg}` : (r.bagIn || '—')}</td>
-                      <td style={tdStyle}>{r.bagOutPcs !== undefined ? `${r.bagOutPcs}/${r.bagOutKg}` : (r.bagOut || '—')}</td>
-                      <td style={tdStyle}>{r.bagTransPcs !== undefined ? `${r.bagTransPcs}/${r.bagTransKg}` : (r.bagTrans || '—')}</td>
-                      
+                      <td style={tdStyle}>{r.mailIn || '—'}</td>
+                      <td style={tdStyle}>{r.mailOut || '—'}</td>
+                      <td style={tdStyle}>{r.mailTrans || '—'}</td>
+                      <td style={tdStyle}>{r.cargoIn || '—'}</td>
+                      <td style={tdStyle}>{r.cargoOut || '—'}</td>
+                      <td style={tdStyle}>{r.cargoTrans || '—'}</td>
+                      <td style={tdStyle}>{r.otherIn || '—'}</td>
+                      <td style={tdStyle}>{r.otherOut || '—'}</td>
+                      <td style={tdStyle}>{r.otherTrans || '—'}</td>
+                      <td style={tdStyle}>{r.bagIn || '—'}</td>
+                      <td style={tdStyle}>{r.bagOut || '—'}</td>
+                      <td style={tdStyle}>{r.bagTrans || '—'}</td>
                       <td style={tdStyle}>{collectorName}</td>
                       <td style={tdStyle}>{r.comments || 'NIL'}</td>
                     </tr>
@@ -428,15 +421,15 @@ function ReportsPage() {
                   <td style={tdStyle}>{dfisTotals.paxOutInf}</td>
                   <td style={tdStyle}>{dfisTotals.paxTransAd}</td>
                   <td style={tdStyle}>{dfisTotals.paxTransInf}</td>
-                  <td style={tdStyle}>{dfisTotals.mailIn}</td>
-                  <td style={tdStyle}>{dfisTotals.mailOut}</td>
-                  <td style={tdStyle}>{dfisTotals.mailTrans}</td>
-                  <td style={tdStyle}>{dfisTotals.cargoIn}</td>
-                  <td style={tdStyle}>{dfisTotals.cargoOut}</td>
-                  <td style={tdStyle}>{dfisTotals.cargoTrans}</td>
-                  <td style={tdStyle}>{dfisTotals.otherIn}</td>
-                  <td style={tdStyle}>{dfisTotals.otherOut}</td>
-                  <td style={tdStyle}>{dfisTotals.otherTrans}</td>
+                  <td style={tdStyle}>{dfisTotals.mailInPcs}/{dfisTotals.mailInKg}</td>
+                  <td style={tdStyle}>{dfisTotals.mailOutPcs}/{dfisTotals.mailOutKg}</td>
+                  <td style={tdStyle}>{dfisTotals.mailTransPcs}/{dfisTotals.mailTransKg}</td>
+                  <td style={tdStyle}>{dfisTotals.cargoInPcs}/{dfisTotals.cargoInKg}</td>
+                  <td style={tdStyle}>{dfisTotals.cargoOutPcs}/{dfisTotals.cargoOutKg}</td>
+                  <td style={tdStyle}>{dfisTotals.cargoTransPcs}/{dfisTotals.cargoTransKg}</td>
+                  <td style={tdStyle}>{dfisTotals.otherInPcs}/{dfisTotals.otherInKg}</td>
+                  <td style={tdStyle}>{dfisTotals.otherOutPcs}/{dfisTotals.otherOutKg}</td>
+                  <td style={tdStyle}>{dfisTotals.otherTransPcs}/{dfisTotals.otherTransKg}</td>
                   <td style={tdStyle}>{dfisTotals.bagInPcs}/{dfisTotals.bagInKg}</td>
                   <td style={tdStyle}>{dfisTotals.bagOutPcs}/{dfisTotals.bagOutKg}</td>
                   <td style={tdStyle}>{dfisTotals.bagTransPcs}/{dfisTotals.bagTransKg}</td>

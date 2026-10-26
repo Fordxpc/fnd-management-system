@@ -44,6 +44,36 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     e.target.blur();
   };
 
+  // Reusable component for the split inputs
+  const SplitInput = ({ prefix, label }: { prefix: string, label: string }) => (
+    <table className="inner-table">
+      <thead><tr><th colSpan={3}>{label}</th></tr><tr><th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th></tr></thead>
+      <tbody><tr>
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+            <input type="text" id={`${prefix}InPcs`} value={formData[`${prefix}InPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+            <span style={{ fontWeight: 'bold' }}>/</span>
+            <input type="text" id={`${prefix}InKg`} value={formData[`${prefix}InKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+          </div>
+        </td>
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+            <input type="text" id={`${prefix}OutPcs`} value={formData[`${prefix}OutPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+            <span style={{ fontWeight: 'bold' }}>/</span>
+            <input type="text" id={`${prefix}OutKg`} value={formData[`${prefix}OutKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+          </div>
+        </td>
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+            <input type="text" id={`${prefix}TransPcs`} value={formData[`${prefix}TransPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+            <span style={{ fontWeight: 'bold' }}>/</span>
+            <input type="text" id={`${prefix}TransKg`} value={formData[`${prefix}TransKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+          </div>
+        </td>
+      </tr></tbody>
+    </table>
+  );
+
   return (
     <>
       <div className={`ramp-sheet ${isViewOnlyMode ? 'view-only' : ''}`}>
@@ -174,59 +204,13 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <td><input type="number" id="paxTransTotal" value={formData.paxTransTotal} readOnly /></td>
               </tr></tbody>
             </table>
-            <table className="inner-table">
-              <thead><tr><th colSpan={3}>CARGO</th></tr><tr><th>In(kg)</th><th>Out(kg)</th><th>Trans(kg)</th></tr></thead>
-              <tbody><tr>
-                <td><input type="text" id="cargoIn" value={formData.cargoIn} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="cargoOut" value={formData.cargoOut} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="cargoTrans" value={formData.cargoTrans} onChange={handleChange} readOnly={!isManager} /></td>
-              </tr></tbody>
-            </table>
-            <table className="inner-table">
-              <thead><tr><th colSpan={3}>MAIL</th></tr><tr><th>In(kg)</th><th>Out(kg)</th><th>Trans(kg)</th></tr></thead>
-              <tbody><tr>
-                <td><input type="text" id="mailIn" value={formData.mailIn} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="mailOut" value={formData.mailOut} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="mailTrans" value={formData.mailTrans} onChange={handleChange} readOnly={!isManager} /></td>
-              </tr></tbody>
-            </table>
             
-            {/* BAGGAGE TABLE - UPDATED WITH SPLIT INPUTS */}
-            <table className="inner-table">
-              <thead><tr><th colSpan={3}>BAGGAGE</th></tr><tr><th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th></tr></thead>
-              <tbody><tr>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <input type="text" id="bagInPcs" value={formData.bagInPcs || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-                    <span style={{ fontWeight: 'bold' }}>/</span>
-                    <input type="text" id="bagInKg" value={formData.bagInKg || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-                  </div>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <input type="text" id="bagOutPcs" value={formData.bagOutPcs || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-                    <span style={{ fontWeight: 'bold' }}>/</span>
-                    <input type="text" id="bagOutKg" value={formData.bagOutKg || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-                  </div>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <input type="text" id="bagTransPcs" value={formData.bagTransPcs || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-                    <span style={{ fontWeight: 'bold' }}>/</span>
-                    <input type="text" id="bagTransKg" value={formData.bagTransKg || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
-                  </div>
-                </td>
-              </tr></tbody>
-            </table>
-            
-            <table className="inner-table">
-              <thead><tr><th colSpan={3}>OTHERS</th></tr><tr><th>In(kg)</th><th>Out(kg)</th><th>Trans(kg)</th></tr></thead>
-              <tbody><tr>
-                <td><input type="text" id="otherIn" value={formData.otherIn} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="otherOut" value={formData.otherOut} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="otherTrans" value={formData.otherTrans} onChange={handleChange} readOnly={!isManager} /></td>
-              </tr></tbody>
-            </table>
+            {/* USING THE SPLIT INPUT COMPONENT FOR ALL KG FIELDS */}
+            <SplitInput prefix="cargo" label="CARGO" />
+            <SplitInput prefix="mail" label="MAIL" />
+            <SplitInput prefix="bag" label="BAGGAGE" />
+            <SplitInput prefix="other" label="OTHERS" />
+
             <table className="inner-table">
               <thead><tr><th colSpan={3}>SPECIAL INSTRUCTIONS</th></tr></thead>
               <tbody><tr>
@@ -263,24 +247,14 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
             </p>
             
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', margin: '0 auto 24px auto' }}>
-              <select 
-                value={tempHour} 
-                onChange={(e) => setTempHour(e.target.value)} 
-                style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}
-              >
+              <select value={tempHour} onChange={(e) => setTempHour(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
                 {Array.from({ length: 24 }).map((_, i) => {
                   const h = String(i).padStart(2, '0');
                   return <option key={h} value={h}>{h}</option>;
                 })}
               </select>
-              
               <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>:</span>
-              
-              <select 
-                value={tempMin} 
-                onChange={(e) => setTempMin(e.target.value)} 
-                style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}
-              >
+              <select value={tempMin} onChange={(e) => setTempMin(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
                 {Array.from({ length: 60 }).map((_, i) => {
                   const m = String(i).padStart(2, '0');
                   return <option key={m} value={m}>{m}</option>;
@@ -288,26 +262,15 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
               </select>
             </div>
 
-            <button 
-              onClick={handleClearField} 
-              style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}
-            >
+            <button onClick={handleClearField} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}>
               Clear this field
             </button>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
-              <button 
-                onClick={() => setConfirmId(null)} 
-                style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(220, 38, 38, 0.2)' }}
-                title="Cancel"
-              >
+              <button onClick={() => setConfirmId(null)} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(220, 38, 38, 0.2)' }} title="Cancel">
                 ✕
               </button>
-              <button 
-                onClick={executeFillNow} 
-                style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#dcfce7', color: '#16a34a', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(22, 163, 74, 0.2)' }}
-                title="Confirm"
-              >
+              <button onClick={executeFillNow} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#dcfce7', color: '#16a34a', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(22, 163, 74, 0.2)' }} title="Confirm">
                 ✓
               </button>
             </div>

@@ -17,10 +17,13 @@ const INITIAL_FORM = {
   paxInAdult: '', paxInInf: '', paxInLocal: '', paxInForeign: '', paxInTotal: '',
   paxOutAdult: '', paxOutInf: '', paxOutLocal: '', paxOutForeign: '', paxOutTotal: '',
   paxTransAdult: '', paxTransInf: '', paxTransTotal: '',
-  cargoIn: '', cargoOut: '', cargoTrans: '', mailIn: '', mailOut: '', mailTrans: '',
+  cargoInPcs: '', cargoInKg: '', cargoOutPcs: '', cargoOutKg: '', cargoTransPcs: '', cargoTransKg: '',
+  mailInPcs: '', mailInKg: '', mailOutPcs: '', mailOutKg: '', mailTransPcs: '', mailTransKg: '',
   bagInPcs: '', bagInKg: '', bagOutPcs: '', bagOutKg: '', bagTransPcs: '', bagTransKg: '',
-  bagIn: '', bagOut: '', bagTrans: '', // Keep old keys for backward compatibility
-  otherIn: '', otherOut: '', otherTrans: '',
+  otherInPcs: '', otherInKg: '', otherOutPcs: '', otherOutKg: '', otherTransPcs: '', otherTransKg: '',
+  // Legacy keys for DB compatibility
+  cargoIn: '', cargoOut: '', cargoTrans: '', mailIn: '', mailOut: '', mailTrans: '',
+  bagIn: '', bagOut: '', bagTrans: '', otherIn: '', otherOut: '', otherTrans: '',
   specialLoad: '', comments: '', delayTime: '', medicalEmergency: ''
 };
 
@@ -64,24 +67,7 @@ function RampCheckSheetPage() {
       try {
         const draft = await apiFetch('/ramp/draft');
         if (draft && Object.keys(draft).length > 0) {
-          // If loaded from draft, split the old baggage string into the new pcs/kg fields
-          const parsedDraft = { ...draft };
-          if (parsedDraft.bagIn && !parsedDraft.bagInPcs) {
-            const [p, k] = parsedDraft.bagIn.split('/');
-            parsedDraft.bagInPcs = p || '';
-            parsedDraft.bagInKg = k || '';
-          }
-          if (parsedDraft.bagOut && !parsedDraft.bagOutPcs) {
-            const [p, k] = parsedDraft.bagOut.split('/');
-            parsedDraft.bagOutPcs = p || '';
-            parsedDraft.bagOutKg = k || '';
-          }
-          if (parsedDraft.bagTrans && !parsedDraft.bagTransPcs) {
-            const [p, k] = parsedDraft.bagTrans.split('/');
-            parsedDraft.bagTransPcs = p || '';
-            parsedDraft.bagTransKg = k || '';
-          }
-          setFormData(prev => ({ ...prev, ...parsedDraft }));
+          setFormData(prev => ({ ...prev, ...draft }));
         }
       } catch (err) { console.error("Failed to load draft", err); }
     };
@@ -120,16 +106,13 @@ function RampCheckSheetPage() {
         updated.paxTransTotal = String(a + i);
       }
 
-      // Combine split baggage fields into single string for DB
-      if (id.startsWith('bagInPcs') || id.startsWith('bagInKg')) {
-        updated.bagIn = `${updated.bagInPcs || ''}/${updated.bagInKg || ''}`;
-      }
-      if (id.startsWith('bagOutPcs') || id.startsWith('bagOutKg')) {
-        updated.bagOut = `${updated.bagOutPcs || ''}/${updated.bagOutKg || ''}`;
-      }
-      if (id.startsWith('bagTransPcs') || id.startsWith('bagTransKg')) {
-        updated.bagTrans = `${updated.bagTransPcs || ''}/${updated.bagTransKg || ''}`;
-      }
+      // Combine split fields into single string for DB
+      const prefixes = ['cargo', 'mail', 'bag', 'other'];
+      prefixes.forEach(prefix => {
+        if (id.startsWith(`${prefix}InPcs`) || id.startsWith(`${prefix}InKg`)) updated[`${prefix}In`] = `${updated[`${prefix}InPcs`] || ''}/${updated[`${prefix}InKg`] || ''}`;
+        if (id.startsWith(`${prefix}OutPcs`) || id.startsWith(`${prefix}OutKg`)) updated[`${prefix}Out`] = `${updated[`${prefix}OutPcs`] || ''}/${updated[`${prefix}OutKg`] || ''}`;
+        if (id.startsWith(`${prefix}TransPcs`) || id.startsWith(`${prefix}TransKg`)) updated[`${prefix}Trans`] = `${updated[`${prefix}TransPcs`] || ''}/${updated[`${prefix}TransKg`] || ''}`;
+      });
 
       return updated;
     });
@@ -182,12 +165,14 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
-      const { id: _id, bagInPcs: _bp, bagInKg: _bk, bagOutPcs: _bop, bagOutKg: _bok, bagTransPcs: _btp, bagTransKg: _btk, ...rest } = formData as any;
-      
-      const payload = {
-        ...rest,
-        checkedBy: user?.email || rest.checkedBy || rest.observer || 'System'
-      };
+      // Remove temporary split fields before saving to DB
+      const payload = { ...formData } as any;
+      delete payload.cargoInPcs; delete payload.cargoInKg; delete payload.cargoOutPcs; delete payload.cargoOutKg; delete payload.cargoTransPcs; delete payload.cargoTransKg;
+      delete payload.mailInPcs; delete payload.mailInKg; delete payload.mailOutPcs; delete payload.mailOutKg; delete payload.mailTransPcs; delete payload.mailTransKg;
+      delete payload.bagInPcs; delete payload.bagInKg; delete payload.bagOutPcs; delete payload.bagOutKg; delete payload.bagTransPcs; delete payload.bagTransKg;
+      delete payload.otherInPcs; delete payload.otherInKg; delete payload.otherOutPcs; delete payload.otherOutKg; delete payload.otherTransPcs; delete payload.otherTransKg;
+
+      payload.checkedBy = user?.email || formData.checkedBy || formData.observer || 'System';
 
       if (currentDocId) {
         await apiFetch(`/ramp/reports/${currentDocId}`, {
@@ -218,9 +203,7 @@ function RampCheckSheetPage() {
     toast.success('Form cleared');
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const copyLiveLink = () => {
     navigator.clipboard.writeText(window.location.origin + '/live');
@@ -230,23 +213,26 @@ function RampCheckSheetPage() {
   const handleEditReport = (report: any) => {
     const { id, createdAt: _c, updatedAt: _u, ...rest } = report;
     
-    // Split old baggage strings if editing an old report
+    // Split combined strings back into Pcs/Kg for the form
     const parsedReport = { ...rest };
-    if (parsedReport.bagIn && !parsedReport.bagInPcs) {
-      const [p, k] = parsedReport.bagIn.split('/');
-      parsedReport.bagInPcs = p || '';
-      parsedReport.bagInKg = k || '';
-    }
-    if (parsedReport.bagOut && !parsedReport.bagOutPcs) {
-      const [p, k] = parsedReport.bagOut.split('/');
-      parsedReport.bagOutPcs = p || '';
-      parsedReport.bagOutKg = k || '';
-    }
-    if (parsedReport.bagTrans && !parsedReport.bagTransPcs) {
-      const [p, k] = parsedReport.bagTrans.split('/');
-      parsedReport.bagTransPcs = p || '';
-      parsedReport.bagTransKg = k || '';
-    }
+    const prefixes = ['cargo', 'mail', 'bag', 'other'];
+    prefixes.forEach(prefix => {
+      if (parsedReport[`${prefix}In`] && !parsedReport[`${prefix}InPcs`]) {
+        const [p, k] = parsedReport[`${prefix}In`].split('/');
+        parsedReport[`${prefix}InPcs`] = p || '';
+        parsedReport[`${prefix}InKg`] = k || '';
+      }
+      if (parsedReport[`${prefix}Out`] && !parsedReport[`${prefix}OutPcs`]) {
+        const [p, k] = parsedReport[`${prefix}Out`].split('/');
+        parsedReport[`${prefix}OutPcs`] = p || '';
+        parsedReport[`${prefix}OutKg`] = k || '';
+      }
+      if (parsedReport[`${prefix}Trans`] && !parsedReport[`${prefix}TransPcs`]) {
+        const [p, k] = parsedReport[`${prefix}Trans`].split('/');
+        parsedReport[`${prefix}TransPcs`] = p || '';
+        parsedReport[`${prefix}TransKg`] = k || '';
+      }
+    });
 
     setFormData({ ...INITIAL_FORM, ...parsedReport });
     setCurrentDocId(id);
