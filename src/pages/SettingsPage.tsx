@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 const STAFF_CREDENTIALS = [
   { email: 'sn-0034@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Adam' },
@@ -59,24 +60,33 @@ function SettingsPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [resetting, setResetting] = useState<string | null>(null);
+
+  // Temp Access State
+  const [tempAccessList, setTempAccessList] = useState<any[]>([]);
+  const [tempEmail, setTempEmail] = useState('');
+  const [tempDept, setTempDept] = useState('Maintenance');
+  const [tempStart, setTempStart] = useState('');
+  const [tempEnd, setTempEnd] = useState('');
   
   const currentUser = auth.currentUser;
 
-  // FETCH DATA FROM D1
   const fetchSettings = useCallback(async () => {
     try {
-      const rulesData = await apiFetch('/settings/ot_rules');
+      const [rulesData, usersData, tempAccessData] = await Promise.all([
+        apiFetch('/settings/ot_rules'),
+        apiFetch('/users'),
+        apiFetch('/temp-access')
+      ]);
       if (rulesData) setOtRules(rulesData);
-
-      const usersData = await apiFetch('/users');
       setActiveUsers(usersData);
+      setTempAccessList(tempAccessData);
     } catch (err: any) {
       console.error("Failed to load settings", err);
     }
@@ -108,6 +118,29 @@ function SettingsPage() {
     });
   };
 
+  const handleAddTempAccess = async (e: any) => {
+    e.preventDefault();
+    if (!tempEmail || !tempStart || !tempEnd) { toast.error("Fill all fields"); return; }
+    try {
+      await apiFetch('/temp-access', { 
+        method: 'POST', 
+        body: JSON.stringify({ email: tempEmail, targetDept: tempDept, startDate: tempStart, endDate: tempEnd }) 
+      });
+      toast.success('Temporary access granted');
+      setTempEmail(''); setTempStart(''); setTempEnd('');
+      fetchSettings();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleRemoveTempAccess = async (id: string) => {
+    if (!window.confirm("Remove this temporary access?")) return;
+    try {
+      await apiFetch(`/temp-access/${id}`, { method: 'DELETE' });
+      toast.success('Access removed');
+      fetchSettings();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
   const handleSendReset = async (email: string) => {
     if (!window.confirm(`Send password reset email to ${email}?`)) return;
     setResetting(email);
@@ -125,10 +158,8 @@ function SettingsPage() {
     try {
       await apiFetch(`/users/${userId}`, { method: 'DELETE' });
       toast.success(`${email} removed from lists.`);
-      fetchSettings(); // Refresh
-    } catch (err: any) {
-      toast.error('Error: ' + err.message);
-    }
+      fetchSettings();
+    } catch (err: any) { toast.error('Error: ' + err.message); }
   };
 
   let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({
@@ -207,11 +238,11 @@ function SettingsPage() {
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>Regular Staff Weekly Hours</label>
-                <input type="number" value={otRules.regularHours} onChange={e => setOtRules({...otRules, regularHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px' }} />
+                <input type="number" value={otRules.regularHours} onChange={e => setOtRules({...otRules, regularHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px', color: '#1e293b' }} />
               </div>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>Admin Staff Weekly Hours</label>
-                <input type="number" value={otRules.adminHours} onChange={e => setOtRules({...otRules, adminHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px' }} />
+                <input type="number" value={otRules.adminHours} onChange={e => setOtRules({...otRules, adminHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px', color: '#1e293b' }} />
               </div>
             </div>
 
@@ -219,7 +250,7 @@ function SettingsPage() {
             <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>If a staff member takes these leaves during the week, deduct 8 hours from their target.</p>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
               {ALL_LEAVES.map(l => (
-                <label key={l} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', background: otRules.deductLeaves.includes(l) ? '#dbeafe' : '#fff', padding: '6px 12px', borderRadius: '20px', border: '1px solid #cbd5e1', cursor: 'pointer' }}>
+                <label key={l} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', background: otRules.deductLeaves.includes(l) ? '#dbeafe' : '#fff', padding: '6px 12px', borderRadius: '20px', border: '1px solid #cbd5e1', cursor: 'pointer', color: '#1e293b' }}>
                   <input type="checkbox" checked={otRules.deductLeaves.includes(l)} onChange={() => toggleDeductLeave(l)} />
                   {l}
                 </label>
@@ -228,6 +259,36 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
+          {/* TEMP ACCESS SECTION */}
+          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+            <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>🔑 Temporary Cross-Department Access</h4>
+            <form onSubmit={handleAddTempAccess} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Staff Email</label><input type="email" value={tempEmail} onChange={e => setTempEmail(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} /></div>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Target Department</label>
+                <select value={tempDept} onChange={e => setTempDept(e.target.value)} style={{ display: 'block', padding: '8px', color: '#1e293b', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Start Date</label><input type="date" value={tempStart} onChange={e => setTempStart(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} /></div>
+              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>End Date</label><input type="date" value={tempEnd} onChange={e => setTempEnd(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} /></div>
+              <button type="submit" className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }}>Grant Access</button>
+            </form>
+            
+            {tempAccessList.length > 0 && (
+              <table className="mini-table">
+                <thead><tr><th>Email</th><th>Dept</th><th>Start</th><th>End</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {tempAccessList.map(t => (
+                    <tr key={t.id}>
+                      <td>{t.email}</td><td>{t.targetDept}</td><td>{t.startDate}</td><td>{t.endDate}</td>
+                      <td><button onClick={() => handleRemoveTempAccess(t.id)} className="delete-btn">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
           {isDev && (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
@@ -235,11 +296,9 @@ function SettingsPage() {
                   <h4 style={{ margin: 0, color: '#1e293b' }}>👥 Master User List ({allMergedUsers.length})</h4>
                 </div>
                 <input 
-                  type="text" 
-                  placeholder="🔍 Search name or email..." 
-                  value={searchQuery}
+                  type="text" placeholder="🔍 Search name or email..." value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '250px', fontSize: '13px' }}
+                  style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '250px', fontSize: '13px', color: '#1e293b' }}
                 />
               </div>
               
@@ -269,22 +328,11 @@ function SettingsPage() {
                           {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <button 
-                            className="reset-pw-btn" 
-                            disabled={resetting === u.email}
-                            onClick={() => handleSendReset(u.email)}
-                            style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}
-                          >
+                          <button className="reset-pw-btn" disabled={resetting === u.email} onClick={() => handleSendReset(u.email)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>
                             {resetting === u.email ? '...' : '📧 Reset'}
                           </button>
                           {u.id && (
-                            <button 
-                              className="delete-btn"
-                              onClick={() => handleRemoveUser(u.id!, u.email)}
-                              style={{ padding: '4px 8px', fontSize: '11px' }}
-                            >
-                              Remove
-                            </button>
+                            <button className="delete-btn" onClick={() => handleRemoveUser(u.id!, u.email)} style={{ padding: '4px 8px', fontSize: '11px' }}>Remove</button>
                           )}
                         </td>
                       </tr>

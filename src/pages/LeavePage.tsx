@@ -121,7 +121,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 };
 
 function LeavePage() {
-  const { profile, user } = useAuth();
+  const { profile, user, tempAccess } = useAuth(); // Added tempAccess
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
@@ -137,6 +137,7 @@ function LeavePage() {
   const [loading, setLoading] = useState<boolean>(true);
 
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
+  const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false); // New state
   const [balanceTab, setBalanceTab] = useState<'annual' | 'sick' | 'other'>('annual');
 
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -169,7 +170,6 @@ function LeavePage() {
       const rawLeaveData = getData(1);
       const holidaysData = getData(2);
 
-      // SAFETY NET: Remove duplicates from the UI
       const uniqueLeaves = Array.from(new Map(rawLeaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}-${item.leaveType}`, item])).values());
 
       setStaffList(staffData);
@@ -204,6 +204,10 @@ function LeavePage() {
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (myStaff?.department || '').trim().toLowerCase();
     const isActuallySMT = isSMT || myStaff?.isSMT === true;
+    
+    // Temp access check
+    if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === targetDept)) return true;
+
     if (currentDept === 'safety' && targetDept === 'security') return true;
     if (isActuallySMT && currentDept === targetDept) return true;
     if (isDeptManager && currentDept === targetDept) return true;
@@ -244,6 +248,13 @@ function LeavePage() {
 
   const usedDays: { [key: string]: number } = {};
   LEAVE_TYPES.forEach((t) => { usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0; });
+
+  const deptBalanceStaff = staffList
+    .filter((s: any) => {
+      if (s.isSMT === true || s.department === 'Administration') return false;
+      return canApproveThisDept(s.department);
+    })
+    .sort((a: any, b: any) => (a.sn || '').localeCompare(b.sn || ''));
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
@@ -367,6 +378,42 @@ function LeavePage() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* DEPARTMENT STAFF BALANCES (For SMT/Managers/Admins) */}
+      {(canApproveAnyDept || isSMT || tempAccess.length > 0) && deptBalanceStaff.length > 0 && (
+        <div className="collapsible-card">
+          <button className="collapsible-header" onClick={() => setShowDeptBalances(!showDeptBalances)}>
+            <span><strong>👥 Department Staff Balances</strong></span>
+            <span className="collapsible-toggle">{showDeptBalances ? '▼' : '▶'}</span>
+          </button>
+          {showDeptBalances && (
+            <div className="collapsible-body">
+              <div style={{ overflowX: 'auto' }}>
+                <table className="mini-table">
+                  <thead><tr><th>SN</th><th>Name</th><th>Dept</th><th>Annual</th><th>Sick</th><th>FRL</th></tr></thead>
+                  <tbody>
+                    {deptBalanceStaff.map((s: any) => {
+                      const aUsed = computeUsedDays(s.id, s.joinDate || '', 'ANNUAL LEAVE', requests);
+                      const sUsed = computeUsedDays(s.id, s.joinDate || '', 'SICK LEAVE', requests);
+                      const fUsed = computeUsedDays(s.id, s.joinDate || '', 'FAMILY RESPONSIBILITY LEAVE (FRL)', requests);
+                      return (
+                        <tr key={s.id}>
+                          <td>{s.sn || '—'}</td>
+                          <td><strong>{s.name}</strong></td>
+                          <td style={{ fontSize: '12px' }}>{s.department}</td>
+                          <td style={{ fontWeight: 600 }}>{ANNUAL_LEAVE_TOTAL - aUsed} / 30</td>
+                          <td style={{ fontWeight: 600 }}>{15 - sUsed} / 15</td>
+                          <td style={{ fontWeight: 600 }}>{10 - fUsed} / 10</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}

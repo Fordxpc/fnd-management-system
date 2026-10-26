@@ -2,13 +2,14 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import { apiFetch } from './lib/api'; // <-- Import API helper
+import { apiFetch } from './lib/api';
 
 const AuthContext = createContext<any>({});
 
 export function AuthProvider({ children }: any) {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [tempAccess, setTempAccess] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,17 +20,12 @@ export function AuthProvider({ children }: any) {
         const email = (currentUser.email || "").trim().toLowerCase();
         
         try {
-          // 1. Get the real data from the STAFF collection
           let staffData: any = null;
           try {
             const staffSnap = await getDocs(collection(db, "staff"));
             const match = staffSnap.docs.find(d => (d.data().email || "").trim().toLowerCase() === email);
-            if (match) {
-              staffData = match.data();
-            }
-          } catch (e) { 
-            console.warn("Staff lookup failed", e); 
-          }
+            if (match) staffData = match.data();
+          } catch (e) { console.warn(e); }
 
           const staffDept = staffData?.department || ""; 
           const isSMT = staffData?.isSMT === true;
@@ -37,7 +33,6 @@ export function AuthProvider({ children }: any) {
 
           const userRef = doc(db, "users", currentUser.uid);
           const userSnap = await getDoc(userRef);
-
           let finalProfile: any = null;
 
           if (userSnap.exists()) {
@@ -45,106 +40,79 @@ export function AuthProvider({ children }: any) {
             let updates: any = {};
             let needsUpdate = false;
 
-            if (staffDept && userData.department !== staffDept) {
-              updates.department = staffDept;
-              needsUpdate = true;
-            }
-
+            if (staffDept && userData.department !== staffDept) { updates.department = staffDept; needsUpdate = true; }
             if (userData.role === 'staff') {
               if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
               else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }
             }
-
             if (needsUpdate) {
               await updateDoc(userRef, updates);
               finalProfile = { ...userData, ...updates };
-              setProfile(finalProfile);
-            } else {
-              finalProfile = userData;
-              setProfile(finalProfile);
-            }
-
+            } else finalProfile = userData;
           } else {
-            // New user - check for preset
-            let presetDoc: any = null;
-            let presetId: string | null = null;
-
+            let presetDoc: any = null; let presetId: string | null = null;
             try {
               const q = query(collection(db, "user_presets"), where("email", "==", email));
               const presetSnap = await getDocs(q);
-              if (!presetSnap.empty) {
-                presetDoc = presetSnap.docs[0].data();
-                presetId = presetSnap.docs[0].id;
-              }
-            } catch (presetErr) {
-              console.warn("Could not look up preset:", presetErr);
-            }
+              if (!presetSnap.empty) { presetDoc = presetSnap.docs[0].data(); presetId = presetSnap.docs[0].id; }
+            } catch (e) {}
 
             let initialRole = presetDoc?.role || "staff";
             if (initialRole === "staff" && isSMT) initialRole = "smt";
             if (initialRole === "staff" && isManagerPos) initialRole = "manager";
 
             const newProfile = {
-              email: currentUser.email,
-              role: initialRole,
+              email: currentUser.email, role: initialRole,
               department: presetDoc?.department || staffDept || "Ground Operations",
               createdAt: new Date().toISOString(),
-              ...(presetDoc && { presetApplied: true })
             };
-
             await setDoc(userRef, newProfile);
             finalProfile = newProfile;
-            setProfile(newProfile);
-
-            if (presetId) {
-              try { await deleteDoc(doc(db, "user_presets", presetId)); } catch (cleanupErr) { console.warn("Could not delete preset:", cleanupErr); }
-            }
+            if (presetId) await deleteDoc(doc(db, "user_presets", presetId));
           }
 
-          // 🔥 SYNC TO CLOUDFLARE D1 🔥
+          setProfile(finalProfile);
+
+          // Fetch Temporary Access
+          try {
+            const tAccess = await apiFetch('/temp-access');
+            const today = new Date().toISOString().split('T')[0];
+            const activeAccess = tAccess.filter((t: any) => 
+              t.email.toLowerCase() === email && t.startDate <= today && t.endDate >= today
+            );
+            setTempAccess(activeAccess);
+          } catch (e) { console.warn("Temp access fetch failed", e); }
+
           if (finalProfile) {
             try {
               await apiFetch('/users/sync', {
                 method: 'POST',
                 body: JSON.stringify({
-                  uid: currentUser.uid,
-                  email: currentUser.email,
-                  role: finalProfile.role || 'staff',
-                  department: finalProfile.department || 'Ground Operations'
+                  uid: currentUser.uid, email: currentUser.email,
+                  role: finalProfile.role || 'staff', department: finalProfile.department || 'Ground Operations'
                 })
               });
-            } catch (d1Err) {
-              console.error("Failed to sync user to D1:", d1Err);
-            }
+            } catch (d1Err) {}
           }
 
         } catch (err) {
-          console.error("Failed to load user profile:", err);
           setProfile({ email: currentUser.email, role: "staff", department: "Ground Operations" });
         }
       } else {
         setProfile(null);
+        setTempAccess([]);
       }
-
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    try {
-      return await signInWithEmailAndPassword(auth, email, password);
-    } catch (error: any) {
-      console.error("Firebase Login Error:", error);
-      throw error;
-    }
-  };
-
+  const login = async (email: string, password: string) => await signInWithEmailAndPassword(auth, email, password);
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, profile, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, profile, tempAccess, login, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

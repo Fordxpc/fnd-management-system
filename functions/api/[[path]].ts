@@ -556,6 +556,51 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // TEMPORARY ACCESS MODULE
+    // ==========================================
+    if (url.pathname === "/api/temp-access" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM temp_access").all();
+      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/temp-access" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO temp_access (id, email, targetDept, startDate, endDate) VALUES (?, ?, ?, ?, ?)`)
+        .bind(id, body.email, body.targetDept, body.startDate, body.endDate).run();
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM temp_access WHERE id = ?").bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
+    // RUNWAY LIGHTS MODULE
+    // ==========================================
+    if (url.pathname === "/api/lights" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM rwy_lights ORDER BY date DESC").all();
+      const formatted = results.map((row: any) => ({ ...row, data: JSON.parse(row.data || '{}') }));
+      return new Response(JSON.stringify(formatted), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/lights" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO rwy_lights (id, date, inspectorName, data, remarks, createdAt) VALUES (?, ?, ?, ?, ?, ?)`)
+        .bind(id, body.date, body.inspectorName, JSON.stringify(body.data), body.remarks || '', new Date().toISOString()).run();
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/lights/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM rwy_lights WHERE id = ?").bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
     // TIMESHEET / ATTENDANCE MODULE
     // ==========================================
     if (url.pathname === "/api/timesheets" && method === "GET") {

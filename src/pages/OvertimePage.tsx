@@ -48,7 +48,7 @@ const getWeekEnd = (weekStartStr: string): string => {
 const selectStyle = { padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', backgroundColor: '#ffffff' };
 
 function OvertimePage() {
-  const { profile, user } = useAuth();
+  const { profile, user, tempAccess } = useAuth();
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
@@ -114,18 +114,20 @@ function OvertimePage() {
   
   const canViewAll = isDev || isManager;
   
-  // Approver Logic: Safety SMT can approve Security. SMT can approve own dept.
   const canApproveThisDept = (dept: string) => {
     if (canViewAll) return true;
     if (!isSMT) return false;
     const target = (dept || '').toLowerCase();
     const current = (myStaff?.department || '').toLowerCase();
+    
+    // Temp access check
+    if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === target)) return true;
+
     if (current === 'safety' && target === 'security') return true;
     return current === target;
   };
 
   const canEditThisDept = (dept: string) => {
-    // Admin/Manager edit all, SMT edit own dept
     return canViewAll || canApproveThisDept(dept);
   };
 
@@ -137,24 +139,23 @@ function OvertimePage() {
 
   let filtered = entries.filter((e) => (e.date || '').startsWith(monthFilter));
   
-  if (canViewAll) {
+  if (canViewAll || isSMT) {
     if (viewMode === 'individual' && myStaff) {
       filtered = filtered.filter((e) => e.staffId === myStaff.id);
     } else {
-      filtered = filtered.filter((e) => e.staffDepartment === filterDept);
-      if (filterStaff !== 'all') filtered = filtered.filter((e) => e.staffId === filterStaff);
-    }
-  } else if (isSMT) {
-    if (viewMode === 'individual' && myStaff) {
-      filtered = filtered.filter((e) => e.staffId === myStaff.id);
-    } else {
-      filtered = filtered.filter((e) => canApproveThisDept(e.staffDepartment));
+      // Hide own data when looking at department
+      filtered = filtered.filter((e) => e.staffId !== myStaff?.id); 
+      
+      if (filterStaff !== 'all') {
+        filtered = filtered.filter((e) => e.staffId === filterStaff);
+      } else {
+        filtered = filtered.filter((e) => canApproveThisDept(e.staffDepartment));
+      }
     }
   } else {
     filtered = filtered.filter((e) => myStaff && e.staffId === myStaff.id);
   }
 
-  // Filter by tab
   filtered = filtered.filter(e => (e.status || 'approved').toLowerCase() === tab);
 
   filtered.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -261,21 +262,23 @@ function OvertimePage() {
         </div>
       </div>
 
-      {(canViewAll || isSMT) && (
+      {(canViewAll || isSMT || tempAccess.length > 0) && (
         <div className="leave-tabs" style={{ marginBottom: '16px' }}>
           <button className={viewMode === 'individual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('individual')}>👤 My Individual OT</button>
           <button className={viewMode === 'department' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('department')}>🏢 Department OT</button>
         </div>
       )}
 
-      {viewMode === 'department' && canViewAll && (
+      {viewMode === 'department' && (canViewAll || isSMT) && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-          <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={selectStyle}>
-            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-          </select>
+          {canViewAll && (
+            <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={selectStyle}>
+              {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+          )}
           <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} style={selectStyle}>
-            <option value="all">All Staff in {filterDept}</option>
-            {staff.filter(s => s.department === filterDept).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <option value="all">All Staff in {canViewAll ? filterDept : myStaff?.department}</option>
+            {staff.filter(s => (canViewAll ? s.department === filterDept : s.department === myStaff?.department) && s.id !== myStaff?.id).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       )}

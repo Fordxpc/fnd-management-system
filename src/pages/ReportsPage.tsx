@@ -15,18 +15,16 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse' as const, fontSiz
 const thStyle = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' as const };
 const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' as const };
 
-// Helper function to get background color based on aircraft type
 const getAircraftColor = (type: string) => {
   if (!type) return '#ffffff';
   const t = type.toUpperCase();
-  if (t.includes('ATR-72')) return '#e0f2fe'; // Light Blue
-  if (t.includes('ATR-42')) return '#dcfce7'; // Light Green
-  if (t.includes('DH-8/300') || t.includes('DASH8-C')) return '#fef3c7'; // Light Yellow
-  if (t.includes('DH-8/200') || t.includes('DASH8-B')) return '#f3e8ff'; // Light Purple
-  return '#f8fafc'; // Default very light gray
+  if (t.includes('ATR-72')) return '#e0f2fe';
+  if (t.includes('ATR-42')) return '#dcfce7';
+  if (t.includes('DH-8/300') || t.includes('DASH8-C')) return '#fef3c7';
+  if (t.includes('DH-8/200') || t.includes('DASH8-B')) return '#f3e8ff';
+  return '#f8fafc';
 };
 
-// Legend Component
 const AircraftLegend = () => (
   <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '16px', flexWrap: 'wrap', fontSize: '11px', fontFamily: 'Arial, sans-serif' }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -49,15 +47,14 @@ function ReportsPage() {
   const [activeTab, setActiveTab] = useState<'dfis' | 'wildlife' | 'fod' | 'stats' | 'traffic' | 'lights' | 'custom'>('dfis');
   const [loading, setLoading] = useState(true);
   
-  // Data State
   const [rampData, setRampData] = useState<any[]>([]);
   const [fodData, setFodData] = useState<any[]>([]);
   const [birdData, setBirdData] = useState<any[]>([]);
   const [staffData, setStaffData] = useState<any[]>([]);
   const [rosterData, setRosterData] = useState<any[]>([]);
   const [flightData, setFlightData] = useState<any[]>([]);
+  const [lightsData, setLightsData] = useState<any[]>([]); // New state
 
-  // Custom Report State
   const [reportType, setReportType] = useState<'staff' | 'ops' | 'wildlife'>('staff');
   const [selectedStaff, setSelectedStaff] = useState('');
   const [selectedAircraft, setSelectedAircraft] = useState('');
@@ -65,16 +62,12 @@ function ReportsPage() {
   const [endDate, setEndDate] = useState('');
   const [generatedReport, setGeneratedReport] = useState<any>(null);
 
-  // FETCH ALL DATA FROM D1 SAFELY
   const fetchData = useCallback(async () => {
     try {
       const results = await Promise.allSettled([
-        apiFetch('/ramp/reports'),
-        apiFetch('/fod'),
-        apiFetch('/wildlife'),
-        apiFetch('/staff'),
-        apiFetch('/roster'),
-        apiFetch('/flights')
+        apiFetch('/ramp/reports'), apiFetch('/fod'), apiFetch('/wildlife'),
+        apiFetch('/staff'), apiFetch('/roster'), apiFetch('/flights'),
+        apiFetch('/lights') // Fetch lights
       ]);
 
       const getData = (index: number) => {
@@ -82,16 +75,14 @@ function ReportsPage() {
         return [];
       };
 
-      const rampRes = getData(0);
-      const fodRes = getData(1);
-      const birdRes = getData(2);
-      const staffRes = getData(3);
-      const rosterRes = getData(4);
-      const flightsRes = getData(5);
+      const rampRes = getData(0); const fodRes = getData(1); const birdRes = getData(2);
+      const staffRes = getData(3); const rosterRes = getData(4); const flightsRes = getData(5);
+      const lightsRes = getData(6);
 
       setRampData([...rampRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
       setFodData([...fodRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
       setBirdData([...birdRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
+      setLightsData([...lightsRes].sort((a: any, b: any) => (b.date || '').localeCompare(a.date || '')));
       
       setStaffData(staffRes);
       setRosterData(rosterRes);
@@ -105,7 +96,7 @@ function ReportsPage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000);
+    const interval = setInterval(fetchData, 15000); 
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -131,12 +122,10 @@ function ReportsPage() {
       });
 
       setGeneratedReport({ type: 'staff', staffInfo, present, absent, leaves, totalDays: entries.length });
-
     } else if (reportType === 'ops') {
       const filteredFlights = flightData.filter(f => f.date >= startDate && f.date <= endDate && (selectedAircraft === '' || f.aircraft === selectedAircraft));
-      const totalMvmts = filteredFlights.length * 2; // In/Out
+      const totalMvmts = filteredFlights.length * 2; 
       setGeneratedReport({ type: 'ops', totalMvmts, flights: filteredFlights });
-
     } else if (reportType === 'wildlife') {
       const filteredBirds = birdData.filter(b => b.date >= startDate && b.date <= endDate);
       const speciesCount: { [key: string]: number } = {};
@@ -177,15 +166,13 @@ function ReportsPage() {
 
       <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
         
-        {/* CUSTOM GENERATOR TAB */}
         {activeTab === 'custom' && (
           <div>
             <ExcelHeader title="CUSTOM REPORT GENERATOR" subtitle="Select parameters to generate a detailed report" />
-            
             <div style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '24px', flexWrap: 'wrap' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Report Type</label>
-                <select value={reportType} onChange={(e: any) => { setReportType(e.target.value); setGeneratedReport(null); }} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px' }}>
+                <select value={reportType} onChange={(e: any) => { setReportType(e.target.value); setGeneratedReport(null); }} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px', color: '#1e293b' }}>
                   <option value="staff">👤 Individual Staff</option>
                   <option value="ops">✈️ Operations (Flights)</option>
                   <option value="wildlife">🦅 Wildlife (Species)</option>
@@ -195,7 +182,7 @@ function ReportsPage() {
               {reportType === 'staff' && (
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Select Staff</label>
-                  <select value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px' }}>
+                  <select value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px', color: '#1e293b' }}>
                     <option value="">-- Choose Staff --</option>
                     {staffData.map(s => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
                   </select>
@@ -205,7 +192,7 @@ function ReportsPage() {
               {reportType === 'ops' && (
                 <div>
                   <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Aircraft (Optional)</label>
-                  <select value={selectedAircraft} onChange={(e) => setSelectedAircraft(e.target.value)} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px' }}>
+                  <select value={selectedAircraft} onChange={(e) => setSelectedAircraft(e.target.value)} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px', color: '#1e293b' }}>
                     <option value="">All Aircraft</option>
                     <option value="ATR-72/600">ATR-72/600</option>
                     <option value="ATR-42/600">ATR-42/600</option>
@@ -229,7 +216,6 @@ function ReportsPage() {
               </div>
             </div>
 
-            {/* REPORT RESULTS */}
             {generatedReport?.type === 'staff' && (
               <div style={{ background: '#eff6ff', padding: '20px', borderRadius: '8px', border: '2px solid #3b82f6' }}>
                 <h3 style={{ color: '#1e40af', margin: '0 0 16px' }}>👤 Staff Report: {generatedReport.staffInfo?.name} ({generatedReport.staffInfo?.sn})</h3>
@@ -487,7 +473,34 @@ function ReportsPage() {
         {activeTab === 'lights' && (
           <div>
              <ExcelHeader title="RUNWAY LIGHTS INSPECTION" subtitle="Fault & Maintenance Report" />
-             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>No specific light fault records exist yet. This will pull data once logged in the Ops Board.</div>
+             <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Date</th><th style={thStyle}>Inspector</th>
+                  <th style={thStyle}>Edge (A/B)</th><th style={thStyle}>End (01/19)</th>
+                  <th style={thStyle}>Threshold</th><th style={thStyle}>Apron (Masts x Lts)</th>
+                  <th style={thStyle}>ROB</th><th style={thStyle}>Windcone</th>
+                  <th style={thStyle}>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lightsData.length === 0 ? (
+                  <tr><td colSpan={9} style={{ padding: '20px', textAlign: 'center' }}>No light records found.</td></tr>
+                ) : lightsData.map(r => (
+                  <tr key={r.id}>
+                    <td style={tdStyle}>{r.date}</td>
+                    <td style={tdStyle}>{r.inspectorName}</td>
+                    <td style={tdStyle}>{r.data.edge?.sideA || 0} / {r.data.edge?.sideB || 0}</td>
+                    <td style={tdStyle}>{r.data.end?.sideA || 0} / {r.data.end?.sideB || 0}</td>
+                    <td style={tdStyle}>{r.data.threshold?.count || 0}</td>
+                    <td style={tdStyle}>{r.data.apron?.masts || 0} x {r.data.apron?.perMast || 0}</td>
+                    <td style={tdStyle}><strong>{r.data.rob?.status || 'In Service'}</strong></td>
+                    <td style={tdStyle}><strong>{r.data.windcone?.status || 'In Service'}</strong></td>
+                    <td style={tdStyle}>{r.remarks || 'NIL'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
