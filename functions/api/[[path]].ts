@@ -389,11 +389,42 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
-        INSERT INTO overtime_entries (id, staffId, staffName, staffSN, staffDepartment, date, startTime, endTime, hours, notes, createdAt, createdBy)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO overtime_entries (id, staffId, staffName, staffSN, staffDepartment, date, startTime, endTime, hours, notes, status, createdAt, createdBy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `).bind(id, body.staffId, body.staffName, body.staffSN || '', body.staffDepartment, body.date, body.startTime, body.endTime, body.hours, body.notes || '', new Date().toISOString(), body.createdBy || '').run();
-      context.waitUntil(backupToFirebase('overtime_entries', id, { ...body }));
+      context.waitUntil(backupToFirebase('overtime_entries', id, { ...body, status: 'pending' }));
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // EDIT OVERTIME ENTRY
+    if (url.pathname.startsWith("/api/overtime/") && method === "PUT" && !url.pathname.endsWith("/approve") && !url.pathname.endsWith("/reject")) {
+      const id = url.pathname.split("/").pop();
+      const body: any = await request.json();
+      await env.DB.prepare(`
+        UPDATE overtime_entries SET date = ?, startTime = ?, endTime = ?, hours = ?, notes = ? WHERE id = ?
+      `).bind(body.date, body.startTime, body.endTime, body.hours, body.notes || '', id).run();
+      context.waitUntil(backupToFirebase('overtime_entries', id!, body));
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // APPROVE OVERTIME
+    if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/approve") && method === "PUT") {
+      const id = url.pathname.split("/")[3];
+      const body: any = await request.json();
+      await env.DB.prepare(`UPDATE overtime_entries SET status = 'approved', reviewedBy = ?, reviewedAt = ? WHERE id = ?`)
+        .bind(body.reviewedBy, new Date().toISOString(), id).run();
+      context.waitUntil(backupToFirebase('overtime_entries', id, { status: 'approved', reviewedBy: body.reviewedBy }));
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // REJECT OVERTIME
+    if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/reject") && method === "PUT") {
+      const id = url.pathname.split("/")[3];
+      const body: any = await request.json();
+      await env.DB.prepare(`UPDATE overtime_entries SET status = 'rejected', reviewedBy = ?, reviewedAt = ? WHERE id = ?`)
+        .bind(body.reviewedBy, new Date().toISOString(), id).run();
+      context.waitUntil(backupToFirebase('overtime_entries', id, { status: 'rejected', reviewedBy: body.reviewedBy }));
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (url.pathname.startsWith("/api/overtime/") && method === "DELETE") {

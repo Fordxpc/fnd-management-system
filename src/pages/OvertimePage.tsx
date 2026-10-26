@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import { ConfirmDialog } from '../components/Dialogs'; // <-- Imported custom dialog
+import { ConfirmDialog } from '../components/Dialogs';
 
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration'];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -45,6 +45,8 @@ const getWeekEnd = (weekStartStr: string): string => {
   return formatDate(d);
 };
 
+const selectStyle = { padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', backgroundColor: '#ffffff' };
+
 function OvertimePage() {
   const { profile, user } = useAuth();
   const [entries, setEntries] = useState<any[]>([]);
@@ -56,11 +58,13 @@ function OvertimePage() {
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
 
   const [monthFilter, setMonthFilter] = useState<string>(formatDate(new Date()).slice(0, 7));
+  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [viewMode, setViewMode] = useState<'individual' | 'department'>('individual');
   const [filterDept, setFilterDept] = useState<string>('Ground Operations');
   const [filterStaff, setFilterStaff] = useState<string>('all');
+  
   const [showForm, setShowForm] = useState<boolean>(false);
-
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [formDept, setFormDept] = useState<string>('Ground Operations');
   const [formStaffId, setFormStaffId] = useState<string>('');
   const [formDate, setFormDate] = useState<string>(formatDate(new Date()));
@@ -69,17 +73,14 @@ function OvertimePage() {
   const [formNotes, setFormNotes] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
 
-  // Custom Delete State
+  const [approveTarget, setApproveTarget] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  // FETCH ALL DATA VIA API
   const fetchData = useCallback(async () => {
     try {
       const [otData, staffData, leaveData, rulesData] = await Promise.all([
-        apiFetch('/overtime'),
-        apiFetch('/staff'),
-        apiFetch('/leave-requests'),
-        apiFetch('/settings/ot_rules')
+        apiFetch('/overtime'), apiFetch('/staff'), apiFetch('/leave-requests'), apiFetch('/settings/ot_rules')
       ]);
       
       setEntries(otData);
@@ -103,14 +104,30 @@ function OvertimePage() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 15000); // Poll every 15s
+    const interval = setInterval(fetchData, 15000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const canApprove = isDev || isManager || isSMT;
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true;
+  
+  const canViewAll = isDev || isManager;
+  
+  // Approver Logic: Safety SMT can approve Security. SMT can approve own dept.
+  const canApproveThisDept = (dept: string) => {
+    if (canViewAll) return true;
+    if (!isSMT) return false;
+    const target = (dept || '').toLowerCase();
+    const current = (myStaff?.department || '').toLowerCase();
+    if (current === 'safety' && target === 'security') return true;
+    return current === target;
+  };
+
+  const canEditThisDept = (dept: string) => {
+    // Admin/Manager edit all, SMT edit own dept
+    return canViewAll || canApproveThisDept(dept);
+  };
 
   const isExcludedFromOT = (staffName: string, position: string) => {
     const n = (staffName || '').toLowerCase();
@@ -120,16 +137,25 @@ function OvertimePage() {
 
   let filtered = entries.filter((e) => (e.date || '').startsWith(monthFilter));
   
-  if (canApprove) {
+  if (canViewAll) {
     if (viewMode === 'individual' && myStaff) {
       filtered = filtered.filter((e) => e.staffId === myStaff.id);
     } else {
       filtered = filtered.filter((e) => e.staffDepartment === filterDept);
       if (filterStaff !== 'all') filtered = filtered.filter((e) => e.staffId === filterStaff);
     }
+  } else if (isSMT) {
+    if (viewMode === 'individual' && myStaff) {
+      filtered = filtered.filter((e) => e.staffId === myStaff.id);
+    } else {
+      filtered = filtered.filter((e) => canApproveThisDept(e.staffDepartment));
+    }
   } else {
     filtered = filtered.filter((e) => myStaff && e.staffId === myStaff.id);
   }
+
+  // Filter by tab
+  filtered = filtered.filter(e => (e.status || 'approved').toLowerCase() === tab);
 
   filtered.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
@@ -157,20 +183,58 @@ function OvertimePage() {
 
     setSubmitting(true);
     try {
-      await apiFetch('/overtime', {
-        method: 'POST',
-        body: JSON.stringify({
-          staffId: formStaffId, staffName: staffMember.name, staffSN: staffMember.sn || '',
-          staffDepartment: staffMember.department, date: formDate, startTime: formStart, endTime: formEnd,
-          hours, notes: formNotes, createdBy: user?.email || ''
-        })
-      });
-      setFormNotes('');
-      setShowForm(false);
-      toast.success(`✅ Logged ${hours} hour(s).`);
+      if (editingId) {
+        await apiFetch(`/overtime/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ date: formDate, startTime: formStart, endTime: formEnd, hours, notes: formNotes })
+        });
+        toast.success(`OT entry updated.`);
+      } else {
+        await apiFetch('/overtime', {
+          method: 'POST',
+          body: JSON.stringify({
+            staffId: formStaffId, staffName: staffMember.name, staffSN: staffMember.sn || '',
+            staffDepartment: staffMember.department, date: formDate, startTime: formStart, endTime: formEnd,
+            hours, notes: formNotes, createdBy: user?.email || ''
+          })
+        });
+        toast.success(`OT request submitted for approval.`);
+      }
+      setFormNotes(''); setShowForm(false); setEditingId(null);
       fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
     setSubmitting(false);
+  };
+
+  const handleEditClick = (entry: any) => {
+    setEditingId(entry.id);
+    setFormStaffId(entry.staffId);
+    setFormDate(entry.date);
+    setFormStart(entry.startTime);
+    setFormEnd(entry.endTime);
+    setFormNotes(entry.notes || '');
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const confirmApprove = async () => {
+    if (!approveTarget) return;
+    try {
+      await apiFetch(`/overtime/${approveTarget}/approve`, { method: 'PUT', body: JSON.stringify({ reviewedBy: user?.email }) });
+      toast.success('OT Approved');
+      setApproveTarget(null);
+      fetchData();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const confirmReject = async () => {
+    if (!rejectTarget) return;
+    try {
+      await apiFetch(`/overtime/${rejectTarget}/reject`, { method: 'PUT', body: JSON.stringify({ reviewedBy: user?.email }) });
+      toast.success('OT Rejected');
+      setRejectTarget(null);
+      fetchData();
+    } catch (err: any) { toast.error(err.message); }
   };
 
   const confirmDelete = async () => {
@@ -190,44 +254,52 @@ function OvertimePage() {
       <div className="staff-header">
         <h2>Overtime Sheet</h2>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
+          <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={selectStyle} />
           {!isExcludedFromOT(myStaff?.name, myStaff?.position) && (
-            <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Log OT'}</button>
+            <button className="add-staff-btn" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormNotes(''); }}>{showForm ? 'Cancel' : '+ Request OT'}</button>
           )}
         </div>
       </div>
 
-      {canApprove && (
+      {(canViewAll || isSMT) && (
         <div className="leave-tabs" style={{ marginBottom: '16px' }}>
           <button className={viewMode === 'individual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('individual')}>👤 My Individual OT</button>
           <button className={viewMode === 'department' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('department')}>🏢 Department OT</button>
         </div>
       )}
 
-      {canApprove && viewMode === 'department' && (
+      {viewMode === 'department' && canViewAll && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-          <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+          <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={selectStyle}>
             {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} style={selectStyle}>
             <option value="all">All Staff in {filterDept}</option>
             {staff.filter(s => s.department === filterDept).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       )}
 
+      <div className="leave-tabs" style={{ marginBottom: '16px' }}>
+        <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>Pending</button>
+        <button className={tab === 'approved' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('approved')}>Approved</button>
+        <button className={tab === 'rejected' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('rejected')}>Rejected</button>
+      </div>
+
       {showForm && !isExcludedFromOT(myStaff?.name, myStaff?.position) && (
         <form className="staff-form" onSubmit={handleSubmit}>
-          <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>⏰ Log Overtime</div>
+          <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>
+            {editingId ? '✏️ Edit Overtime' : '⏰ Request Overtime'}
+          </div>
           
-          {canApprove && (
-            <select value={formDept} onChange={(e) => { setFormDept(e.target.value); setFormStaffId(''); }} required>
+          {canViewAll && !editingId && (
+            <select value={formDept} onChange={(e) => { setFormDept(e.target.value); setFormStaffId(''); }} required style={selectStyle}>
               {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
 
-          {canApprove ? (
-            <select value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} required>
+          {canViewAll && !editingId ? (
+            <select value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} required style={selectStyle}>
               <option value="">Select Staff...</option>
               {staff.filter(s => s.department === formDept && !isExcludedFromOT(s.name, s.position)).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}
             </select>
@@ -253,22 +325,19 @@ function OvertimePage() {
       )}
 
       {weekKeys.length === 0 ? (
-        <div className="staff-list"><div className="empty-state"><p>No OT entries for {monthFilter}.</p></div></div>
+        <div className="staff-list"><div className="empty-state"><p>No {tab} OT entries for this period.</p></div></div>
       ) : (
         weekKeys.map((weekKey) => {
           const weekEntries = weekMap[weekKey];
           const weekTotal = weekEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
           
           const sampleStaff = staff.find(s => s.id === weekEntries[0].staffId);
-          const isAdmin = sampleStaff?.department === 'Administration';
-          const targetHours = isAdmin ? otRules.adminHours : otRules.regularHours;
+          const isAdminDept = sampleStaff?.department === 'Administration';
+          const targetHours = isAdminDept ? otRules.adminHours : otRules.regularHours;
 
           const weekEnd = getWeekEnd(weekKey);
           const weekLeaves = leaveReqs.filter(r => 
-            r.staffId === weekEntries[0].staffId && 
-            r.status === 'approved' && 
-            otRules.deductLeaves.includes(r.leaveType) &&
-            r.startDate <= weekEnd && r.endDate >= weekKey
+            r.staffId === weekEntries[0].staffId && r.status === 'approved' && otRules.deductLeaves.includes(r.leaveType) && r.startDate <= weekEnd && r.endDate >= weekKey
           );
           
           let deductionHours = 0;
@@ -295,18 +364,31 @@ function OvertimePage() {
               </div>
               <div className="staff-list" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <table>
-                  <thead><tr><th>Date</th><th>Day</th>{canApprove && viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th></th></tr></thead>
+                  <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Actions</th></tr></thead>
                   <tbody>
-                    {weekEntries.map((e) => (
-                      <tr key={e.id}>
-                        <td>{formatDisplay(e.date)}</td>
-                        <td>{getDayShort(e.date)}</td>
-                        {canApprove && viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
-                        <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
-                        <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
-                        <td><button className="delete-btn" onClick={() => setDeleteTarget(e.id)}>Delete</button></td>
-                      </tr>
-                    ))}
+                    {weekEntries.map((e) => {
+                      const canManage = canEditThisDept(e.staffDepartment);
+                      return (
+                        <tr key={e.id}>
+                          <td>{formatDisplay(e.date)}</td>
+                          <td>{getDayShort(e.date)}</td>
+                          {viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
+                          <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
+                          <td style={{ fontSize: '12px', color: '#64748b' }}>{e.notes || '—'}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            {tab === 'pending' && canManage && (
+                              <>
+                                <button className="approve-btn" onClick={() => setApproveTarget(e.id)}>✓</button>
+                                <button className="reject-btn" onClick={() => setRejectTarget(e.id)}>✕</button>
+                              </>
+                            )}
+                            {canManage && <button className="edit-btn" onClick={() => handleEditClick(e)} style={{ marginLeft: '6px' }}>Edit</button>}
+                            {canManage && <button className="delete-btn" onClick={() => setDeleteTarget(e.id)} style={{ marginLeft: '6px' }}>Delete</button>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -315,16 +397,9 @@ function OvertimePage() {
         })
       )}
 
-      {/* CUSTOM DELETE DIALOG */}
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        title="Delete Overtime Entry?"
-        message="Are you sure you want to permanently delete this overtime entry? This action cannot be undone."
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      <ConfirmDialog isOpen={!!approveTarget} title="Approve OT?" message="Are you sure you want to approve this OT entry?" confirmText="Approve" isDanger={false} onConfirm={confirmApprove} onCancel={() => setApproveTarget(null)} />
+      <ConfirmDialog isOpen={!!rejectTarget} title="Reject OT?" message="Are you sure you want to reject this OT entry?" confirmText="Reject" isDanger={true} onConfirm={confirmReject} onCancel={() => setRejectTarget(null)} />
+      <ConfirmDialog isOpen={!!deleteTarget} title="Delete Entry?" message="Permanently delete this OT entry?" confirmText="Delete" isDanger={true} onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   );
 }
