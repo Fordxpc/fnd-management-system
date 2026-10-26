@@ -15,6 +15,7 @@ import RampCheckSheetPage from './pages/RampCheckSheetPage';
 import WildlifePage from './pages/WildlifePage';
 import ReportsPage from './pages/ReportsPage';
 import RWYLightsPage from './pages/RWYLightsPage';
+import MigrationTool from './pages/MigrationTool';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
@@ -44,8 +45,10 @@ function Dashboard(_props: any) {
   const canSeeWildlife = !isStaff;
   
   // Lights Access Logic
-  const myStaffId = profile?.id; // Note: we might need to fetch the actual staff ID if profile doesn't have it directly, but let's assume profile has ID or we match by email.
-  const isLightsInspector = lightsInspectors.some((i: any) => i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === profile?.staffId);
+  const myStaffId = profile?.id; 
+  const isLightsInspector = lightsInspectors.some((i: any) => 
+    i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
+  );
   const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector;
 
   const navigate = (page: string) => {
@@ -54,11 +57,12 @@ function Dashboard(_props: any) {
     else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
     else if (['reports'].includes(page)) setActiveModule('reports');
-    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
+    else if (['holidays', 'users', 'settings', 'migration'].includes(page)) setActiveModule('system');
   };
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
+    ...(isDev ? { migration: <MigrationTool /> } : {}), // ONLY DEV CAN ACCESS
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
     rampcheck: <RampCheckSheetPage />,
@@ -109,6 +113,14 @@ function Dashboard(_props: any) {
           {activeModule === 'system' && (
             <>
               <div className="sidebar-section-title">System & Setting</div>
+              
+              {/* MIGRATION TOOL - DEVELOPER ONLY */}
+              {isDev && (
+                <button className={currentPage === 'migration' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('migration')} style={{ background: '#8b5cf6', color: 'white', marginBottom: '8px' }}>
+                  🚀 Migration Tool
+                </button>
+              )}
+
               <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('holidays')}>🎉 Holidays</button>
               {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('users')}>🔑 User Accounts</button>}
               <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>

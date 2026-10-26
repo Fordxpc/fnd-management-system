@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import FlightRadarWidget from '../FlightRadarWidget';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const COLORS = ['#2563eb', '#16a34a', '#dc2626', '#f59e0b', '#8b5cf6', '#06b6d4'];
@@ -96,10 +95,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
       const fodData = getData(6); const birdData = getData(7);
 
-      // SAFETY NET: Deduplicate roster entries by Staff ID + Date
       const uniqueRoster = Array.from(new Map(rosterData.map((item: any) => [`${item.staffId}-${item.date}`, item])).values());
-
-      // SAFETY NET: Deduplicate leave requests by Staff ID + Start Date + End Date
       const uniqueLeaves = Array.from(new Map(leaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}`, item])).values());
 
       setStaff(staffData); 
@@ -301,8 +297,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
           ) : <div style={{ fontSize: '13px' }}>Loading weather data...</div>}
         </div>
       </div>
-
-      {nextFlight && <FlightRadarWidget flightNumber={nextFlight.flightNo} />}
 
       <div className="dash-stats" style={{ marginTop: '20px' }}>
         {isManager && (
