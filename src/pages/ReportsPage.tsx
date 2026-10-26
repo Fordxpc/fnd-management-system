@@ -42,6 +42,28 @@ const AircraftLegend = () => (
   </div>
 );
 
+// Helper to extract just the kg part from strings like "2/30" or "30"
+const parseKg = (val: any) => {
+  if (!val) return 0;
+  const str = String(val);
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    return Number(parts[1]) || 0; // Takes the second number (kg)
+  }
+  return Number(str) || 0; // Fallback if they just typed the kg
+};
+
+// Helper to format baggage from "5/39" to "5 pcs / 39 kg"
+const formatBaggage = (val: any) => {
+  if (!val) return '—';
+  const str = String(val);
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    return `${parts[0]} pcs / ${parts[1]} kg`;
+  }
+  return `0 pcs / ${str} kg`;
+};
+
 function ReportsPage() {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<'dfis' | 'wildlife' | 'fod' | 'stats' | 'traffic' | 'lights' | 'custom'>('dfis');
@@ -310,7 +332,6 @@ function ReportsPage() {
               </thead>
               <tbody>
                 {rampData.map((r, i) => {
-                  // Find the staff member to show the real name instead of email
                   const rawEmail = (r.checkedBy || r.observer || '').toLowerCase();
                   const staffMatch = staffData.find((s: any) => (s.email || '').toLowerCase() === rawEmail);
                   const collectorName = staffMatch ? staffMatch.name : (r.checkedBy || r.observer || '—').split('@')[0];
@@ -347,9 +368,12 @@ function ReportsPage() {
                       <td style={tdStyle}>{r.otherIn || 0}</td>
                       <td style={tdStyle}>{r.otherOut || 0}</td>
                       <td style={tdStyle}>{r.otherTrans || 0}</td>
-                      <td style={tdStyle}>{r.bagIn || 0}</td>
-                      <td style={tdStyle}>{r.bagOut || 0}</td>
-                      <td style={tdStyle}>{r.bagTrans || 0}</td>
+                      
+                      {/* BAGGAGE FORMATTED HERE */}
+                      <td style={tdStyle}>{formatBaggage(r.bagIn)}</td>
+                      <td style={tdStyle}>{formatBaggage(r.bagOut)}</td>
+                      <td style={tdStyle}>{formatBaggage(r.bagTrans)}</td>
+                      
                       <td style={tdStyle}>{collectorName}</td>
                       <td style={tdStyle}>{r.comments || 'NIL'}</td>
                     </tr>
@@ -385,10 +409,13 @@ function ReportsPage() {
                     <td style={tdStyle}>{r.paxInInf || 0}</td>
                     <td style={tdStyle}>{r.paxOutAdult || 0}</td>
                     <td style={tdStyle}>{r.paxOutInf || 0}</td>
-                    <td style={tdStyle}>{r.cargoIn || 0}</td>
-                    <td style={tdStyle}>{r.cargoOut || 0}</td>
-                    <td style={tdStyle}>{r.mailIn || 0}</td>
-                    <td style={tdStyle}>{r.mailOut || 0}</td>
+                    
+                    {/* USING parseKg for Cargo and Mail */}
+                    <td style={tdStyle}>{parseKg(r.cargoIn)}</td>
+                    <td style={tdStyle}>{parseKg(r.cargoOut)}</td>
+                    <td style={tdStyle}>{parseKg(r.mailIn)}</td>
+                    <td style={tdStyle}>{parseKg(r.mailOut)}</td>
+                    
                   </tr>
                 ))}
               </tbody>
@@ -432,10 +459,13 @@ function ReportsPage() {
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxInInf || 0), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxOutAdult || 0), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxOutInf || 0), 0)}</td>
-                      <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.mailIn || 0), 0)}</td>
-                      <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.mailOut || 0), 0)}</td>
-                      <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.cargoIn || 0), 0)}</td>
-                      <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.cargoOut || 0), 0)}</td>
+                      
+                      {/* USING parseKg for Mail and Cargo to prevent NaN */}
+                      <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.mailIn), 0)}</td>
+                      <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.mailOut), 0)}</td>
+                      <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.cargoIn), 0)}</td>
+                      <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.cargoOut), 0)}</td>
+                      
                     </tr>
                   );
                 })}
