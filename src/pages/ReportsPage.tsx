@@ -79,6 +79,10 @@ function ReportsPage() {
   const [flightData, setFlightData] = useState<any[]>([]);
   const [lightsData, setLightsData] = useState<any[]>([]);
 
+  // Date Filter State
+  const [filterStart, setFilterStart] = useState('');
+  const [filterEnd, setFilterEnd] = useState('');
+
   const [reportType, setReportType] = useState<'staff' | 'ops' | 'wildlife'>('staff');
   const [selectedStaff, setSelectedStaff] = useState('');
   const [selectedAircraft, setSelectedAircraft] = useState('');
@@ -182,13 +186,30 @@ function ReportsPage() {
 
   if (loading) return <div className="page-content"><p>Loading Reports from D1...</p></div>;
 
-  const validFlightsForStats = rampData.filter(r => {
+  // Helper to filter data by date range
+  const getFilteredData = (data: any[]) => {
+    if (!filterStart && !filterEnd) return data; // No filter applied
+    return data.filter(item => {
+      const itemDate = item.date || '';
+      if (filterStart && itemDate < filterStart) return false;
+      if (filterEnd && itemDate > filterEnd) return false;
+      return true;
+    });
+  };
+
+  // Apply filters to all datasets
+  const currentRampData = getFilteredData(rampData);
+  const currentFodData = getFilteredData(fodData);
+  const currentBirdData = getFilteredData(birdData);
+  const currentLightsData = getFilteredData(lightsData);
+
+  const validFlightsForStats = currentRampData.filter(r => {
     const c = (r.comments || '').toLowerCase();
     const rem = (r.remarks || '').toLowerCase();
     return !c.includes('air ambulance') && !rem.includes('air ambulance');
   });
 
-  const dfisTotals = rampData.reduce((acc, r) => {
+  const dfisTotals = currentRampData.reduce((acc, r) => {
     acc.mvmnts += 2;
     acc.paxInAd += Number(r.paxInAdult || 0); acc.paxInInf += Number(r.paxInInf || 0);
     acc.paxOutAd += Number(r.paxOutAdult || 0); acc.paxOutInf += Number(r.paxOutInf || 0);
@@ -232,6 +253,15 @@ function ReportsPage() {
         )}
       </div>
 
+      {/* DATE FILTER BAR */}
+      <div className="no-print" style={{ display: 'flex', gap: '12px', alignItems: 'center', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>Filter by Date:</span>
+        <input type="date" value={filterStart} onChange={e => setFilterStart(e.target.value)} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#1e293b' }} />
+        <span style={{ color: '#64748b' }}>to</span>
+        <input type="date" value={filterEnd} onChange={e => setFilterEnd(e.target.value)} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#1e293b' }} />
+        <button onClick={() => { setFilterStart(''); setFilterEnd(''); }} className="quick-btn" style={{ background: '#e2e8f0', color: '#475569', padding: '6px 12px', fontSize: '12px' }}>Clear Filter</button>
+      </div>
+
       <div className="ops-tabs no-print" style={{ flexWrap: 'wrap' }}>
         <button className={`ops-tab-btn ${activeTab === 'custom' ? 'active' : ''}`} style={{ background: activeTab === 'custom' ? '#8b5cf6' : '', color: activeTab === 'custom' ? 'white' : '' }} onClick={() => setActiveTab('custom')}>✨ Custom Generator</button>
         <button className={`ops-tab-btn ${activeTab === 'dfis' ? 'active' : ''}`} onClick={() => setActiveTab('dfis')}>DFIS</button>
@@ -242,7 +272,8 @@ function ReportsPage() {
         <button className={`ops-tab-btn ${activeTab === 'lights' ? 'active' : ''}`} onClick={() => setActiveTab('lights')}>RWY Lights</button>
       </div>
 
-      <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
+      {/* Wrapped in a div with maxHeight and overflow to fix horizontal scrolling */}
+      <div className="dash-card" style={{ padding: '24px', maxHeight: '75vh', overflow: 'auto', background: '#fff' }}>
         
         {activeTab === 'custom' && (
           <div>
@@ -353,11 +384,11 @@ function ReportsPage() {
         )}
 
         {activeTab === 'dfis' && (
-          <div className="dfis-print-table"> {/* CLASS ADDED FOR PRINT CSS */}
+          <div className="dfis-print-table">
             <ExcelHeader title="AIRCRAFT TURNAROUND LOG" subtitle="Funadhoo Airport" />
             <AircraftLegend />
-            <table style={tableStyle}>
-              <thead>
+            <table style={{...tableStyle, position: 'relative'}}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   <th style={thStyle} rowSpan={2}>S.No.</th><th style={thStyle} rowSpan={2}>Date</th><th style={thStyle} rowSpan={2}>CHECK-IN</th><th style={thStyle} rowSpan={2}>Reg.</th>
                   <th style={thStyle} rowSpan={2}>Type of Aircraft</th><th style={thStyle} rowSpan={2}>Owner/Operator</th>
@@ -381,7 +412,7 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rampData.map((r, i) => {
+                {currentRampData.map((r, i) => {
                   const rawEmail = (r.checkedBy || r.observer || '').toLowerCase();
                   const staffMatch = staffData.find((s: any) => (s.email || '').toLowerCase() === rawEmail);
                   const collectorName = staffMatch ? staffMatch.name : (r.checkedBy || r.observer || '—').split('@')[0];
@@ -427,7 +458,7 @@ function ReportsPage() {
                   );
                 })}
               </tbody>
-              <tfoot>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 10 }}>
                 <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
                   <td colSpan={14} style={{ ...tdStyle, textAlign: 'right' }}>Grand Totals:</td>
                   <td style={tdStyle}>{dfisTotals.mvmnts}</td>
@@ -461,7 +492,7 @@ function ReportsPage() {
             <ExcelHeader title="FUNADHOO AIRPORT" subtitle="Statistics Report (Excludes Air Ambulance)" />
             <AircraftLegend />
             <table style={tableStyle}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   <th style={thStyle}>Date</th><th style={thStyle}>Operator</th><th style={thStyle}>Type of Aircraft</th>
                   <th style={thStyle}>No. of Mvts</th><th style={thStyle}>Pax In (Ad)</th><th style={thStyle}>Pax In (Inf)</th>
@@ -488,7 +519,7 @@ function ReportsPage() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 10 }}>
                 <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
                   <td colSpan={3} style={{ ...tdStyle, textAlign: 'right' }}>Grand Totals:</td>
                   <td style={tdStyle}>{statsTotals.mvmts}</td>
@@ -511,7 +542,7 @@ function ReportsPage() {
             <ExcelHeader title="TRAFFIC MONTHLY REPORT (FUNADHOO AIRPORT)" subtitle="2026 (Excludes Air Ambulance)" />
             <AircraftLegend />
             <table style={tableStyle}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   <th style={thStyle}>S. No.</th><th style={thStyle}>Owner or Operator</th><th style={thStyle}>Type of Aircraft</th>
                   <th style={thStyle}>No. of Movements</th><th style={thStyle} colSpan={2}>PAX IN</th><th style={thStyle} colSpan={2}>PAX OUT</th>
@@ -558,11 +589,11 @@ function ReportsPage() {
           <div>
              <ExcelHeader title="WILDLIFE TREND ANALYSIS" subtitle="Bird Sightings & Risk Summary" />
              <table style={tableStyle}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr><th style={thStyle}>Date</th><th style={thStyle}>Ref No</th><th style={thStyle}>Species Logged</th><th style={thStyle}>Highest Risk Level</th><th style={thStyle}>Observer</th></tr>
               </thead>
               <tbody>
-                {birdData.map(b => {
+                {currentBirdData.map(b => {
                   let highest = 'LOW RISK';
                   b.rows?.forEach((r: any) => {
                     if (r.zones && r.zones.reduce((a:any, c:any)=>a+c,0) > 5) highest = 'HIGH RISK';
@@ -578,10 +609,10 @@ function ReportsPage() {
                   );
                 })}
               </tbody>
-              <tfoot>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 10 }}>
                 <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
                   <td colSpan={2} style={{ ...tdStyle, textAlign: 'right' }}>Total Records:</td>
-                  <td style={tdStyle}>{birdData.length}</td>
+                  <td style={tdStyle}>{currentBirdData.length}</td>
                   <td colSpan={2} style={tdStyle}></td>
                 </tr>
               </tfoot>
@@ -593,9 +624,11 @@ function ReportsPage() {
           <div>
              <ExcelHeader title="FOD COLLECTION LOG" subtitle="Foreign Object Debris Report" />
              <table style={tableStyle}>
-              <thead><tr><th style={thStyle}>Date</th><th style={thStyle}>Amount (grams)</th><th style={thStyle}>Remarks</th><th style={thStyle}>Logged By</th></tr></thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr><th style={thStyle}>Date</th><th style={thStyle}>Amount (grams)</th><th style={thStyle}>Remarks</th><th style={thStyle}>Logged By</th></tr>
+              </thead>
               <tbody>
-                {fodData.map(f => (
+                {currentFodData.map(f => (
                   <tr key={f.id}>
                     <td style={tdStyle}>{f.date}</td>
                     <td style={tdStyle}><strong>{f.grams}g</strong></td>
@@ -604,10 +637,10 @@ function ReportsPage() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
+              <tfoot style={{ position: 'sticky', bottom: 0, zIndex: 10 }}>
                 <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
                   <td colSpan={1} style={{ ...tdStyle, textAlign: 'right' }}>Total:</td>
-                  <td style={tdStyle}>{fodData.reduce((s, f) => s + Number(f.grams || 0), 0)}g</td>
+                  <td style={tdStyle}>{currentFodData.reduce((s, f) => s + Number(f.grams || 0), 0)}g</td>
                   <td colSpan={2} style={tdStyle}></td>
                 </tr>
               </tfoot>
@@ -619,7 +652,7 @@ function ReportsPage() {
           <div>
              <ExcelHeader title="RUNWAY LIGHTS INSPECTION" subtitle="Fault & Maintenance Report" />
              <table style={tableStyle}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
                   <th style={thStyle}>Date</th><th style={thStyle}>Time</th><th style={thStyle}>Inspector</th><th style={thStyle}>Weather</th>
                   <th style={thStyle}>Edge (A/B)</th><th style={thStyle}>End (01/19)</th><th style={thStyle}>Thresh (01/19)</th>
@@ -629,9 +662,9 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {lightsData.length === 0 ? (
+                {currentLightsData.length === 0 ? (
                   <tr><td colSpan={14} style={{ padding: '20px', textAlign: 'center' }}>No light records found.</td></tr>
-                ) : lightsData.map(r => (
+                ) : currentLightsData.map(r => (
                   <tr key={r.id}>
                     <td style={tdStyle}>{r.date}</td>
                     <td style={tdStyle}>{r.time || '—'}</td>
