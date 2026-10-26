@@ -18,7 +18,9 @@ const INITIAL_FORM = {
   paxOutAdult: '', paxOutInf: '', paxOutLocal: '', paxOutForeign: '', paxOutTotal: '',
   paxTransAdult: '', paxTransInf: '', paxTransTotal: '',
   cargoIn: '', cargoOut: '', cargoTrans: '', mailIn: '', mailOut: '', mailTrans: '',
-  bagIn: '', bagOut: '', bagTrans: '', otherIn: '', otherOut: '', otherTrans: '',
+  bagInPcs: '', bagInKg: '', bagOutPcs: '', bagOutKg: '', bagTransPcs: '', bagTransKg: '',
+  bagIn: '', bagOut: '', bagTrans: '', // Keep old keys for backward compatibility
+  otherIn: '', otherOut: '', otherTrans: '',
   specialLoad: '', comments: '', delayTime: '', medicalEmergency: ''
 };
 
@@ -62,7 +64,24 @@ function RampCheckSheetPage() {
       try {
         const draft = await apiFetch('/ramp/draft');
         if (draft && Object.keys(draft).length > 0) {
-          setFormData(prev => ({ ...prev, ...draft }));
+          // If loaded from draft, split the old baggage string into the new pcs/kg fields
+          const parsedDraft = { ...draft };
+          if (parsedDraft.bagIn && !parsedDraft.bagInPcs) {
+            const [p, k] = parsedDraft.bagIn.split('/');
+            parsedDraft.bagInPcs = p || '';
+            parsedDraft.bagInKg = k || '';
+          }
+          if (parsedDraft.bagOut && !parsedDraft.bagOutPcs) {
+            const [p, k] = parsedDraft.bagOut.split('/');
+            parsedDraft.bagOutPcs = p || '';
+            parsedDraft.bagOutKg = k || '';
+          }
+          if (parsedDraft.bagTrans && !parsedDraft.bagTransPcs) {
+            const [p, k] = parsedDraft.bagTrans.split('/');
+            parsedDraft.bagTransPcs = p || '';
+            parsedDraft.bagTransKg = k || '';
+          }
+          setFormData(prev => ({ ...prev, ...parsedDraft }));
         }
       } catch (err) { console.error("Failed to load draft", err); }
     };
@@ -80,6 +99,7 @@ function RampCheckSheetPage() {
     setFormData(prev => {
       const updated = { ...prev, [id]: finalValue };
 
+      // Auto-calculate PAX totals
       if (id.includes('paxIn')) {
         const a = parseInt(updated.paxInAdult) || 0;
         const i = parseInt(updated.paxInInf) || 0;
@@ -99,6 +119,18 @@ function RampCheckSheetPage() {
         const i = parseInt(updated.paxTransInf) || 0;
         updated.paxTransTotal = String(a + i);
       }
+
+      // Combine split baggage fields into single string for DB
+      if (id.startsWith('bagInPcs') || id.startsWith('bagInKg')) {
+        updated.bagIn = `${updated.bagInPcs || ''}/${updated.bagInKg || ''}`;
+      }
+      if (id.startsWith('bagOutPcs') || id.startsWith('bagOutKg')) {
+        updated.bagOut = `${updated.bagOutPcs || ''}/${updated.bagOutKg || ''}`;
+      }
+      if (id.startsWith('bagTransPcs') || id.startsWith('bagTransKg')) {
+        updated.bagTrans = `${updated.bagTransPcs || ''}/${updated.bagTransKg || ''}`;
+      }
+
       return updated;
     });
 
@@ -150,9 +182,8 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
-      const { id: _id, ...rest } = formData as any;
+      const { id: _id, bagInPcs: _bp, bagInKg: _bk, bagOutPcs: _bop, bagOutKg: _bok, bagTransPcs: _btp, bagTransKg: _btk, ...rest } = formData as any;
       
-      // Attach the current user's email to the payload
       const payload = {
         ...rest,
         checkedBy: user?.email || rest.checkedBy || rest.observer || 'System'
@@ -198,7 +229,26 @@ function RampCheckSheetPage() {
 
   const handleEditReport = (report: any) => {
     const { id, createdAt: _c, updatedAt: _u, ...rest } = report;
-    setFormData({ ...INITIAL_FORM, ...rest });
+    
+    // Split old baggage strings if editing an old report
+    const parsedReport = { ...rest };
+    if (parsedReport.bagIn && !parsedReport.bagInPcs) {
+      const [p, k] = parsedReport.bagIn.split('/');
+      parsedReport.bagInPcs = p || '';
+      parsedReport.bagInKg = k || '';
+    }
+    if (parsedReport.bagOut && !parsedReport.bagOutPcs) {
+      const [p, k] = parsedReport.bagOut.split('/');
+      parsedReport.bagOutPcs = p || '';
+      parsedReport.bagOutKg = k || '';
+    }
+    if (parsedReport.bagTrans && !parsedReport.bagTransPcs) {
+      const [p, k] = parsedReport.bagTrans.split('/');
+      parsedReport.bagTransPcs = p || '';
+      parsedReport.bagTransKg = k || '';
+    }
+
+    setFormData({ ...INITIAL_FORM, ...parsedReport });
     setCurrentDocId(id);
     setActiveSubTab('form');
     toast.success(`Report ${report.fltNo || ''} loaded for editing. Make changes and click Save Record.`);

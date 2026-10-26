@@ -190,14 +190,35 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <td><input type="text" id="mailTrans" value={formData.mailTrans} onChange={handleChange} readOnly={!isManager} /></td>
               </tr></tbody>
             </table>
+            
+            {/* BAGGAGE TABLE - UPDATED WITH SPLIT INPUTS */}
             <table className="inner-table">
-              <thead><tr><th colSpan={3}>BAGGAGE</th></tr><tr><th>In(kg)</th><th>Out(kg)</th><th>Trans(kg)</th></tr></thead>
+              <thead><tr><th colSpan={3}>BAGGAGE</th></tr><tr><th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th></tr></thead>
               <tbody><tr>
-                <td><input type="text" id="bagIn" value={formData.bagIn} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="bagOut" value={formData.bagOut} onChange={handleChange} readOnly={!isManager} /></td>
-                <td><input type="text" id="bagTrans" value={formData.bagTrans} onChange={handleChange} readOnly={!isManager} /></td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <input type="text" id="bagInPcs" value={formData.bagInPcs || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+                    <span style={{ fontWeight: 'bold' }}>/</span>
+                    <input type="text" id="bagInKg" value={formData.bagInKg || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+                  </div>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <input type="text" id="bagOutPcs" value={formData.bagOutPcs || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+                    <span style={{ fontWeight: 'bold' }}>/</span>
+                    <input type="text" id="bagOutKg" value={formData.bagOutKg || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+                  </div>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <input type="text" id="bagTransPcs" value={formData.bagTransPcs || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+                    <span style={{ fontWeight: 'bold' }}>/</span>
+                    <input type="text" id="bagTransKg" value={formData.bagTransKg || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '40%', padding: '2px', border: '1px solid #ccc', textAlign: 'center' }} />
+                  </div>
+                </td>
               </tr></tbody>
             </table>
+            
             <table className="inner-table">
               <thead><tr><th colSpan={3}>OTHERS</th></tr><tr><th>In(kg)</th><th>Out(kg)</th><th>Trans(kg)</th></tr></thead>
               <tbody><tr>
@@ -267,7 +288,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
               </select>
             </div>
 
-            {/* CLEAR BUTTON ADDED HERE */}
             <button 
               onClick={handleClearField} 
               style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}

@@ -15,13 +15,14 @@ const tableStyle = { width: '100%', borderCollapse: 'collapse' as const, fontSiz
 const thStyle = { border: '1px solid #000', padding: '4px', background: '#f1f5f9', fontWeight: 'bold', whiteSpace: 'nowrap' as const };
 const tdStyle = { border: '1px solid #000', padding: '4px', whiteSpace: 'nowrap' as const };
 
+// FIXED: Properly matches DASH-8/300 and DASH-8/200
 const getAircraftColor = (type: string) => {
   if (!type) return '#ffffff';
   const t = type.toUpperCase();
   if (t.includes('ATR-72')) return '#e0f2fe';
   if (t.includes('ATR-42')) return '#dcfce7';
-  if (t.includes('DH-8/300') || t.includes('DASH8-C')) return '#fef3c7';
-  if (t.includes('DH-8/200') || t.includes('DASH8-B')) return '#f3e8ff';
+  if (t.includes('DH-8/300') || t.includes('DASH-8/300') || t.includes('DASH8-C')) return '#fef3c7';
+  if (t.includes('DH-8/200') || t.includes('DASH-8/200') || t.includes('DASH8-B')) return '#f3e8ff';
   return '#f8fafc';
 };
 
@@ -51,17 +52,6 @@ const parseKg = (val: any) => {
     return Number(parts[1]) || 0; // Takes the second number (kg)
   }
   return Number(str) || 0; // Fallback if they just typed the kg
-};
-
-// Helper to format baggage from "5/39" to "5 pcs / 39 kg"
-const formatBaggage = (val: any) => {
-  if (!val) return '—';
-  const str = String(val);
-  if (str.includes('/')) {
-    const parts = str.split('/');
-    return `${parts[0]} pcs / ${parts[1]} kg`;
-  }
-  return `0 pcs / ${str} kg`;
 };
 
 function ReportsPage() {
@@ -175,6 +165,54 @@ function ReportsPage() {
     const rem = (r.remarks || '').toLowerCase();
     return !c.includes('air ambulance') && !rem.includes('air ambulance');
   });
+
+  // Calculate Totals for DFIS
+  const dfisTotals = rampData.reduce((acc, r) => {
+    acc.mvmnts += 2;
+    acc.paxInAd += Number(r.paxInAdult || 0);
+    acc.paxInInf += Number(r.paxInInf || 0);
+    acc.paxOutAd += Number(r.paxOutAdult || 0);
+    acc.paxOutInf += Number(r.paxOutInf || 0);
+    acc.paxTransAd += Number(r.paxTransAdult || 0);
+    acc.paxTransInf += Number(r.paxTransInf || 0);
+    acc.mailIn += parseKg(r.mailIn);
+    acc.mailOut += parseKg(r.mailOut);
+    acc.mailTrans += parseKg(r.mailTrans);
+    acc.cargoIn += parseKg(r.cargoIn);
+    acc.cargoOut += parseKg(r.cargoOut);
+    acc.cargoTrans += parseKg(r.cargoTrans);
+    acc.otherIn += parseKg(r.otherIn);
+    acc.otherOut += parseKg(r.otherOut);
+    acc.otherTrans += parseKg(r.otherTrans);
+    
+    const inPcs = r.bagInPcs !== undefined ? Number(r.bagInPcs) : Number(r.bagIn?.split('/')[0] || 0);
+    const inKg = r.bagInKg !== undefined ? Number(r.bagInKg) : Number(r.bagIn?.split('/')[1] || 0);
+    acc.bagInPcs += inPcs; acc.bagInKg += inKg;
+
+    const outPcs = r.bagOutPcs !== undefined ? Number(r.bagOutPcs) : Number(r.bagOut?.split('/')[0] || 0);
+    const outKg = r.bagOutKg !== undefined ? Number(r.bagOutKg) : Number(r.bagOut?.split('/')[1] || 0);
+    acc.bagOutPcs += outPcs; acc.bagOutKg += outKg;
+
+    const transPcs = r.bagTransPcs !== undefined ? Number(r.bagTransPcs) : Number(r.bagTrans?.split('/')[0] || 0);
+    const transKg = r.bagTransKg !== undefined ? Number(r.bagTransKg) : Number(r.bagTrans?.split('/')[1] || 0);
+    acc.bagTransPcs += transPcs; acc.bagTransKg += transKg;
+
+    return acc;
+  }, { mvmnts: 0, paxInAd: 0, paxInInf: 0, paxOutAd: 0, paxOutInf: 0, paxTransAd: 0, paxTransInf: 0, mailIn: 0, mailOut: 0, mailTrans: 0, cargoIn: 0, cargoOut: 0, cargoTrans: 0, otherIn: 0, otherOut: 0, otherTrans: 0, bagInPcs: 0, bagInKg: 0, bagOutPcs: 0, bagOutKg: 0, bagTransPcs: 0, bagTransKg: 0 });
+
+  // Calculate Totals for Statistics
+  const statsTotals = validFlightsForStats.reduce((acc, r) => {
+    acc.mvmts += 2;
+    acc.paxInAd += Number(r.paxInAdult || 0);
+    acc.paxInInf += Number(r.paxInInf || 0);
+    acc.paxOutAd += Number(r.paxOutAdult || 0);
+    acc.paxOutInf += Number(r.paxOutInf || 0);
+    acc.cargoIn += parseKg(r.cargoIn);
+    acc.cargoOut += parseKg(r.cargoOut);
+    acc.mailIn += parseKg(r.mailIn);
+    acc.mailOut += parseKg(r.mailOut);
+    return acc;
+  }, { mvmts: 0, paxInAd: 0, paxInInf: 0, paxOutAd: 0, paxOutInf: 0, cargoIn: 0, cargoOut: 0, mailIn: 0, mailOut: 0 });
 
   return (
     <div className="page-content">
@@ -327,7 +365,7 @@ function ReportsPage() {
                   <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
                   <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
                   <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
-                  <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
+                  <th style={thStyle}>In(pcs/kg)</th><th style={thStyle}>Out(pcs/kg)</th><th style={thStyle}>Tran(pcs/kg)</th>
                 </tr>
               </thead>
               <tbody>
@@ -369,10 +407,10 @@ function ReportsPage() {
                       <td style={tdStyle}>{r.otherOut || 0}</td>
                       <td style={tdStyle}>{r.otherTrans || 0}</td>
                       
-                      {/* BAGGAGE FORMATTED HERE */}
-                      <td style={tdStyle}>{formatBaggage(r.bagIn)}</td>
-                      <td style={tdStyle}>{formatBaggage(r.bagOut)}</td>
-                      <td style={tdStyle}>{formatBaggage(r.bagTrans)}</td>
+                      {/* Shows just X/Y without 'pcs' and 'kg' */}
+                      <td style={tdStyle}>{r.bagInPcs !== undefined ? `${r.bagInPcs}/${r.bagInKg}` : (r.bagIn || '—')}</td>
+                      <td style={tdStyle}>{r.bagOutPcs !== undefined ? `${r.bagOutPcs}/${r.bagOutKg}` : (r.bagOut || '—')}</td>
+                      <td style={tdStyle}>{r.bagTransPcs !== undefined ? `${r.bagTransPcs}/${r.bagTransKg}` : (r.bagTrans || '—')}</td>
                       
                       <td style={tdStyle}>{collectorName}</td>
                       <td style={tdStyle}>{r.comments || 'NIL'}</td>
@@ -380,6 +418,31 @@ function ReportsPage() {
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
+                  <td colSpan={14} style={{ ...tdStyle, textAlign: 'right' }}>Grand Totals:</td>
+                  <td style={tdStyle}>{dfisTotals.mvmnts}</td>
+                  <td style={tdStyle}>{dfisTotals.paxInAd}</td>
+                  <td style={tdStyle}>{dfisTotals.paxInInf}</td>
+                  <td style={tdStyle}>{dfisTotals.paxOutAd}</td>
+                  <td style={tdStyle}>{dfisTotals.paxOutInf}</td>
+                  <td style={tdStyle}>{dfisTotals.paxTransAd}</td>
+                  <td style={tdStyle}>{dfisTotals.paxTransInf}</td>
+                  <td style={tdStyle}>{dfisTotals.mailIn}</td>
+                  <td style={tdStyle}>{dfisTotals.mailOut}</td>
+                  <td style={tdStyle}>{dfisTotals.mailTrans}</td>
+                  <td style={tdStyle}>{dfisTotals.cargoIn}</td>
+                  <td style={tdStyle}>{dfisTotals.cargoOut}</td>
+                  <td style={tdStyle}>{dfisTotals.cargoTrans}</td>
+                  <td style={tdStyle}>{dfisTotals.otherIn}</td>
+                  <td style={tdStyle}>{dfisTotals.otherOut}</td>
+                  <td style={tdStyle}>{dfisTotals.otherTrans}</td>
+                  <td style={tdStyle}>{dfisTotals.bagInPcs}/{dfisTotals.bagInKg}</td>
+                  <td style={tdStyle}>{dfisTotals.bagOutPcs}/{dfisTotals.bagOutKg}</td>
+                  <td style={tdStyle}>{dfisTotals.bagTransPcs}/{dfisTotals.bagTransKg}</td>
+                  <td colSpan={2} style={tdStyle}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
@@ -409,16 +472,27 @@ function ReportsPage() {
                     <td style={tdStyle}>{r.paxInInf || 0}</td>
                     <td style={tdStyle}>{r.paxOutAdult || 0}</td>
                     <td style={tdStyle}>{r.paxOutInf || 0}</td>
-                    
-                    {/* USING parseKg for Cargo and Mail */}
                     <td style={tdStyle}>{parseKg(r.cargoIn)}</td>
                     <td style={tdStyle}>{parseKg(r.cargoOut)}</td>
                     <td style={tdStyle}>{parseKg(r.mailIn)}</td>
                     <td style={tdStyle}>{parseKg(r.mailOut)}</td>
-                    
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
+                  <td colSpan={3} style={{ ...tdStyle, textAlign: 'right' }}>Grand Totals:</td>
+                  <td style={tdStyle}>{statsTotals.mvmts}</td>
+                  <td style={tdStyle}>{statsTotals.paxInAd}</td>
+                  <td style={tdStyle}>{statsTotals.paxInInf}</td>
+                  <td style={tdStyle}>{statsTotals.paxOutAd}</td>
+                  <td style={tdStyle}>{statsTotals.paxOutInf}</td>
+                  <td style={tdStyle}>{statsTotals.cargoIn}</td>
+                  <td style={tdStyle}>{statsTotals.cargoOut}</td>
+                  <td style={tdStyle}>{statsTotals.mailIn}</td>
+                  <td style={tdStyle}>{statsTotals.mailOut}</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
@@ -444,8 +518,8 @@ function ReportsPage() {
                 {['DH-8/200', 'DH-8/300', 'ATR-72', 'ATR-42'].map(type => {
                   const flights = validFlightsForStats.filter(r => {
                     const ac = (r.acType || '').toUpperCase().replace(/\s+/g, '');
-                    if (type === 'DH-8/300') return ac.includes('DH-8/300') || ac.includes('DASH8-C');
-                    if (type === 'DH-8/200') return ac.includes('DH-8/200') || ac.includes('DASH8-B');
+                    if (type === 'DH-8/300') return ac.includes('DH-8/300') || ac.includes('DASH-8/300') || ac.includes('DASH8-C');
+                    if (type === 'DH-8/200') return ac.includes('DH-8/200') || ac.includes('DASH-8/200') || ac.includes('DASH8-B');
                     if (type === 'ATR-72') return ac.includes('ATR-72');
                     if (type === 'ATR-42') return ac.includes('ATR-42');
                     return false;
@@ -459,13 +533,10 @@ function ReportsPage() {
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxInInf || 0), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxOutAdult || 0), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + Number(f.paxOutInf || 0), 0)}</td>
-                      
-                      {/* USING parseKg for Mail and Cargo to prevent NaN */}
                       <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.mailIn), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.mailOut), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.cargoIn), 0)}</td>
                       <td style={tdStyle}>{flights.reduce((s, f) => s + parseKg(f.cargoOut), 0)}</td>
-                      
                     </tr>
                   );
                 })}
@@ -498,6 +569,13 @@ function ReportsPage() {
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
+                  <td colSpan={2} style={{ ...tdStyle, textAlign: 'right' }}>Total Records:</td>
+                  <td style={tdStyle}>{birdData.length}</td>
+                  <td colSpan={2} style={tdStyle}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
@@ -517,6 +595,13 @@ function ReportsPage() {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr style={{ background: '#e2e8f0', fontWeight: 'bold' }}>
+                  <td colSpan={1} style={{ ...tdStyle, textAlign: 'right' }}>Total:</td>
+                  <td style={tdStyle}>{fodData.reduce((s, f) => s + Number(f.grams || 0), 0)}g</td>
+                  <td colSpan={2} style={tdStyle}></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
