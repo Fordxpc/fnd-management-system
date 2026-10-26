@@ -601,6 +601,27 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // LIGHTS INSPECTORS MODULE
+    // ==========================================
+    if (url.pathname === "/api/lights-inspectors" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM lights_inspectors").all();
+      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/lights-inspectors" && method === "POST") {
+      const body: any = await request.json();
+      await env.DB.prepare(`INSERT OR REPLACE INTO lights_inspectors (staffId, staffName, staffSN) VALUES (?, ?, ?)`)
+        .bind(body.staffId, body.staffName, body.staffSN || '').run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM lights_inspectors WHERE staffId = ?").bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
     // TIMESHEET / ATTENDANCE MODULE
     // ==========================================
     if (url.pathname === "/api/timesheets" && method === "GET") {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { db, auth } from '../firebase';
+import { auth } from '../firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
@@ -55,38 +55,49 @@ const STAFF_CREDENTIALS = [
 ];
 
 function SettingsPage() {
-  const { profile, logout } = useAuth();
+  const { profile, logout, lightsInspectors } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'detailed' | 'console'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const canManageAccess = isDev || isManager || isSMT;
   
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [resetting, setResetting] = useState<string | null>(null);
 
   // Temp Access State
   const [tempAccessList, setTempAccessList] = useState<any[]>([]);
-  const [tempEmail, setTempEmail] = useState('');
+  const [tempStaffId, setTempStaffId] = useState('');
   const [tempDept, setTempDept] = useState('Maintenance');
   const [tempStart, setTempStart] = useState('');
   const [tempEnd, setTempEnd] = useState('');
+
+  // Lights Inspectors State
+  const [inspectorStaffId, setInspectorStaffId] = useState('');
+  const [inspectorList, setInspectorList] = useState<any[]>([]);
   
   const currentUser = auth.currentUser;
 
   const fetchSettings = useCallback(async () => {
     try {
-      const [rulesData, usersData, tempAccessData] = await Promise.all([
+      const [rulesData, usersData, tempAccessData, staffData, inspectorsData] = await Promise.all([
         apiFetch('/settings/ot_rules'),
         apiFetch('/users'),
-        apiFetch('/temp-access')
+        apiFetch('/temp-access'),
+        apiFetch('/staff'),
+        apiFetch('/lights-inspectors')
       ]);
       if (rulesData) setOtRules(rulesData);
       setActiveUsers(usersData);
       setTempAccessList(tempAccessData);
+      setStaffList(staffData);
+      setInspectorList(inspectorsData);
     } catch (err: any) {
       console.error("Failed to load settings", err);
     }
@@ -120,14 +131,16 @@ function SettingsPage() {
 
   const handleAddTempAccess = async (e: any) => {
     e.preventDefault();
-    if (!tempEmail || !tempStart || !tempEnd) { toast.error("Fill all fields"); return; }
+    const staff = staffList.find(s => s.id === tempStaffId);
+    if (!staff || !tempStart || !tempEnd) { toast.error("Fill all fields"); return; }
+    
     try {
       await apiFetch('/temp-access', { 
         method: 'POST', 
-        body: JSON.stringify({ email: tempEmail, targetDept: tempDept, startDate: tempStart, endDate: tempEnd }) 
+        body: JSON.stringify({ email: staff.email, targetDept: tempDept, startDate: tempStart, endDate: tempEnd }) 
       });
       toast.success('Temporary access granted');
-      setTempEmail(''); setTempStart(''); setTempEnd('');
+      setTempStart(''); setTempEnd('');
       fetchSettings();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -137,6 +150,31 @@ function SettingsPage() {
     try {
       await apiFetch(`/temp-access/${id}`, { method: 'DELETE' });
       toast.success('Access removed');
+      fetchSettings();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleAddInspector = async (e: any) => {
+    e.preventDefault();
+    const staff = staffList.find(s => s.id === inspectorStaffId);
+    if (!staff) { toast.error("Select a staff member"); return; }
+
+    try {
+      await apiFetch('/lights-inspectors', {
+        method: 'POST',
+        body: JSON.stringify({ staffId: staff.id, staffName: staff.name, staffSN: staff.sn })
+      });
+      toast.success('Inspector added');
+      setInspectorStaffId('');
+      fetchSettings();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleRemoveInspector = async (staffId: string) => {
+    if (!window.confirm("Remove this inspector?")) return;
+    try {
+      await apiFetch(`/lights-inspectors/${staffId}`, { method: 'DELETE' });
+      toast.success('Inspector removed');
       fetchSettings();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -188,7 +226,7 @@ function SettingsPage() {
 
       <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px', margin: '0 auto 24px auto' }}>
         <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General</button>
-        {(isDev || isManager) && (
+        {(isDev || isManager || isSMT) && (
           <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ Rules & Users</button>
         )}
         {isDev && (
@@ -229,7 +267,7 @@ function SettingsPage() {
         </>
       )}
 
-      {activeTab === 'rules' && (isDev || isManager) && (
+      {activeTab === 'rules' && canManageAccess && (
         <div className="dash-card border-l-4 border-blue-500">
           <h3>⚙️ System Rules & Access Control</h3>
           
@@ -263,8 +301,15 @@ function SettingsPage() {
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
             <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>🔑 Temporary Cross-Department Access</h4>
             <form onSubmit={handleAddTempAccess} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
-              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Staff Email</label><input type="email" value={tempEmail} onChange={e => setTempEmail(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} /></div>
-              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Target Department</label>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Staff Name</label>
+                <select value={tempStaffId} onChange={e => setTempStaffId(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', maxWidth: '250px' }}>
+                  <option value="">Search Staff...</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.department})</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Target Department</label>
                 <select value={tempDept} onChange={e => setTempDept(e.target.value)} style={{ display: 'block', padding: '8px', color: '#1e293b', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
                   {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
@@ -282,6 +327,38 @@ function SettingsPage() {
                     <tr key={t.id}>
                       <td>{t.email}</td><td>{t.targetDept}</td><td>{t.startDate}</td><td>{t.endDate}</td>
                       <td><button onClick={() => handleRemoveTempAccess(t.id)} className="delete-btn">Remove</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* LIGHTS INSPECTORS SECTION */}
+          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
+            <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>🚨 RWY Lights Inspectors</h4>
+            <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>Selected staff members will have access to fill out the Runway Lights inspection sheet.</p>
+            
+            <form onSubmit={handleAddInspector} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Select Staff</label>
+                <select value={inspectorStaffId} onChange={e => setInspectorStaffId(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', maxWidth: '250px' }}>
+                  <option value="">Search Staff...</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.department})</option>)}
+                </select>
+              </div>
+              <button type="submit" className="quick-btn" style={{ background: '#dc2626', color: 'white' }}>Add Inspector</button>
+            </form>
+
+            {inspectorList.length > 0 && (
+              <table className="mini-table">
+                <thead><tr><th>Staff Name</th><th>SN</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {inspectorList.map(i => (
+                    <tr key={i.staffId}>
+                      <td><strong>{i.staffName}</strong></td>
+                      <td>{i.staffSN || '—'}</td>
+                      <td><button onClick={() => handleRemoveInspector(i.staffId)} className="delete-btn">Remove</button></td>
                     </tr>
                   ))}
                 </tbody>

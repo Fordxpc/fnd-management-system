@@ -14,7 +14,7 @@ import OpsBoardPage from './pages/OpsBoardPage';
 import RampCheckSheetPage from './pages/RampCheckSheetPage';
 import WildlifePage from './pages/WildlifePage';
 import ReportsPage from './pages/ReportsPage';
-import MigrationTool from './pages/MigrationTool'; // <-- IMPORT IS BACK
+import RWYLightsPage from './pages/RWYLightsPage';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
@@ -22,42 +22,48 @@ const USER_ADMIN_ROLES = ['developer', 'manager'];
 type Module = 'dashboard' | 'operations' | 'roster' | 'reports' | 'system';
 
 function Dashboard(_props: any) {
-  const { profile } = useAuth();
+  const { profile, lightsInspectors } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const isAdmin = profile?.role === 'admin';
   const dept = profile?.department || '';
   
-  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
+  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && !isAdmin;
   const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
-  const canManageUsers = isDev || isManager;
+  const canManageUsers = isDev || isManager || isAdmin;
   
-  const canSeeOpsBoard = isDev || isManager || isSMT || isOpsOrSafety;
-  const canSeeRampCheck = isDev || isManager || isSMT;
-  const canSeeStaffList = isDev || isManager || isSMT;
+  const canSeeOpsBoard = isDev || isManager || isAdmin || isSMT || isOpsOrSafety;
+  const canSeeRampCheck = isDev || isManager || isAdmin || isSMT;
+  const canSeeStaffList = isDev || isManager || isAdmin || isSMT;
   
   const canSeeReports = !isStaff; 
   const canSeeWildlife = !isStaff;
+  
+  // Lights Access Logic
+  const myStaffId = profile?.id; // Note: we might need to fetch the actual staff ID if profile doesn't have it directly, but let's assume profile has ID or we match by email.
+  const isLightsInspector = lightsInspectors.some((i: any) => i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === profile?.staffId);
+  const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector;
 
   const navigate = (page: string) => {
     setCurrentPage(page);
     if (page === 'dashboard') setActiveModule('dashboard');
-    else if (['opsboard', 'flights', 'rampcheck', 'wildlife'].includes(page)) setActiveModule('operations');
+    else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
     else if (['reports'].includes(page)) setActiveModule('reports');
-    else if (['holidays', 'users', 'settings', 'migration'].includes(page)) setActiveModule('system');
+    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
   };
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
-    migration: <MigrationTool />, // <-- ROUTE IS BACK
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
     rampcheck: <RampCheckSheetPage />,
     wildlife: <WildlifePage />,
+    lights: <RWYLightsPage />,
     reports: <ReportsPage />,
     staff: <StaffPage />,
     roster: <RosterPage />,
@@ -79,6 +85,7 @@ function Dashboard(_props: any) {
               <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
               {canSeeRampCheck && <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>}
               {canSeeWildlife && <button className={currentPage === 'wildlife' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('wildlife')}>🦅 Wildlife & Bird Strike</button>}
+              {canSeeLights && <button className={currentPage === 'lights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('lights')}>🚨 RWY Lights</button>}
             </>
           )}
 
@@ -102,10 +109,6 @@ function Dashboard(_props: any) {
           {activeModule === 'system' && (
             <>
               <div className="sidebar-section-title">System & Setting</div>
-              
-              {/* MIGRATION BUTTON IS BACK */}
-              <button className={currentPage === 'migration' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('migration')} style={{ background: '#8b5cf6', color: 'white', marginBottom: '8px' }}>🚀 Migration Tool</button>
-              
               <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('holidays')}>🎉 Holidays</button>
               {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('users')}>🔑 User Accounts</button>}
               <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>

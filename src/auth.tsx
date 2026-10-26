@@ -10,6 +10,7 @@ export function AuthProvider({ children }: any) {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [tempAccess, setTempAccess] = useState<any[]>([]);
+  const [lightsInspectors, setLightsInspectors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -73,7 +74,7 @@ export function AuthProvider({ children }: any) {
 
           setProfile(finalProfile);
 
-          // Fetch Temporary Access
+          // Fetch Temp Access
           try {
             const tAccess = await apiFetch('/temp-access');
             const today = new Date().toISOString().split('T')[0];
@@ -82,6 +83,12 @@ export function AuthProvider({ children }: any) {
             );
             setTempAccess(activeAccess);
           } catch (e) { console.warn("Temp access fetch failed", e); }
+
+          // Fetch Lights Inspectors
+          try {
+            const inspectors = await apiFetch('/lights-inspectors');
+            setLightsInspectors(inspectors);
+          } catch (e) { console.warn("Lights inspectors fetch failed", e); }
 
           if (finalProfile) {
             try {
@@ -101,6 +108,7 @@ export function AuthProvider({ children }: any) {
       } else {
         setProfile(null);
         setTempAccess([]);
+        setLightsInspectors([]);
       }
       setLoading(false);
     });
@@ -112,7 +120,7 @@ export function AuthProvider({ children }: any) {
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, profile, tempAccess, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, profile, tempAccess, lightsInspectors, login, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

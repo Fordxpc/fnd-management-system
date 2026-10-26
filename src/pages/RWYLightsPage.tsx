@@ -7,10 +7,19 @@ import { ConfirmDialog } from '../components/Dialogs';
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
 export default function RWYLightsPage() {
-  const { profile, user, tempAccess } = useAuth();
+  const { profile, user, lightsInspectors } = useAuth();
+  
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  
+  const myStaffId = profile?.id; 
+  const isSelectedInspector = lightsInspectors.some((i: any) => 
+    i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
+  );
+
+  // Only these roles can fill the form
+  const canEdit = isDev || isManager || isSelectedInspector;
   
   const [records, setRecords] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -80,12 +89,12 @@ export default function RWYLightsPage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>🚨 Runway Lights Inspection</h2>
-        {(isDev || isManager || isSMT || tempAccess.length > 0) && (
+        {canEdit && (
           <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ New Inspection'}</button>
         )}
       </div>
 
-      {showForm && (
+      {showForm && canEdit && (
         <form className="staff-form" onSubmit={handleSubmit} style={{ marginBottom: '24px' }}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, marginBottom: '8px' }}>New Inspection Log</div>
           <div><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} required /></div>
