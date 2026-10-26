@@ -26,6 +26,12 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     setConfirmId(null);
   };
 
+  const handleClearField = () => {
+    if (!confirmId) return;
+    handleChange({ target: { id: confirmId, value: '' } } as any);
+    setConfirmId(null);
+  };
+
   const handleTimeClick = (id: string) => {
     if (!isManager) return;
     const now = new Date();
@@ -34,7 +40,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     setConfirmId(id);
   };
 
-  // Helper to prevent mobile keyboard
   const preventKeyboard = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.blur();
   };
@@ -233,7 +238,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>
             <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time (24h)</h3>
             <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
-              Adjust the time below.
+              Adjust the time below or clear it.
             </p>
             
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', margin: '0 auto 24px auto' }}>
@@ -261,6 +266,14 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 })}
               </select>
             </div>
+
+            {/* CLEAR BUTTON ADDED HERE */}
+            <button 
+              onClick={handleClearField} 
+              style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}
+            >
+              Clear this field
+            </button>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
               <button 

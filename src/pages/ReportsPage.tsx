@@ -401,8 +401,17 @@ function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {['DASH8-B', 'DASH8-C', 'ATR-72', 'ATR-42'].map(type => {
-                  const flights = rampData.filter(r => r.acType?.includes(type) || (type === 'ATR-72' && r.acType?.includes('ATR-72')));
+                {['DH-8/200', 'DH-8/300', 'ATR-72', 'ATR-42'].map(type => {
+                  // Filter logic handles variations in naming
+                  const flights = rampData.filter(r => {
+                    const ac = (r.acType || '').toUpperCase().replace(/\s+/g, '');
+                    if (type === 'DH-8/300') return ac.includes('DH-8/300') || ac.includes('DASH8-C');
+                    if (type === 'DH-8/200') return ac.includes('DH-8/200') || ac.includes('DASH8-B');
+                    if (type === 'ATR-72') return ac.includes('ATR-72');
+                    if (type === 'ATR-42') return ac.includes('ATR-42');
+                    return false;
+                  });
+                  
                   return (
                     <tr key={type} style={{ backgroundColor: getAircraftColor(type) }}>
                       <td style={tdStyle}>1</td><td style={tdStyle}>Maldivian</td><td style={tdStyle}><strong>{type}</strong></td>
