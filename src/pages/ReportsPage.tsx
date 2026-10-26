@@ -42,7 +42,6 @@ const AircraftLegend = () => (
   </div>
 );
 
-// Helper to ensure all weight/count fields show as "Pcs / Kg"
 const formatPcsKg = (val: any) => {
   if (!val || val === '—') return '0/0';
   const str = String(val).trim();
@@ -50,27 +49,20 @@ const formatPcsKg = (val: any) => {
     const parts = str.split('/');
     return `${parts[0] || '0'}/${parts[1] || '0'}`;
   }
-  // If only a single number was entered (legacy), assume it's Kg
   return `0/${str}`;
 };
 
-// Helper to extract just the kg part from strings like "2/30" or "30"
 const parseKg = (val: any) => {
   if (!val) return 0;
   const str = String(val);
-  if (str.includes('/')) {
-    return Number(str.split('/')[1]) || 0;
-  }
+  if (str.includes('/')) return Number(str.split('/')[1]) || 0;
   return Number(str) || 0;
 };
 
-// Helper to extract just the pcs part from strings like "2/30"
 const parsePcs = (val: any) => {
   if (!val) return 0;
   const str = String(val);
-  if (str.includes('/')) {
-    return Number(str.split('/')[0]) || 0;
-  }
+  if (str.includes('/')) return Number(str.split('/')[0]) || 0;
   return 0;
 };
 
@@ -93,6 +85,10 @@ function ReportsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [generatedReport, setGeneratedReport] = useState<any>(null);
+
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const canPrint = isDev || isManager;
 
   const fetchData = useCallback(async () => {
     try {
@@ -173,6 +169,12 @@ function ReportsPage() {
     }
   };
 
+  const handlePrint = () => {
+    document.body.classList.add('printing-report');
+    window.print();
+    setTimeout(() => document.body.classList.remove('printing-report'), 1000);
+  };
+
   const isStaff = profile?.role === 'staff' && !profile?.isSMT;
   if (isStaff) {
     return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2><p>You do not have permission to view Reports.</p></div></div>;
@@ -186,33 +188,26 @@ function ReportsPage() {
     return !c.includes('air ambulance') && !rem.includes('air ambulance');
   });
 
-  // Calculate Totals for DFIS
   const dfisTotals = rampData.reduce((acc, r) => {
     acc.mvmnts += 2;
     acc.paxInAd += Number(r.paxInAdult || 0); acc.paxInInf += Number(r.paxInInf || 0);
     acc.paxOutAd += Number(r.paxOutAdult || 0); acc.paxOutInf += Number(r.paxOutInf || 0);
     acc.paxTransAd += Number(r.paxTransAdult || 0); acc.paxTransInf += Number(r.paxTransInf || 0);
-    
     acc.mailInPcs += parsePcs(r.mailIn); acc.mailInKg += parseKg(r.mailIn);
     acc.mailOutPcs += parsePcs(r.mailOut); acc.mailOutKg += parseKg(r.mailOut);
     acc.mailTransPcs += parsePcs(r.mailTrans); acc.mailTransKg += parseKg(r.mailTrans);
-
     acc.cargoInPcs += parsePcs(r.cargoIn); acc.cargoInKg += parseKg(r.cargoIn);
     acc.cargoOutPcs += parsePcs(r.cargoOut); acc.cargoOutKg += parseKg(r.cargoOut);
     acc.cargoTransPcs += parsePcs(r.cargoTrans); acc.cargoTransKg += parseKg(r.cargoTrans);
-
     acc.otherInPcs += parsePcs(r.otherIn); acc.otherInKg += parseKg(r.otherIn);
     acc.otherOutPcs += parsePcs(r.otherOut); acc.otherOutKg += parseKg(r.otherOut);
     acc.otherTransPcs += parsePcs(r.otherTrans); acc.otherTransKg += parseKg(r.otherTrans);
-
     acc.bagInPcs += parsePcs(r.bagIn); acc.bagInKg += parseKg(r.bagIn);
     acc.bagOutPcs += parsePcs(r.bagOut); acc.bagOutKg += parseKg(r.bagOut);
     acc.bagTransPcs += parsePcs(r.bagTrans); acc.bagTransKg += parseKg(r.bagTrans);
-
     return acc;
   }, { mvmnts: 0, paxInAd: 0, paxInInf: 0, paxOutAd: 0, paxOutInf: 0, paxTransAd: 0, paxTransInf: 0, mailInPcs: 0, mailInKg: 0, mailOutPcs: 0, mailOutKg: 0, mailTransPcs: 0, mailTransKg: 0, cargoInPcs: 0, cargoInKg: 0, cargoOutPcs: 0, cargoOutKg: 0, cargoTransPcs: 0, cargoTransKg: 0, otherInPcs: 0, otherInKg: 0, otherOutPcs: 0, otherOutKg: 0, otherTransPcs: 0, otherTransKg: 0, bagInPcs: 0, bagInKg: 0, bagOutPcs: 0, bagOutKg: 0, bagTransPcs: 0, bagTransKg: 0 });
 
-  // Calculate Totals for Statistics
   const statsTotals = validFlightsForStats.reduce((acc, r) => {
     acc.mvmts += 2;
     acc.paxInAd += Number(r.paxInAdult || 0); acc.paxInInf += Number(r.paxInInf || 0);
@@ -224,8 +219,17 @@ function ReportsPage() {
 
   return (
     <div className="page-content">
-      <div className="staff-header no-print">
+      <div className="staff-header no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>📊 Operations Reports</h2>
+        {canPrint && (
+          <button 
+            onClick={handlePrint} 
+            className="add-staff-btn" 
+            style={{ background: '#16a34a', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            🖨️ Print / Save as PDF
+          </button>
+        )}
       </div>
 
       <div className="ops-tabs no-print" style={{ flexWrap: 'wrap' }}>
@@ -243,7 +247,7 @@ function ReportsPage() {
         {activeTab === 'custom' && (
           <div>
             <ExcelHeader title="CUSTOM REPORT GENERATOR" subtitle="Select parameters to generate a detailed report" />
-            <div style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '24px', flexWrap: 'wrap' }}>
+            <div className="no-print" style={{ display: 'flex', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '24px', flexWrap: 'wrap' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Report Type</label>
                 <select value={reportType} onChange={(e: any) => { setReportType(e.target.value); setGeneratedReport(null); }} style={{ display: 'block', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', marginTop: '4px', color: '#1e293b' }}>
@@ -405,8 +409,6 @@ function ReportsPage() {
                       <td style={tdStyle}>{r.paxOutInf || 0}</td>
                       <td style={tdStyle}>{r.paxTransAdult || 0}</td>
                       <td style={tdStyle}>{r.paxTransInf || 0}</td>
-                      
-                      {/* Applying formatPcsKg to all weight columns */}
                       <td style={tdStyle}>{formatPcsKg(r.mailIn)}</td>
                       <td style={tdStyle}>{formatPcsKg(r.mailOut)}</td>
                       <td style={tdStyle}>{formatPcsKg(r.mailTrans)}</td>
@@ -419,7 +421,6 @@ function ReportsPage() {
                       <td style={tdStyle}>{formatPcsKg(r.bagIn)}</td>
                       <td style={tdStyle}>{formatPcsKg(r.bagOut)}</td>
                       <td style={tdStyle}>{formatPcsKg(r.bagTrans)}</td>
-                      
                       <td style={tdStyle}>{collectorName}</td>
                       <td style={tdStyle}>{r.comments || 'NIL'}</td>
                     </tr>

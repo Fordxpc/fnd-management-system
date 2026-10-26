@@ -133,3 +133,70 @@ input:read-only, textarea:read-only, input:disabled, select:disabled {
   color: #475569 !important;
   -webkit-text-fill-color: #475569 !important;
 }
+/* ==========================================
+   REPORTS PRINT STYLES
+   ========================================== */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 5mm;
+  }
+
+  /* When printing a report, hide everything except the report content */
+  body.printing-report * {
+    visibility: hidden;
+  }
+  
+  body.printing-report .page-content,
+  body.printing-report .page-content * {
+    visibility: visible;
+  }
+
+  body.printing-report .page-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Hide UI elements */
+  body.printing-report .no-print,
+  body.printing-report .staff-header,
+  body.printing-report .ops-tabs,
+  body.printing-report .sidebar,
+  body.printing-report .main-app-header,
+  body.printing-report .top-tabs-container {
+    display: none !important;
+  }
+
+  /* Format the report card and tables */
+  body.printing-report .dash-card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  body.printing-report table {
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 8px !important; /* Smaller font to fit */
+  }
+
+  body.printing-report th,
+  body.printing-report td {
+    border: 1px solid #000 !important;
+    padding: 2px 4px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    white-space: normal !important; /* Allow text wrapping */
+  }
+
+  /* Ensure the logo and title print well */
+  body.printing-report .roster-title,
+  body.printing-report .title-container {
+    margin-bottom: 10px !important;
+  }
+}
