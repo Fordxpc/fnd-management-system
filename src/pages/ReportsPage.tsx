@@ -42,7 +42,19 @@ const AircraftLegend = () => (
   </div>
 );
 
-// Parses "X/Y" and returns Y (kg). If just "Y", returns Y.
+// Helper to ensure all weight/count fields show as "Pcs / Kg"
+const formatPcsKg = (val: any) => {
+  if (!val || val === '—') return '0/0';
+  const str = String(val).trim();
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    return `${parts[0] || '0'}/${parts[1] || '0'}`;
+  }
+  // If only a single number was entered (legacy), assume it's Kg
+  return `0/${str}`;
+};
+
+// Helper to extract just the kg part from strings like "2/30" or "30"
 const parseKg = (val: any) => {
   if (!val) return 0;
   const str = String(val);
@@ -52,7 +64,7 @@ const parseKg = (val: any) => {
   return Number(str) || 0;
 };
 
-// Parses "X/Y" and returns X (pcs).
+// Helper to extract just the pcs part from strings like "2/30"
 const parsePcs = (val: any) => {
   if (!val) return 0;
   const str = String(val);
@@ -393,18 +405,21 @@ function ReportsPage() {
                       <td style={tdStyle}>{r.paxOutInf || 0}</td>
                       <td style={tdStyle}>{r.paxTransAdult || 0}</td>
                       <td style={tdStyle}>{r.paxTransInf || 0}</td>
-                      <td style={tdStyle}>{r.mailIn || '—'}</td>
-                      <td style={tdStyle}>{r.mailOut || '—'}</td>
-                      <td style={tdStyle}>{r.mailTrans || '—'}</td>
-                      <td style={tdStyle}>{r.cargoIn || '—'}</td>
-                      <td style={tdStyle}>{r.cargoOut || '—'}</td>
-                      <td style={tdStyle}>{r.cargoTrans || '—'}</td>
-                      <td style={tdStyle}>{r.otherIn || '—'}</td>
-                      <td style={tdStyle}>{r.otherOut || '—'}</td>
-                      <td style={tdStyle}>{r.otherTrans || '—'}</td>
-                      <td style={tdStyle}>{r.bagIn || '—'}</td>
-                      <td style={tdStyle}>{r.bagOut || '—'}</td>
-                      <td style={tdStyle}>{r.bagTrans || '—'}</td>
+                      
+                      {/* Applying formatPcsKg to all weight columns */}
+                      <td style={tdStyle}>{formatPcsKg(r.mailIn)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.mailOut)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.mailTrans)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.cargoIn)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.cargoOut)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.cargoTrans)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.otherIn)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.otherOut)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.otherTrans)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.bagIn)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.bagOut)}</td>
+                      <td style={tdStyle}>{formatPcsKg(r.bagTrans)}</td>
+                      
                       <td style={tdStyle}>{collectorName}</td>
                       <td style={tdStyle}>{r.comments || 'NIL'}</td>
                     </tr>
