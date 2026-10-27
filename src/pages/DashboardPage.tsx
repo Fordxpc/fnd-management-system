@@ -164,7 +164,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const upcomingFlights = flights
     .filter(f => {
-      const isCompleted = ['Departed', 'Landed', 'Cancelled'].includes(f.status);
+      const isCompleted = ['Departed', 'Departed (Origin)', 'Landed', 'Cancelled'].includes(f.status);
       return f.date >= todayStr && !isCompleted;
     })
     .sort((a, b) => {
@@ -186,7 +186,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
     else if (liveRamp.ata) liveStatus = 'Landed';
-    else if (liveRamp.eta) liveStatus = 'En Route'; 
+    else if (liveRamp.eta) liveStatus = 'Departed (Origin)'; 
   }
 
   let myLeaveUsed = 0;
@@ -238,7 +238,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : liveStatus === 'En Route' ? '#8b5cf6' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
+            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : liveStatus === 'Departed (Origin)' ? '#8b5cf6' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
@@ -250,7 +250,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
               </div>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
               
-              {/* SPLIT STA AND ETA INTO 5 COLUMNS */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
                 <div>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>CHECK-IN</div>
@@ -262,15 +261,15 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#a78bfa' }}>{liveRamp?.eta || '—'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#a78bfa' }}>{liveRamp?.eta || nextFlight.eta || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ARRIVAL (ATA)</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{liveRamp?.ata || '—'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{liveRamp?.ata || nextFlight.ata || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>DEPARTURE (ATD)</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{liveRamp?.atd || nextFlight.departureTime || '—'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{liveRamp?.atd || nextFlight.atd || nextFlight.departureTime || '—'}</div>
                 </div>
               </div>
             </div>

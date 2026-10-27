@@ -123,35 +123,6 @@ export const onRequest = async (context: any) => {
       context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/holidays/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    
-    // CREATE LEAVE REQUEST
-    if (url.pathname === "/api/leave-requests" && method === "POST") {
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      const requestedAt = new Date().toISOString();
-      const finalStatus = body.status || 'pending';
-
-      // Prevent duplicates
-      const existing = await env.DB.prepare(`
-        SELECT id FROM leave_requests 
-        WHERE staffId = ? AND startDate = ? AND endDate = ? AND leaveType = ?
-      `).bind(body.staffId, body.startDate, body.endDate, body.leaveType).first();
-
-      if (existing) {
-        return new Response(JSON.stringify({ success: true, id: existing.id, message: "Already exists" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      await env.DB.prepare(`
-        INSERT INTO leave_requests (id, staffId, staffName, staffDepartment, staffSN, staffGender, staffIsSMT, leaveType, startDate, endDate, days, reason, status, requestedAt, requestedBy)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        id, body.staffId, body.staffName, body.staffDepartment, body.staffSN || '', body.staffGender || '', body.staffIsSMT ? 1 : 0,
-        body.leaveType, body.startDate, body.endDate, body.days, body.reason || '', finalStatus, requestedAt, body.requestedBy || ''
-      ).run();
-
-      context.waitUntil(backupToFirebase('leave_requests', id, { ...body, status: finalStatus, requestedAt }));
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
 
     // ==========================================
     // LEAVE REQUESTS MODULE
@@ -162,12 +133,11 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify(formattedResults), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // CREATE LEAVE REQUEST (FIXED: Accepts status from body)
     if (url.pathname === "/api/leave-requests" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const requestedAt = new Date().toISOString();
-      const finalStatus = body.status || 'pending'; // <--- THE FIX
+      const finalStatus = body.status || 'pending';
 
       await env.DB.prepare(`
         INSERT INTO leave_requests (id, staffId, staffName, staffDepartment, staffSN, staffGender, staffIsSMT, leaveType, startDate, endDate, days, reason, status, requestedAt, requestedBy)
@@ -181,7 +151,6 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // APPROVE LEAVE REQUEST (FIXED: Matches old IDs to new D1 IDs)
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/approve") && method === "PUT") {
       const id = url.pathname.split("/")[3];
       const body: any = await request.json();
@@ -396,7 +365,6 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // EDIT OVERTIME ENTRY
     if (url.pathname.startsWith("/api/overtime/") && method === "PUT" && !url.pathname.endsWith("/approve") && !url.pathname.endsWith("/reject")) {
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
@@ -407,7 +375,6 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // APPROVE OVERTIME
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/approve") && method === "PUT") {
       const id = url.pathname.split("/")[3];
       const body: any = await request.json();
@@ -417,7 +384,6 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // REJECT OVERTIME
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/reject") && method === "PUT") {
       const id = url.pathname.split("/")[3];
       const body: any = await request.json();
@@ -535,7 +501,26 @@ export const onRequest = async (context: any) => {
     if (url.pathname === "/api/ramp/reports" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await env.DB.prepare(`INSERT INTO ramp_inspections (id, date, fltNo, acReg, payload, createdAt) VALUES (?, ?, ?, ?, ?, ?)`).bind(id, body.date || '', body.fltNo || '', body.acReg || '', JSON.stringify(body), new Date().toISOString()).run();
+      
+      await env.DB.prepare(`
+        INSERT INTO ramp_inspections (id, date, fltNo, acReg, payload, createdAt) 
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(id, body.date || '', body.fltNo || '', body.acReg || '', JSON.stringify(body), new Date().toISOString()).run();
+
+      // 🔥 SYNC FLIGHT STATUS AND TIMES TO THE FLIGHTS TABLE 🔥
+      if (body.fltNo && body.date) {
+        let newStatus = 'Scheduled';
+        if (body.atd) newStatus = 'Departed';
+        else if (body.ata) newStatus = 'Landed';
+        else if (body.eta) newStatus = 'Departed (Origin)';
+
+        await env.DB.prepare(`
+          UPDATE flights 
+          SET status = ?, eta = ?, ata = ?, atd = ? 
+          WHERE flightNo = ? AND date = ?
+        `).bind(newStatus, body.eta || null, body.ata || null, body.atd || null, body.fltNo, body.date).run();
+      }
+
       context.waitUntil(backupToFirebase('ramp_inspections', id, { ...body }));
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -543,7 +528,27 @@ export const onRequest = async (context: any) => {
     if (url.pathname.startsWith("/api/ramp/reports/") && method === "PUT") {
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
-      await env.DB.prepare(`UPDATE ramp_inspections SET date = ?, fltNo = ?, acReg = ?, payload = ?, updatedAt = ? WHERE id = ?`).bind(body.date || '', body.fltNo || '', body.acReg || '', JSON.stringify(body), new Date().toISOString(), id).run();
+      
+      await env.DB.prepare(`
+        UPDATE ramp_inspections 
+        SET date = ?, fltNo = ?, acReg = ?, payload = ?, updatedAt = ? 
+        WHERE id = ?
+      `).bind(body.date || '', body.fltNo || '', body.acReg || '', JSON.stringify(body), new Date().toISOString(), id).run();
+
+      // 🔥 SYNC FLIGHT STATUS AND TIMES TO THE FLIGHTS TABLE 🔥
+      if (body.fltNo && body.date) {
+        let newStatus = 'Scheduled';
+        if (body.atd) newStatus = 'Departed';
+        else if (body.ata) newStatus = 'Landed';
+        else if (body.eta) newStatus = 'Departed (Origin)';
+
+        await env.DB.prepare(`
+          UPDATE flights 
+          SET status = ?, eta = ?, ata = ?, atd = ? 
+          WHERE flightNo = ? AND date = ?
+        `).bind(newStatus, body.eta || null, body.ata || null, body.atd || null, body.fltNo, body.date).run();
+      }
+
       context.waitUntil(backupToFirebase('ramp_inspections', id!, { ...body }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -552,72 +557,6 @@ export const onRequest = async (context: any) => {
       const id = url.pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM ramp_inspections WHERE id = ?").bind(id).run();
       context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/ramp_inspections/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ==========================================
-    // TEMPORARY ACCESS MODULE
-    // ==========================================
-    if (url.pathname === "/api/temp-access" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM temp_access").all();
-      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname === "/api/temp-access" && method === "POST") {
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      await env.DB.prepare(`INSERT INTO temp_access (id, email, targetDept, startDate, endDate) VALUES (?, ?, ?, ?, ?)`)
-        .bind(id, body.email, body.targetDept, body.startDate, body.endDate).run();
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
-      const id = url.pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM temp_access WHERE id = ?").bind(id).run();
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ==========================================
-    // RUNWAY LIGHTS MODULE
-    // ==========================================
-    if (url.pathname === "/api/lights" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM rwy_lights ORDER BY date DESC").all();
-      const formatted = results.map((row: any) => ({ ...row, data: JSON.parse(row.data || '{}') }));
-      return new Response(JSON.stringify(formatted), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname === "/api/lights" && method === "POST") {
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      await env.DB.prepare(`INSERT INTO rwy_lights (id, date, inspectorName, data, remarks, createdAt) VALUES (?, ?, ?, ?, ?, ?)`)
-        .bind(id, body.date, body.inspectorName, JSON.stringify(body.data), body.remarks || '', new Date().toISOString()).run();
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname.startsWith("/api/lights/") && method === "DELETE") {
-      const id = url.pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM rwy_lights WHERE id = ?").bind(id).run();
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ==========================================
-    // LIGHTS INSPECTORS MODULE
-    // ==========================================
-    if (url.pathname === "/api/lights-inspectors" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM lights_inspectors").all();
-      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname === "/api/lights-inspectors" && method === "POST") {
-      const body: any = await request.json();
-      await env.DB.prepare(`INSERT OR REPLACE INTO lights_inspectors (staffId, staffName, staffSN) VALUES (?, ?, ?)`)
-        .bind(body.staffId, body.staffName, body.staffSN || '').run();
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
-      const id = url.pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM lights_inspectors WHERE staffId = ?").bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -651,6 +590,72 @@ export const onRequest = async (context: any) => {
       const id = url.pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM timesheets WHERE id = ?").bind(id).run();
       context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/timesheets/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
+    // TEMPORARY ACCESS MODULE
+    // ==========================================
+    if (url.pathname === "/api/temp-access" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM temp_access").all();
+      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/temp-access" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO temp_access (id, email, targetDept, startDate, endDate) VALUES (?, ?, ?, ?, ?)`)
+        .bind(id, body.email, body.targetDept, body.startDate, body.endDate).run();
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM temp_access WHERE id = ?").bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
+    // LIGHTS INSPECTORS MODULE
+    // ==========================================
+    if (url.pathname === "/api/lights-inspectors" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM lights_inspectors").all();
+      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/lights-inspectors" && method === "POST") {
+      const body: any = await request.json();
+      await env.DB.prepare(`INSERT OR REPLACE INTO lights_inspectors (staffId, staffName, staffSN) VALUES (?, ?, ?)`)
+        .bind(body.staffId, body.staffName, body.staffSN || '').run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM lights_inspectors WHERE staffId = ?").bind(id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
+    // RUNWAY LIGHTS MODULE
+    // ==========================================
+    if (url.pathname === "/api/lights" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM rwy_lights ORDER BY date DESC").all();
+      const formatted = results.map((row: any) => ({ ...row, data: JSON.parse(row.data || '{}') }));
+      return new Response(JSON.stringify(formatted), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/lights" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await env.DB.prepare(`INSERT INTO rwy_lights (id, date, time, weather, inspectorName, data, remarks, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(id, body.date, body.time || '', body.weather || '', body.inspectorName, JSON.stringify(body.data), body.remarks || '', new Date().toISOString()).run();
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/lights/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM rwy_lights WHERE id = ?").bind(id).run();
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

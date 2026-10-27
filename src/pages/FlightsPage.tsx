@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../components/Dialogs';
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
-const STATUS_OPTIONS = ['Scheduled', 'Delayed', 'Boarding', 'Departed', 'Landed', 'Cancelled'];
+const STATUS_OPTIONS = ['Scheduled', 'Delayed', 'Boarding', 'Departed (Origin)', 'Landed', 'Departed', 'Cancelled'];
 
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 const formatDisplayDate = (dateStr: string) => {
@@ -14,15 +14,6 @@ const formatDisplayDate = (dateStr: string) => {
   const [y, m, d] = dateStr.split('-');
   const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
   return `${d}${months[parseInt(m) - 1]}${y}`;
-};
-
-// Helper function to format text to HH:MM (24h format)
-const formatTimeInput = (val: string) => {
-  const clean = val.replace(/\D/g, '');
-  if (clean.length >= 3) {
-    return `${clean.slice(0, 2)}:${clean.slice(2, 4)}`;
-  }
-  return clean;
 };
 
 function FlightsPage() {
@@ -159,7 +150,7 @@ function FlightsPage() {
     return (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00');
   });
 
-  const completedStatuses = ['Departed', 'Landed', 'Cancelled'];
+  const completedStatuses = ['Departed', 'Departed (Origin)', 'Landed', 'Cancelled'];
   const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(displayStatus(f.status)));
   const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(displayStatus(f.status))).reverse();
 
@@ -177,25 +168,40 @@ function FlightsPage() {
         </div>
       </div>
 
-      <div className="flight-card-details">
+      <div className="flight-card-details" style={{ gridTemplateColumns: '1.5fr 1fr 1fr' }}>
+        {/* SCHEDULED TIMES */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Scheduled</div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>SCHEDULED ARR</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>SCHEDULED DEP</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL (STA)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (STD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
         </div>
 
-        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '8px' }}>ROUTE</div>
-          <div style={{ fontSize: '20px', fontWeight: 900, color: '#1e293b' }}>{f.route}</div>
+        {/* ACTUAL TIMES (FROM RAMP SHEET) */}
+        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0' }}>
+          <div style={{ fontSize: '12px', fontWeight: 800, color: '#d97706', textTransform: 'uppercase' }}>Live Status</div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ETA</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#8b5cf6' }}>{f.eta || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL (ATA)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#16a34a' }}>{f.ata || '—'}</div></div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (ATD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#dc2626' }}>{f.atd || '—'}</div></div>
         </div>
 
-        <div style={{ borderLeft: '1px solid #e2e8f0', paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        {/* ROUTE & STATUS */}
+        <div style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>ROUTE</div>
+            <div style={{ fontSize: '18px', fontWeight: 900, color: '#1e293b', marginBottom: '12px' }}>{f.route}</div>
+            
             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>STATUS</div>
-            <span className="status-badge" style={{ fontSize: '14px', padding: '6px 12px', background: displayStatus(f.status) === 'Delayed' ? '#fef3c7' : displayStatus(f.status) === 'Cancelled' ? '#fee2e2' : displayStatus(f.status) === 'Departed' || displayStatus(f.status) === 'Landed' ? '#e2e8f0' : '#dcfce7', color: displayStatus(f.status) === 'Delayed' ? '#92400e' : displayStatus(f.status) === 'Cancelled' ? '#991b1b' : displayStatus(f.status) === 'Departed' || displayStatus(f.status) === 'Landed' ? '#475569' : '#065f46' }}>{displayStatus(f.status)}</span>
+            <span className="status-badge" style={{ 
+              fontSize: '14px', padding: '6px 12px', 
+              background: displayStatus(f.status) === 'Delayed' ? '#fef3c7' : displayStatus(f.status) === 'Cancelled' ? '#fee2e2' : displayStatus(f.status).includes('Departed') || displayStatus(f.status) === 'Landed' ? '#e2e8f0' : displayStatus(f.status) === 'Departed (Origin)' ? '#f3e8ff' : '#dcfce7', 
+              color: displayStatus(f.status) === 'Delayed' ? '#92400e' : displayStatus(f.status) === 'Cancelled' ? '#991b1b' : displayStatus(f.status).includes('Departed') || displayStatus(f.status) === 'Landed' ? '#475569' : displayStatus(f.status) === 'Departed (Origin)' ? '#6b21a8' : '#065f46' 
+            }}>
+              {displayStatus(f.status)}
+            </span>
           </div>
           {isManager && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
               <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
               <button className="delete-btn" onClick={() => setDeleteTarget(f)}>Delete</button>
             </div>
@@ -238,19 +244,9 @@ function FlightsPage() {
 
           {aircraft === 'CUSTOM' && <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>}
 
-          {/* THE TIME INPUTS ARE NOW TEXT INPUTS TO FORCE 24H FORMAT */}
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time (24h)</label>
-            <input type="text" placeholder="HH:MM" maxLength={5} value={checkIn} onChange={e => setCheckIn(formatTimeInput(e.target.value))} />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (24h)</label>
-            <input type="text" placeholder="HH:MM" maxLength={5} value={arrival} onChange={e => setArrival(formatTimeInput(e.target.value))} />
-          </div>
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (24h)</label>
-            <input type="text" placeholder="HH:MM" maxLength={5} value={departure} onChange={e => setDeparture(formatTimeInput(e.target.value))} />
-          </div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time</label><input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (STA)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (STD)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
           
