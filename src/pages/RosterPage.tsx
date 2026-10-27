@@ -112,9 +112,9 @@ function RosterPage() {
   const [holidays, setHolidays] = useState<any[]>([]);
   const [periodStart, setPeriodStart] = useState<Date>(getPeriodStart(new Date()));
   const [loading, setLoading] = useState(true);
+  const [reorderMode, setReorderMode] = useState<boolean>(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  // Custom Dialog States
   const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
@@ -332,6 +332,7 @@ function RosterPage() {
     setBulkSubmitting(false);
   };
 
+  // FIXED: Exact relative week/day mapping
   const handleCopyPreviousPeriod = async () => {
     const prevStart = new Date(periodStart); prevStart.setMonth(prevStart.getMonth() - 1);
     const prevEnd = new Date(periodEnd); prevEnd.setMonth(prevEnd.getMonth() - 1);
@@ -345,10 +346,20 @@ function RosterPage() {
     setCopying(true);
     try {
       const newEntries: any[] = [];
+      
+      const prevFirstSat = getSaturdayOnOrBefore(prevStart);
+      const currentFirstSat = getSaturdayOnOrBefore(periodStart);
+
       for (const e of prevEntries) {
-        const oldDate = new Date(e.date + 'T00:00:00'); const newDate = new Date(oldDate); newDate.setMonth(newDate.getMonth() + 1);
-        const newDateStr = formatDate(newDate);
+        const oldDate = new Date(e.date + 'T00:00:00');
+        // Calculate exact day offset from the first Saturday of the period
+        const diffDays = Math.floor((oldDate.getTime() - prevFirstSat.getTime()) / (1000 * 3600 * 24));
         
+        const newDate = new Date(currentFirstSat);
+        newDate.setDate(newDate.getDate() + diffDays);
+        const newDateStr = formatDate(newDate);
+
+        // Skip if there's currently approved leave on this new date
         const isProtected = entries.some(curr => curr.staffId === e.staffId && curr.date === newDateStr && (isApprovedLeaveStatus(curr.status) || curr.leaveRequestId));
         if (isProtected) continue;
 
@@ -371,6 +382,23 @@ function RosterPage() {
 
   const changePeriod = (direction: number) => {
     const newDate = new Date(periodStart); newDate.setMonth(newDate.getMonth() + direction); setPeriodStart(newDate);
+  };
+
+  const moveStaff = async (id: string, direction: 'up' | 'down') => {
+    const list = [...visibleStaff]; const index = list.findIndex((s) => s.id === id);
+    if (index === -1) return;
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    
+    [list[index], list[targetIndex]] = [list[targetIndex], list[index]];
+    
+    try {
+      await apiFetch('/staff/reorder', {
+        method: 'PUT',
+        body: JSON.stringify({ orderedIds: list.map(s => s.id) })
+      });
+      fetchData();
+    } catch (err: any) { toast.error('Reorder failed: ' + err.message); }
   };
 
   const captureCanvas = async () => {
@@ -444,6 +472,12 @@ function RosterPage() {
           <button className="export-btn jpg-btn" onClick={exportToJPG}>📸 JPG</button>
           <button className="export-btn pdf-btn" onClick={exportToPDF}>📄 PDF</button>
           
+          {isAdmin && (
+            <button className="export-btn bulk-btn" onClick={() => setReorderMode(!reorderMode)} style={{ background: reorderMode ? '#dc2626' : '#8b5cf6', color: 'white' }}>
+              {reorderMode ? 'Cancel Reorder' : '🔄 Reorder Staff'}
+            </button>
+          )}
+
           {isAdmin && (
              <button className="export-btn bulk-btn" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}</button>
           )}
@@ -554,13 +588,23 @@ function RosterPage() {
               <thead>
                 <tr>
                   <th className="col-sn">SN No.</th><th className="col-name">NAME</th>
+                  {reorderMode && <th className="reorder-col" style={{ width: '30px' }}>↕</th>}
                   {week.map((d) => <th key={formatDate(d)} className="col-date">{formatHeaderDate(d)}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {visibleStaff.length === 0 ? <tr><td colSpan={9} style={{ textAlign: 'center', padding: '15px' }}>No staff found for this department.</td></tr> : visibleStaff.map((s) => (
+                {visibleStaff.length === 0 ? <tr><td colSpan={reorderMode ? 10 : 9} style={{ textAlign: 'center', padding: '15px' }}>No staff found for this department.</td></tr> : visibleStaff.map((s) => (
                   <tr key={s.id}>
-                    <td className="col-sn">{s.sn || '—'}</td><td className="col-name">{s.name}</td>
+                    <td className="col-sn">{s.sn || '—'}</td>
+                    <td className="col-name">{s.name}</td>
+                    {reorderMode && (
+                      <td className="reorder-col">
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <button onClick={(e) => { e.stopPropagation(); moveStaff(s.id, 'up'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '0' }}>▲</button>
+                          <button onClick={(e) => { e.stopPropagation(); moveStaff(s.id, 'down'); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '0' }}>▼</button>
+                        </div>
+                      </td>
+                    )}
                     {week.map((d) => {
                       const dStr = formatDate(d);
                       const isInPeriod = dStr >= formatDate(periodStart) && dStr <= formatDate(periodEnd);
@@ -572,7 +616,7 @@ function RosterPage() {
                       }
 
                       let displayValue = ''; let cellClass = 'empty-cell';
-                      let cellEditable = canEditDept(s.department);
+                      let cellEditable = canEditDept(s.department) && !reorderMode;
 
                       if (entry) {
                         displayValue = entry.status === 'scheduled' ? (entry.shiftTime || '') : getShortLeave(entry.status);
