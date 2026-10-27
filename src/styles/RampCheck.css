@@ -68,11 +68,17 @@
 /* ==========================================
    PRINT STYLES (FORCE PORTRAIT)
    ========================================== */
+/* Create a specific named page for the Check Sheet */
+@page check-sheet-portrait {
+  size: A4 portrait;
+  margin: 8mm; /* Leaves space for border */
+}
+
 @media print {
-  /* This forces the check sheet to default to Portrait A4 */
-  @page {
-    size: A4 portrait;
-    margin: 8mm;
+  /* Force both normal and modal check sheets to use portrait */
+  body:not(.printing-modal) .ramp-sheet,
+  body.printing-modal .ramp-sheet {
+    page: check-sheet-portrait;
   }
 
   html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; height: auto !important; }
@@ -113,7 +119,7 @@
     display: none !important;
   }
 
-  /* 3. COMPACT SINGLE-PAGE LAYOUT (with border) */
+  /* 3. COMPACT SINGLE-PAGE LAYOUT */
   .ramp-sheet { font-size: 8px !important; }
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 4px !important; }
   .ramp-sheet .company-header { margin-bottom: 4px !important; }
