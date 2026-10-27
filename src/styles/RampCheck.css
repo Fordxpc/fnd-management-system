@@ -66,18 +66,13 @@
 }
 
 /* ==========================================
-   PRINT STYLES (MUST BE AT THE VERY BOTTOM)
+   PRINT STYLES (FORCE PORTRAIT)
    ========================================== */
-@page ramp-portrait {
-  size: A4 portrait;
-  margin: 8mm; /* 8mm margin leaves space for border */
-}
-
 @media print {
-  /* Force the check sheet to use portrait */
-  body:not(.printing-modal) .ramp-sheet,
-  body.printing-modal .ramp-sheet {
-    page: ramp-portrait;
+  /* This forces the check sheet to default to Portrait A4 */
+  @page {
+    size: A4 portrait;
+    margin: 8mm;
   }
 
   html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; height: auto !important; }
