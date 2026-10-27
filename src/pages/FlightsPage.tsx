@@ -6,7 +6,6 @@ import { ConfirmDialog } from '../components/Dialogs';
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
-const STATUS_OPTIONS = ['Scheduled', 'Delayed', 'Boarding', 'Departed (Origin)', 'Landed', 'Departed', 'Cancelled'];
 
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 const formatDisplayDate = (dateStr: string) => {
@@ -38,7 +37,6 @@ function FlightsPage() {
   const [departure, setDeparture] = useState('');
   const [route, setRoute] = useState('MLE/FND/MLE');
   const [originDep, setOriginDep] = useState('');
-  const [status, setStatus] = useState('Scheduled');
   const [remarks, setRemarks] = useState('');
 
   const fetchFlights = useCallback(async () => {
@@ -62,7 +60,7 @@ function FlightsPage() {
     setFlightNo('Q2-'); setType('Scheduled'); setAircraft('DH-8/300');
     setCustomAircraft(''); setBookedFigure(''); setCheckIn('');
     setArrival(''); setDeparture(''); setRoute('MLE/FND/MLE');
-    setOriginDep(''); setStatus('Scheduled'); setRemarks('');
+    setOriginDep(''); setRemarks('');
     setEditingId(null);
   };
 
@@ -79,11 +77,15 @@ function FlightsPage() {
       return;
     }
 
+    // Auto-determine status if creating new. Keep existing if editing.
+    const existingFlight = flights.find(f => f.id === editingId);
+    const finalStatus = existingFlight ? existingFlight.status : 'Scheduled';
+
     const payload = {
       date: dateFilter, flightNo, type, aircraft: finalAircraft,
       bookedFigure, checkInTime: checkIn, arrivalTime: arrival, 
       departureTime: departure, route, originDepTime: originDep, 
-      status, remarks
+      status: finalStatus, remarks
     };
 
     try {
@@ -126,7 +128,6 @@ function FlightsPage() {
     setDeparture(f.departureTime || '');
     setRoute(f.route || '');
     setOriginDep(f.originDepTime || '');
-    setStatus(f.status === 'On Time' ? 'Scheduled' : (f.status || 'Scheduled')); 
     setRemarks(f.remarks || '');
     setShowForm(true);
   };
@@ -249,12 +250,6 @@ function FlightsPage() {
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (STD)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
-          
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value)}>
-              {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
 
           <button type="submit" style={{ gridColumn: 'span 2', background: editingId ? '#2563eb' : '#16a34a' }}>
             {editingId ? 'Save Changes' : 'Save Flight'}

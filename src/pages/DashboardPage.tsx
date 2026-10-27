@@ -176,12 +176,21 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
+  // DYNAMIC STATUS LOGIC
   let baseStatus = nextFlight?.status || 'Scheduled';
   if (baseStatus === 'On Time') baseStatus = 'Scheduled';
   let liveStatus = baseStatus;
   
   const cleanFlightStr = (str: string) => (str || '').replace(/\s+/g, '').toUpperCase();
   
+  // 1. Check saved database times first
+  if (nextFlight) {
+    if (nextFlight.atd) liveStatus = 'Departed';
+    else if (nextFlight.ata) liveStatus = 'Landed';
+    else if (nextFlight.eta) liveStatus = 'Departed (Origin)';
+  }
+
+  // 2. Override with live draft if it matches exactly
   if (nextFlight && liveRamp && cleanFlightStr(liveRamp.fltNo) === cleanFlightStr(nextFlight.flightNo)) {
     if (liveRamp.atd) liveStatus = 'Departed';
     else if (liveRamp.boarding) liveStatus = 'Boarding';
@@ -238,7 +247,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus === 'Departed' ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : liveStatus === 'Departed (Origin)' ? '#8b5cf6' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
+            {/* DYNAMIC STATUS BADGE */}
+            {nextFlight && <span style={{ fontSize: '12px', background: liveStatus.includes('Departed') ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : liveStatus === 'Departed (Origin)' ? '#8b5cf6' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
           </div>
           
           {nextFlight ? (
@@ -261,15 +271,15 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#a78bfa' }}>{liveRamp?.eta || nextFlight.eta || '—'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#a78bfa' }}>{nextFlight.eta || liveRamp?.eta || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ARRIVAL (ATA)</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{liveRamp?.ata || nextFlight.ata || '—'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.ata || liveRamp?.ata || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>DEPARTURE (ATD)</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{liveRamp?.atd || nextFlight.atd || nextFlight.departureTime || '—'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.atd || liveRamp?.atd || nextFlight.departureTime || '—'}</div>
                 </div>
               </div>
             </div>

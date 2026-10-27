@@ -517,7 +517,7 @@ export const onRequest = async (context: any) => {
         await env.DB.prepare(`
           UPDATE flights 
           SET status = ?, eta = ?, ata = ?, atd = ? 
-          WHERE flightNo = ? AND date = ?
+          WHERE TRIM(UPPER(flightNo)) = TRIM(UPPER(?)) AND date = ?
         `).bind(newStatus, body.eta || null, body.ata || null, body.atd || null, body.fltNo, body.date).run();
       }
 
@@ -545,7 +545,7 @@ export const onRequest = async (context: any) => {
         await env.DB.prepare(`
           UPDATE flights 
           SET status = ?, eta = ?, ata = ?, atd = ? 
-          WHERE flightNo = ? AND date = ?
+          WHERE TRIM(UPPER(flightNo)) = TRIM(UPPER(?)) AND date = ?
         `).bind(newStatus, body.eta || null, body.ata || null, body.atd || null, body.fltNo, body.date).run();
       }
 
