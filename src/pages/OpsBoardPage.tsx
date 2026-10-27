@@ -57,6 +57,7 @@ function OpsBoardPage() {
   const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [deleteFodTarget, setDeleteFodTarget] = useState<string | null>(null);
+  const [deleteTaskTarget, setDeleteTaskTarget] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool));
@@ -67,7 +68,27 @@ function OpsBoardPage() {
   const [lights, setLights] = useState<string[]>([]);
   const runwayRef = useRef<HTMLDivElement>(null);
 
-  const [tasks] = useState(DEFAULT_TASKS);
+  // ---- TASK BOARDS (dynamic, persisted) ----
+  const [tasks, setTasks] = useState<any[]>(() => {
+    const saved = localStorage.getItem('ops_tasks');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch { /* fall through to defaults */ }
+    }
+    return DEFAULT_TASKS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ops_tasks', JSON.stringify(tasks));
+  }, [tasks]);
+
+  // Add/Edit task modal state
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskForm, setTaskForm] = useState({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
+
   const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>({});
   const groundRef = useRef<HTMLDivElement>(null);
 
@@ -127,6 +148,54 @@ function OpsBoardPage() {
   useEffect(() => {
     localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
   }, [rwy19, rwy01, lights, groundAssign]);
+
+  // ---- TASK BOARD ACTIONS ----
+  const handleAddTask = () => {
+    setEditingTaskId(null);
+    setTaskForm({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
+    setShowTaskModal(true);
+  };
+
+  const handleEditTask = (task: any) => {
+    const colorMatches = String(task.color || '').match(/#[0-9a-fA-F]{3,6}/g) || [];
+    setTaskForm({
+      label: task.label || '',
+      colorStart: colorMatches[0] || '#26c6da',
+      colorEnd: colorMatches[1] || '#00838f',
+      text: task.text || '#fff',
+    });
+    setEditingTaskId(task.id);
+    setShowTaskModal(true);
+  };
+
+  const handleSaveTask = () => {
+    const label = taskForm.label.trim();
+    if (!label) { toast.error('Task label is required'); return; }
+
+    const payload = {
+      id: editingTaskId || `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      label: label.toUpperCase(),
+      color: `linear-gradient(135deg, ${taskForm.colorStart}, ${taskForm.colorEnd})`,
+      text: taskForm.text,
+    };
+
+    if (editingTaskId) {
+      setTasks(prev => prev.map(t => (t.id === editingTaskId ? payload : t)));
+      toast.success('Task board updated');
+    } else {
+      setTasks(prev => [...prev, payload]);
+      toast.success('Task board added');
+    }
+    setShowTaskModal(false);
+    setEditingTaskId(null);
+  };
+
+  const handleDeleteTask = (id: string) => setDeleteTaskTarget(id);
+
+  const handleResetTasks = () => {
+    setTasks(DEFAULT_TASKS);
+    toast.success('Task boards reset to defaults');
+  };
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
     if (!canEdit) return;
@@ -379,11 +448,40 @@ function OpsBoardPage() {
         <div>
           {canEdit && (
             <div className="dash-card" style={{ marginBottom: '20px' }}>
-              <h3>Assign Staff to Tasks</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ margin: 0 }}>Assign Staff to Tasks</h3>
+                {canEdit && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="quick-btn" style={{ background: '#6b7280', color: 'white' }} onClick={handleResetTasks}>↺ Reset Defaults</button>
+                    <button className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }} onClick={handleAddTask}>➕ Add Task Board</button>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
                 {tasks.map(t => (
                   <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
-                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
+                      {canEdit && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            onClick={() => handleEditTask(t)}
+                            title="Edit task board"
+                            style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTask(t.id)}
+                            title="Delete task board"
+                            style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                       {staffPool.map(s => (
                         <label key={s} style={{ 
@@ -398,6 +496,11 @@ function OpsBoardPage() {
                     </div>
                   </div>
                 ))}
+                {tasks.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>
+                    No task boards configured. Click <strong>➕ Add Task Board</strong> to create one.
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -721,6 +824,121 @@ function OpsBoardPage() {
         </div>
       )}
 
+      {/* ---- Add / Edit Task Board Modal ---- */}
+      {showTaskModal && (
+        <div className="modal-backdrop" onClick={() => setShowTaskModal(false)} style={{ zIndex: 10000 }}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '450px', width: '92%', padding: '24px' }}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1e293b', fontSize: '18px' }}>
+              {editingTaskId ? '✏️ Edit Task Board' : '➕ Add Task Board'}
+            </h3>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Task Label *</label>
+                <input
+                  type="text"
+                  value={taskForm.label}
+                  onChange={(e) => setTaskForm({ ...taskForm, label: e.target.value })}
+                  placeholder="e.g. LAVATORY SERVICE"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#1e293b', background: '#fff' }}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Gradient Start</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="color"
+                      value={taskForm.colorStart}
+                      onChange={(e) => setTaskForm({ ...taskForm, colorStart: e.target.value })}
+                      style={{ width: '42px', height: '38px', padding: 0, border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', background: '#fff' }}
+                    />
+                    <input
+                      type="text"
+                      value={taskForm.colorStart}
+                      onChange={(e) => setTaskForm({ ...taskForm, colorStart: e.target.value })}
+                      style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', color: '#1e293b', background: '#fff' }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Gradient End</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="color"
+                      value={taskForm.colorEnd}
+                      onChange={(e) => setTaskForm({ ...taskForm, colorEnd: e.target.value })}
+                      style={{ width: '42px', height: '38px', padding: 0, border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', background: '#fff' }}
+                    />
+                    <input
+                      type="text"
+                      value={taskForm.colorEnd}
+                      onChange={(e) => setTaskForm({ ...taskForm, colorEnd: e.target.value })}
+                      style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', color: '#1e293b', background: '#fff' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Text Color</label>
+                <select
+                  value={taskForm.text}
+                  onChange={(e) => setTaskForm({ ...taskForm, text: e.target.value })}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#1e293b', background: '#fff', cursor: 'pointer' }}
+                >
+                  <option value="#fff">White (light backgrounds)</option>
+                  <option value="#1a1a1a">Dark (light backgrounds)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Preview</label>
+                <div
+                  style={{
+                    background: `linear-gradient(135deg, ${taskForm.colorStart}, ${taskForm.colorEnd})`,
+                    color: taskForm.text,
+                    padding: '10px',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '12px',
+                    borderRadius: '6px',
+                    letterSpacing: '0.5px',
+                    minHeight: '38px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {(taskForm.label || 'TASK LABEL PREVIEW').toUpperCase()}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={() => setShowTaskModal(false)}
+                style={{ padding: '9px 18px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTask}
+                style={{ padding: '9px 18px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+              >
+                {editingTaskId ? 'Save Changes' : 'Add Board'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ConfirmDialog 
         isOpen={!!deleteStaffTarget}
         title="Remove Staff?"
@@ -769,6 +987,26 @@ function OpsBoardPage() {
           setDeleteFodTarget(null);
         }}
         onCancel={() => setDeleteFodTarget(null)}
+      />
+
+      <ConfirmDialog 
+        isOpen={!!deleteTaskTarget}
+        title="Delete Task Board?"
+        message={`Are you sure you want to delete this task board? Any staff assigned to it will be unassigned.`}
+        confirmText="Delete"
+        isDanger={true}
+        onConfirm={() => {
+          if (!deleteTaskTarget) return;
+          setTasks(prev => prev.filter(t => t.id !== deleteTaskTarget));
+          setGroundAssign(prev => {
+            const updated = { ...prev };
+            delete updated[deleteTaskTarget];
+            return updated;
+          });
+          toast.success('Task board deleted');
+          setDeleteTaskTarget(null);
+        }}
+        onCancel={() => setDeleteTaskTarget(null)}
       />
     </div>
   );

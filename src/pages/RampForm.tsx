@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import '../styles/RampCheck.css';
 
 interface RampFormProps {
@@ -13,11 +13,95 @@ interface RampFormProps {
   isViewOnlyMode?: boolean;
 }
 
-export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
+interface SplitInputProps {
+  prefix: string;
+  label: string;
+  formData: any;
+  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  isManager: boolean;
+}
 
+function SplitInput({ prefix, label, formData, handleChange, isManager }: SplitInputProps) {
+  const inputStyle: React.CSSProperties = {
+    width: '45%',
+    padding: '4px',
+    border: '1px solid #cbd5e1',
+    borderRadius: '4px',
+    textAlign: 'center',
+    fontSize: '13px',
+    height: '28px',
+  };
+
+  const renderPair = (suffix: 'In' | 'Out' | 'Trans') => (
+    <td>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          id={`${prefix}${suffix}Pcs`}
+          value={formData[`${prefix}${suffix}Pcs`] || ''}
+          onChange={handleChange}
+          readOnly={!isManager}
+          autoComplete="off"
+          style={inputStyle}
+        />
+        <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          id={`${prefix}${suffix}Kg`}
+          value={formData[`${prefix}${suffix}Kg`] || ''}
+          onChange={handleChange}
+          readOnly={!isManager}
+          autoComplete="off"
+          style={inputStyle}
+        />
+      </div>
+    </td>
+  );
+
+  return (
+    <table className="inner-table">
+      <thead>
+        <tr><th colSpan={3}>{label}</th></tr>
+        <tr><th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          {renderPair('In')}
+          {renderPair('Out')}
+          {renderPair('Trans')}
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [tempHour, setTempHour] = useState<string>('00');
   const [tempMin, setTempMin] = useState<string>('00');
+
+  // Derive pcs/kg from combined fields for legacy records (so saved data always shows)
+  const displayData = useMemo(() => {
+    const d = { ...formData };
+    const prefixes = ['cargo', 'mail', 'bag', 'other'];
+    prefixes.forEach(prefix => {
+      (['In', 'Out', 'Trans'] as const).forEach(suffix => {
+        const pcsKey = `${prefix}${suffix}Pcs`;
+        const kgKey = `${prefix}${suffix}Kg`;
+        const combinedKey = `${prefix}${suffix}`;
+        if ((d[pcsKey] === undefined || d[pcsKey] === '') && (d[kgKey] === undefined || d[kgKey] === '') && d[combinedKey]) {
+          const [p, k] = String(d[combinedKey]).split('/');
+          d[pcsKey] = p || '';
+          d[kgKey] = k || '';
+        }
+      });
+    });
+    return d;
+  }, [formData]);
 
   const executeFillNow = () => {
     if (!confirmId) return;
@@ -43,36 +127,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
   const preventKeyboard = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.blur();
   };
-
-  // Reusable component for the split inputs with larger font
-  const SplitInput = ({ prefix, label }: { prefix: string, label: string }) => (
-    <table className="inner-table">
-      <thead><tr><th colSpan={3}>{label}</th></tr><tr><th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th></tr></thead>
-      <tbody><tr>
-        <td>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-            <input type="text" id={`${prefix}InPcs`} value={formData[`${prefix}InPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
-            <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
-            <input type="text" id={`${prefix}InKg`} value={formData[`${prefix}InKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
-          </div>
-        </td>
-        <td>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-            <input type="text" id={`${prefix}OutPcs`} value={formData[`${prefix}OutPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
-            <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
-            <input type="text" id={`${prefix}OutKg`} value={formData[`${prefix}OutKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
-          </div>
-        </td>
-        <td>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-            <input type="text" id={`${prefix}TransPcs`} value={formData[`${prefix}TransPcs`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
-            <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
-            <input type="text" id={`${prefix}TransKg`} value={formData[`${prefix}TransKg`] || ''} onChange={handleChange} readOnly={!isManager} style={{ width: '45%', padding: '4px', border: '1px solid #cbd5e1', borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px' }} />
-          </div>
-        </td>
-      </tr></tbody>
-    </table>
-  );
 
   return (
     <>
@@ -205,10 +259,10 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
               </tr></tbody>
             </table>
             
-            <SplitInput prefix="cargo" label="CARGO" />
-            <SplitInput prefix="mail" label="MAIL" />
-            <SplitInput prefix="bag" label="BAGGAGE" />
-            <SplitInput prefix="other" label="OTHERS" />
+            <SplitInput prefix="cargo" label="CARGO" formData={displayData} handleChange={handleChange} isManager={isManager} />
+            <SplitInput prefix="mail" label="MAIL" formData={displayData} handleChange={handleChange} isManager={isManager} />
+            <SplitInput prefix="bag" label="BAGGAGE" formData={displayData} handleChange={handleChange} isManager={isManager} />
+            <SplitInput prefix="other" label="OTHERS" formData={displayData} handleChange={handleChange} isManager={isManager} />
 
             <table className="inner-table">
               <thead><tr><th colSpan={3}>SPECIAL INSTRUCTIONS</th></tr></thead>

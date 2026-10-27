@@ -32,20 +32,9 @@ function RampCheckSheetPage() {
   
   const role = profile?.role || '';
   const isSMTOrAbove = ['developer', 'manager', 'admin', 'owner', 'smt'].includes(role) || profile?.isSMT === true;
-  
-  if (!isSMTOrAbove) {
-    return (
-      <div className="page-content">
-        <div className="empty-state">
-          <h2>Access Denied</h2>
-          <p>You do not have permission to view the Flight Operation sheet.</p>
-        </div>
-      </div>
-    );
-  }
-
   const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(role);
   
+  // ---- All hooks first (rules of hooks) ----
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
   const [formData, setFormData] = useState<Record<string, string>>(INITIAL_FORM);
   const [acTypes, setAcTypes] = useState<string[]>([]);
@@ -54,7 +43,6 @@ function RampCheckSheetPage() {
 
   const typingTimer = useRef<any>(null);
 
-  // Custom Dialog States
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [promptAction, setPromptAction] = useState<'acType' | 'routeCode' | null>(null);
 
@@ -77,6 +65,18 @@ function RampCheckSheetPage() {
     };
     if (isManager) loadDraft();
   }, [isManager]);
+
+  // ---- Early return AFTER all hooks ----
+  if (!isSMTOrAbove) {
+    return (
+      <div className="page-content">
+        <div className="empty-state">
+          <h2>Access Denied</h2>
+          <p>You do not have permission to view the Flight Operation sheet.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (!isManager) return;
@@ -163,11 +163,8 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
+      // Keep ALL fields including pcs/kg so they appear in saved records
       const payload = { ...formData } as any;
-      delete payload.cargoInPcs; delete payload.cargoInKg; delete payload.cargoOutPcs; delete payload.cargoOutKg; delete payload.cargoTransPcs; delete payload.cargoTransKg;
-      delete payload.mailInPcs; delete payload.mailInKg; delete payload.mailOutPcs; delete payload.mailOutKg; delete payload.mailTransPcs; delete payload.mailTransKg;
-      delete payload.bagInPcs; delete payload.bagInKg; delete payload.bagOutPcs; delete payload.bagOutKg; delete payload.bagTransPcs; delete payload.bagTransKg;
-      delete payload.otherInPcs; delete payload.otherInKg; delete payload.otherOutPcs; delete payload.otherOutKg; delete payload.otherTransPcs; delete payload.otherTransKg;
 
       payload.checkedBy = user?.email || formData.checkedBy || formData.observer || 'System';
 
