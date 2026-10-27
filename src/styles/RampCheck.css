@@ -68,16 +68,25 @@
 /* ==========================================
    PRINT STYLES (MUST BE AT THE VERY BOTTOM)
    ========================================== */
+@page ramp-portrait {
+  size: A4 portrait;
+  margin: 8mm; /* 8mm margin leaves space for border */
+}
+
 @media print {
-  @page { size: A4 portrait; margin: 8mm; } /* 8mm margin leaves space for border */
+  /* Force the check sheet to use portrait */
+  body:not(.printing-modal) .ramp-sheet,
+  body.printing-modal .ramp-sheet {
+    page: ramp-portrait;
+  }
 
   html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; height: auto !important; }
-
+  
   /* Hide normal app UI */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, .ops-tabs, .toolbar, .no-print, .modal-header {
     display: none !important;
   }
-
+  
   .dashboard-layout, .main-content, .page-content { 
     display: block !important; padding: 0 !important; margin: 0 !important; 
     background: #fff !important; overflow: visible !important; height: auto !important;
@@ -132,11 +141,7 @@
   .ramp-sheet .route-select, .ramp-sheet .btn-plus { display: none !important; }
   .ramp-sheet .route-wrapper { display: block !important; padding: 0 !important; }
   .ramp-sheet .special-load-textarea { height: 22px !important; font-size: 7px !important; padding: 1px !important; }
-
-  /* Override the 15px inline margin on tables */
   .ramp-sheet .inner-table[style*="margin-top"] { margin-top: 3px !important; }
-
-  /* Override the inline styles on pcs/kg inputs */
   .ramp-sheet .bottom-section-2 input[type="text"] {
     height: 13px !important;
     font-size: 8px !important;
@@ -146,7 +151,5 @@
   }
   .ramp-sheet .bottom-section-2 td span { font-size: 9px !important; }
   .ramp-sheet .bottom-section-2 td > div { gap: 2px !important; }
-
-  /* Ensure everything stays on one page */
   .ramp-sheet, .ramp-sheet * { page-break-inside: avoid !important; page-break-after: avoid !important; }
 }

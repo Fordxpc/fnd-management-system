@@ -201,12 +201,17 @@ input:read-only, textarea:read-only, input:disabled, select:disabled {
   }
 }
 /* ==========================================
-   REPORTS PRINT STYLES
+   REPORTS PRINT STYLES (LANDSCAPE)
    ========================================== */
+@page report-landscape {
+  size: A4 landscape;
+  margin: 5mm;
+}
+
 @media print {
-  @page {
-    size: A4 landscape;
-    margin: 2mm; /* Reduced margin to give more space */
+  /* Force the report to use landscape */
+  body.printing-report .page-content {
+    page: report-landscape;
   }
 
   body.printing-report * {
@@ -243,7 +248,6 @@ input:read-only, textarea:read-only, input:disabled, select:disabled {
     background: #fff !important;
   }
 
-  /* General Table Styles for Print */
   body.printing-report table {
     width: 100% !important;
     table-layout: auto !important;
@@ -259,18 +263,16 @@ input:read-only, textarea:read-only, input:disabled, select:disabled {
     white-space: normal !important; 
   }
 
-  /* DFIS SPECIFIC FIX: Make it ultra-small to fit on one page */
   body.printing-report .dfis-print-table table {
-    font-size: 5.5px !important; /* Extremely small to fit 35 columns */
+    font-size: 5.5px !important;
   }
   
   body.printing-report .dfis-print-table th,
   body.printing-report .dfis-print-table td {
-    padding: 0px 1px !important; /* Almost no padding */
+    padding: 0px 1px !important;
     word-break: break-all !important;
   }
 
-  /* Ensure the logo and title print well */
   body.printing-report .roster-title,
   body.printing-report .title-container {
     margin-bottom: 10px !important;
