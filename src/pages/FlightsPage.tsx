@@ -77,7 +77,6 @@ function FlightsPage() {
       return;
     }
 
-    // Auto-determine status if creating new. Keep existing if editing.
     const existingFlight = flights.find(f => f.id === editingId);
     const finalStatus = existingFlight ? existingFlight.status : 'Scheduled';
 
@@ -151,7 +150,8 @@ function FlightsPage() {
     return (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00');
   });
 
-  const completedStatuses = ['Departed', 'Departed (Origin)', 'Landed', 'Cancelled'];
+  // FIXED: Only move to past flights if it has departed or is cancelled.
+  const completedStatuses = ['Departed', 'Cancelled'];
   const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(displayStatus(f.status)));
   const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(displayStatus(f.status))).reverse();
 
@@ -170,7 +170,6 @@ function FlightsPage() {
       </div>
 
       <div className="flight-card-details" style={{ gridTemplateColumns: '1.5fr 1fr 1fr' }}>
-        {/* SCHEDULED TIMES */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
           <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Scheduled</div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
@@ -178,7 +177,6 @@ function FlightsPage() {
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (STD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
         </div>
 
-        {/* ACTUAL TIMES (FROM RAMP SHEET) */}
         <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0' }}>
           <div style={{ fontSize: '12px', fontWeight: 800, color: '#d97706', textTransform: 'uppercase' }}>Live Status</div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ETA</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#8b5cf6' }}>{f.eta || '—'}</div></div>
@@ -186,7 +184,6 @@ function FlightsPage() {
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (ATD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#dc2626' }}>{f.atd || '—'}</div></div>
         </div>
 
-        {/* ROUTE & STATUS */}
         <div style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>ROUTE</div>

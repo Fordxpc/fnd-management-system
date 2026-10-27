@@ -162,9 +162,10 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
 
+  // FIXED: Only filter out if officially Departed or Cancelled. Keeps it visible when Landed or Departed (Origin).
   const upcomingFlights = flights
     .filter(f => {
-      const isCompleted = ['Departed', 'Departed (Origin)', 'Landed', 'Cancelled'].includes(f.status);
+      const isCompleted = ['Departed', 'Cancelled'].includes(f.status);
       return f.date >= todayStr && !isCompleted;
     })
     .sort((a, b) => {
@@ -176,26 +177,13 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
-  // DYNAMIC STATUS LOGIC
-  let baseStatus = nextFlight?.status || 'Scheduled';
-  if (baseStatus === 'On Time') baseStatus = 'Scheduled';
-  let liveStatus = baseStatus;
+  // FIXED: DYNAMIC STATUS LOGIC
+  let liveStatus = nextFlight?.status || 'Scheduled';
   
-  const cleanFlightStr = (str: string) => (str || '').replace(/\s+/g, '').toUpperCase();
-  
-  // 1. Check saved database times first
   if (nextFlight) {
-    if (nextFlight.atd) liveStatus = 'Departed';
-    else if (nextFlight.ata) liveStatus = 'Landed';
-    else if (nextFlight.eta) liveStatus = 'Departed (Origin)';
-  }
-
-  // 2. Override with live draft if it matches exactly
-  if (nextFlight && liveRamp && cleanFlightStr(liveRamp.fltNo) === cleanFlightStr(nextFlight.flightNo)) {
-    if (liveRamp.atd) liveStatus = 'Departed';
-    else if (liveRamp.boarding) liveStatus = 'Boarding';
-    else if (liveRamp.ata) liveStatus = 'Landed';
-    else if (liveRamp.eta) liveStatus = 'Departed (Origin)'; 
+    if (nextFlight.atd || liveRamp?.atd) liveStatus = 'Departed';
+    else if (nextFlight.ata || liveRamp?.ata) liveStatus = 'Landed';
+    else if (nextFlight.eta || liveRamp?.eta) liveStatus = 'Departed (Origin)';
   }
 
   let myLeaveUsed = 0;
@@ -247,7 +235,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%)', color: 'white', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ color: '#93c5fd', margin: 0 }}>✈️ Next Flight</h3>
-            {/* DYNAMIC STATUS BADGE */}
             {nextFlight && <span style={{ fontSize: '12px', background: liveStatus.includes('Departed') ? '#64748b' : liveStatus === 'Boarding' ? '#f59e0b' : liveStatus === 'Landed' ? '#059669' : liveStatus === 'Departed (Origin)' ? '#8b5cf6' : '#2563eb', padding: '6px 12px', borderRadius: '20px', fontWeight: 800 }}>{liveStatus}</span>}
           </div>
           
