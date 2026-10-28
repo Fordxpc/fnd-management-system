@@ -69,8 +69,10 @@
    PRINT STYLES (COMFORTABLE HEIGHT)
    ========================================== */
 @media print {
-  .ramp-sheet { font-size: 10px !important; }
-  .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 8px !important; }
+  .ramp-container { overflow: visible !important; padding: 0 !important; margin: 0 !important; }
+  
+  .ramp-sheet { font-size: 10px !important; width: 100% !important; max-width: none !important; }
+  .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 8px !important; width: 100% !important; }
   .ramp-sheet .company-header { margin-bottom: 8px !important; }
   .ramp-sheet .company-header img { height: 45px !important; margin-bottom: 4px !important; }
   .ramp-sheet .company-title { font-size: 13px !important; }
