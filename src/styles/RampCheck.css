@@ -66,10 +66,9 @@
 }
 
 /* ==========================================
-   PRINT STYLES (FORCE PORTRAIT FOR RAMP SHEET)
+   PRINT STYLES (EXACT REVERT TO WORKING STATE)
    ========================================== */
 @media print {
-  /* Strictly force the Ramp Sheet to A4 Portrait */
   @page {
     size: A4 portrait;
     margin: 8mm;
@@ -113,7 +112,7 @@
     display: none !important;
   }
 
-  /* 3. COMPACT SINGLE-PAGE LAYOUT */
+  /* 3. COMPACT SINGLE-PAGE LAYOUT (RESTORED EXACTLY) */
   .ramp-sheet { font-size: 8px !important; }
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 4px !important; }
   .ramp-sheet .company-header { margin-bottom: 4px !important; }
