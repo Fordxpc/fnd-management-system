@@ -89,7 +89,7 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   }
   ::-webkit-scrollbar { display: none !important; }
 
-  /* --- REPORTS LANDSCAPE --- */
+  /* --- REPORTS LANDSCAPE (OVERRIDES GLOBAL PORTRAIT) --- */
   body.printing-report { page: report-landscape; }
   body.printing-report .page-content, body.printing-report .modal-backdrop { page: report-landscape; }
 
@@ -104,11 +104,12 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   body.printing-report .no-print, body.printing-report .staff-header, body.printing-report .ops-tabs { display: none !important; }
   body.printing-report .dash-card { border: none !important; box-shadow: none !important; padding: 0 !important; background: #fff !important; }
   
-  /* Formatting for wide Reports - table-layout: fixed forces it to fit the page */
+  /* Force tables to shrink and fit the Landscape page perfectly */
   body.printing-report table { 
     width: 100% !important; 
     table-layout: fixed !important; 
     font-size: 7px !important; 
+    border-collapse: collapse !important;
   }
   body.printing-report th, body.printing-report td { 
     border: 1px solid #000 !important; 

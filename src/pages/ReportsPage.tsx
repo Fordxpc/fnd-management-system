@@ -244,9 +244,12 @@ function ReportsPage() {
         <h2>📊 Operations Reports</h2>
         {canPrint && (
           <button 
-            onClick={handlePrint} 
-            className="add-staff-btn" 
-            style={{ background: '#16a34a', display: 'flex', alignItems: 'center', gap: '8px' }}
+            className="..."
+            onClick={() => { 
+              document.body.classList.add('printing-report');
+              window.print();
+              setTimeout(() => document.body.classList.remove('printing-report'), 1000);
+            }}
           >
             🖨️ Print / Save as PDF
           </button>
