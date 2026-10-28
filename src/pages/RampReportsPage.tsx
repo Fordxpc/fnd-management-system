@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import RampForm from './RampForm';
 import { ConfirmDialog } from '../components/Dialogs';
 
+const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
+
 interface RampReportsPageProps {
   onEdit?: (report: any) => void;
 }
@@ -12,7 +14,6 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const [reports, setReports] = useState<any[]>([]);
   const [viewingReport, setViewingReport] = useState<any>(null);
   
-  // Custom Dialog State
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
@@ -91,7 +92,8 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
                 formData={viewingReport}
                 handleChange={() => {}}
                 isManager={false}
-                acTypes={[]}
+                // FIXED: Pass default AC types PLUS the saved AC type so it shows in the dropdown
+                acTypes={Array.from(new Set([...DEFAULT_AC_TYPES, viewingReport.acType].filter(Boolean)))}
                 routeCodes={[]}
                 handleAddAcType={() => {}}
                 handleAddRoute={() => {}}

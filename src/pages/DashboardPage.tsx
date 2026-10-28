@@ -149,26 +149,33 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   // 1. Get everyone approved for leave today
   const approvedLeavesToday = leaveReqs.filter(l => l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr);
   const leaveStaffIds = new Set(approvedLeavesToday.map(l => l.staffId).filter(Boolean));
-  const leaveStaffNames = new Set(approvedLeavesToday.map(l => (l.staffName || '').toLowerCase()).filter(Boolean));
+  const leaveStaffNames = new Set(approvedLeavesToday.map(l => (l.staffName || '').toLowerCase().trim()).filter(Boolean));
 
   // 2. Get all roster entries explicitly for today
   const todayRoster = roster.filter(r => r.date === todayStr);
 
-  // 3. Today's Leave (from roster, deduplicated)
+  // 3. Today's Leave (strict deduplication by staffName + dept)
   const rawLeaveToday = todayRoster.filter(r => r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   const finalLeaveMap = new Map();
-  rawLeaveToday.forEach(r => finalLeaveMap.set(r.staffId || r.staffName, r));
+  rawLeaveToday.forEach(r => {
+    const key = (r.staffName || '').trim().toLowerCase() + '-' + (r.staffDepartment || '').trim().toLowerCase();
+    finalLeaveMap.set(key, r);
+  });
   const todayLeaveAll = Array.from(finalLeaveMap.values());
 
-  // 4. Today's Duty (from roster, deduplicated, excluding anyone on approved leave)
+  // 4. Today's Duty (strict deduplication + leave exclusion)
   const rawShiftsToday = todayRoster.filter(r => r.status === 'scheduled');
   const dutyFiltered = rawShiftsToday.filter(r => {
      if (r.staffId && leaveStaffIds.has(r.staffId)) return false;
-     if (r.staffName && leaveStaffNames.has((r.staffName || '').toLowerCase())) return false;
+     if (r.staffName && leaveStaffNames.has((r.staffName || '').toLowerCase().trim())) return false;
      return true;
   });
   const finalDutyMap = new Map();
-  dutyFiltered.forEach(r => finalDutyMap.set(r.staffId || r.staffName, r));
+  dutyFiltered.forEach(r => {
+    // Keying strictly by normalized name + dept prevents duplicates even if IDs are missing
+    const key = (r.staffName || '').trim().toLowerCase() + '-' + (r.staffDepartment || '').trim().toLowerCase();
+    finalDutyMap.set(key, r);
+  });
   const todayShiftsAll = Array.from(finalDutyMap.values());
 
   const pendingLeave = leaveReqs.filter((r) => r.status?.toLowerCase() === 'pending');

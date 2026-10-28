@@ -258,3 +258,56 @@ input:read-only, textarea:read-only, input:disabled, select:disabled {
     break-before: page;
   }
 }
+/* ==========================================
+   BIRD COUNT PRINT STYLES (A4 Landscape)
+   ========================================== */
+@page bird-count-landscape {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  body.printing-bird-count .page-content {
+    page: bird-count-landscape;
+  }
+  
+  body.printing-bird-count * {
+    visibility: hidden;
+  }
+  
+  body.printing-bird-count .page-content,
+  body.printing-bird-count .page-content * {
+    visibility: visible;
+  }
+
+  body.printing-bird-count .page-content {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.printing-bird-count .no-print {
+    display: none !important;
+  }
+
+  /* Force Page 2 to break onto a new page */
+  body.printing-bird-count .bird-count-page-2 {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Ensure tables fit the landscape page */
+  body.printing-bird-count table {
+    width: 100% !important;
+    table-layout: auto !important;
+    font-size: 10px !important;
+  }
+  
+  body.printing-bird-count th, body.printing-bird-count td {
+    padding: 4px !important;
+    border: 1px solid #000 !important;
+  }
+}
