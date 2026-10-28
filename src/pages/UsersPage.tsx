@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase'; // Added db
+import { doc, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -14,8 +15,8 @@ const ALL_ROLES = ['developer', 'manager', 'admin', 'smt', 'staff'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 const selectStyle: React.CSSProperties = {
-  padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px',
-  background: '#ffffff', color: '#1e293b', colorScheme: 'light', width: '100%'
+  padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px',
+  background: '#ffffff', color: '#1e293b', colorScheme: 'light',
 };
 
 function UsersPage() {
@@ -30,13 +31,11 @@ function UsersPage() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Custom Dialog States
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{ id: string, email: string } | null>(null);
   const [deletePresetTarget, setDeletePresetTarget] = useState<{ id: string, email: string } | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
 
-  // Form States (Updated for Firebase Auth Creation)
   const [showPresetForm, setShowPresetForm] = useState<boolean>(false);
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations'
@@ -45,7 +44,6 @@ function UsersPage() {
 
   const fetchData = useCallback(async () => {
     if (!canView) { setLoading(false); return; }
-    
     try {
       const [usersData, presetsData, staffData] = await Promise.all([
         apiFetch('/users'), apiFetch('/user-presets'), apiFetch('/staff')
@@ -77,10 +75,13 @@ function UsersPage() {
   const handleChangeRole = async (userId: string, value: string) => {
     if (!canEdit) return;
     try {
-      await apiFetch(`/users/${userId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ role: value, department: users.find(u => u.id === userId)?.department || 'Ground Operations' })
-      });
+      const dept = users.find(u => u.id === userId)?.department || 'Ground Operations';
+      
+      // Update Firestore
+      try { await updateDoc(doc(db, 'users', userId), { role: value, department: dept }); } catch(e) {}
+      
+      // Update D1
+      await apiFetch(`/users/${userId}`, { method: 'PUT', body: JSON.stringify({ role: value, department: dept }) });
       toast.success('Role updated');
       fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
@@ -89,10 +90,13 @@ function UsersPage() {
   const handleChangeDept = async (userId: string, value: string) => {
     if (!canEdit) return;
     try {
-      await apiFetch(`/users/${userId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ role: users.find(u => u.id === userId)?.role || 'staff', department: value })
-      });
+      const currentRole = users.find(u => u.id === userId)?.role || 'staff';
+      
+      // Update Firestore
+      try { await updateDoc(doc(db, 'users', userId), { role: currentRole, department: value }); } catch(e) {}
+      
+      // Update D1
+      await apiFetch(`/users/${userId}`, { method: 'PUT', body: JSON.stringify({ role: currentRole, department: value }) });
       toast.success('Department updated');
       fetchData();
     } catch (err: any) { toast.error('Error: ' + err.message); }
