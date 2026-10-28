@@ -68,7 +68,7 @@ function SplitInput({ prefix, label, formData, handleChange, isManager, onOpenKe
 
 export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
   
-  // --- TIME POPUP STATE (For Start/Stop fields) ---
+  // --- TIME POPUP STATE (For Start/Stop, ATA, ATD) ---
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [tempHour, setTempHour] = useState<string>('00');
   const [tempMin, setTempMin] = useState<string>('00');
@@ -96,7 +96,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     return d;
   }, [formData]);
 
-  // --- TIME POPUP HANDLERS (For Start/Stop) ---
+  // --- TIME POPUP HANDLERS ---
   const executeFillNow = () => {
     if (!confirmId) return;
     const finalTime = `${tempHour}:${tempMin}`;
@@ -195,19 +195,19 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 </div>
               </div>
               
-              {/* FIXED BORDER: FLT.NO */}
+              {/* FLT.NO - Custom Keypad */}
               <div className="header-row">
                 <span className="header-label">FLT.NO :</span>
                 <input className="header-value" id="fltNo" type="text" value={formData.fltNo} readOnly onClick={() => openKeypad('fltNo', 'alpha')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* FIXED BORDER: ATA */}
+              {/* ATA - Current Time Popup */}
               <div className="header-row">
                 <span className="header-label">ATA:</span>
-                <input className="header-value" id="ata" type="text" value={formData.ata} readOnly onClick={() => openKeypad('ata', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
+                <input className="header-value" id="ata" type="text" value={formData.ata} readOnly onClick={() => handleTimeClick('ata')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* FIXED BORDER: STA */}
+              {/* STA - Custom Keypad */}
               <div className="header-row">
                 <span className="header-label">STA:</span>
                 <input className="header-value" id="sta" type="text" value={formData.sta} readOnly onClick={() => openKeypad('sta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
@@ -239,16 +239,16 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
             <div>
               <div className="header-row"><span className="header-label">DATE :</span><input className="header-value" id="date" type="date" value={formData.date} onChange={handleChange} readOnly={!isManager} /></div>
               
-              {/* FIXED BORDER: ETA */}
+              {/* ETA - Custom Keypad */}
               <div className="header-row">
                 <span className="header-label">ETA :</span>
                 <input className="header-value" id="eta" type="text" value={formData.eta} readOnly onClick={() => openKeypad('eta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* FIXED BORDER: ATD */}
+              {/* ATD - Current Time Popup */}
               <div className="header-row">
                 <span className="header-label">ATD :</span>
-                <input className="header-value" id="atd" type="text" value={formData.atd} readOnly onClick={() => openKeypad('atd', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
+                <input className="header-value" id="atd" type="text" value={formData.atd} readOnly onClick={() => handleTimeClick('atd')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
 
               <table className="inner-table" style={{ marginTop: '15px' }}>
@@ -273,7 +273,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
               <table className="inner-table info-table" style={{ marginTop: '15px' }}>
                 <tbody>
-                  {/* CHECK-IN */}
+                  {/* CHECK-IN - Custom Keypad */}
                   <tr>
                     <td>CHECK-IN</td>
                     <td><input type="text" id="checkIn" value={formData.checkIn} readOnly onClick={() => openKeypad('checkIn', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
@@ -364,7 +364,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
       </div>
 
       {/* ========================================= */}
-      {/* 1. CURRENT TIME POPUP MODAL (Start/Stop)  */}
+      {/* 1. CURRENT TIME POPUP MODAL (Start/Stop, ATA, ATD)  */}
       {/* ========================================= */}
       {confirmId && (
         <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
