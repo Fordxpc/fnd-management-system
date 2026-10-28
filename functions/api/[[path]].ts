@@ -280,9 +280,9 @@ export const onRequest = async (context: any) => {
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
       await env.DB.prepare(`
-        INSERT INTO flights (id, date, flightNo, type, aircraft, bookedFigure, checkInTime, arrivalTime, departureTime, route, originDepTime, status, remarks, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(id, body.date, body.flightNo, body.type, body.aircraft, body.bookedFigure || '', body.checkInTime || '', body.arrivalTime || '', body.departureTime || '', body.route || '', body.originDepTime || '', body.status, body.remarks || '', createdAt).run();
+        INSERT INTO flights (id, date, flightNo, type, aircraft, bookedFigure, paxAdults, paxInfants, checkInTime, arrivalTime, departureTime, route, originDepTime, status, remarks, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, body.date, body.flightNo, body.type, body.aircraft, body.bookedFigure || '', body.paxAdults || 0, body.paxInfants || 0, body.checkInTime || '', body.arrivalTime || '', body.departureTime || '', body.route || '', body.originDepTime || '', body.status, body.remarks || '', createdAt).run();
       context.waitUntil(backupToFirebase('flights', id, { ...body, createdAt }));
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -292,8 +292,8 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const updatedAt = new Date().toISOString();
       await env.DB.prepare(`
-        UPDATE flights SET date = ?, flightNo = ?, type = ?, aircraft = ?, bookedFigure = ?, checkInTime = ?, arrivalTime = ?, departureTime = ?, route = ?, originDepTime = ?, status = ?, remarks = ?, updatedAt = ? WHERE id = ?
-      `).bind(body.date, body.flightNo, body.type, body.aircraft, body.bookedFigure || '', body.checkInTime || '', body.arrivalTime || '', body.departureTime || '', body.route || '', body.originDepTime || '', body.status, body.remarks || '', updatedAt, id).run();
+        UPDATE flights SET date = ?, flightNo = ?, type = ?, aircraft = ?, bookedFigure = ?, paxAdults = ?, paxInfants = ?, checkInTime = ?, arrivalTime = ?, departureTime = ?, route = ?, originDepTime = ?, status = ?, remarks = ?, updatedAt = ? WHERE id = ?
+      `).bind(body.date, body.flightNo, body.type, body.aircraft, body.bookedFigure || '', body.paxAdults || 0, body.paxInfants || 0, body.checkInTime || '', body.arrivalTime || '', body.departureTime || '', body.route || '', body.originDepTime || '', body.status, body.remarks || '', updatedAt, id).run();
       context.waitUntil(backupToFirebase('flights', id!, { ...body, updatedAt }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

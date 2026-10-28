@@ -29,12 +29,13 @@ const BIRD_DB = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const ZONES = [1, 2, 3, 4, 5, 6, 7];
+const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 function WildlifePage() {
   const { profile, user } = useAuth();
   const isManager = ['developer', 'manager', 'smt'].includes(profile?.role || '');
   
-  const [activeTab, setActiveTab] = useState<'form' | 'records' | 'analysis' | 'map'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'reports' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -42,7 +43,7 @@ function WildlifePage() {
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [refNo, setRefNo] = useState(`RACL-FND-WHP-${new Date().getFullYear()}-01`);
-  const [windDir, setWindDir] = useState('');
+  const [windDir, setWindDir] = useState('N');
   const [windSpd, setWindSpd] = useState('');
   const [temp, setTemp] = useState('');
   const [cloud, setCloud] = useState('');
@@ -105,6 +106,7 @@ function WildlifePage() {
     const validRows = rows.filter(r => r.bird);
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
 
+    // Force Full Name & Designation from Auth Profile
     const observerName = `${profile?.name || user?.email || 'User'} (${profile?.position || 'Staff'})`;
 
     try {
@@ -119,7 +121,7 @@ function WildlifePage() {
         })
       });
       toast.success('Bird count saved successfully!');
-      setActiveTab('records');
+      setActiveTab('reports');
       setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
       fetchRecords();
     } catch (err: any) { toast.error(err.message); }
@@ -185,8 +187,7 @@ function WildlifePage() {
 
       <div className="ops-tabs no-print">
         <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => setActiveTab('form')}>📝 Bird Count Form</button>
-        <button className={`ops-tab-btn ${activeTab === 'records' ? 'active' : ''}`} onClick={() => setActiveTab('records')}>📁 Saved Records</button>
-        <button className={`ops-tab-btn ${activeTab === 'analysis' ? 'active' : ''}`} onClick={() => setActiveTab('analysis')}>📊 Trend Analysis</button>
+        <button className={`ops-tab-btn ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>📊 Reports & Analysis</button>
         <button className={`ops-tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>🗺️ Zone Map</button>
       </div>
 
@@ -200,34 +201,41 @@ function WildlifePage() {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>
-              <div><label style={{fontSize:'12px', fontWeight:'bold'}}>DATE:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-1 border" /></div>
-              <div><label style={{fontSize:'12px', fontWeight:'bold'}}>REF NO:</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-1 border" /></div>
-              <div>
-                <label style={{fontSize:'12px', fontWeight:'bold'}}>WIND:</label>
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <input placeholder="WSW" value={windDir} onChange={e => setWindDir(e.target.value)} className="w-full p-1 border" style={{ width: '40%' }} />
-                  <input type="number" placeholder="31" value={windSpd} onChange={e => setWindSpd(e.target.value)} className="w-full p-1 border" style={{ width: '40%' }} />
-                  <span style={{ fontSize: '11px', fontWeight: 'bold' }}>km/h</span>
-                </div>
-              </div>
-              <div><label style={{fontSize:'12px', fontWeight:'bold'}}>START TIME:</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-1 border" /></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>DATE:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-1 border" /></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>REF NO:</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-1 border" /></div>
               
               <div>
-                <label style={{fontSize:'12px', fontWeight:'bold'}}>TEMPERATURE:</label>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <input type="number" placeholder="28" value={temp} onChange={e => setTemp(e.target.value)} className="w-full p-1 border" />
-                  <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>°C</span>
+                <label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>WIND:</label>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}>
+                  <select value={windDir} onChange={e => setWindDir(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }}>
+                    {WIND_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <span style={{ color: '#cbd5e1', fontSize: '12px' }}>|</span>
+                  <input type="number" value={windSpd} onChange={e => setWindSpd(e.target.value)} style={{ width: '40px', border: 'none', padding: '0 4px', textAlign: 'center', outline: 'none', fontSize: '12px' }} />
+                  <span style={{ fontSize: '10px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>km/h</span>
                 </div>
               </div>
+              
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>START TIME:</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-1 border" /></div>
+              
               <div>
-                <label style={{fontSize:'12px', fontWeight:'bold'}}>CLOUDY:</label>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <input type="number" placeholder="100" value={cloud} onChange={e => setCloud(e.target.value)} className="w-full p-1 border" />
-                  <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>%</span>
+                <label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>TEMPERATURE:</label>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}>
+                  <input type="number" value={temp} onChange={e => setTemp(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} />
+                  <span style={{ fontSize: '12px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>°C</span>
                 </div>
               </div>
-              <div><label style={{fontSize:'12px', fontWeight:'bold'}}>RAIN LAST 24 HRS:</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-1 border"><option value="N">N</option><option value="Y">Y</option></select></div>
-              <div><label style={{fontSize:'12px', fontWeight:'bold'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" /></div>
+              
+              <div>
+                <label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>CLOUDY:</label>
+                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}>
+                  <input type="number" value={cloud} onChange={e => setCloud(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} />
+                  <span style={{ fontSize: '12px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>%</span>
+                </div>
+              </div>
+              
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>RAIN LAST 24 HRS:</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-1 border"><option value="N">N</option><option value="Y">Y</option></select></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" /></div>
             </div>
 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', textAlign: 'center', fontFamily: 'Arial' }}>
@@ -312,29 +320,7 @@ function WildlifePage() {
         </div>
       )}
 
-      {activeTab === 'records' && (
-        <div className="dash-card">
-          <h3>📁 Saved Bird Count Records</h3>
-          <table className="mini-table mt-4">
-            <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Total Species</th><th>Actions</th></tr></thead>
-            <tbody>
-              {records.map((r: any) => (
-                <tr key={r.id}>
-                  <td>{r.date}</td>
-                  <td>{r.refNo}</td>
-                  <td>{r.observer}</td>
-                  <td>{r.rows?.length || 0}</td>
-                  <td>
-                    <button className="delete-btn" onClick={() => setDeleteTarget(r.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {activeTab === 'analysis' && (
+      {activeTab === 'reports' && (
         <div className="dash-grid">
           <div className="dash-card" style={{ gridColumn: 'span 2', marginBottom: '20px' }}>
             <h3>📊 Monthly Bird Population Trend</h3>
@@ -353,7 +339,7 @@ function WildlifePage() {
             </div>
           </div>
 
-          <div className="dash-card" style={{ gridColumn: 'span 2', overflowX: 'auto' }}>
+          <div className="dash-card" style={{ gridColumn: 'span 2', overflowX: 'auto', marginBottom: '20px' }}>
             <h3>📅 Daily Trend Analysis (Excel Format)</h3>
             <table className="mini-table mt-4" style={{ fontSize: '12px' }}>
               <thead>
@@ -367,9 +353,28 @@ function WildlifePage() {
                   <tr key={r.date}>
                     <td><strong>{r.date}</strong></td>
                     {trendData.speciesList.map((s: string) => (
-                      /* FIX: Cast r to any to avoid index signature error */
                       <td key={s} style={{ textAlign: 'center' }}>{(r as any)[s] || 0}</td>
                     ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="dash-card" style={{ gridColumn: 'span 2' }}>
+            <h3>📁 Saved Bird Count Records</h3>
+            <table className="mini-table mt-4">
+              <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Total Species</th><th>Actions</th></tr></thead>
+              <tbody>
+                {records.map((r: any) => (
+                  <tr key={r.id}>
+                    <td>{r.date}</td>
+                    <td>{r.refNo}</td>
+                    <td>{r.observer}</td>
+                    <td>{r.rows?.length || 0}</td>
+                    <td>
+                      <button className="delete-btn" onClick={() => setDeleteTarget(r.id)}>Delete</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

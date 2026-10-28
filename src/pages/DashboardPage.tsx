@@ -96,7 +96,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
       const fodData = getData(6); const birdData = getData(7);
 
-      // Deduplicate roster: Prioritize leave entries over scheduled shifts
+      // Deduplicate roster strictly by staffId + date (prioritizing leave status over scheduled)
       const rosterMap = new Map();
       rosterData.forEach((item: any) => {
         const key = `${item.staffId}-${item.date}`;
@@ -156,16 +156,24 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   
-  // FIXED: Deduplicate and remove staff on leave from Today's Duty
-  const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
-  const onLeaveIds = new Set(todayLeaveAll.map(r => r.staffId));
-  const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled' && !onLeaveIds.has(r.staffId));
+  // FIXED: Check strictly against approved Leave Requests to remove them from Today's Duty
+  const approvedLeavesToday = leaveReqs.filter(l => l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr);
+  const onLeaveIds = new Set(approvedLeavesToday.map(l => l.staffId));
 
+  const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled' && !onLeaveIds.has(r.staffId));
+  
+  // Deduplicate shifts just in case the same person was scheduled twice
+  const uniqueShiftsMap = new Map();
+  todayShiftsAll.forEach(r => uniqueShiftsMap.set(r.staffId, r));
+  const finalShifts = Array.from(uniqueShiftsMap.values());
+
+  const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
+  
   const pendingLeave = leaveReqs.filter((r) => r.status?.toLowerCase() === 'pending');
 
   const userDept = profile?.department;
   
-  const todayShifts = canSeeAllDepartments ? todayShiftsAll : todayShiftsAll.filter(r => r.staffDepartment === userDept);
+  const todayShifts = canSeeAllDepartments ? finalShifts : finalShifts.filter(r => r.staffDepartment === userDept);
   const todayLeave = canSeeAllDepartments ? todayLeaveAll : todayLeaveAll.filter(r => r.staffDepartment === userDept);
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
@@ -267,8 +275,8 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                   <div style={{ fontSize: '16px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>PAX FIG</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700 }}>{nextFlight.bookedFigure || nextFlight.paxAdults || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>PAX (AD/INF)</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700 }}>{nextFlight.paxAdults || 0} / {nextFlight.paxInfants || 0}</div>
                 </div>
               </div>
 

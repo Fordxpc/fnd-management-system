@@ -23,40 +23,23 @@ interface SplitInputProps {
 
 function SplitInput({ prefix, label, formData, handleChange, isManager }: SplitInputProps) {
   const inputStyle: React.CSSProperties = {
-    width: '45%',
-    padding: '4px',
-    border: '1px solid #cbd5e1',
-    borderRadius: '4px',
-    textAlign: 'center',
-    fontSize: '13px',
-    height: '28px',
+    width: '45%', padding: '4px', border: '1px solid #cbd5e1',
+    borderRadius: '4px', textAlign: 'center', fontSize: '13px', height: '28px',
   };
 
   const renderPair = (suffix: 'In' | 'Out' | 'Trans') => (
     <td>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
         <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          id={`${prefix}${suffix}Pcs`}
-          value={formData[`${prefix}${suffix}Pcs`] || ''}
-          onChange={handleChange}
-          readOnly={!isManager}
-          autoComplete="off"
-          style={inputStyle}
+          type="text" inputMode="numeric" pattern="[0-9]*" id={`${prefix}${suffix}Pcs`}
+          value={formData[`${prefix}${suffix}Pcs`] || ''} onChange={handleChange}
+          readOnly={!isManager} autoComplete="off" style={inputStyle}
         />
         <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
         <input
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          id={`${prefix}${suffix}Kg`}
-          value={formData[`${prefix}${suffix}Kg`] || ''}
-          onChange={handleChange}
-          readOnly={!isManager}
-          autoComplete="off"
-          style={inputStyle}
+          type="text" inputMode="numeric" pattern="[0-9]*" id={`${prefix}${suffix}Kg`}
+          value={formData[`${prefix}${suffix}Kg`] || ''} onChange={handleChange}
+          readOnly={!isManager} autoComplete="off" style={inputStyle}
         />
       </div>
     </td>
@@ -80,11 +63,9 @@ function SplitInput({ prefix, label, formData, handleChange, isManager }: SplitI
 }
 
 export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [tempHour, setTempHour] = useState<string>('00');
-  const [tempMin, setTempMin] = useState<string>('00');
+  const [keypadTarget, setKeypadTarget] = useState<string | null>(null);
+  const [keypadValue, setKeypadValue] = useState<string>('');
 
-  // Derive pcs/kg from combined fields for legacy records (so saved data always shows)
   const displayData = useMemo(() => {
     const d = { ...formData };
     const prefixes = ['cargo', 'mail', 'bag', 'other'];
@@ -103,30 +84,41 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     return d;
   }, [formData]);
 
-  const executeFillNow = () => {
-    if (!confirmId) return;
-    const finalTime = `${tempHour}:${tempMin}`;
-    handleChange({ target: { id: confirmId, value: finalTime } } as any);
-    setConfirmId(null);
-  };
-
-  const handleClearField = () => {
-    if (!confirmId) return;
-    handleChange({ target: { id: confirmId, value: '' } } as any);
-    setConfirmId(null);
-  };
-
   const handleTimeClick = (id: string) => {
     if (!isManager) return;
-    const now = new Date();
-    setTempHour(String(now.getHours()).padStart(2, '0'));
-    setTempMin(String(now.getMinutes()).padStart(2, '0'));
-    setConfirmId(id);
+    const currentValue = formData[id] || '';
+    setKeypadValue(currentValue.replace(/[^0-9]/g, '')); // Strip colon
+    setKeypadTarget(id);
+  };
+
+  const handleKeypadPress = (key: string) => {
+    if (key === 'C') setKeypadValue('');
+    else if (key === '⌫') setKeypadValue(prev => prev.slice(0, -1));
+    else if (key === 'OK') {
+      let formatted = keypadValue;
+      if (formatted.length > 0) {
+        if (formatted.length <= 2) formatted = formatted.padStart(2, '0') + ':00';
+        else formatted = formatted.slice(0, formatted.length - 2).padStart(2, '0') + ':' + formatted.slice(-2);
+      }
+      handleChange({ target: { id: keypadTarget, value: formatted } } as any);
+      setKeypadTarget(null);
+    } else {
+      if (keypadValue.length < 4) setKeypadValue(prev => prev + key);
+    }
   };
 
   const preventKeyboard = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.blur();
   };
+
+  const formattedPreview = useMemo(() => {
+    let f = keypadValue;
+    if (f.length === 0) return '--:--';
+    if (f.length === 1) return `0${f}:--`;
+    if (f.length === 2) return `${f}:--`;
+    if (f.length === 3) return `${f.slice(0, 2)}:${f.slice(2)}0`;
+    return `${f.slice(0, 2)}:${f.slice(2)}`;
+  }, [keypadValue]);
 
   return (
     <>
@@ -291,41 +283,31 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
         </div>
       </div>
 
-      {confirmId && (
-        <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>
-            <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time (24h)</h3>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
-              Adjust the time below or clear it.
+      {/* IN-APP NUMERIC KEYPAD MODAL */}
+      {keypadTarget && (
+        <div className="modal-backdrop" onClick={() => setKeypadTarget(null)} style={{ zIndex: 9999, backdropFilter: 'blur(4px)' }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '320px', padding: '24px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '8px', color: '#1e293b', fontSize: '18px' }}>Enter Time (24h)</h3>
+            <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>
+              Type digits to set the time.
             </p>
             
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', margin: '0 auto 24px auto' }}>
-              <select value={tempHour} onChange={(e) => setTempHour(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
-                {Array.from({ length: 24 }).map((_, i) => {
-                  const h = String(i).padStart(2, '0');
-                  return <option key={h} value={h}>{h}</option>;
-                })}
-              </select>
-              <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>:</span>
-              <select value={tempMin} onChange={(e) => setTempMin(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
-                {Array.from({ length: 60 }).map((_, i) => {
-                  const m = String(i).padStart(2, '0');
-                  return <option key={m} value={m}>{m}</option>;
-                })}
-              </select>
+            <div style={{ fontSize: '36px', fontWeight: 900, color: '#0f172a', letterSpacing: '2px', marginBottom: '24px', background: '#f1f5f9', padding: '12px', borderRadius: '8px', border: '2px solid #cbd5e1' }}>
+              {formattedPreview}
             </div>
 
-            <button onClick={handleClearField} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}>
-              Clear this field
-            </button>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
+                <button key={k} onClick={() => handleKeypadPress(k)} style={{ padding: '16px', fontSize: '24px', fontWeight: 'bold', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#1e293b', cursor: 'pointer', transition: 'background 0.1s' }}>{k}</button>
+              ))}
+              <button onClick={() => handleKeypadPress('C')} style={{ padding: '16px', fontSize: '18px', fontWeight: 'bold', background: '#fee2e2', border: 'none', borderRadius: '8px', color: '#dc2626', cursor: 'pointer' }}>C</button>
+              <button onClick={() => handleKeypadPress('0')} style={{ padding: '16px', fontSize: '24px', fontWeight: 'bold', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#1e293b', cursor: 'pointer' }}>0</button>
+              <button onClick={() => handleKeypadPress('⌫')} style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', background: '#fef3c7', border: 'none', borderRadius: '8px', color: '#d97706', cursor: 'pointer' }}>⌫</button>
+            </div>
 
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
-              <button onClick={() => setConfirmId(null)} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(220, 38, 38, 0.2)' }} title="Cancel">
-                ✕
-              </button>
-              <button onClick={executeFillNow} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#dcfce7', color: '#16a34a', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(22, 163, 74, 0.2)' }} title="Confirm">
-                ✓
-              </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setKeypadTarget(null)} style={{ flex: 1, padding: '16px', background: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => handleKeypadPress('OK')} style={{ flex: 2, padding: '16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}>Set Time</button>
             </div>
           </div>
         </div>
