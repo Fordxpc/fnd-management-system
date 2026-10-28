@@ -75,7 +75,7 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
 }
 
 @media print {
-  /* 1. Global Resets - Force all containers to expand to 100% and remove shadows */
+  /* 1. Global Resets - Force all containers to expand to 100% and remove shadows/scrolls */
   html, body, #root, .dashboard-layout, .main-content, .page-content, 
   .modal-backdrop, .modal-content, .modal-scrollable-body {
     overflow: visible !important;
@@ -86,11 +86,10 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     padding: 0 !important;
     margin: 0 !important;
     background: #fff !important;
-    box-shadow: none !important; /* Kills the grey shadow */
+    box-shadow: none !important;
     border: none !important;
   }
 
-  /* Force everything to remove shadows (kills the box-shadow from .modal-content) */
   * {
     box-shadow: none !important;
   }
@@ -157,22 +156,47 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   .ramp-sheet .bottom-section-2 td > div { gap: 4px !important; }
   .ramp-sheet, .ramp-sheet * { page-break-inside: avoid !important; page-break-after: avoid !important; }
 
-  /* 4. Reports Formatting */
+  /* 4. Reports Formatting (FIX FOR DFIS SCROLLER) */
   body.printing-report * { visibility: hidden; }
+  
   body.printing-report .page-content, body.printing-report .page-content *,
   body.printing-report .modal-backdrop, body.printing-report .modal-backdrop * { visibility: visible; }
+  
   body.printing-report .page-content, body.printing-report .modal-backdrop { 
-    position: absolute; left: 0; top: 0; width: 100%; 
+    position: absolute; left: 0; top: 0; width: 100% !important; max-width: 100% !important; 
+    overflow: visible !important; /* Fixes the scroller leak */
   }
-  body.printing-report table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; }
-  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 1px 2px !important; }
+
+  /* Force all wrappers inside the report to not overflow */
+  body.printing-report .dash-card, body.printing-report .dash-grid {
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  
+  body.printing-report table { 
+    width: 100% !important; 
+    table-layout: fixed !important; 
+    font-size: 7px !important; 
+    border-collapse: collapse !important;
+  }
+  body.printing-report th, body.printing-report td { 
+    border: 1px solid #000 !important; 
+    padding: 1px 2px !important; 
+    -webkit-print-color-adjust: exact !important; 
+    print-color-adjust: exact !important; 
+    word-break: break-all !important; 
+    overflow: hidden !important; /* Prevents cells from forcing the table wider */
+  }
+  
+  body.printing-report .dfis-print-table { overflow: visible !important; width: 100% !important; }
   body.printing-report .dfis-print-table table { font-size: 5.5px !important; }
   body.printing-report .dfis-print-table th, body.printing-report .dfis-print-table td { padding: 0px 1px !important; }
 
   /* 5. Bird Count Formatting */
   body.printing-bird-count * { visibility: hidden; }
   body.printing-bird-count .page-content, body.printing-bird-count .page-content * { visibility: visible; }
-  body.printing-bird-count .page-content { position: absolute; left: 0; top: 0; width: 100%; }
+  body.printing-bird-count .page-content { position: absolute; left: 0; top: 0; width: 100%; overflow: visible !important; }
   body.printing-bird-count .bird-count-page-1 { page-break-after: always; break-after: page; }
   body.printing-bird-count .bird-count-page-2 { page-break-before: always; break-before: page; }
   body.printing-bird-count table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; }
