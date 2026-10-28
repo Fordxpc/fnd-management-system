@@ -194,19 +194,23 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                   {isManager && !isViewOnlyMode && <button type="button" className="btn-plus" onClick={handleAddAcType}>➕</button>}
                 </div>
               </div>
+              
+              {/* FIXED BORDER: FLT.NO */}
               <div className="header-row">
                 <span className="header-label">FLT.NO :</span>
-                <input className="header-value" id="fltNo" type="text" value={formData.fltNo} readOnly onClick={() => openKeypad('fltNo', 'alpha')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
+                <input className="header-value" id="fltNo" type="text" value={formData.fltNo} readOnly onClick={() => openKeypad('fltNo', 'alpha')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* TIME FIELDS - Using custom numeric keypad for ATA & STA */}
+              {/* FIXED BORDER: ATA */}
               <div className="header-row">
                 <span className="header-label">ATA:</span>
-                <input className="header-value" id="ata" type="text" value={formData.ata} readOnly onClick={() => openKeypad('ata', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
+                <input className="header-value" id="ata" type="text" value={formData.ata} readOnly onClick={() => openKeypad('ata', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
+              
+              {/* FIXED BORDER: STA */}
               <div className="header-row">
                 <span className="header-label">STA:</span>
-                <input className="header-value" id="sta" type="text" value={formData.sta} readOnly onClick={() => openKeypad('sta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
+                <input className="header-value" id="sta" type="text" value={formData.sta} readOnly onClick={() => openKeypad('sta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
 
               <table className="inner-table" style={{ marginTop: '15px' }}>
@@ -235,14 +239,16 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
             <div>
               <div className="header-row"><span className="header-label">DATE :</span><input className="header-value" id="date" type="date" value={formData.date} onChange={handleChange} readOnly={!isManager} /></div>
               
-              {/* TIME FIELDS - Using custom numeric keypad for ETA & ATD */}
+              {/* FIXED BORDER: ETA */}
               <div className="header-row">
                 <span className="header-label">ETA :</span>
-                <input className="header-value" id="eta" type="text" value={formData.eta} readOnly onClick={() => openKeypad('eta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
+                <input className="header-value" id="eta" type="text" value={formData.eta} readOnly onClick={() => openKeypad('eta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
+              
+              {/* FIXED BORDER: ATD */}
               <div className="header-row">
                 <span className="header-label">ATD :</span>
-                <input className="header-value" id="atd" type="text" value={formData.atd} readOnly onClick={() => openKeypad('atd', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
+                <input className="header-value" id="atd" type="text" value={formData.atd} readOnly onClick={() => openKeypad('atd', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
 
               <table className="inner-table" style={{ marginTop: '15px' }}>
@@ -267,7 +273,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
               <table className="inner-table info-table" style={{ marginTop: '15px' }}>
                 <tbody>
-                  {/* CHECK-IN - Using custom numeric keypad */}
+                  {/* CHECK-IN */}
                   <tr>
                     <td>CHECK-IN</td>
                     <td><input type="text" id="checkIn" value={formData.checkIn} readOnly onClick={() => openKeypad('checkIn', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
