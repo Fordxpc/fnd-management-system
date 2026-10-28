@@ -40,6 +40,8 @@ function WildlifePage() {
   const [loading, setLoading] = useState(true);
   
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [viewingRecord, setViewingRecord] = useState<any>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [refNo, setRefNo] = useState(`RACL-FND-WHP-${new Date().getFullYear()}-01`);
@@ -106,25 +108,51 @@ function WildlifePage() {
     const validRows = rows.filter(r => r.bird);
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
 
-    // Force Full Name & Designation from Auth Profile
     const observerName = `${profile?.name || user?.email || 'User'} (${profile?.position || 'Staff'})`;
 
     try {
-      await apiFetch('/wildlife', {
-        method: 'POST',
-        body: JSON.stringify({
-          date, refNo, 
-          wind: `${windDir} ${windSpd}km/h`.trim(), 
-          temp, cloud, rain, startTime, endTime,
-          rows: validRows,
-          observer: observerName
-        })
-      });
-      toast.success('Bird count saved successfully!');
+      const payload = {
+        date, refNo, 
+        wind: `${windDir} ${windSpd}km/h`.trim(), 
+        temp, cloud, rain, startTime, endTime,
+        rows: validRows,
+        observer: observerName
+      };
+
+      if (editingId) {
+        await apiFetch(`/wildlife/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        toast.success('Bird count updated successfully!');
+      } else {
+        await apiFetch('/wildlife', { method: 'POST', body: JSON.stringify(payload) });
+        toast.success('Bird count saved successfully!');
+      }
+
       setActiveTab('reports');
+      setEditingId(null);
       setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
       fetchRecords();
     } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleEdit = (record: any) => {
+    setEditingId(record.id);
+    setDate(record.date);
+    setRefNo(record.refNo);
+    
+    // Split wind back into dir and speed
+    const windParts = (record.wind || '').split(' ');
+    setWindDir(windParts[0] || 'N');
+    setWindSpd(windParts[1]?.replace('km/h', '') || '');
+    
+    setTemp(record.temp);
+    setCloud(record.cloud);
+    setRain(record.rain);
+    setStartTime(record.startTime);
+    setEndTime(record.endTime);
+    setRows(record.rows && record.rows.length > 0 ? record.rows : Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
+    
+    setActiveTab('form');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handlePrint = () => {
@@ -162,7 +190,7 @@ function WildlifePage() {
 
     const monthlyTotals: Record<string, number> = {};
     Object.entries(dailyData).forEach(([dateStr, speciesMap]) => {
-      const month = dateStr.substring(0, 7); // YYYY-MM
+      const month = dateStr.substring(0, 7); 
       const totalForDay = Object.values(speciesMap).reduce((a, b) => a + b, 0);
       monthlyTotals[month] = (monthlyTotals[month] || 0) + totalForDay;
     });
@@ -186,7 +214,9 @@ function WildlifePage() {
       </div>
 
       <div className="ops-tabs no-print">
-        <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => setActiveTab('form')}>📝 Bird Count Form</button>
+        <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => { setActiveTab('form'); if(!editingId) { setDate(new Date().toISOString().split('T')[0]); setRefNo(`RACL-FND-WHP-${new Date().getFullYear()}-01`); } }}>
+          {editingId ? '✏️ Editing Record' : '📝 Bird Count Form'}
+        </button>
         <button className={`ops-tab-btn ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>📊 Reports & Analysis</button>
         <button className={`ops-tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>🗺️ Zone Map</button>
       </div>
@@ -314,8 +344,12 @@ function WildlifePage() {
           </div>
 
           <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }} className="no-print">
-            {isManager && <button className="add-staff-btn" onClick={handleSave}>💾 Save Bird Count</button>}
             <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
+            {isManager && (
+              <button className="add-staff-btn" onClick={handleSave} style={{ background: editingId ? '#2563eb' : '#16a34a' }}>
+                {editingId ? '💾 Save Changes' : '💾 Save Bird Count'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -372,8 +406,10 @@ function WildlifePage() {
                     <td>{r.refNo}</td>
                     <td>{r.observer}</td>
                     <td>{r.rows?.length || 0}</td>
-                    <td>
-                      <button className="delete-btn" onClick={() => setDeleteTarget(r.id)}>Delete</button>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="quick-btn" onClick={() => setViewingRecord(r)} style={{ background: '#2563eb', color: 'white', padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>👁️ View / Print</button>
+                      <button className="edit-btn" onClick={() => handleEdit(r)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button>
+                      <button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -389,6 +425,107 @@ function WildlifePage() {
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>Reference map for Bird Concentration Zones (1-7)</p>
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
             <img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', maxWidth: '800px', height: 'auto', objectFit: 'contain' }} />
+          </div>
+        </div>
+      )}
+
+      {/* PRINT PREVIEW MODAL FOR SAVED RECORDS */}
+      {viewingRecord && (
+        <div className="modal-backdrop" onClick={() => setViewingRecord(null)} style={{ zIndex: 9999 }}>
+          <div className="modal-content" style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>Bird Count Report: {viewingRecord.date}</h3>
+              <div>
+                <button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrint}>🖨️ Print / Save as PDF</button>
+                <button className="cancel-btn" onClick={() => setViewingRecord(null)}>Close</button>
+              </div>
+            </div>
+            
+            <div className="modal-scrollable-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#fff' }}>
+              <div className="bird-count-page-1">
+                <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
+                  <img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} />
+                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div>
+                  <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>DATE:</label><input type="date" value={viewingRecord.date} readOnly className="w-full p-1 border" /></div>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>REF NO:</label><input value={viewingRecord.refNo} readOnly className="w-full p-1 border" /></div>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>WIND:</label><input value={viewingRecord.wind} readOnly className="w-full p-1 border" /></div>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>START TIME:</label><input type="time" value={viewingRecord.startTime} readOnly className="w-full p-1 border" /></div>
+                  
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>TEMPERATURE:</label><input type="number" value={viewingRecord.temp} readOnly className="w-full p-1 border" /></div>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>CLOUDY:</label><input type="number" value={viewingRecord.cloud} readOnly className="w-full p-1 border" /></div>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>RAIN LAST 24 HRS:</label><input value={viewingRecord.rain} readOnly className="w-full p-1 border" /></div>
+                  <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>FINISHED @:</label><input type="time" value={viewingRecord.endTime} readOnly className="w-full p-1 border" /></div>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', textAlign: 'center', fontFamily: 'Arial' }}>
+                  <thead>
+                    <tr>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>BIRD SPECIES</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>FLOCKS (Y/N)</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={7}>Concentration of Birds at Zone</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Hazardous Behaviour</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Bird Type Total @ Zones</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Status</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Action Required</th>
+                    </tr>
+                    <tr>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={3}></th>
+                      {ZONES.map(z => <th key={z} style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>{z}</th>)}
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>RSHB</th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
+                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewingRecord.rows?.map((row: any, i: number) => {
+                      const calc = calculateRisk(row);
+                      return (
+                        <tr key={i}>
+                          <td style={{border:'1px solid #000', padding:'4px'}}>{i + 1}</td>
+                          <td style={{border:'1px solid #000', padding:'4px'}}>{row.bird}</td>
+                          <td style={{border:'1px solid #000', padding:'4px'}}>{row.flocks}</td>
+                          {ZONES.map((_, zIdx) => (
+                            <td key={zIdx} style={{border:'1px solid #000', padding:'4px'}}>{row.zones[zIdx] || 0}</td>
+                          ))}
+                          <td style={{border:'1px solid #000', padding:'4px'}}>{calc.rshb}</td>
+                          <td style={{border:'1px solid #000', padding:'4px'}} className="font-bold">{calc.total}</td>
+                          <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status}</td>
+                          <td style={{border:'1px solid #000', padding:'4px'}}>{calc.action}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="bird-count-page-2" style={{ marginTop: '40px', borderTop: '2px dashed #ccc', paddingTop: '20px' }}>
+                <h3 style={{ textAlign: 'center', fontFamily: 'Arial', marginBottom: '16px' }}>Bird Watch Report</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '12px', fontFamily: 'Arial', border: '1px solid #000' }}>
+                  <div style={{ padding: '10px', borderRight: '1px solid #000' }}>
+                    <div style={{ marginBottom: '8px' }}><strong>Report No:</strong> {viewingRecord.refNo}</div>
+                    <div style={{ marginBottom: '8px' }}><strong>Condition:</strong> LOW / MODERATE / SEVERE / High / ALERT</div>
+                    <div><strong>Legend:</strong><br/>
+                      LOW: Normal bird activity, low probability.<br/>
+                      MODERATE: Concentrations represent probable hazard.<br/>
+                      SEVERE: Heavy concentration, immediate hazard.<br/>
+                      ALERT: Weather/time makes influx likely.
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px' }}>
+                    <div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {viewingRecord.date} <strong>Review date:</strong> {viewingRecord.date}</div>
+                    <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {viewingRecord.observer}</div>
+                    <div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div>
+                    <div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

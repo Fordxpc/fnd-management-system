@@ -8,13 +8,10 @@
   --accent-bg: rgba(170, 59, 255, 0.1);
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
+  --shadow: rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
-
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
@@ -24,10 +21,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  @media (max-width: 1024px) { font-size: 16px; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -41,13 +35,9 @@
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+  #social .button-icon { filter: invert(1) brightness(2); }
 }
 
 #root {
@@ -62,252 +52,65 @@
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
-}
+body { margin: 0; }
+h1, h2 { font-family: var(--heading); font-weight: 500; color: var(--text-h); }
+h1 { font-size: 56px; letter-spacing: -1.68px; margin: 32px 0; @media (max-width: 1024px) { font-size: 36px; margin: 20px 0; } }
+h2 { font-size: 24px; line-height: 118%; letter-spacing: -0.24px; margin: 0 0 8px; @media (max-width: 1024px) { font-size: 20px; } }
+p { margin: 0; }
+code, .counter { font-family: var(--mono); display: inline-flex; border-radius: 4px; color: var(--text-h); }
+code { font-size: 15px; line-height: 135%; padding: 4px 8px; background: var(--code-bg); }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+input, select, textarea { color: #1e293b !important; background-color: #ffffff !important; -webkit-text-fill-color: #1e293b !important; color-scheme: light !important; }
+input:read-only, textarea:read-only, input:disabled, select:disabled { background-color: #f1f5f9 !important; color: #64748b !important; -webkit-text-fill-color: #64748b !important; }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
-}
-
-/* Force all inputs to have dark text on white background globally */
-input, select, textarea {
-  color: #1e293b !important;
-  background-color: #ffffff !important;
-  -webkit-text-fill-color: #1e293b !important;
-  color-scheme: light !important;
-}
-
-/* Keep readonly/disabled fields looking slightly different */
-input:read-only, textarea:read-only, input:disabled, select:disabled {
-  background-color: #f1f5f9 !important;
-  color: #64748b !important;
-  -webkit-text-fill-color: #64748b !important;
-}
-
-/* Fix for the Ramp Sheet specifically */
-.ramp-sheet input, .ramp-sheet textarea, .ramp-sheet select {
-  color: #000000 !important;
-  -webkit-text-fill-color: #000000 !important;
-}
-.ramp-sheet input[readonly], .ramp-sheet textarea[readonly] {
-  color: #475569 !important;
-  -webkit-text-fill-color: #475569 !important;
-}
+.ramp-sheet input, .ramp-sheet textarea, .ramp-sheet select { color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
+.ramp-sheet input[readonly], .ramp-sheet textarea[readonly] { color: #475569 !important; -webkit-text-fill-color: #475569 !important; }
 
 /* ==========================================
-   REPORTS PRINT STYLES (LANDSCAPE)
+   PRINT STYLES: REPORTS & BIRD COUNT (A4 Landscape)
    ========================================== */
 @page report-landscape {
   size: A4 landscape;
-  margin: 2mm;
+  margin: 5mm;
+}
+
+@page bird-count-landscape {
+  size: A4 landscape;
+  margin: 10mm;
 }
 
 @media print {
-  /* Force the report to use the landscape named page */
+  /* Force landscape for reports */
   body.printing-report .page-content {
     page: report-landscape;
   }
 
-  body.printing-report * {
-    visibility: hidden;
-  }
-  
-  body.printing-report .page-content,
-  body.printing-report .page-content * {
-    visibility: visible;
-  }
+  body.printing-report * { visibility: hidden; }
+  body.printing-report .page-content, body.printing-report .page-content * { visibility: visible; }
+  body.printing-report .page-content { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; margin: 0 !important; }
+  body.printing-report .no-print, body.printing-report .staff-header, body.printing-report .ops-tabs { display: none !important; }
+  body.printing-report .dash-card { border: none !important; box-shadow: none !important; padding: 0 !important; background: #fff !important; }
+  body.printing-report table { width: 100% !important; table-layout: auto !important; font-size: 8px !important; }
+  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 2px 4px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; white-space: normal !important; }
+  body.printing-report .dfis-print-table table { font-size: 5.5px !important; }
+  body.printing-report .dfis-print-table th, body.printing-report .dfis-print-table td { padding: 0px 1px !important; word-break: break-all !important; }
 
-  body.printing-report .page-content {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  /* Hide UI elements */
-  body.printing-report .no-print,
-  body.printing-report .staff-header,
-  body.printing-report .ops-tabs,
-  body.printing-report .sidebar,
-  body.printing-report .main-app-header,
-  body.printing-report .top-tabs-container {
-    display: none !important;
-  }
-
-  /* Format the report card and tables */
-  body.printing-report .dash-card {
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    background: #fff !important;
-  }
-
-  body.printing-report table {
-    width: 100% !important;
-    table-layout: auto !important;
-    font-size: 8px !important;
-  }
-
-  body.printing-report th,
-  body.printing-report td {
-    border: 1px solid #000 !important;
-    padding: 2px 4px !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-    white-space: normal !important; 
-  }
-
-  /* DFIS SPECIFIC FIX */
-  body.printing-report .dfis-print-table table {
-    font-size: 5.5px !important;
-  }
-  
-  body.printing-report .dfis-print-table th,
-  body.printing-report .dfis-print-table td {
-    padding: 0px 1px !important;
-    word-break: break-all !important;
-  }
-
-  body.printing-report .roster-title,
-  body.printing-report .title-container {
-    margin-bottom: 10px !important;
-  }
-}
-
-/* ==========================================
-   BIRD COUNT PRINT STYLES (2 Pages Landscape)
-   ========================================== */
-@page bird-count-landscape {
-  size: A4 landscape;
-  margin: 10mm;
-}
-
-@media print {
+  /* Force landscape for Bird Count */
   body.printing-bird-count .page-content {
     page: bird-count-landscape;
   }
   
-  body.printing-bird-count * {
-    visibility: hidden;
-  }
+  body.printing-bird-count * { visibility: hidden; }
+  body.printing-bird-count .page-content, body.printing-bird-count .page-content * { visibility: visible; }
+  body.printing-bird-count .page-content { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; margin: 0 !important; }
+  body.printing-bird-count .no-print { display: none !important; }
   
-  body.printing-bird-count .page-content,
-  body.printing-bird-count .page-content * {
-    visibility: visible;
-  }
-
-  body.printing-bird-count .page-content {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  body.printing-bird-count .no-print {
-    display: none !important;
-  }
-
-  /* Force Page 2 to break onto a new page */
-  .bird-count-page-2 {
-    page-break-before: always;
-    break-before: page;
-  }
-}
-/* ==========================================
-   BIRD COUNT PRINT STYLES (A4 Landscape)
-   ========================================== */
-@page bird-count-landscape {
-  size: A4 landscape;
-  margin: 10mm;
-}
-
-@media print {
-  body.printing-bird-count .page-content {
-    page: bird-count-landscape;
-  }
-  
-  body.printing-bird-count * {
-    visibility: hidden;
-  }
-  
-  body.printing-bird-count .page-content,
-  body.printing-bird-count .page-content * {
-    visibility: visible;
-  }
-
-  body.printing-bird-count .page-content {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  body.printing-bird-count .no-print {
-    display: none !important;
-  }
-
-  /* Force Page 2 to break onto a new page */
+  /* Page break for the Bird Count */
   body.printing-bird-count .bird-count-page-2 {
     page-break-before: always;
     break-before: page;
   }
 
-  /* Ensure tables fit the landscape page */
-  body.printing-bird-count table {
-    width: 100% !important;
-    table-layout: auto !important;
-    font-size: 10px !important;
-  }
-  
-  body.printing-bird-count th, body.printing-bird-count td {
-    padding: 4px !important;
-    border: 1px solid #000 !important;
-  }
+  body.printing-bird-count table { width: 100% !important; table-layout: auto !important; font-size: 10px !important; }
+  body.printing-bird-count th, body.printing-bird-count td { padding: 4px !important; border: 1px solid #000 !important; }
 }
