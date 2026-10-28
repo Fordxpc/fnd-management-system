@@ -66,7 +66,25 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
-    
+      
+      await env.DB.prepare(`
+        INSERT INTO staff (
+          id, sn, name, email, personalEmail, nid, joinDate, phone, gender, 
+          department, position, isSMT, balanceVisible, notes, basicSalary, 
+          dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        id, body.sn || '', body.name, body.email, body.personalEmail || '', 
+        body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
+        body.department, body.position || '', body.isSMT ? 1 : 0, body.balanceVisible ? 1 : 0, 
+        body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
+        body.holidayAllowanceRate || 0, body.bankAccount || '', 'active', createdAt, 9999
+      ).run();
+
+      context.waitUntil(backupToFirebase('staff', id, { ...body, status: 'active', createdAt }));
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (url.pathname.startsWith("/api/staff/") && method === "PUT") {
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
@@ -89,24 +107,6 @@ export const onRequest = async (context: any) => {
 
       context.waitUntil(backupToFirebase('staff', id!, { ...body, updatedAt }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-      
-      await env.DB.prepare(`
-        INSERT INTO staff (
-          id, sn, name, email, personalEmail, nid, joinDate, phone, gender, 
-          department, position, isSMT, balanceVisible, notes, basicSalary, 
-          dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        id, body.sn || '', body.name, body.email, body.personalEmail || '', 
-        body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
-        body.department, body.position || '', body.isSMT ? 1 : 0, body.balanceVisible ? 1 : 0, 
-        body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
-        body.holidayAllowanceRate || 0, body.bankAccount || '', 'active', createdAt, 9999
-      ).run();
-
-      context.waitUntil(backupToFirebase('staff', id, { ...body, status: 'active', createdAt }));
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (url.pathname.startsWith("/api/staff/") && method === "DELETE") {
@@ -330,11 +330,11 @@ export const onRequest = async (context: any) => {
 
     if (url.pathname === "/api/users/sync" && method === "POST") {
       const body: any = await request.json();
-      const existing = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(body.email).first();
+      const existing: any = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(body.email).first();
       if (existing) {
-        await env.DB.prepare(`UPDATE users SET role = ?, department = ? WHERE email = ?`).bind(body.role, body.department, body.email).run();
+        await env.DB.prepare(`UPDATE users SET role = ?, department = ?, name = ?, position = ? WHERE email = ?`).bind(body.role, body.department, body.name || '', body.position || '', body.email).run();
       } else {
-        await env.DB.prepare(`INSERT INTO users (id, email, role, department) VALUES (?, ?, ?, ?)`).bind(body.uid, body.email, body.role, body.department).run();
+        await env.DB.prepare(`INSERT INTO users (id, email, role, department, name, position) VALUES (?, ?, ?, ?, ?, ?)`).bind(body.uid, body.email, body.role, body.department, body.name || '', body.position || '').run();
       }
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -353,6 +353,45 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ==========================================
+    // CREATE FIREBASE AUTH USER & PRE-REGISTER
+    // ==========================================
+    if (url.pathname === "/api/users/create-auth" && method === "POST") {
+      const body: any = await request.json();
+      const { email, password, role, department, name, position } = body;
+
+      if (!email || !password) {
+        return new Response(JSON.stringify({ message: "Email and password are required" }), { status: 400, headers: corsHeaders });
+      }
+
+      const firebaseUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`;
+      
+      const firebaseRes = await fetch(firebaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, returnSecureToken: false })
+      });
+
+      const firebaseData: any = await firebaseRes.json();
+
+      if (firebaseData.error) {
+        let msg = firebaseData.error.message;
+        if (msg === 'EMAIL_EXISTS') msg = 'This email is already registered in Firebase.';
+        if (msg === 'WEAK_PASSWORD : Password should be at least 6 characters') msg = 'Password must be at least 6 characters.';
+        return new Response(JSON.stringify({ message: msg }), { status: 400, headers: corsHeaders });
+      }
+
+      const id = crypto.randomUUID();
+      await env.DB.prepare(`
+        INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        id, email, role, department, name || '', position || '', new Date().toISOString(), 'Admin Panel'
+      ).run();
+
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (url.pathname === "/api/user-presets" && method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM user_presets").all();
       return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -361,7 +400,7 @@ export const onRequest = async (context: any) => {
     if (url.pathname === "/api/user-presets" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await env.DB.prepare(`INSERT OR REPLACE INTO user_presets (id, email, role, department, createdAt, createdBy) VALUES (?, ?, ?, ?, ?, ?)`).bind(id, body.email, body.role, body.department, new Date().toISOString(), body.createdBy || '').run();
+      await env.DB.prepare(`INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, body.email, body.role, body.department, body.name || '', body.position || '', new Date().toISOString(), body.createdBy || '').run();
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -532,7 +571,6 @@ export const onRequest = async (context: any) => {
         VALUES (?, ?, ?, ?, ?, ?)
       `).bind(id, body.date || '', body.fltNo || '', body.acReg || '', JSON.stringify(body), new Date().toISOString()).run();
 
-      // 🔥 SYNC FLIGHT STATUS AND TIMES TO THE FLIGHTS TABLE 🔥
       if (body.fltNo && body.date) {
         let newStatus = 'Scheduled';
         if (body.atd) newStatus = 'Departed';
@@ -560,7 +598,6 @@ export const onRequest = async (context: any) => {
         WHERE id = ?
       `).bind(body.date || '', body.fltNo || '', body.acReg || '', JSON.stringify(body), new Date().toISOString(), id).run();
 
-      // 🔥 SYNC FLIGHT STATUS AND TIMES TO THE FLIGHTS TABLE 🔥
       if (body.fltNo && body.date) {
         let newStatus = 'Scheduled';
         if (body.atd) newStatus = 'Departed';

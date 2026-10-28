@@ -48,10 +48,11 @@ function UsersPage() {
   const [deletePresetTarget, setDeletePresetTarget] = useState<{ id: string, email: string } | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
 
+  // Form States (Updated for Firebase Auth Creation)
   const [showPresetForm, setShowPresetForm] = useState<boolean>(false);
-  const [presetEmail, setPresetEmail] = useState<string>('');
-  const [presetRole, setPresetRole] = useState<string>('staff');
-  const [presetDept, setPresetDept] = useState<string>('Ground Operations');
+  const [formData, setFormData] = useState({
+    name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations'
+  });
   const [savingPreset, setSavingPreset] = useState<boolean>(false);
 
   const fetchData = useCallback(async () => {
@@ -124,33 +125,39 @@ function UsersPage() {
   const handleSendReset = (email: string) => setResetPwTarget(email);
   const handleDeletePreset = (id: string, email: string) => setDeletePresetTarget({ id, email });
 
-  const handleAddPreset = async (e: any) => {
+  const handleCreateUser = async (e: any) => {
     e.preventDefault();
     if (!canEdit) return;
     
-    const email = presetEmail.trim().toLowerCase();
-    if (!email) { toast.error('Email is required'); return; }
-    if (!email.includes('@')) { toast.error('Please enter a valid email address'); return; }
+    const email = formData.email.trim().toLowerCase();
+    if (!email || !formData.password) { toast.error('Email and Password are required'); return; }
+    if (formData.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
 
     if (users.some((u) => (u.email || '').toLowerCase() === email)) {
-      toast.error('This user has already logged in and has an active account.');
-      return;
-    }
-    if (presets.some((p) => (p.email || '').toLowerCase() === email)) {
-      toast.error('This email is already pre-registered.');
-      return;
+      toast.error('This user already exists in the active database.'); return;
     }
 
     setSavingPreset(true);
     try {
-      await apiFetch('/user-presets', {
+      await apiFetch('/users/create-auth', {
         method: 'POST',
-        body: JSON.stringify({ email, role: presetRole, department: presetDept, createdBy: profile?.email || '' })
+        body: JSON.stringify({ 
+          email, 
+          password: formData.password,
+          role: formData.role,
+          department: formData.department,
+          name: formData.name,
+          position: formData.position
+        })
       });
-      toast.success(`Pre-registered!`);
-      setPresetEmail(''); setPresetRole('staff'); setPresetDept('Ground Operations'); setShowPresetForm(false);
+      
+      toast.success(`User ${email} created successfully!`);
+      setFormData({ name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations' });
+      setShowPresetForm(false);
       fetchData();
-    } catch (err: any) { toast.error('Error: ' + err.message); }
+    } catch (err: any) { 
+      toast.error('Error: ' + err.message); 
+    }
     setSavingPreset(false);
   };
 
@@ -162,52 +169,54 @@ function UsersPage() {
         <h2>User Management { !canEdit && <span style={{ fontSize: '14px', color: '#dc2626', fontWeight: 'normal' }}>(View Only)</span> }</h2>
         {canEdit && (
           <button className="add-staff-btn" onClick={() => setShowPresetForm(!showPresetForm)}>
-            {showPresetForm ? 'Cancel' : '+ Add User Login'}
+            {showPresetForm ? 'Cancel' : '+ Create New User'}
           </button>
         )}
       </div>
 
       {showPresetForm && canEdit && (
-        <form className="staff-form" onSubmit={handleAddPreset}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            ➕ Pre-register User (before they log in)
+        <form className="staff-form" onSubmit={handleCreateUser}>
+          <div style={{ gridColumn: 'span 2', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
+            ➕ Create New User (Adds to Firebase Auth & Database)
           </div>
-          <input type="email" placeholder="Email (must match their Firebase login) *" value={presetEmail} onChange={(e) => setPresetEmail(e.target.value)} required />
-          <select value={presetRole} onChange={(e) => setPresetRole(e.target.value)} style={selectStyle}>
+          
+          <input placeholder="Full Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+          <input placeholder="Designation (e.g. Operations Officer)" value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} />
+          
+          <input type="email" placeholder="Work Email *" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
+          <input type="text" placeholder="Temporary Password * (min 6 chars)" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required />
+          
+          <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>
             {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
           </select>
-          <select value={presetDept} onChange={(e) => setPresetDept(e.target.value)} style={selectStyle}>
+          <select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={selectStyle}>
             {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-          <button type="submit" disabled={savingPreset}>{savingPreset ? 'Saving...' : 'Pre-register User'}</button>
+          
+          <button type="submit" disabled={savingPreset} style={{ gridColumn: 'span 2', background: '#2563eb', color: 'white' }}>
+            {savingPreset ? 'Creating...' : 'Create User Account'}
+          </button>
         </form>
       )}
 
       {presets.length > 0 && (
         <div className="collapsible-card">
           <div className="collapsible-header" style={{ cursor: 'default' }}>
-            <span><strong>⏳ Pre-registered (awaiting first login)</strong></span>
+            <span><strong>⏳ Pre-registered Users (Waiting for first login)</strong></span>
           </div>
           <div className="collapsible-body" style={{ overflowX: 'auto' }}>
             <table>
               <thead>
-                <tr>
-                  <th>Name</th><th>Email</th><th>Role</th><th>Department</th>
-                  {canEdit && <th>Actions</th>}
-                </tr>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr>
               </thead>
               <tbody>
                 {presets.map((p) => (
                   <tr key={p.id}>
-                    <td><strong>{getStaffName(p.email)}</strong></td>
+                    <td><strong>{p.name || getStaffName(p.email)}</strong></td>
                     <td>{p.email}</td>
                     <td><span style={{ textTransform: 'uppercase', fontSize: '11px' }}>{p.role}</span></td>
                     <td>{p.department}</td>
-                    {canEdit && (
-                      <td>
-                        <button className="delete-btn" onClick={() => handleDeletePreset(p.id, p.email)}>Remove</button>
-                      </td>
-                    )}
+                    {canEdit && <td><button className="delete-btn" onClick={() => handleDeletePreset(p.id, p.email)}>Remove</button></td>}
                   </tr>
                 ))}
               </tbody>
@@ -222,38 +231,23 @@ function UsersPage() {
         </div>
         <div className="collapsible-body" style={{ overflowX: 'auto' }}>
           {users.length === 0 ? (
-            <div className="empty-state"><p>No users have logged in yet.</p></div>
+            <div className="empty-state"><p>No active users yet.</p></div>
           ) : (
             <div style={{ minWidth: '600px' }}>
               <table>
-                <thead>
-                  <tr>
-                    <th>Name</th><th>Email</th><th>Role</th><th>Department</th>
-                    {canEdit && <th>Actions</th>}
-                  </tr>
-                </thead>
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id}>
-                      <td><strong>{getStaffName(u.email)}</strong></td>
+                      <td><strong>{u.name || getStaffName(u.email)}</strong></td>
                       <td>{u.email}</td>
                       <td>
-                        <select
-                          value={u.role || 'staff'}
-                          onChange={(e) => handleChangeRole(u.id, e.target.value)}
-                          disabled={!canEdit}
-                          style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}
-                        >
+                        <select value={u.role || 'staff'} onChange={(e) => handleChangeRole(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>
                           {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                         </select>
                       </td>
                       <td>
-                        <select
-                          value={u.department || 'Ground Operations'}
-                          onChange={(e) => handleChangeDept(u.id, e.target.value)}
-                          disabled={!canEdit}
-                          style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}
-                        >
+                        <select value={u.department || 'Ground Operations'} onChange={(e) => handleChangeDept(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>
                           {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                         </select>
                       </td>
@@ -273,68 +267,25 @@ function UsersPage() {
         </div>
       </div>
 
-      <ConfirmDialog 
-        isOpen={!!resetPwTarget}
-        title="Send Password Reset?"
-        message={`Send a password reset email to ${resetPwTarget}?`}
-        confirmText="Send"
-        isDanger={false}
-        onConfirm={async () => {
+      <ConfirmDialog isOpen={!!resetPwTarget} title="Send Password Reset?" message={`Send a password reset email to ${resetPwTarget}?`} confirmText="Send" isDanger={false} onConfirm={async () => {
           if (!resetPwTarget) return;
-          try {
-            await sendPasswordResetEmail(auth, resetPwTarget);
-            toast.success(`Reset email sent to ${resetPwTarget}.`);
-          } catch (err: any) {
-            toast.error(err.code === 'auth/user-not-found' ? 'User not in Firebase Auth.' : err.message);
-          }
+          try { await sendPasswordResetEmail(auth, resetPwTarget); toast.success(`Reset email sent.`); } catch (err: any) { toast.error(err.message); }
           setResetPwTarget(null);
-        }}
-        onCancel={() => setResetPwTarget(null)}
-      />
+        }} onCancel={() => setResetPwTarget(null)} />
 
-      <ConfirmDialog 
-        isOpen={!!deleteUserTarget}
-        title="Remove User?"
-        message={`Remove ${deleteUserTarget?.email} from the access list?`}
-        confirmText="Remove"
-        isDanger={true}
-        onConfirm={async () => {
+      <ConfirmDialog isOpen={!!deleteUserTarget} title="Remove User?" message={`Remove ${deleteUserTarget?.email} from the database?`} confirmText="Remove" isDanger={true} onConfirm={async () => {
           if (!deleteUserTarget) return;
-          try {
-            await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' });
-            toast.success('User removed.');
-            fetchData();
-          } catch (err: any) { toast.error('Error: ' + err.message); }
+          try { await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' }); toast.success('User removed.'); fetchData(); } catch (err: any) { toast.error(err.message); }
           setDeleteUserTarget(null);
-        }}
-        onCancel={() => setDeleteUserTarget(null)}
-      />
+        }} onCancel={() => setDeleteUserTarget(null)} />
 
-      <ConfirmDialog 
-        isOpen={!!deletePresetTarget}
-        title="Remove Pre-registration?"
-        message={`Remove pre-registration for ${deletePresetTarget?.email}?`}
-        confirmText="Remove"
-        isDanger={true}
-        onConfirm={async () => {
+      <ConfirmDialog isOpen={!!deletePresetTarget} title="Remove Pre-registration?" message={`Remove pre-registration for ${deletePresetTarget?.email}?`} confirmText="Remove" isDanger={true} onConfirm={async () => {
           if (!deletePresetTarget) return;
-          try {
-            await apiFetch(`/user-presets/${deletePresetTarget.id}`, { method: 'DELETE' });
-            toast.success('Pre-registration removed.');
-            fetchData();
-          } catch (err: any) { toast.error('Error: ' + err.message); }
+          try { await apiFetch(`/user-presets/${deletePresetTarget.id}`, { method: 'DELETE' }); toast.success('Pre-registration removed.'); fetchData(); } catch (err: any) { toast.error(err.message); }
           setDeletePresetTarget(null);
-        }}
-        onCancel={() => setDeletePresetTarget(null)}
-      />
+        }} onCancel={() => setDeletePresetTarget(null)} />
 
-      {editingUser && (
-        <UserEditModal 
-          user={editingUser} 
-          onClose={() => setEditingUser(null)} 
-          onSaved={fetchData} 
-        />
-      )}
+      {editingUser && <UserEditModal user={editingUser} onClose={() => setEditingUser(null)} onSaved={fetchData} />}
     </div>
   );
 }
