@@ -96,21 +96,9 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
       const fodData = getData(6); const birdData = getData(7);
 
-      // Deduplicate roster by staffId + date. If duplicates exist, prioritize 'scheduled'.
-      const rosterMap = new Map();
-      rosterData.forEach((item: any) => {
-        const key = `${item.staffId}-${item.date}`;
-        if (!rosterMap.has(key) || item.status === 'scheduled') {
-          rosterMap.set(key, item);
-        }
-      });
-      const uniqueRoster = Array.from(rosterMap.values());
-      
-      const uniqueLeaves = Array.from(new Map(leaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}`, item])).values());
-
       setStaff(staffData); 
-      setRoster(uniqueRoster); 
-      setLeaveReqs(uniqueLeaves); 
+      setRoster(rosterData); 
+      setLeaveReqs(leaveData); 
       setOtEntries(otData);
       setFlights(flightsData); 
       setLiveRamp(rampDraft);
@@ -156,28 +144,48 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   
-  // --- TODAY'S DUTY DEDUPLICATION & LEAVE EXCLUSION ---
-  // 1. Get a strict list of approved leaves for today
-  const approvedLeavesToday = leaveReqs.filter(l => l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr);
+  // --- STRICT TODAY'S DUTY DEDUPLICATION & LEAVE EXCLUSION ---
   
-  // 2. Create a Set of IDs that MUST be excluded from Today's Duty
-  const excludeFromDuty = new Set();
-  approvedLeavesToday.forEach(l => excludeFromDuty.add(l.staffId));
-  roster.forEach(r => {
-    if (r.date === todayStr && r.status !== 'scheduled' && r.status !== 'OFF DAY') {
-      excludeFromDuty.add(r.staffId);
+  // 1. Deduplicate roster: Prefer leave entries over scheduled shifts
+  const rosterMap = new Map();
+  roster.forEach((item: any) => {
+    const key = item.staffId || item.staffName; // Fallback to name just in case ID is missing
+    if (!rosterMap.has(key) || item.status !== 'scheduled') {
+      rosterMap.set(key, item);
     }
   });
+  const uniqueRoster = Array.from(rosterMap.values());
 
-  // 3. Filter shifts (strict exclusion & deduplication)
-  const rawShifts = roster.filter((r) => r.date === todayStr && r.status === 'scheduled' && !excludeFromDuty.has(r.staffId));
+  // 2. Identify everyone who is on approved leave today
+  const approvedLeavesToday = leaveReqs.filter(l => l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr);
+  const onLeaveIds = new Set();
+  const onLeaveNames = new Set();
   
-  // Deduplicate by staffId (ensures one person doesn't appear twice)
-  const shiftsMap = new Map();
-  rawShifts.forEach(r => shiftsMap.set(r.staffId, r));
-  const todayShiftsAll = Array.from(shiftsMap.values());
+  approvedLeavesToday.forEach(l => {
+    if (l.staffId) onLeaveIds.add(l.staffId);
+    if (l.staffName) onLeaveNames.add(l.staffName.toLowerCase());
+  });
 
-  const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
+  // 3. Filter Today's Duty (must be scheduled AND NOT on leave)
+  const rawShifts = uniqueRoster.filter((r: any) => {
+    if (r.date !== todayStr || r.status !== 'scheduled') return false;
+    if (r.staffId && onLeaveIds.has(r.staffId)) return false;
+    if (r.staffName && onLeaveNames.has(r.staffName.toLowerCase())) return false;
+    return true;
+  });
+
+  // 4. Final deduplication for shifts (by name/id)
+  const finalShiftsMap = new Map();
+  rawShifts.forEach((r: any) => finalShiftsMap.set(r.staffId || r.staffName, r));
+  const todayShiftsAll = Array.from(finalShiftsMap.values());
+
+  // 5. Filter for On Leave Today section
+  const rawLeaveToday = uniqueRoster.filter((r: any) => r.date === todayStr && r.status !== 'scheduled' && r.status !== 'OFF DAY');
+  
+  // 6. Final deduplication for leaves
+  const finalLeaveMap = new Map();
+  rawLeaveToday.forEach((r: any) => finalLeaveMap.set(r.staffId || r.staffName, r));
+  const todayLeaveAll = Array.from(finalLeaveMap.values());
   
   const pendingLeave = leaveReqs.filter((r) => r.status?.toLowerCase() === 'pending');
 

@@ -41,26 +41,34 @@ export function AuthProvider({ children }: any) {
             let updates: any = {};
             let needsUpdate = false;
 
-            // Only apply staffDept if the user doesn't have a department set yet
-            if (staffDept && !userData.department) { 
-              updates.department = staffDept; 
-              needsUpdate = true; 
-            }
+            // Only update role if it's currently 'staff' and they qualify for SMT/Manager
             if (userData.role === 'staff') {
               if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
               else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }
             }
             
-            // Ensure name and position are synced
-            const staffName = staffData?.name || userData.name || currentUser.email?.split('@')[0] || 'User';
-            const staffPosition = staffData?.position || userData.position || 'Staff';
-            if (userData.name !== staffName) { updates.name = staffName; needsUpdate = true; }
-            if (userData.position !== staffPosition) { updates.position = staffPosition; needsUpdate = true; }
+            // DO NOT overwrite department if it exists. Only set it if missing.
+            if (!userData.department) {
+              updates.department = staffDept || 'Ground Operations';
+              needsUpdate = true;
+            }
+            
+            // DO NOT overwrite name/position if they exist.
+            if (!userData.name) { 
+              updates.name = staffData?.name || currentUser.email?.split('@')[0] || 'User'; 
+              needsUpdate = true; 
+            }
+            if (!userData.position) { 
+              updates.position = staffData?.position || 'Staff'; 
+              needsUpdate = true; 
+            }
 
             if (needsUpdate) {
               await updateDoc(userRef, updates);
               finalProfile = { ...userData, ...updates };
-            } else finalProfile = userData;
+            } else {
+              finalProfile = userData;
+            }
           } else {
             let presetDoc: any = null; let presetId: string | null = null;
             try {
