@@ -364,8 +364,14 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ message: "Email and password are required" }), { status: 400, headers: corsHeaders });
       }
 
+      // Check if user is already ACTIVE in our system
+      const activeUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+      if (activeUser) {
+        return new Response(JSON.stringify({ message: "This user is already active in the system." }), { status: 400, headers: corsHeaders });
+      }
+
+      // Try to create in Firebase Auth
       const firebaseUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`;
-      
       const firebaseRes = await fetch(firebaseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -375,12 +381,24 @@ export const onRequest = async (context: any) => {
       const firebaseData: any = await firebaseRes.json();
 
       if (firebaseData.error) {
+        if (firebaseData.error.message === 'EMAIL_EXISTS') {
+          // User exists in Firebase but not active in our DB. 
+          // We will just add them to the pre-registration list.
+          const id = crypto.randomUUID();
+          await env.DB.prepare(`
+            INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `).bind(id, email, role, department, name || '', position || '', new Date().toISOString(), 'Admin Panel').run();
+
+          return new Response(JSON.stringify({ success: true, message: "Existing Firebase user added to pre-registrations." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
         let msg = firebaseData.error.message;
-        if (msg === 'EMAIL_EXISTS') msg = 'This email is already registered in Firebase.';
         if (msg === 'WEAK_PASSWORD : Password should be at least 6 characters') msg = 'Password must be at least 6 characters.';
         return new Response(JSON.stringify({ message: msg }), { status: 400, headers: corsHeaders });
       }
 
+      // If Firebase creation was successful, save to D1
       const id = crypto.randomUUID();
       await env.DB.prepare(`
         INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) 
@@ -389,9 +407,12 @@ export const onRequest = async (context: any) => {
         id, email, role, department, name || '', position || '', new Date().toISOString(), 'Admin Panel'
       ).run();
 
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, id, message: "User created and pre-registered." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // ==========================================
+    // USER PRESETS MODULE
+    // ==========================================
     if (url.pathname === "/api/user-presets" && method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM user_presets").all();
       return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -402,6 +423,14 @@ export const onRequest = async (context: any) => {
       const id = crypto.randomUUID();
       await env.DB.prepare(`INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, body.email, body.role, body.department, body.name || '', body.position || '', new Date().toISOString(), body.createdBy || '').run();
       return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/user-presets/") && method === "PUT") {
+      const id = url.pathname.split("/").pop();
+      const body: any = await request.json();
+      await env.DB.prepare(`UPDATE user_presets SET role = ?, department = ?, name = ?, position = ? WHERE id = ?`)
+        .bind(body.role, body.department, body.name || '', body.position || '', id).run();
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (url.pathname.startsWith("/api/user-presets/") && method === "DELETE") {

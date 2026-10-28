@@ -17,14 +17,17 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
   const [position, setPosition] = useState(user.position || '');
   const [saving, setSaving] = useState(false);
 
+  const isPreset = user.status === 'Pre-registered';
+  const endpoint = isPreset ? `/user-presets/${user.id}` : `/users/${user.id}`;
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await apiFetch(`/users/${user.id}`, {
+      await apiFetch(endpoint, {
         method: 'PUT',
         body: JSON.stringify({ role, department: dept, name, position })
       });
-      toast.success('User account updated successfully');
+      toast.success(isPreset ? 'Pre-registration updated' : 'User account updated');
       onSaved();
       onClose();
     } catch (err: any) {
@@ -36,7 +39,10 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', padding: '24px' }}>
-        <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1e293b' }}>Edit User: {user.email}</h3>
+        <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1e293b' }}>
+          {isPreset ? 'Edit Pre-registration' : 'Edit Active User'}: <br/>
+          <span style={{ fontSize: '14px', color: '#64748b' }}>{user.email}</span>
+        </h3>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>

@@ -11,23 +11,11 @@ const VIEW_ROLES = ['developer', 'manager', 'admin', 'owner', 'smt'];
 const EDIT_ROLES = ['developer', 'manager', 'admin', 'owner'];
 const ALL_ROLES = ['developer', 'manager', 'admin', 'smt', 'staff'];
 
-const DEPARTMENTS = [
-  'Ground Operations',
-  'Maintenance',
-  'Security',
-  'Fire & Rescue',
-  'Administration',
-  'Safety', 
-];
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 const selectStyle: React.CSSProperties = {
-  padding: '6px',
-  border: '1px solid #cbd5e1',
-  borderRadius: '4px',
-  fontSize: '12px',
-  background: '#ffffff',
-  color: '#1e293b',
-  colorScheme: 'light',
+  padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px',
+  background: '#ffffff', color: '#1e293b', colorScheme: 'light', width: '100%'
 };
 
 function UsersPage() {
@@ -56,16 +44,12 @@ function UsersPage() {
   const [savingPreset, setSavingPreset] = useState<boolean>(false);
 
   const fetchData = useCallback(async () => {
-    if (!canView) {
-      setLoading(false);
-      return;
-    }
+    if (!canView) { setLoading(false); return; }
     
     try {
       const [usersData, presetsData, staffData] = await Promise.all([
         apiFetch('/users'), apiFetch('/user-presets'), apiFetch('/staff')
       ]);
-      
       setUsers(usersData); 
       setPresets(presetsData); 
       setStaffList(staffData); 
@@ -82,14 +66,7 @@ function UsersPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  if (!canView) {
-    return (
-      <div className="page-content">
-        <h2>Access Denied</h2>
-        <p>You do not have permission to view this page.</p>
-      </div>
-    );
-  }
+  if (!canView) return <div className="page-content"><h2>Access Denied</h2><p>You do not have permission to view this page.</p></div>;
 
   const getStaffName = (email: string) => {
     if (!email) return '—';
@@ -139,7 +116,7 @@ function UsersPage() {
 
     setSavingPreset(true);
     try {
-      await apiFetch('/users/create-auth', {
+      const res = await apiFetch('/users/create-auth', {
         method: 'POST',
         body: JSON.stringify({ 
           email, 
@@ -151,7 +128,7 @@ function UsersPage() {
         })
       });
       
-      toast.success(`User ${email} created successfully!`);
+      toast.success(res.message || `User ${email} created successfully!`);
       setFormData({ name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations' });
       setShowPresetForm(false);
       fetchData();
@@ -176,31 +153,49 @@ function UsersPage() {
 
       {showPresetForm && canEdit && (
         <form className="staff-form" onSubmit={handleCreateUser}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '8px', fontWeight: 600, color: '#1e293b' }}>
+          <div style={{ gridColumn: 'span 2', marginBottom: '8px', fontWeight: 600, color: '#1e293b', fontSize: '16px' }}>
             ➕ Create New User (Adds to Firebase Auth & Database)
           </div>
           
-          <input placeholder="Full Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
-          <input placeholder="Designation (e.g. Operations Officer)" value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} />
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', display: 'block' }}>Full Name</label>
+            <input placeholder="e.g. Mohamed Fuadhu" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', display: 'block' }}>Designation</label>
+            <input placeholder="e.g. Operations Officer" value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} />
+          </div>
           
-          <input type="email" placeholder="Work Email *" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
-          <input type="text" placeholder="Temporary Password * (min 6 chars)" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required />
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', display: 'block' }}>Work Email *</label>
+            <input type="email" placeholder="email@funadhooairport.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required />
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', display: 'block' }}>Temporary Password *</label>
+            <input type="text" placeholder="Min 6 characters" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required />
+          </div>
           
-          <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>
-            {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-          <select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={selectStyle}>
-            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', display: 'block' }}>Role</label>
+            <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>
+              {ALL_ROLES.map((r) => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '4px', display: 'block' }}>Department</label>
+            <select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={selectStyle}>
+              {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
           
-          <button type="submit" disabled={savingPreset} style={{ gridColumn: 'span 2', background: '#2563eb', color: 'white' }}>
-            {savingPreset ? 'Creating...' : 'Create User Account'}
+          <button type="submit" disabled={savingPreset} style={{ gridColumn: 'span 2', background: '#2563eb', color: 'white', padding: '12px', fontSize: '14px', marginTop: '10px' }}>
+            {savingPreset ? 'Creating User...' : 'Create User Account'}
           </button>
         </form>
       )}
 
       {presets.length > 0 && (
-        <div className="collapsible-card">
+        <div className="collapsible-card" style={{ marginTop: '20px' }}>
           <div className="collapsible-header" style={{ cursor: 'default' }}>
             <span><strong>⏳ Pre-registered Users (Waiting for first login)</strong></span>
           </div>
@@ -214,9 +209,14 @@ function UsersPage() {
                   <tr key={p.id}>
                     <td><strong>{p.name || getStaffName(p.email)}</strong></td>
                     <td>{p.email}</td>
-                    <td><span style={{ textTransform: 'uppercase', fontSize: '11px' }}>{p.role}</span></td>
+                    <td><span style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>{p.role}</span></td>
                     <td>{p.department}</td>
-                    {canEdit && <td><button className="delete-btn" onClick={() => handleDeletePreset(p.id, p.email)}>Remove</button></td>}
+                    {canEdit && (
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <button className="edit-btn" onClick={() => setEditingUser({ ...p, status: 'Pre-registered' })} style={{ marginRight: '6px', padding: '4px 8px', fontSize: '11px' }}>✏️ Edit</button>
+                        <button className="delete-btn" onClick={() => handleDeletePreset(p.id, p.email)} style={{ padding: '4px 8px', fontSize: '11px' }}>Remove</button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -225,7 +225,7 @@ function UsersPage() {
         </div>
       )}
 
-      <div className="collapsible-card">
+      <div className="collapsible-card" style={{ marginTop: '20px' }}>
         <div className="collapsible-header" style={{ cursor: 'default' }}>
           <span><strong>👥 Active Users</strong></span>
         </div>
@@ -253,9 +253,9 @@ function UsersPage() {
                       </td>
                       {canEdit && (
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          <button className="edit-btn" onClick={() => setEditingUser(u)} style={{ marginRight: '6px' }}>✏️ Edit</button>
-                          <button className="reset-pw-btn" onClick={() => handleSendReset(u.email)}>📧 Reset PW</button>
-                          <button className="delete-btn" onClick={() => handleDelete(u.id, u.email)} style={{ marginLeft: '6px' }}>Remove</button>
+                          <button className="edit-btn" onClick={() => setEditingUser({ ...u, status: 'Active' })} style={{ marginRight: '6px', padding: '4px 8px', fontSize: '11px' }}>✏️ Edit</button>
+                          <button className="reset-pw-btn" onClick={() => handleSendReset(u.email)} style={{ padding: '4px 8px', fontSize: '11px' }}>📧 Reset PW</button>
+                          <button className="delete-btn" onClick={() => handleDelete(u.id, u.email)} style={{ marginLeft: '6px', padding: '4px 8px', fontSize: '11px' }}>Remove</button>
                         </td>
                       )}
                     </tr>
