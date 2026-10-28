@@ -26,7 +26,6 @@ export default function RWYLightsPage() {
   const canEdit = isDev || isManager || isSelectedInspector || isGroundOpsSMT;
   
   const [records, setRecords] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -34,7 +33,13 @@ export default function RWYLightsPage() {
   // Form State
   const [date, setDate] = useState(formatDate(new Date()));
   const [time, setTime] = useState(getCurrentTime());
-  const [weather, setWeather] = useState('');
+  
+  // Weather State
+  const [weatherVis, setWeatherVis] = useState('');
+  const [weatherCloud, setWeatherCloud] = useState('');
+  const [weatherWindDir, setWeatherWindDir] = useState('');
+  const [weatherWindSpd, setWeatherWindSpd] = useState('');
+  
   const [inspector, setInspector] = useState('');
   const [remarks, setRemarks] = useState('');
   
@@ -55,9 +60,8 @@ export default function RWYLightsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [recData, staffData] = await Promise.all([apiFetch('/lights'), apiFetch('/staff')]);
+      const recData = await apiFetch('/lights');
       setRecords(recData);
-      setStaffList(staffData);
       setLoading(false);
     } catch (err: any) { toast.error(err.message); setLoading(false); }
   }, []);
@@ -77,15 +81,28 @@ export default function RWYLightsPage() {
     e.preventDefault();
     if (!inspector) { toast.error('Select the inspector'); return; }
 
+    // Combine 4 weather fields into 1 string for the database
+    const finalWeather = `Vis: ${weatherVis || 'N/A'} | Cloud: ${weatherCloud || 'N/A'} | Wind: ${weatherWindDir || 'N/A'} ${weatherWindSpd || '0'}kts`;
+
     try {
       await apiFetch('/lights', {
         method: 'POST',
-        body: JSON.stringify({ date, time, weather, inspectorName: inspector, data: lights, remarks })
+        body: JSON.stringify({ 
+          date, 
+          time, 
+          weather: finalWeather, 
+          inspectorName: inspector, 
+          data: lights, 
+          remarks 
+        })
       });
       toast.success('Lights inspection saved!');
       setShowForm(false);
       setRemarks('');
-      setWeather('');
+      setWeatherVis('');
+      setWeatherCloud('');
+      setWeatherWindDir('');
+      setWeatherWindSpd('');
       fetchData();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -116,15 +133,54 @@ export default function RWYLightsPage() {
           <div style={{ gridColumn: 'span 2', fontWeight: 600, marginBottom: '8px' }}>Inspection Details</div>
           <div><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} required /></div>
           <div><label>Time</label><input type="time" value={time} onChange={e => setTime(e.target.value)} required /></div>
-          <div>
-            <label>Weather Condition</label>
-            <input type="text" placeholder="e.g. Clear, 10km visibility" value={weather} onChange={e => setWeather(e.target.value)} required />
+          
+          {/* Split Weather Condition into Grid */}
+          <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', background: '#f8fafc', padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Visibility</label>
+              <select value={weatherVis} onChange={e => setWeatherVis(e.target.value)} style={{ color: '#1e293b', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', width: '100%' }}>
+                <option value="">Select...</option>
+                <option value="Good">Good</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Poor">Poor</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Cloud</label>
+              <select value={weatherCloud} onChange={e => setWeatherCloud(e.target.value)} style={{ color: '#1e293b', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', width: '100%' }}>
+                <option value="">Select...</option>
+                <option value="SKC">Clear (SKC)</option>
+                <option value="FEW">Few (FEW)</option>
+                <option value="SCT">Scattered (SCT)</option>
+                <option value="BKN">Broken (BKN)</option>
+                <option value="OVC">Overcast (OVC)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Wind Dir</label>
+              <select value={weatherWindDir} onChange={e => setWeatherWindDir(e.target.value)} style={{ color: '#1e293b', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', width: '100%' }}>
+                <option value="">Select...</option>
+                <option value="N">N</option><option value="NE">NE</option><option value="E">E</option>
+                <option value="SE">SE</option><option value="S">S</option><option value="SW">SW</option>
+                <option value="W">W</option><option value="NW">NW</option><option value="VRB">VRB</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Wind Spd (kts)</label>
+              <input type="number" placeholder="e.g. 10" value={weatherWindSpd} onChange={e => setWeatherWindSpd(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1' }} />
+            </div>
           </div>
+
           <div>
             <label>Inspected By</label>
             <select value={inspector} onChange={e => setInspector(e.target.value)} required style={{ color: '#1e293b' }}>
               <option value="">Select Staff...</option>
-              {staffList.map(s => <option key={s.id} value={s.name}>{s.name} ({s.department})</option>)}
+              {/* Use lightsInspectors array instead of all staffList */}
+              {lightsInspectors.map((s: any) => (
+                <option key={s.staffId} value={s.staffName}>
+                  {s.staffName} (Authorized)
+                </option>
+              ))}
             </select>
           </div>
 
@@ -241,7 +297,7 @@ export default function RWYLightsPage() {
                   <td>{r.date}</td>
                   <td>{r.time || '—'}</td>
                   <td><strong>{r.inspectorName}</strong></td>
-                  <td>{r.weather || '—'}</td>
+                  <td style={{ fontSize: '11px', maxWidth: '150px' }}>{r.weather || '—'}</td>
                   <td>{r.data.edge?.sideA || 0} / {r.data.edge?.sideB || 0}</td>
                   <td>{r.data.end?.rwy01 || 0} / {r.data.end?.rwy19 || 0}</td>
                   <td>{r.data.threshold?.rwy01 || 0} / {r.data.threshold?.rwy19 || 0}</td>
