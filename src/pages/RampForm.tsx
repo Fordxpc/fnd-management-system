@@ -35,14 +35,14 @@ function SplitInput({ prefix, label, formData, handleChange, isManager, onOpenKe
         <input
           type="text" id={`${prefix}${suffix}Pcs`}
           value={formData[`${prefix}${suffix}Pcs`] || ''} readOnly
-          onClick={() => onOpenKeypad(`${prefix}${suffix}Pcs`, 'numeric')}
+          onClick={() => isManager && onOpenKeypad(`${prefix}${suffix}Pcs`, 'numeric')}
           style={inputStyle}
         />
         <span style={{ fontWeight: 'bold', fontSize: '16px' }}>/</span>
         <input
           type="text" id={`${prefix}${suffix}Kg`}
           value={formData[`${prefix}${suffix}Kg`] || ''} readOnly
-          onClick={() => onOpenKeypad(`${prefix}${suffix}Kg`, 'numeric')}
+          onClick={() => isManager && onOpenKeypad(`${prefix}${suffix}Kg`, 'numeric')}
           style={inputStyle}
         />
       </div>
@@ -67,6 +67,13 @@ function SplitInput({ prefix, label, formData, handleChange, isManager, onOpenKe
 }
 
 export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
+  
+  // --- TIME POPUP STATE (For Start/Stop fields) ---
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [tempHour, setTempHour] = useState<string>('00');
+  const [tempMin, setTempMin] = useState<string>('00');
+
+  // --- IN-APP KEYBOARD STATE ---
   const [keypadTarget, setKeypadTarget] = useState<string | null>(null);
   const [keypadType, setKeypadType] = useState<'numeric' | 'alpha' | 'time'>('numeric');
   const [keypadValue, setKeypadValue] = useState('');
@@ -89,23 +96,54 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     return d;
   }, [formData]);
 
+  // --- TIME POPUP HANDLERS (For Start/Stop) ---
+  const executeFillNow = () => {
+    if (!confirmId) return;
+    const finalTime = `${tempHour}:${tempMin}`;
+    handleChange({ target: { id: confirmId, value: finalTime } } as any);
+    setConfirmId(null);
+  };
+
+  const handleClearField = () => {
+    if (!confirmId) return;
+    handleChange({ target: { id: confirmId, value: '' } } as any);
+    setConfirmId(null);
+  };
+
+  const handleTimeClick = (id: string) => {
+    if (!isManager) return;
+    const now = new Date();
+    setTempHour(String(now.getHours()).padStart(2, '0'));
+    setTempMin(String(now.getMinutes()).padStart(2, '0'));
+    setConfirmId(id);
+  };
+
+  const preventKeyboard = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.blur();
+  };
+
+  // --- CUSTOM KEYPAD HANDLERS ---
   const openKeypad = (id: string, type: 'numeric' | 'alpha' | 'time') => {
     if (!isManager) return;
     setKeypadTarget(id);
     setKeypadType(type);
-    setKeypadValue(formData[id] || '');
+    // Strip colon if it's an existing time value
+    const currentVal = formData[id] || '';
+    setKeypadValue(type === 'time' ? currentVal.replace(/[^0-9]/g, '') : currentVal);
   };
 
   const handleKeypadPress = (key: string) => {
     if (key === 'OK') {
       let finalVal = keypadValue;
+      
+      // Auto-format time if the keypad type is 'time'
       if (keypadType === 'time') {
-        // Auto-format time (e.g., 0830 -> 08:30)
         if (finalVal.length === 4) finalVal = finalVal.slice(0, 2) + ':' + finalVal.slice(2);
         else if (finalVal.length === 3) finalVal = '0' + finalVal.slice(0, 1) + ':' + finalVal.slice(1);
         else if (finalVal.length === 2) finalVal = finalVal + ':00';
         else if (finalVal.length === 1) finalVal = '0' + finalVal + ':00';
       }
+
       handleChange({ target: { id: keypadTarget, value: finalVal } } as any);
       setKeypadTarget(null);
     } else if (key === 'C') {
@@ -114,7 +152,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
       setKeypadValue(prev => prev.slice(0, -1));
     } else {
       if (keypadType === 'numeric' && keypadValue.length >= 6) return;
-      if (keypadType === 'time' && keypadValue.length >= 4) return;
+      if (keypadType === 'time' && keypadValue.length >= 4) return; // Max 4 digits for HHMM
       setKeypadValue(prev => prev + key);
     }
   };
@@ -144,16 +182,10 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                     onChange={handleChange}
                     disabled={!isManager}
                     style={{
-                      borderBottom: '1px solid #000',
-                      background: 'transparent',
-                      padding: '2px 4px',
-                      fontSize: '12px',
-                      fontFamily: 'inherit',
-                      color: '#000',
-                      width: '100%',
-                      outline: 'none',
-                      cursor: isManager ? 'pointer' : 'default',
-                      appearance: 'menulist', 
+                      borderBottom: '1px solid #000', background: 'transparent',
+                      padding: '2px 4px', fontSize: '12px', fontFamily: 'inherit',
+                      color: '#000', width: '100%', outline: 'none',
+                      cursor: isManager ? 'pointer' : 'default', appearance: 'menulist', 
                     }}
                   >
                     <option value="">-- Select --</option>
@@ -166,6 +198,8 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <span className="header-label">FLT.NO :</span>
                 <input className="header-value" id="fltNo" type="text" value={formData.fltNo} readOnly onClick={() => openKeypad('fltNo', 'alpha')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
               </div>
+              
+              {/* TIME FIELDS - Using custom numeric keypad for ATA & STA */}
               <div className="header-row">
                 <span className="header-label">ATA:</span>
                 <input className="header-value" id="ata" type="text" value={formData.ata} readOnly onClick={() => openKeypad('ata', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
@@ -179,20 +213,20 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <thead><tr><th colSpan={3}>IN BOUND</th></tr><tr><th style={{ textAlign: 'left', paddingLeft: '8px' }}></th><th>START</th><th>STOP</th></tr></thead>
                 <tbody>
                   <tr><td>CHOCKS</td>
-                    <td><input type="text" id="chocksStart" value={formData.chocksStart} readOnly onClick={() => openKeypad('chocksStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="chocksStop" value={formData.chocksStop} readOnly onClick={() => openKeypad('chocksStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="chocksStart" value={formData.chocksStart} readOnly onClick={() => handleTimeClick('chocksStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="chocksStop" value={formData.chocksStop} readOnly onClick={() => handleTimeClick('chocksStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
                   <tr><td>PAX OFF</td>
-                    <td><input type="text" id="paxOffStart" value={formData.paxOffStart} readOnly onClick={() => openKeypad('paxOffStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="paxOffStop" value={formData.paxOffStop} readOnly onClick={() => openKeypad('paxOffStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="paxOffStart" value={formData.paxOffStart} readOnly onClick={() => handleTimeClick('paxOffStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="paxOffStop" value={formData.paxOffStop} readOnly onClick={() => handleTimeClick('paxOffStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
                   <tr><td>PAX ON</td>
-                    <td><input type="text" id="paxOnStart" value={formData.paxOnStart} readOnly onClick={() => openKeypad('paxOnStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="paxOnStop" value={formData.paxOnStop} readOnly onClick={() => openKeypad('paxOnStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="paxOnStart" value={formData.paxOnStart} readOnly onClick={() => handleTimeClick('paxOnStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="paxOnStop" value={formData.paxOnStop} readOnly onClick={() => handleTimeClick('paxOnStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
                   <tr><td>CLEANING</td>
-                    <td><input type="text" id="cleanStart" value={formData.cleanStart} readOnly onClick={() => openKeypad('cleanStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="cleanStop" value={formData.cleanStop} readOnly onClick={() => openKeypad('cleanStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="cleanStart" value={formData.cleanStart} readOnly onClick={() => handleTimeClick('cleanStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="cleanStop" value={formData.cleanStop} readOnly onClick={() => handleTimeClick('cleanStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
                 </tbody>
               </table>
@@ -200,6 +234,8 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
             <div>
               <div className="header-row"><span className="header-label">DATE :</span><input className="header-value" id="date" type="date" value={formData.date} onChange={handleChange} readOnly={!isManager} /></div>
+              
+              {/* TIME FIELDS - Using custom numeric keypad for ETA & ATD */}
               <div className="header-row">
                 <span className="header-label">ETA :</span>
                 <input className="header-value" id="eta" type="text" value={formData.eta} readOnly onClick={() => openKeypad('eta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} />
@@ -213,25 +249,29 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <thead><tr><th colSpan={3}>OUT BOUND / SERVICES</th></tr><tr><th style={{ textAlign: 'left', paddingLeft: '8px' }}></th><th>START</th><th>STOP</th></tr></thead>
                 <tbody>
                   <tr><td>BAGGAGE ON</td>
-                    <td><input type="text" id="bagOnStart" value={formData.bagOnStart} readOnly onClick={() => openKeypad('bagOnStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="bagOnStop" value={formData.bagOnStop} readOnly onClick={() => openKeypad('bagOnStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="bagOnStart" value={formData.bagOnStart} readOnly onClick={() => handleTimeClick('bagOnStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="bagOnStop" value={formData.bagOnStop} readOnly onClick={() => handleTimeClick('bagOnStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
                   <tr><td>BAGGAGE OFF</td>
-                    <td><input type="text" id="bagOffStart" value={formData.bagOffStart} readOnly onClick={() => openKeypad('bagOffStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="bagOffStop" value={formData.bagOffStop} readOnly onClick={() => openKeypad('bagOffStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="bagOffStart" value={formData.bagOffStart} readOnly onClick={() => handleTimeClick('bagOffStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="bagOffStop" value={formData.bagOffStop} readOnly onClick={() => handleTimeClick('bagOffStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
-                  <tr><td>BOARDING</td><td colSpan={2}><input type="text" id="boarding" value={formData.boarding} readOnly onClick={() => openKeypad('boarding', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td></tr>
+                  <tr><td>BOARDING</td><td colSpan={2}><input type="text" id="boarding" value={formData.boarding} readOnly onClick={() => handleTimeClick('boarding')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td></tr>
                   <tr><td>DOOR</td>
-                    <td><input type="text" id="doorStart" value={formData.doorStart} readOnly onClick={() => openKeypad('doorStart', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
-                    <td><input type="text" id="doorStop" value={formData.doorStop} readOnly onClick={() => openKeypad('doorStop', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="doorStart" value={formData.doorStart} readOnly onClick={() => handleTimeClick('doorStart')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                    <td><input type="text" id="doorStop" value={formData.doorStop} readOnly onClick={() => handleTimeClick('doorStop')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
                   </tr>
-                  <tr><td>START- UP</td><td colSpan={2}><input type="text" id="startup" value={formData.startup} readOnly onClick={() => openKeypad('startup', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td></tr>
+                  <tr><td>START- UP</td><td colSpan={2}><input type="text" id="startup" value={formData.startup} readOnly onClick={() => handleTimeClick('startup')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td></tr>
                 </tbody>
               </table>
 
               <table className="inner-table info-table" style={{ marginTop: '15px' }}>
                 <tbody>
-                  <tr><td>CHECK-IN</td><td><input type="text" id="checkIn" value={formData.checkIn} readOnly onClick={() => openKeypad('checkIn', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td></tr>
+                  {/* CHECK-IN - Using custom numeric keypad */}
+                  <tr>
+                    <td>CHECK-IN</td>
+                    <td><input type="text" id="checkIn" value={formData.checkIn} readOnly onClick={() => openKeypad('checkIn', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
+                  </tr>
                   <tr><td>ROUTE</td><td>
                     <div className="route-wrapper">
                       <input type="text" id="route" style={{ flex: 1, cursor: isManager ? 'pointer' : 'default' }} value={formData.route} readOnly onClick={() => openKeypad('route', 'alpha')} />
@@ -317,12 +357,61 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
         </div>
       </div>
 
-      {/* CUSTOM IN-APP KEYBOARD MODAL */}
+      {/* ========================================= */}
+      {/* 1. CURRENT TIME POPUP MODAL (Start/Stop)  */}
+      {/* ========================================= */}
+      {confirmId && (
+        <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>
+            <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time (24h)</h3>
+            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
+              Adjust the time below or clear it.
+            </p>
+            
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', margin: '0 auto 24px auto' }}>
+              <select value={tempHour} onChange={(e) => setTempHour(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
+                {Array.from({ length: 24 }).map((_, i) => {
+                  const h = String(i).padStart(2, '0');
+                  return <option key={h} value={h}>{h}</option>;
+                })}
+              </select>
+              <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>:</span>
+              <select value={tempMin} onChange={(e) => setTempMin(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
+                {Array.from({ length: 60 }).map((_, i) => {
+                  const m = String(i).padStart(2, '0');
+                  return <option key={m} value={m}>{m}</option>;
+                })}
+              </select>
+            </div>
+
+            <button onClick={handleClearField} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}>
+              Clear this field
+            </button>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
+              <button onClick={() => setConfirmId(null)} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(220, 38, 38, 0.2)' }} title="Cancel">
+                ✕
+              </button>
+              <button onClick={executeFillNow} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#dcfce7', color: '#16a34a', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(22, 163, 74, 0.2)' }} title="Confirm">
+                ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================= */}
+      {/* 2. CUSTOM IN-APP NUMERIC/ALPHA KEYBOARD   */}
+      {/* ========================================= */}
       {keypadTarget && (
         <div className="modal-backdrop" onClick={() => setKeypadTarget(null)} style={{ zIndex: 9999, backdropFilter: 'blur(4px)' }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '400px', padding: '24px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h3 style={{ marginTop: 0, marginBottom: '8px', color: '#1e293b', fontSize: '18px' }}>Enter Value</h3>
-            <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>Using custom in-app keyboard</p>
+            <h3 style={{ marginTop: 0, marginBottom: '8px', color: '#1e293b', fontSize: '18px' }}>
+              {keypadType === 'time' ? 'Enter Time (24h)' : 'Enter Value'}
+            </h3>
+            <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>
+              {keypadType === 'time' ? 'Type 4 digits (e.g. 0930 for 09:30)' : 'Using custom in-app keyboard'}
+            </p>
             
             <div style={{ fontSize: '32px', fontWeight: 900, color: '#0f172a', letterSpacing: '1px', marginBottom: '20px', background: '#f1f5f9', padding: '12px', borderRadius: '8px', border: '2px solid #cbd5e1', minHeight: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', wordBreak: 'break-all' }}>
               {keypadValue || <span style={{ color: '#cbd5e1' }}>Type...</span>}
@@ -346,7 +435,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
               </div>
             )}
 
-            {/* NUMERIC & TIME KEYBOARD */}
+            {/* NUMERIC / TIME KEYBOARD */}
             {(keypadType === 'numeric' || keypadType === 'time') && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
