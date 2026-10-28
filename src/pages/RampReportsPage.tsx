@@ -14,6 +14,7 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const [reports, setReports] = useState<any[]>([]);
   const [viewingReport, setViewingReport] = useState<any>(null);
   
+  // Custom Dialog State
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
@@ -32,12 +33,16 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const handleDelete = (id: string) => setDeleteTarget(id);
 
   const handlePrintModal = () => {
-    // Add the class
-    document.body.classList.add('printing-report');
-    // Trigger print
+    // Add BOTH classes to unpack the modal AND apply the compact print sizing
+    document.body.classList.add('printing-modal');
+    document.body.classList.add('printing-ramp');
+    
     window.print();
-    // Clean up
-    setTimeout(() => document.body.classList.remove('printing-report'), 1000);
+    
+    setTimeout(() => {
+      document.body.classList.remove('printing-modal');
+      document.body.classList.remove('printing-ramp');
+    }, 1000);
   };
 
   return (
@@ -95,7 +100,6 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
                 formData={viewingReport}
                 handleChange={() => {}}
                 isManager={false}
-                // FIXED: Pass default AC types PLUS the saved AC type so it shows in the dropdown
                 acTypes={Array.from(new Set([...DEFAULT_AC_TYPES, viewingReport.acType].filter(Boolean)))}
                 routeCodes={[]}
                 handleAddAcType={() => {}}
