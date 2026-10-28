@@ -66,12 +66,13 @@
 }
 
 /* ==========================================
-   PRINT STYLES (FORCE PORTRAIT)
+   PRINT STYLES (FORCE PORTRAIT FOR RAMP SHEET)
    ========================================== */
 @media print {
+  /* Strictly force the Ramp Sheet to A4 Portrait */
   @page {
     size: A4 portrait;
-    margin: 10mm; /* Gives space around the border */
+    margin: 8mm;
   }
 
   html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; height: auto !important; }
@@ -86,84 +87,64 @@
     background: #fff !important; overflow: visible !important; height: auto !important;
   }
 
-  /* 1. PRINTING THE MAIN FORM & MODAL */
-  body:not(.printing-modal) .ramp-container,
-  body.printing-modal .modal-backdrop,
-  body.printing-modal .modal-content,
-  body.printing-modal .modal-scrollable-body {
-    display: block !important; position: static !important;
-    width: 100% !important; max-width: 100% !important;
-    padding: 0 !important; margin: 0 !important;
-    background: transparent !important; box-shadow: none !important; border: none !important;
+  /* 1. PRINTING THE MAIN FORM */
+  body:not(.printing-modal) .ramp-container {
+    display: block !important;
+    padding: 0 !important; background: #fff !important; border: none !important; box-shadow: none !important; overflow: visible !important;
+  }
+  body:not(.printing-modal) .ramp-sheet {
+    box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 auto !important; max-width: 100% !important; width: 100% !important; page-break-inside: avoid; page-break-after: avoid;
   }
 
+  /* 2. PRINTING THE MODAL */
+  body.printing-modal .modal-backdrop { 
+    display: block !important;
+    position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: auto !important;
+    padding: 0 !important; margin: 0 !important; background: transparent !important; overflow: visible !important;
+  }
+  body.printing-modal .modal-content {
+    display: block !important; position: static !important; width: 100% !important; max-width: 100% !important; max-height: none !important;
+    padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; background: transparent !important; overflow: visible !important;
+  }
+  body.printing-modal .modal-scrollable-body {
+    display: block !important; padding: 0 !important; margin: 0 !important; max-height: none !important; height: auto !important; overflow: visible !important; background: transparent !important;
+  }
   body.printing-modal .page-content > div > *:not(.modal-backdrop) {
     display: none !important;
   }
 
-  /* 2. FORM STYLING (SCALED TO FILL THE PAGE) */
-  .ramp-sheet {
-    font-size: 10px !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-    page-break-inside: avoid;
-  }
-
-  .ramp-sheet .flight-form { 
-    border: 1px solid #000 !important; 
-    padding: 12px !important; 
-  }
-  
-  /* Header */
-  .ramp-sheet .company-header img { height: 50px !important; margin-bottom: 6px !important; }
-  .ramp-sheet .company-title { font-size: 14px !important; }
-  .ramp-sheet .company-subtitle { font-size: 12px !important; margin-top: 2px !important; }
-  .ramp-sheet .company-unit-text { font-size: 10px !important; margin-top: 2px !important; }
-  .ramp-sheet .title { font-size: 12px !important; margin: 10px 0 !important; }
-
-  /* Grids & Spacing */
-  .ramp-sheet .main-grid { gap: 12px !important; margin-bottom: 12px !important; }
-  .ramp-sheet .bottom-section { gap: 12px !important; margin-bottom: 12px !important; }
-  .ramp-sheet .bottom-section-2 { gap: 8px !important; margin-bottom: 12px !important; }
-  .ramp-sheet .header-row { margin-bottom: 4px !important; }
-  .ramp-sheet .header-label { font-size: 10px !important; width: 60px !important; }
-
-  /* Tables */
-  .ramp-sheet .inner-table th, .ramp-sheet .inner-table td { 
-    padding: 3px 4px !important; 
-    font-size: 9px !important; 
-    line-height: 1.2 !important; 
-  }
-  .ramp-sheet .inner-table input, .ramp-sheet .header-value { 
-    font-size: 10px !important; 
-    height: 18px !important; 
-    line-height: 18px !important; 
-    padding: 0 4px !important; 
-  }
+  /* 3. COMPACT SINGLE-PAGE LAYOUT */
+  .ramp-sheet { font-size: 8px !important; }
+  .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 4px !important; }
+  .ramp-sheet .company-header { margin-bottom: 4px !important; }
+  .ramp-sheet .company-header img { height: 38px !important; margin-bottom: 2px !important; }
+  .ramp-sheet .company-title { font-size: 11px !important; }
+  .ramp-sheet .company-subtitle { font-size: 10px !important; margin-top: 0 !important; }
+  .ramp-sheet .company-unit-text { font-size: 9px !important; margin-top: 1px !important; }
+  .ramp-sheet .title { margin: 3px 0 !important; font-size: 10px !important; }
+  .ramp-sheet .main-grid { gap: 4px !important; margin-bottom: 4px !important; }
+  .ramp-sheet .bottom-section { gap: 4px !important; margin-bottom: 4px !important; }
+  .ramp-sheet .bottom-section-2 { gap: 4px !important; margin-bottom: 4px !important; }
+  .ramp-sheet .header-row { margin-bottom: 1px !important; }
+  .ramp-sheet .header-label { font-size: 8px !important; width: 50px !important; }
+  .ramp-sheet .inner-table th, .ramp-sheet .inner-table td { padding: 0px 1px !important; font-size: 7px !important; line-height: 1.1 !important; }
+  .ramp-sheet .inner-table input, .ramp-sheet .header-value { font-size: 8px !important; height: 13px !important; line-height: 13px !important; padding: 0 1px !important; }
   .ramp-sheet .header-value { border-bottom: 1px solid #000 !important; }
-
-  /* Footer */
-  .ramp-sheet .footer-section { padding-top: 10px !important; gap: 10px !important; }
-  .ramp-sheet .footer-box label { font-size: 10px !important; margin-bottom: 4px !important; }
-  .ramp-sheet .footer-box textarea { height: 40px !important; font-size: 10px !important; padding: 4px !important; }
-  .ramp-sheet .special-load-textarea { height: 40px !important; font-size: 9px !important; padding: 4px !important; }
-
-  /* Hide Interactive elements */
+  .ramp-sheet .footer-section { padding-top: 3px !important; gap: 4px !important; }
+  .ramp-sheet .footer-box label { font-size: 8px !important; margin-bottom: 1px !important; }
+  .ramp-sheet .footer-box textarea { height: 22px !important; padding: 1px !important; font-size: 8px !important; }
   .ramp-sheet .route-select, .ramp-sheet .btn-plus { display: none !important; }
   .ramp-sheet .route-wrapper { display: block !important; padding: 0 !important; }
-
-  /* Fix pcs/kg inline inputs */
+  .ramp-sheet .special-load-textarea { height: 22px !important; font-size: 7px !important; padding: 1px !important; }
+  .ramp-sheet .inner-table[style*="margin-top"] { margin-top: 3px !important; }
   .ramp-sheet .bottom-section-2 input[type="text"] {
-    height: 18px !important;
-    font-size: 10px !important;
-    padding: 0 2px !important;
+    height: 13px !important;
+    font-size: 8px !important;
+    padding: 0 1px !important;
     border: none !important;
     border-radius: 0 !important;
   }
-  .ramp-sheet .bottom-section-2 td span { font-size: 12px !important; }
-  
+  .ramp-sheet .bottom-section-2 td span { font-size: 9px !important; }
+  .ramp-sheet .bottom-section-2 td > div { gap: 2px !important; }
   .ramp-sheet, .ramp-sheet * { page-break-inside: avoid !important; page-break-after: avoid !important; }
 }
