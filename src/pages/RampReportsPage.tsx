@@ -32,9 +32,12 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const handleDelete = (id: string) => setDeleteTarget(id);
 
   const handlePrintModal = () => {
-    document.body.classList.add('printing-modal');
+    // Add the class
+    document.body.classList.add('printing-report');
+    // Trigger print
     window.print();
-    setTimeout(() => document.body.classList.remove('printing-modal'), 1000);
+    // Clean up
+    setTimeout(() => document.body.classList.remove('printing-report'), 1000);
   };
 
   return (
