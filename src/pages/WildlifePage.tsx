@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const BIRD_DB = [
   { name: 'Kiru Bondana', common: 'Kentish Plover', mass: 44, rshb: 1.5 },
@@ -33,7 +34,7 @@ function WildlifePage() {
   const { profile, user } = useAuth();
   const isManager = ['developer', 'manager', 'smt'].includes(profile?.role || '');
   
-  const [activeTab, setActiveTab] = useState<'form' | 'records' | 'map'>('form');
+  const [activeTab, setActiveTab] = useState<'form' | 'records' | 'analysis' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -41,11 +42,8 @@ function WildlifePage() {
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [refNo, setRefNo] = useState(`RACL-FND-WHP-${new Date().getFullYear()}-01`);
-  
-  // Split wind into direction and speed
   const [windDir, setWindDir] = useState('');
   const [windSpd, setWindSpd] = useState('');
-  
   const [temp, setTemp] = useState('');
   const [cloud, setCloud] = useState('');
   const [rain, setRain] = useState('N');
@@ -107,7 +105,6 @@ function WildlifePage() {
     const validRows = rows.filter(r => r.bird);
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
 
-    // Auto update full name and designation
     const observerName = `${profile?.name || user?.email || 'User'} (${profile?.position || 'Staff'})`;
 
     try {
@@ -122,7 +119,6 @@ function WildlifePage() {
         })
       });
       toast.success('Bird count saved successfully!');
-      // ... rest of the function
       setActiveTab('records');
       setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
       fetchRecords();
@@ -145,6 +141,40 @@ function WildlifePage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  // --- CHART & TABLE DATA PROCESSING ---
+  const trendData = useMemo(() => {
+    const dailyData: Record<string, Record<string, number>> = {};
+    const allSpecies = new Set<string>();
+
+    records.forEach(rec => {
+      const d = rec.date;
+      if (!dailyData[d]) dailyData[d] = {};
+      
+      rec.rows?.forEach((r: any) => {
+        if (!r.bird) return;
+        allSpecies.add(r.bird);
+        const total = r.zones.reduce((a: number, b: number) => a + b, 0);
+        dailyData[d][r.bird] = (dailyData[d][r.bird] || 0) + total;
+      });
+    });
+
+    const monthlyTotals: Record<string, number> = {};
+    Object.entries(dailyData).forEach(([dateStr, speciesMap]) => {
+      const month = dateStr.substring(0, 7); // YYYY-MM
+      const totalForDay = Object.values(speciesMap).reduce((a, b) => a + b, 0);
+      monthlyTotals[month] = (monthlyTotals[month] || 0) + totalForDay;
+    });
+
+    const chart = Object.entries(monthlyTotals).map(([month, total]) => ({ month, total })).sort((a, b) => a.month.localeCompare(b.month));
+
+    const tableRows = Object.entries(dailyData).map(([dateStr, speciesMap]) => ({
+      date: dateStr,
+      ...speciesMap
+    })).sort((a, b) => b.date.localeCompare(a.date));
+
+    return { chart, tableRows, speciesList: Array.from(allSpecies).sort() };
+  }, [records]);
+
   if (loading) return <div className="page-content"><p>Loading Wildlife Data...</p></div>;
 
   return (
@@ -156,13 +186,12 @@ function WildlifePage() {
       <div className="ops-tabs no-print">
         <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => setActiveTab('form')}>📝 Bird Count Form</button>
         <button className={`ops-tab-btn ${activeTab === 'records' ? 'active' : ''}`} onClick={() => setActiveTab('records')}>📁 Saved Records</button>
+        <button className={`ops-tab-btn ${activeTab === 'analysis' ? 'active' : ''}`} onClick={() => setActiveTab('analysis')}>📊 Trend Analysis</button>
         <button className={`ops-tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>🗺️ Zone Map</button>
       </div>
 
       {activeTab === 'form' && (
         <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
-          
-          {/* PAGE 1: BIRD COUNT FORM */}
           <div className="bird-count-page-1">
             <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
               <img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} />
@@ -173,8 +202,6 @@ function WildlifePage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>
               <div><label style={{fontSize:'12px', fontWeight:'bold'}}>DATE:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-1 border" /></div>
               <div><label style={{fontSize:'12px', fontWeight:'bold'}}>REF NO:</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-1 border" /></div>
-              
-              {/* Wind Direction and Speed split */}
               <div>
                 <label style={{fontSize:'12px', fontWeight:'bold'}}>WIND:</label>
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
@@ -183,10 +210,8 @@ function WildlifePage() {
                   <span style={{ fontSize: '11px', fontWeight: 'bold' }}>km/h</span>
                 </div>
               </div>
-              
               <div><label style={{fontSize:'12px', fontWeight:'bold'}}>START TIME:</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-1 border" /></div>
               
-              {/* Temp with °C */}
               <div>
                 <label style={{fontSize:'12px', fontWeight:'bold'}}>TEMPERATURE:</label>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -194,8 +219,6 @@ function WildlifePage() {
                   <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>°C</span>
                 </div>
               </div>
-
-              {/* Cloud with % */}
               <div>
                 <label style={{fontSize:'12px', fontWeight:'bold'}}>CLOUDY:</label>
                 <div style={{ display: 'flex', alignItems: 'center' }}>
@@ -203,7 +226,6 @@ function WildlifePage() {
                   <span style={{ marginLeft: '4px', fontWeight: 'bold' }}>%</span>
                 </div>
               </div>
-
               <div><label style={{fontSize:'12px', fontWeight:'bold'}}>RAIN LAST 24 HRS:</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-1 border"><option value="N">N</option><option value="Y">Y</option></select></div>
               <div><label style={{fontSize:'12px', fontWeight:'bold'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" /></div>
             </div>
@@ -260,7 +282,6 @@ function WildlifePage() {
             </table>
           </div>
           
-          {/* PAGE 2: BIRD WATCH REPORT */}
           <div className="bird-count-page-2" style={{ marginTop: '40px', borderTop: '2px dashed #ccc', paddingTop: '20px' }}>
             <h3 style={{ textAlign: 'center', fontFamily: 'Arial', marginBottom: '16px' }}>Bird Watch Report</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '12px', fontFamily: 'Arial', border: '1px solid #000' }}>
@@ -276,7 +297,6 @@ function WildlifePage() {
               </div>
               <div style={{ padding: '10px' }}>
                 <div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {date} <strong>Review date:</strong> {date}</div>
-                {/* Ensure no email is shown here */}
                 <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {profile?.name || 'User'}</div>
                 <div style={{ marginBottom: '8px' }}><strong>Designation:</strong> {profile?.position || 'Operations Officer'}</div>
                 <div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div>
@@ -292,7 +312,6 @@ function WildlifePage() {
         </div>
       )}
 
-      {/* Records and Map tabs remain the same... */}
       {activeTab === 'records' && (
         <div className="dash-card">
           <h3>📁 Saved Bird Count Records</h3>
@@ -312,6 +331,50 @@ function WildlifePage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {activeTab === 'analysis' && (
+        <div className="dash-grid">
+          <div className="dash-card" style={{ gridColumn: 'span 2', marginBottom: '20px' }}>
+            <h3>📊 Monthly Bird Population Trend</h3>
+            <div style={{ width: '100%', height: 300, marginTop: '20px' }}>
+              {trendData.chart.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8' }}>No data yet.</p> : (
+                <ResponsiveContainer>
+                  <BarChart data={trendData.chart} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Bar dataKey="total" name="Total Birds Sighted" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+
+          <div className="dash-card" style={{ gridColumn: 'span 2', overflowX: 'auto' }}>
+            <h3>📅 Daily Trend Analysis (Excel Format)</h3>
+            <table className="mini-table mt-4" style={{ fontSize: '12px' }}>
+              <thead>
+                <tr>
+                  <th>DATE</th>
+                  {trendData.speciesList.map((s: string) => <th key={s}>{s}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {trendData.tableRows.map((r: any) => (
+                  <tr key={r.date}>
+                    <td><strong>{r.date}</strong></td>
+                    {trendData.speciesList.map((s: string) => (
+                      /* FIX: Cast r to any to avoid index signature error */
+                      <td key={s} style={{ textAlign: 'center' }}>{(r as any)[s] || 0}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

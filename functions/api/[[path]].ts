@@ -728,6 +728,41 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // BIRDSTRIKE REPORT MODULE
+    // ==========================================
+    if (url.pathname === "/api/birdstrikes" && method === "GET") {
+      const { results } = await env.DB.prepare("SELECT * FROM bird_strikes ORDER BY date DESC, time DESC").all();
+      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname === "/api/birdstrikes" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      
+      await env.DB.prepare(`
+        INSERT INTO bird_strikes (
+          id, reportNo, date, time, reporterName, contactNo, organization, email, 
+          category, occurrenceType, birdSize, place, metConditions, peopleInvolved, 
+          aircraftInfo, explanation, correctiveAction, submittedBy, designation, photoBase64, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        id, body.reportNo, body.date, body.time, body.reporterName, body.contactNo, body.organization, body.email,
+        body.category, body.occurrenceType, body.birdSize, body.place, body.metConditions, JSON.stringify(body.peopleInvolved),
+        JSON.stringify(body.aircraftInfo), body.explanation, body.correctiveAction, body.submittedBy, body.designation, body.photoBase64 || '', new Date().toISOString()
+      ).run();
+
+      context.waitUntil(backupToFirebase('bird_strikes', id, body));
+      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (url.pathname.startsWith("/api/birdstrikes/") && method === "DELETE") {
+      const id = url.pathname.split("/").pop();
+      await env.DB.prepare("DELETE FROM bird_strikes WHERE id = ?").bind(id).run();
+      context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/bird_strikes/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
     // RUNWAY LIGHTS MODULE
     // ==========================================
     if (url.pathname === "/api/lights" && method === "GET") {
