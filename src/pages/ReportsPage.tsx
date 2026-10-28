@@ -39,6 +39,7 @@ function ReportsPage() {
 
   useEffect(() => {
     fetchAllData();
+    // Poll every 15 seconds to automatically update when a Ramp Sheet is saved
     const interval = setInterval(fetchAllData, 15000);
     return () => clearInterval(interval);
   }, [fetchAllData]);
@@ -70,7 +71,9 @@ function ReportsPage() {
     return { from: parts[0], via: '', to: '' };
   };
 
-  const filteredRamp = useMemo(() => rampReports.filter(filterByDate).reverse(), [rampReports, filterByDate]);
+  const filteredRamp = useMemo(() => {
+    return rampReports.filter(filterByDate).reverse();
+  }, [rampReports, filterByDate]);
 
   // --- STATISTICS TAB DATA PROCESSING ---
   const statsData = useMemo(() => {
@@ -194,7 +197,7 @@ function ReportsPage() {
                         <td>{routeParts.via}</td>
                         <td>{routeParts.to}</td>
                         
-                        <td>{r.fltNo ? r.fltNo.replace('Q2', 'Q3') : '—'}</td>
+                        <td>{r.fltNo ? String(r.fltNo).replace('Q2', 'Q3') : '—'}</td>
                         <td>{r.atd || r.sta || '—'}</td>
                         
                         <td>{r.paxInAdult || '0'}</td>
@@ -243,38 +246,34 @@ function ReportsPage() {
               <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Monthly Statistics</h3>
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', breakInside: 'avoid' }}>
+                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: 0 }}>
                   <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>Total PAX</h4>
-                  <div style={{ height: 300 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={statsData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="paxIn" name="PAX IN" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="paxOut" name="PAX OUT" fill="#10b981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={statsData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="paxIn" name="PAX IN" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="paxOut" name="PAX OUT" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
 
-                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', breakInside: 'avoid' }}>
+                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: 0 }}>
                   <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>Total Cargo (KG)</h4>
-                  <div style={{ height: 300 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={statsData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="cargoIn" name="Cargo IN (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="cargoOut" name="Cargo OUT (kg)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={statsData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="cargoIn" name="Cargo IN (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="cargoOut" name="Cargo OUT (kg)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
