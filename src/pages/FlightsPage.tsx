@@ -31,7 +31,8 @@ function FlightsPage() {
   const [type, setType] = useState('Scheduled');
   const [aircraft, setAircraft] = useState('DH-8/300');
   const [customAircraft, setCustomAircraft] = useState('');
-  const [bookedFigure, setBookedFigure] = useState('');
+  const [paxAdults, setPaxAdults] = useState('');
+  const [paxInfants, setPaxInfants] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [arrival, setArrival] = useState('');
   const [departure, setDeparture] = useState('');
@@ -58,7 +59,7 @@ function FlightsPage() {
 
   const resetForm = () => {
     setFlightNo('Q2-'); setType('Scheduled'); setAircraft('DH-8/300');
-    setCustomAircraft(''); setBookedFigure(''); setCheckIn('');
+    setCustomAircraft(''); setPaxAdults(''); setPaxInfants(''); setCheckIn('');
     setArrival(''); setDeparture(''); setRoute('MLE/FND/MLE');
     setOriginDep(''); setRemarks('');
     setEditingId(null);
@@ -82,7 +83,8 @@ function FlightsPage() {
 
     const payload = {
       date: dateFilter, flightNo, type, aircraft: finalAircraft,
-      bookedFigure, checkInTime: checkIn, arrivalTime: arrival, 
+      paxAdults: Number(paxAdults) || 0, paxInfants: Number(paxInfants) || 0,
+      checkInTime: checkIn, arrivalTime: arrival, 
       departureTime: departure, route, originDepTime: originDep, 
       status: finalStatus, remarks
     };
@@ -121,7 +123,8 @@ function FlightsPage() {
       setCustomAircraft(f.aircraft || '');
     }
     
-    setBookedFigure(f.bookedFigure || '');
+    setPaxAdults(f.paxAdults ? String(f.paxAdults) : '');
+    setPaxInfants(f.paxInfants ? String(f.paxInfants) : '');
     setCheckIn(f.checkInTime || '');
     setArrival(f.arrivalTime || '');
     setDeparture(f.departureTime || '');
@@ -150,7 +153,6 @@ function FlightsPage() {
     return (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00');
   });
 
-  // FIXED: Only move to past flights if it has departed or is cancelled.
   const completedStatuses = ['Departed', 'Cancelled'];
   const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(displayStatus(f.status)));
   const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(displayStatus(f.status))).reverse();
@@ -179,6 +181,7 @@ function FlightsPage() {
 
         <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0' }}>
           <div style={{ fontSize: '12px', fontWeight: 800, color: '#d97706', textTransform: 'uppercase' }}>Live Status</div>
+          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>MLE DEP</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#ca8a04' }}>{f.originDepTime || '—'}</div></div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ETA</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#8b5cf6' }}>{f.eta || '—'}</div></div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL (ATA)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#16a34a' }}>{f.ata || '—'}</div></div>
           <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (ATD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#dc2626' }}>{f.atd || '—'}</div></div>
@@ -189,6 +192,9 @@ function FlightsPage() {
             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>ROUTE</div>
             <div style={{ fontSize: '18px', fontWeight: 900, color: '#1e293b', marginBottom: '12px' }}>{f.route}</div>
             
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>PAX (AD/INF)</div>
+            <div style={{ fontSize: '15px', fontWeight: 800, marginBottom: '12px' }}>{f.paxAdults || 0} / {f.paxInfants || 0}</div>
+
             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>STATUS</div>
             <span className="status-badge" style={{ 
               fontSize: '14px', padding: '6px 12px', 
@@ -242,9 +248,15 @@ function FlightsPage() {
 
           {aircraft === 'CUSTOM' && <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>}
 
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Pax Adults</label><input type="number" placeholder="0" value={paxAdults} onChange={e => setPaxAdults(e.target.value)} /></div>
+            <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Pax Infants</label><input type="number" placeholder="0" value={paxInfants} onChange={e => setPaxInfants(e.target.value)} /></div>
+          </div>
+
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time</label><input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></div>
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (STA)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (STD)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
+          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>MLE Dep (Origin)</label><input type="time" value={originDep} onChange={e => setOriginDep(e.target.value)} /></div>
 
           <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
 
@@ -290,21 +302,44 @@ function FlightsPage() {
         <div>
           <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Past & Departed Flights</h3>
           {pastFlights.length === 0 ? <div className="empty-state"><p>No past flights.</p></div> : (
-            <div style={{ display: 'flex', flexDirection: 'column', opacity: 0.8 }}>
-              {pastFlights.map((f, index) => {
-                const prevFlight = index > 0 ? pastFlights[index - 1] : null;
-                const showDateHeader = !prevFlight || prevFlight.date !== f.date;
-                return (
-                  <div key={f.id}>
-                    {showDateHeader && (
-                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#64748b', margin: '16px 0 12px 0', paddingBottom: '4px', borderBottom: '1px dashed #cbd5e1' }}>
-                        📅 {formatDisplayDate(f.date)}
-                      </div>
-                    )}
-                    <FlightCard f={f} />
-                  </div>
-                );
-              })}
+            <div className="dash-card" style={{ padding: 0, overflowX: 'auto' }}>
+              <table className="mini-table" style={{ margin: 0 }}>
+                <thead style={{ background: '#f8fafc' }}>
+                  <tr>
+                    <th>Date</th>
+                    <th>Flight No</th>
+                    <th>Type</th>
+                    <th>Pax (Ad/Inf)</th>
+                    <th>STA / STD</th>
+                    <th>ATA / ATD</th>
+                    <th>Status</th>
+                    {isManager && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pastFlights.map(f => (
+                    <tr key={f.id}>
+                      <td style={{ fontWeight: 600 }}>{formatDisplayDate(f.date)}</td>
+                      <td><strong>{f.flightNo}</strong> <br/><span style={{fontSize:'10px', color:'#64748b'}}>{f.aircraft}</span></td>
+                      <td><span style={{ fontSize: '10px', background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{f.type}</span></td>
+                      <td style={{ textAlign: 'center' }}>{f.paxAdults || 0} / {f.paxInfants || 0}</td>
+                      <td style={{ fontSize: '12px', color: '#065f46' }}>{f.arrivalTime || '—'} / {f.departureTime || '—'}</td>
+                      <td style={{ fontSize: '12px', color: '#dc2626' }}>{f.ata || '—'} / {f.atd || '—'}</td>
+                      <td>
+                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: '#e2e8f0', color: '#475569' }}>
+                          {displayStatus(f.status)}
+                        </span>
+                      </td>
+                      {isManager && (
+                        <td style={{ whiteSpace: 'nowrap' }}>
+                          <button className="edit-btn" onClick={() => handleEdit(f)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>Edit</button>
+                          <button className="delete-btn" onClick={() => setDeleteTarget(f)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -121,7 +121,7 @@ const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, r
 };
 
 function LeavePage() {
-  const { profile, user, tempAccess } = useAuth(); // Added tempAccess
+  const { profile, user, tempAccess } = useAuth();
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
@@ -137,7 +137,7 @@ function LeavePage() {
   const [loading, setLoading] = useState<boolean>(true);
 
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
-  const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false); // New state
+  const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false); 
   const [balanceTab, setBalanceTab] = useState<'annual' | 'sick' | 'other'>('annual');
 
   const [showForm, setShowForm] = useState<boolean>(false);
@@ -205,7 +205,6 @@ function LeavePage() {
     const currentDept = (myStaff?.department || '').trim().toLowerCase();
     const isActuallySMT = isSMT || myStaff?.isSMT === true;
     
-    // Temp access check
     if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === targetDept)) return true;
 
     if (currentDept === 'safety' && targetDept === 'security') return true;
@@ -384,7 +383,6 @@ function LeavePage() {
         </div>
       )}
 
-      {/* DEPARTMENT STAFF BALANCES (For SMT/Managers/Admins) */}
       {(canApproveAnyDept || isSMT || tempAccess.length > 0) && deptBalanceStaff.length > 0 && (
         <div className="collapsible-card">
           <button className="collapsible-header" onClick={() => setShowDeptBalances(!showDeptBalances)}>
@@ -485,6 +483,10 @@ function LeavePage() {
             <tbody>
               {visibleRequests.map((r: any) => {
                 const canApprove = canApproveRequest(r) && r.status?.toLowerCase() === 'pending';
+                
+                // Find approver name
+                const approverName = r.reviewedBy ? (staffList.find(s => (s.email || '').toLowerCase() === r.reviewedBy.toLowerCase())?.name || r.reviewedBy) : null;
+
                 return (
                   <tr key={r.id}>
                     <td><strong>{r.staffName}</strong></td>
@@ -493,7 +495,14 @@ function LeavePage() {
                     <td>{formatDisplay(r.startDate)}</td>
                     <td>{formatDisplay(r.endDate)}</td>
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
-                    <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span></td>
+                    <td>
+                      <span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span>
+                      {approverName && (
+                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px', textAlign: 'center' }}>
+                          By: {approverName}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {canApprove && (
                         <>

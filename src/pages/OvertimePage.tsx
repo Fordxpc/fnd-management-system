@@ -120,7 +120,6 @@ function OvertimePage() {
     const target = (dept || '').toLowerCase();
     const current = (myStaff?.department || '').toLowerCase();
     
-    // Temp access check
     if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === target)) return true;
 
     if (current === 'safety' && target === 'security') return true;
@@ -143,9 +142,7 @@ function OvertimePage() {
     if (viewMode === 'individual' && myStaff) {
       filtered = filtered.filter((e) => e.staffId === myStaff.id);
     } else {
-      // Hide own data when looking at department
       filtered = filtered.filter((e) => e.staffId !== myStaff?.id); 
-      
       if (filterStaff !== 'all') {
         filtered = filtered.filter((e) => e.staffId === filterStaff);
       } else {
@@ -367,10 +364,12 @@ function OvertimePage() {
               </div>
               <div className="staff-list" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                 <table>
-                  <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Status / Approved By</th><th>Actions</th></tr></thead>
                   <tbody>
                     {weekEntries.map((e) => {
                       const canManage = canEditThisDept(e.staffDepartment);
+                      const approverName = e.reviewedBy ? (staff.find(s => (s.email || '').toLowerCase() === e.reviewedBy.toLowerCase())?.name || e.reviewedBy) : null;
+                      
                       return (
                         <tr key={e.id}>
                           <td>{formatDisplay(e.date)}</td>
@@ -379,6 +378,13 @@ function OvertimePage() {
                           <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
                           <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{e.notes || '—'}</td>
+                          <td>
+                            {tab !== 'pending' && approverName && (
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                {tab === 'approved' ? '✅ Approved' : '❌ Rejected'} by:<br/><strong>{approverName}</strong>
+                              </div>
+                            )}
+                          </td>
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {tab === 'pending' && canManage && (
                               <>

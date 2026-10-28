@@ -96,7 +96,16 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
       const fodData = getData(6); const birdData = getData(7);
 
-      const uniqueRoster = Array.from(new Map(rosterData.map((item: any) => [`${item.staffId}-${item.date}`, item])).values());
+      // Deduplicate roster: Prioritize leave entries over scheduled shifts
+      const rosterMap = new Map();
+      rosterData.forEach((item: any) => {
+        const key = `${item.staffId}-${item.date}`;
+        if (!rosterMap.has(key) || item.status !== 'scheduled') {
+          rosterMap.set(key, item);
+        }
+      });
+      const uniqueRoster = Array.from(rosterMap.values());
+      
       const uniqueLeaves = Array.from(new Map(leaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}`, item])).values());
 
       setStaff(staffData); 
@@ -135,12 +144,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   useEffect(() => {
     fetchDashboardData();
     fetchWeather();
-    
-    const interval = setInterval(() => {
-      fetchDashboardData();
-      fetchWeather();
-    }, 5000);
-    
+    const interval = setInterval(() => { fetchDashboardData(); fetchWeather(); }, 5000);
     return () => clearInterval(interval);
   }, [fetchDashboardData, fetchWeather]);
 
@@ -151,8 +155,12 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
   const displayName = firstName;
 
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
-  const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled');
+  
+  // FIXED: Deduplicate and remove staff on leave from Today's Duty
   const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
+  const onLeaveIds = new Set(todayLeaveAll.map(r => r.staffId));
+  const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled' && !onLeaveIds.has(r.staffId));
+
   const pendingLeave = leaveReqs.filter((r) => r.status?.toLowerCase() === 'pending');
 
   const userDept = profile?.department;
@@ -162,7 +170,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
 
-  // FIXED: Only filter out if officially Departed or Cancelled. Keeps it visible when Landed or Departed (Origin).
   const upcomingFlights = flights
     .filter(f => {
       const isCompleted = ['Departed', 'Cancelled'].includes(f.status);
@@ -177,9 +184,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   const nextFlight = upcomingFlights.length > 0 ? upcomingFlights[0] : null;
 
-  // FIXED: DYNAMIC STATUS LOGIC
   let liveStatus = nextFlight?.status || 'Scheduled';
-  
   if (nextFlight) {
     if (nextFlight.atd || liveRamp?.atd) liveStatus = 'Departed';
     else if (nextFlight.ata || liveRamp?.ata) liveStatus = 'Landed';
@@ -244,29 +249,46 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div style={{ fontSize: '36px', fontWeight: 900, lineHeight: 1 }}>{nextFlight.flightNo}</div>
                 <div style={{ fontSize: '14px', background: 'rgba(255,255,255,0.15)', padding: '4px 10px', borderRadius: '6px', fontWeight: 600 }}>{nextFlight.aircraft}</div>
                 <div style={{ fontSize: '12px', background: '#3b82f6', padding: '4px 10px', borderRadius: '6px', fontWeight: 700 }}>{nextFlight.type || 'Scheduled'}</div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd', marginLeft: 'auto' }}>{nextFlight.route}</div>
               </div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.route}</div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+
+              {/* Scheduled Timings */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>CHECK-IN</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700 }}>{nextFlight.checkInTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>STA</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fcd34d' }}>{nextFlight.arrivalTime || '—'}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#fcd34d' }}>{nextFlight.arrivalTime || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>STD</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.departureTime || '—'}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>PAX FIG</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700 }}>{nextFlight.bookedFigure || nextFlight.paxAdults || '—'}</div>
+                </div>
+              </div>
+
+              {/* Live Timings */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>MLE DEP</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#fde047' }}>{nextFlight.originDepTime || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ETA</div>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#a78bfa' }}>{nextFlight.eta || liveRamp?.eta || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ARRIVAL (ATA)</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATA</div>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#86efac' }}>{nextFlight.ata || liveRamp?.ata || '—'}</div>
                 </div>
                 <div style={{ borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>DEPARTURE (ATD)</div>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.atd || liveRamp?.atd || nextFlight.departureTime || '—'}</div>
+                  <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>ATD</div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd' }}>{nextFlight.atd || liveRamp?.atd || '—'}</div>
                 </div>
               </div>
             </div>
@@ -275,7 +297,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
           )}
         </div>
 
-        {/* EXPANDED WEATHER WIDGET */}
+        {/* WEATHER WIDGET */}
         <div className="dash-card" style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: 'white', padding: '16px 20px' }}>
           <h3 style={{ color: '#e0f2fe', margin: '0 0 12px', fontSize: '14px' }}>🌤️ Detailed Weather (Funadhoo)</h3>
           {weather ? (
