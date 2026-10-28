@@ -81,13 +81,19 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
 
 @media print {
   /* Force landscape for reports */
-  body.printing-report .page-content {
+  body.printing-report .page-content,
+  body.printing-report .modal-backdrop,
+  body.printing-report .modal-content {
     page: report-landscape;
   }
 
   body.printing-report * { visibility: hidden; }
-  body.printing-report .page-content, body.printing-report .page-content * { visibility: visible; }
-  body.printing-report .page-content { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; margin: 0 !important; }
+  body.printing-report .page-content, body.printing-report .page-content *,
+  body.printing-report .modal-backdrop, body.printing-report .modal-backdrop * { visibility: visible; }
+  
+  body.printing-report .page-content,
+  body.printing-report .modal-backdrop { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; margin: 0 !important; }
+  
   body.printing-report .no-print, body.printing-report .staff-header, body.printing-report .ops-tabs { display: none !important; }
   body.printing-report .dash-card { border: none !important; box-shadow: none !important; padding: 0 !important; background: #fff !important; }
   body.printing-report table { width: 100% !important; table-layout: auto !important; font-size: 8px !important; }
@@ -105,7 +111,6 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   body.printing-bird-count .page-content { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; margin: 0 !important; }
   body.printing-bird-count .no-print { display: none !important; }
   
-  /* Page break for the Bird Count */
   body.printing-bird-count .bird-count-page-2 {
     page-break-before: always;
     break-before: page;

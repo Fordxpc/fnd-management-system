@@ -78,7 +78,8 @@ function RampCheckSheetPage() {
     );
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  // FIXED: Added HTMLSelectElement to the type union
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     if (!isManager) return;
     const { id, value } = e.target;
     let finalValue = value;
@@ -163,7 +164,6 @@ function RampCheckSheetPage() {
   const handleSave = async () => {
     if (!isManager) return;
     try {
-      // Keep ALL fields including pcs/kg so they appear in saved records
       const payload = { ...formData } as any;
 
       payload.checkedBy = user?.email || formData.checkedBy || formData.observer || 'System';
@@ -184,7 +184,11 @@ function RampCheckSheetPage() {
 
   const handleReset = () => setShowClearConfirm(true);
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    document.body.classList.add('printing-ramp');
+    window.print();
+    setTimeout(() => document.body.classList.remove('printing-ramp'), 1000);
+  };
 
   const copyLiveLink = () => {
     navigator.clipboard.writeText(window.location.origin + '/live');
