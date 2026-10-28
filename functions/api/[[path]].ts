@@ -66,6 +66,30 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
+    
+    if (url.pathname.startsWith("/api/staff/") && method === "PUT") {
+      const id = url.pathname.split("/").pop();
+      const body: any = await request.json();
+      const updatedAt = new Date().toISOString();
+
+      await env.DB.prepare(`
+        UPDATE staff SET 
+          sn = ?, name = ?, email = ?, personalEmail = ?, nid = ?, joinDate = ?, 
+          phone = ?, gender = ?, department = ?, position = ?, isSMT = ?, 
+          balanceVisible = ?, notes = ?, basicSalary = ?, dailyAllowance = ?, 
+          holidayAllowanceRate = ?, bankAccount = ?, updatedAt = ?
+        WHERE id = ?
+      `).bind(
+        body.sn || '', body.name, body.email, body.personalEmail || '', 
+        body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
+        body.department, body.position || '', body.isSMT ? 1 : 0, body.balanceVisible ? 1 : 0, 
+        body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
+        body.holidayAllowanceRate || 0, body.bankAccount || '', updatedAt, id
+      ).run();
+
+      context.waitUntil(backupToFirebase('staff', id!, { ...body, updatedAt }));
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
       
       await env.DB.prepare(`
         INSERT INTO staff (
@@ -318,7 +342,8 @@ export const onRequest = async (context: any) => {
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
-      await env.DB.prepare(`UPDATE users SET role = ?, department = ? WHERE id = ?`).bind(body.role, body.department, id).run();
+      await env.DB.prepare(`UPDATE users SET role = ?, department = ?, name = ?, position = ? WHERE id = ?`)
+        .bind(body.role, body.department, body.name || '', body.position || '', id).run();
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

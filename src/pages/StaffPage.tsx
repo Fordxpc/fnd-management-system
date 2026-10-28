@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiFetch } from '../lib/api'; // Import our new API helper
+import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
@@ -96,7 +96,9 @@ function StaffPage() {
   const [holidayAllowanceRate, setHolidayAllowanceRate] = useState<string>('');
   const [bankAccount, setBankAccount] = useState<string>('');
 
-  // FETCH DATA FROM D1
+  // NEW: User Account Creation State
+  const [createUserAccount, setCreateUserAccount] = useState<boolean>(true);
+
   const fetchStaff = useCallback(async () => {
     try {
       const data = await apiFetch('/staff');
@@ -109,7 +111,6 @@ function StaffPage() {
     }
   }, []);
 
-  // Load on mount and poll every 10 seconds (simulating real-time)
   useEffect(() => {
     fetchStaff();
     const interval = setInterval(fetchStaff, 10000);
@@ -123,6 +124,7 @@ function StaffPage() {
     setIsSMT(false); setBalanceVisible(false); setNotes('');
     setBasicSalary(''); setDailyAllowance('');
     setHolidayAllowanceRate(''); setBankAccount('');
+    setCreateUserAccount(true);
     setEditingId(null);
   };
 
@@ -145,20 +147,44 @@ function StaffPage() {
     if (canSeeSensitive) payload.notes = notes;
 
     try {
-      // For now, we only implemented POST (Add) in the Worker. 
-      // If editingId exists, you will need a PUT endpoint later.
+      // 1. Save or Update Staff Record
       if (editingId) {
-        toast.error('Edit functionality coming in next API update!');
-        return;
+        await apiFetch(`/staff/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        toast.success('Staff member updated successfully!');
+      } else {
+        await apiFetch('/staff', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        toast.success('Staff added successfully!');
       }
 
-      await apiFetch('/staff', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
+      // 2. Automatically Pre-register User Account (if it's a new staff member)
+      if (!editingId && createUserAccount) {
+        try {
+          // Determine role: SMT if checked, otherwise standard staff
+          const userRole = isSMT ? 'smt' : 'staff';
+          
+          await apiFetch('/user-presets', {
+            method: 'POST',
+            body: JSON.stringify({ 
+              email, 
+              role: userRole, 
+              department, 
+              createdBy: profile?.email || '' 
+            })
+          });
+          toast.success(`Login account pre-registered as ${userRole.toUpperCase()}!`);
+        } catch (userErr: any) {
+          console.error("Failed to pre-register user", userErr);
+          toast.error('Staff saved, but failed to create user login. Use Users page to pre-register manually.');
+        }
+      }
 
-      toast.success('Staff added successfully!');
-      fetchStaff(); // Refresh the list
+      fetchStaff();
       resetForm();
       setShowForm(false);
     } catch (error: any) {
@@ -185,6 +211,7 @@ function StaffPage() {
     setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : '');
     setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : '');
     setBankAccount(s.bankAccount || '');
+    setCreateUserAccount(false); // Don't recreate user on edit
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -222,13 +249,11 @@ function StaffPage() {
           balanceVisible: false,
         };
         
-        await apiFetch('/staff', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
+        await apiFetch('/staff', { method: 'POST', body: JSON.stringify(payload) });
+        await apiFetch('/user-presets', { method: 'POST', body: JSON.stringify({ email: payload.email, role: 'staff', department: payload.department }) });
         added++;
       }
-      toast.success(`Imported ${added} staff member(s).`);
+      toast.success(`Imported ${added} staff member(s) and created logins.`);
       fetchStaff();
     } catch (error: any) {
       toast.error('Import failed: ' + error.message);
@@ -285,29 +310,18 @@ function StaffPage() {
       </div>
 
       <div className="dept-tabs">
-        <button
-          className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'}
-          onClick={() => setSelectedDept('all')}
-        >
+        <button className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('all')}>
           All Departments
         </button>
         {DEPARTMENTS.map((d) => (
-          <button
-            key={d}
-            className={selectedDept === d ? 'dept-tab active' : 'dept-tab'}
-            onClick={() => setSelectedDept(d)}
-          >
+          <button key={d} className={selectedDept === d ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept(d)}>
             {d}
           </button>
         ))}
         <button
           className={selectedDept === 'SMT' ? 'dept-tab active' : 'dept-tab'}
           onClick={() => setSelectedDept('SMT')}
-          style={{
-            borderColor: '#f59e0b',
-            color: selectedDept === 'SMT' ? '#fff' : '#92400e',
-            backgroundColor: selectedDept === 'SMT' ? '#f59e0b' : '#fef3c7',
-          }}
+          style={{ borderColor: '#f59e0b', color: selectedDept === 'SMT' ? '#fff' : '#92400e', backgroundColor: selectedDept === 'SMT' ? '#f59e0b' : '#fef3c7' }}
         >
           ⭐ SMT Members
         </button>
@@ -316,7 +330,7 @@ function StaffPage() {
       {showForm && (
         <form className="staff-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
-            {editingId ? '✏️ Edit Staff Member (API Update coming soon)' : '➕ Add New Staff Member'}
+            {editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}
           </div>
 
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '4px' }}>
@@ -378,6 +392,14 @@ function StaffPage() {
             👁 Allow this staff member to view their own leave balance
           </label>
 
+          {/* NEW: Automatically create login account */}
+          {!editingId && (
+            <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#166534', fontSize: '14px' }}>
+              <input type="checkbox" checked={createUserAccount} onChange={(e) => setCreateUserAccount(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+              🔑 Create User Login (Pre-register email for system access)
+            </label>
+          )}
+
           <button type="submit">
             {editingId ? '💾 Save Changes' : 'Save Staff Member'}
           </button>
@@ -387,10 +409,7 @@ function StaffPage() {
       <div className="staff-list">
         {visibleStaff.length === 0 ? (
           <div className="empty-state">
-            <p>
-              No staff members found for{' '}
-              <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.
-            </p>
+            <p>No staff members found for <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -443,19 +462,11 @@ function StaffPage() {
                         {s.notes || '—'}
                       </td>
                     )}
-                    <td style={{ textAlign: 'center', fontSize: '16px' }}>
-                      {s.isSMT ? '⭐' : '—'}
-                    </td>
-                    <td style={{ textAlign: 'center', fontSize: '16px' }}>
-                      {s.balanceVisible ? '👁' : '🚫'}
-                    </td>
+                    <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.isSMT ? '⭐' : '—'}</td>
+                    <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.balanceVisible ? '👁' : '🚫'}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>
-                        Edit
-                      </button>
-                      <button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>
-                        Delete
-                      </button>
+                      <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>Edit</button>
+                      <button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>Delete</button>
                     </td>
                   </tr>
                 ))}

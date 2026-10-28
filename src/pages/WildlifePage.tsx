@@ -107,8 +107,8 @@ function WildlifePage() {
     const validRows = rows.filter(r => r.bird);
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
 
-    // Auto update full name (fallback to email if name not present)
-    const observerName = profile?.name || user?.displayName || user?.email || 'User';
+    // Auto update full name and designation
+    const observerName = `${profile?.name || user?.email || 'User'} (${profile?.position || 'Staff'})`;
 
     try {
       await apiFetch('/wildlife', {
@@ -122,6 +122,7 @@ function WildlifePage() {
         })
       });
       toast.success('Bird count saved successfully!');
+      // ... rest of the function
       setActiveTab('records');
       setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
       fetchRecords();
@@ -275,9 +276,9 @@ function WildlifePage() {
               </div>
               <div style={{ padding: '10px' }}>
                 <div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {date} <strong>Review date:</strong> {date}</div>
-                {/* Auto update full name */}
-                <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {profile?.name || user?.displayName || user?.email || 'N/A'}</div>
-                <div style={{ marginBottom: '8px' }}><strong>Designation:</strong> OPERATIONS OFFICER</div>
+                {/* Ensure no email is shown here */}
+                <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {profile?.name || 'User'}</div>
+                <div style={{ marginBottom: '8px' }}><strong>Designation:</strong> {profile?.position || 'Operations Officer'}</div>
                 <div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div>
                 <div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div>
               </div>

@@ -6,6 +6,7 @@ import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
 import { ConfirmDialog } from '../components/Dialogs';
+import { UserEditModal } from '../components/UserEditModal';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
@@ -71,11 +72,12 @@ function SettingsPage() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Custom Dialog States
+  // Dialog States
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
   const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
+  const [editingUser, setEditingUser] = useState<any>(null);
 
   // Temp Access State
   const [tempAccessList, setTempAccessList] = useState<any[]>([]);
@@ -164,15 +166,15 @@ function SettingsPage() {
   const handleRemoveUser = (userId: string, email: string) => setDeleteUserTarget({ id: userId, email });
 
   let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({
-    email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null
+    email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null, position: '—'
   }));
 
   activeUsers.forEach(a => {
     const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase());
     if (idx >= 0) {
-      allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id };
+      allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' };
     } else {
-      allMergedUsers.push({ email: a.email || '', name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id });
+      allMergedUsers.push({ email: a.email || '', name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' });
     }
   });
 
@@ -384,6 +386,11 @@ function SettingsPage() {
                           {u.password !== '—' ? u.password : <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 400 }}>Hidden</span>}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
+                          {u.id && (
+                            <button className="edit-btn" onClick={() => setEditingUser(u)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>
+                              ✏️ Edit
+                            </button>
+                          )}
                           <button className="reset-pw-btn" disabled={resetPwTarget === u.email} onClick={() => handleSendReset(u.email)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>
                             {resetPwTarget === u.email ? '...' : '📧 Reset'}
                           </button>
@@ -433,7 +440,6 @@ function SettingsPage() {
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
 
-      {/* CUSTOM DIALOGS */}
       <ConfirmDialog 
         isOpen={!!deleteTempTarget}
         title="Remove Temp Access?"
@@ -506,6 +512,14 @@ function SettingsPage() {
         }}
         onCancel={() => setDeleteUserTarget(null)}
       />
+
+      {editingUser && (
+        <UserEditModal 
+          user={editingUser} 
+          onClose={() => setEditingUser(null)} 
+          onSaved={fetchSettings} 
+        />
+      )}
     </div>
   );
 }

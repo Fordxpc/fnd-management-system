@@ -46,6 +46,13 @@ export function AuthProvider({ children }: any) {
               if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
               else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }
             }
+            
+            // Ensure name and position are synced
+            const staffName = staffData?.name || userData.name || currentUser.email?.split('@')[0] || 'User';
+            const staffPosition = staffData?.position || userData.position || 'Staff';
+            if (userData.name !== staffName) { updates.name = staffName; needsUpdate = true; }
+            if (userData.position !== staffPosition) { updates.position = staffPosition; needsUpdate = true; }
+
             if (needsUpdate) {
               await updateDoc(userRef, updates);
               finalProfile = { ...userData, ...updates };
@@ -63,8 +70,11 @@ export function AuthProvider({ children }: any) {
             if (initialRole === "staff" && isManagerPos) initialRole = "manager";
 
             const newProfile = {
-              email: currentUser.email, role: initialRole,
+              email: currentUser.email, 
+              role: initialRole,
               department: presetDoc?.department || staffDept || "Ground Operations",
+              name: staffData?.name || currentUser.email?.split('@')[0] || 'User',
+              position: staffData?.position || 'Staff',
               createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, newProfile);
@@ -96,14 +106,17 @@ export function AuthProvider({ children }: any) {
                 method: 'POST',
                 body: JSON.stringify({
                   uid: currentUser.uid, email: currentUser.email,
-                  role: finalProfile.role || 'staff', department: finalProfile.department || 'Ground Operations'
+                  role: finalProfile.role || 'staff', 
+                  department: finalProfile.department || 'Ground Operations',
+                  name: finalProfile.name,
+                  position: finalProfile.position
                 })
               });
             } catch (d1Err) {}
           }
 
         } catch (err) {
-          setProfile({ email: currentUser.email, role: "staff", department: "Ground Operations" });
+          setProfile({ email: currentUser.email, role: "staff", department: "Ground Operations", name: "User", position: "Staff" });
         }
       } else {
         setProfile(null);

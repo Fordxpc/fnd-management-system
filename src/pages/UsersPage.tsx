@@ -5,6 +5,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
+import { UserEditModal } from '../components/UserEditModal';
 
 const VIEW_ROLES = ['developer', 'manager', 'admin', 'owner', 'smt'];
 const EDIT_ROLES = ['developer', 'manager', 'admin', 'owner'];
@@ -45,6 +46,7 @@ function UsersPage() {
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{ id: string, email: string } | null>(null);
   const [deletePresetTarget, setDeletePresetTarget] = useState<{ id: string, email: string } | null>(null);
+  const [editingUser, setEditingUser] = useState<any>(null);
 
   const [showPresetForm, setShowPresetForm] = useState<boolean>(false);
   const [presetEmail, setPresetEmail] = useState<string>('');
@@ -63,7 +65,10 @@ function UsersPage() {
         apiFetch('/users'), apiFetch('/user-presets'), apiFetch('/staff')
       ]);
       
-      setUsers(usersData); setPresets(presetsData); setStaffList(staffData); setLoading(false);
+      setUsers(usersData); 
+      setPresets(presetsData); 
+      setStaffList(staffData); 
+      setLoading(false);
     } catch (err: any) {
       toast.error(err.message);
       setLoading(false);
@@ -157,7 +162,7 @@ function UsersPage() {
         <h2>User Management { !canEdit && <span style={{ fontSize: '14px', color: '#dc2626', fontWeight: 'normal' }}>(View Only)</span> }</h2>
         {canEdit && (
           <button className="add-staff-btn" onClick={() => setShowPresetForm(!showPresetForm)}>
-            {showPresetForm ? 'Cancel' : '+ Pre-register User'}
+            {showPresetForm ? 'Cancel' : '+ Add User Login'}
           </button>
         )}
       </div>
@@ -254,6 +259,7 @@ function UsersPage() {
                       </td>
                       {canEdit && (
                         <td style={{ whiteSpace: 'nowrap' }}>
+                          <button className="edit-btn" onClick={() => setEditingUser(u)} style={{ marginRight: '6px' }}>✏️ Edit</button>
                           <button className="reset-pw-btn" onClick={() => handleSendReset(u.email)}>📧 Reset PW</button>
                           <button className="delete-btn" onClick={() => handleDelete(u.id, u.email)} style={{ marginLeft: '6px' }}>Remove</button>
                         </td>
@@ -321,6 +327,14 @@ function UsersPage() {
         }}
         onCancel={() => setDeletePresetTarget(null)}
       />
+
+      {editingUser && (
+        <UserEditModal 
+          user={editingUser} 
+          onClose={() => setEditingUser(null)} 
+          onSaved={fetchData} 
+        />
+      )}
     </div>
   );
 }
