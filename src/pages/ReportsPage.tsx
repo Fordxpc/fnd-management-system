@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const TABS = ['Custom Generator', 'DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
+
+// Exact pastel colors from your screenshot
+const ROW_COLORS = ['#fef3c7', '#dcfce7', '#dbeafe', '#f3e8ff', '#fce7f3'];
 
 function ReportsPage() {
   const [activeTab, setActiveTab] = useState('DFIS');
@@ -35,7 +39,6 @@ function ReportsPage() {
 
   useEffect(() => {
     fetchAllData();
-    // Poll every 15 seconds to automatically update when a Ramp Sheet is saved
     const interval = setInterval(fetchAllData, 15000);
     return () => clearInterval(interval);
   }, [fetchAllData]);
@@ -51,15 +54,14 @@ function ReportsPage() {
     setDateTo('');
   };
 
-  const filterByDate = (item: any) => {
+  const filterByDate = useCallback((item: any) => {
     const d = item.date || item.createdAt?.split('T')[0];
     if (!d) return true;
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
     return true;
-  };
+  }, [dateFrom, dateTo]);
 
-  // Helper to split route (e.g. MLE/FND/MLE) into From, Via, To
   const parseRoute = (routeStr: string) => {
     if (!routeStr) return { from: '', via: '', to: '' };
     const parts = routeStr.split('/');
@@ -67,6 +69,33 @@ function ReportsPage() {
     if (parts.length === 2) return { from: parts[0], via: '', to: parts[1] };
     return { from: parts[0], via: '', to: '' };
   };
+
+  const filteredRamp = useMemo(() => rampReports.filter(filterByDate).reverse(), [rampReports, filterByDate]);
+
+  // --- STATISTICS TAB DATA PROCESSING ---
+  const statsData = useMemo(() => {
+    const grouped: Record<string, { paxIn: number, paxOut: number, cargoIn: number, cargoOut: number }> = {};
+    
+    filteredRamp.forEach(r => {
+      const month = (r.date || '').substring(0, 7);
+      if (!month) return;
+      if (!grouped[month]) grouped[month] = { paxIn: 0, paxOut: 0, cargoIn: 0, cargoOut: 0 };
+      
+      grouped[month].paxIn += Number(r.paxInTotal) || 0;
+      grouped[month].paxOut += Number(r.paxOutTotal) || 0;
+      
+      const parseKg = (val: string) => {
+        if (!val) return 0;
+        const parts = String(val).split('/');
+        return Number(parts[1]) || 0;
+      };
+      
+      grouped[month].cargoIn += parseKg(r.cargoIn);
+      grouped[month].cargoOut += parseKg(r.cargoOut);
+    });
+
+    return Object.entries(grouped).map(([month, data]) => ({ month, ...data })).sort((a,b) => a.month.localeCompare(b.month));
+  }, [filteredRamp]);
 
   return (
     <div className="page-content">
@@ -100,7 +129,7 @@ function ReportsPage() {
       ) : (
         <div className="dash-card" style={{ overflowX: 'auto' }}>
           
-          {/* DFIS TAB (Aircraft Turnaround Log) - Exact Layout from screenshot */}
+          {/* 1. DFIS TAB - WITH COLORS RESTORED */}
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -109,8 +138,8 @@ function ReportsPage() {
                 <h3 style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Funadhoo Airport</h3>
               </div>
 
-              <table className="mini-table" style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>
-                <thead>
+              <table className="mini-table" style={{ fontSize: '11px', whiteSpace: 'nowrap', backgroundColor: '#fff' }}>
+                <thead style={{ backgroundColor: '#f8fafc' }}>
                   <tr>
                     <th rowSpan={2}>S.No.</th>
                     <th rowSpan={2}>Date</th>
@@ -131,33 +160,25 @@ function ReportsPage() {
                     <th rowSpan={2}>Comments</th>
                   </tr>
                   <tr>
-                    {/* Arrivals */}
                     <th>Flight No.</th><th>ETA</th><th>ATA</th>
-                    {/* Route */}
                     <th>From</th><th>Via</th><th>To</th>
-                    {/* Departures */}
                     <th>Flight No.</th><th>Time (DI)</th>
-                    {/* PAX IN */}
                     <th>Adult</th><th>Inft</th><th>Total</th>
-                    {/* PAX OUT */}
                     <th>Adult</th><th>Inft</th><th>Total</th>
-                    {/* TRANSIT */}
                     <th>Adult</th><th>Inft</th><th>Total</th>
-                    {/* MAIL */}
                     <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
-                    {/* CARGO */}
                     <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
-                    {/* OTHERS */}
                     <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
-                    {/* BAGGAGE */}
                     <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rampReports.filter(filterByDate).map((r, index) => {
+                  {filteredRamp.map((r, index) => {
                     const routeParts = parseRoute(r.route);
+                    const bgColor = ROW_COLORS[index % ROW_COLORS.length]; // Apply pastel colors
+                    
                     return (
-                      <tr key={r.id}>
+                      <tr key={r.id} style={{ backgroundColor: bgColor }}>
                         <td>{index + 1}</td>
                         <td>{r.date}</td>
                         <td>{r.checkIn || '—'}</td>
@@ -165,68 +186,130 @@ function ReportsPage() {
                         <td>{r.acType || '—'}</td>
                         <td>Island Aviation Services</td>
                         
-                        {/* Arrivals */}
                         <td>{r.fltNo || '—'}</td>
                         <td>{r.eta || '—'}</td>
                         <td>{r.ata || '—'}</td>
                         
-                        {/* Route */}
                         <td>{routeParts.from}</td>
                         <td>{routeParts.via}</td>
                         <td>{routeParts.to}</td>
                         
-                        {/* Departures */}
-                        <td>{r.fltNo ? r.fltNo.replace('Q2', 'Q3') : '—'}</td> {/* Assumption: Outbound flight uses Q3 */}
+                        <td>{r.fltNo ? r.fltNo.replace('Q2', 'Q3') : '—'}</td>
                         <td>{r.atd || r.sta || '—'}</td>
                         
-                        {/* PAX IN */}
                         <td>{r.paxInAdult || '0'}</td>
                         <td>{r.paxInInf || '0'}</td>
                         <td>{r.paxInTotal || '0'}</td>
                         
-                        {/* PAX OUT */}
                         <td>{r.paxOutAdult || '0'}</td>
                         <td>{r.paxOutInf || '0'}</td>
                         <td>{r.paxOutTotal || '0'}</td>
                         
-                        {/* TRANSIT */}
                         <td>{r.paxTransAdult || '0'}</td>
                         <td>{r.paxTransInf || '0'}</td>
                         <td>{r.paxTransTotal || '0'}</td>
                         
-                        {/* MAIL */}
                         <td>{r.mailIn || '0 / 0'}</td>
                         <td>{r.mailOut || '0 / 0'}</td>
                         <td>{r.mailTrans || '0 / 0'}</td>
                         
-                        {/* CARGO */}
                         <td>{r.cargoIn || '0 / 0'}</td>
                         <td>{r.cargoOut || '0 / 0'}</td>
                         <td>{r.cargoTrans || '0 / 0'}</td>
                         
-                        {/* OTHERS */}
                         <td>{r.otherIn || '0 / 0'}</td>
                         <td>{r.otherOut || '0 / 0'}</td>
                         <td>{r.otherTrans || '0 / 0'}</td>
                         
-                        {/* BAGGAGE */}
                         <td>{r.bagIn || '0 / 0'}</td>
                         <td>{r.bagOut || '0 / 0'}</td>
                         <td>{r.bagTrans || '0 / 0'}</td>
                         
-                        <td>{r.comments || ''}</td>
+                        <td style={{ whiteSpace: 'normal', minWidth: '150px' }}>{r.comments || ''}</td>
                       </tr>
                     );
                   })}
-                  {rampReports.filter(filterByDate).length === 0 && (
-                    <tr><td colSpan={32} style={{ textAlign: 'center' }}>No records found for this date range.</td></tr>
+                  {filteredRamp.length === 0 && (
+                    <tr><td colSpan={32} style={{ textAlign: 'center', padding: '20px' }}>No records found.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           )}
 
-          {/* WILDLIFE TAB */}
+          {/* 2. STATISTICS TAB - WITH CHARTS */}
+          {activeTab === 'Statistics' && (
+            <div style={{ padding: '20px' }}>
+              <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Monthly Statistics</h3>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', breakInside: 'avoid' }}>
+                  <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>Total PAX</h4>
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={statsData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="paxIn" name="PAX IN" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="paxOut" name="PAX OUT" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', breakInside: 'avoid' }}>
+                  <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>Total Cargo (KG)</h4>
+                  <div style={{ height: 300 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={statsData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="cargoIn" name="Cargo IN (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="cargoOut" name="Cargo OUT (kg)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3. TRAFFIC TAB - SUMMARY TABLE */}
+          {activeTab === 'Traffic' && (
+            <div style={{ padding: '20px' }}>
+              <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Flight Traffic Summary</h3>
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Total Flights</th>
+                    <th>Total PAX IN</th>
+                    <th>Total PAX OUT</th>
+                    <th>Total PAX</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statsData.map(stat => (
+                    <tr key={stat.month}>
+                      <td><strong>{stat.month}</strong></td>
+                      <td style={{ textAlign: 'center' }}>{filteredRamp.filter(r => r.date?.startsWith(stat.month)).length}</td>
+                      <td style={{ textAlign: 'center' }}>{stat.paxIn}</td>
+                      <td style={{ textAlign: 'center' }}>{stat.paxOut}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 700 }}>{stat.paxIn + stat.paxOut}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* 4. WILDLIFE TAB */}
           {activeTab === 'Wildlife' && (
             <table className="mini-table">
               <thead>
@@ -243,7 +326,7 @@ function ReportsPage() {
             </table>
           )}
 
-          {/* FOD TAB */}
+          {/* 5. FOD TAB */}
           {activeTab === 'FOD' && (
             <table className="mini-table">
               <thead>
@@ -260,7 +343,8 @@ function ReportsPage() {
             </table>
           )}
 
-          {['Custom Generator', 'Statistics', 'Traffic', 'RWY Lights'].includes(activeTab) && (
+          {/* Placeholders for remaining tabs */}
+          {['Custom Generator', 'RWY Lights'].includes(activeTab) && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
               <p>Content for <strong>{activeTab}</strong> will appear here.</p>
             </div>
