@@ -41,7 +41,11 @@ export function AuthProvider({ children }: any) {
             let updates: any = {};
             let needsUpdate = false;
 
-            if (staffDept && userData.department !== staffDept) { updates.department = staffDept; needsUpdate = true; }
+            // Only apply staffDept if the user doesn't have a department set yet
+            if (staffDept && !userData.department) { 
+              updates.department = staffDept; 
+              needsUpdate = true; 
+            }
             if (userData.role === 'staff') {
               if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
               else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }

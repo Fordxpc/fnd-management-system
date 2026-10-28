@@ -342,8 +342,18 @@ export const onRequest = async (context: any) => {
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
+      
+      // 1. Update the Users table
       await env.DB.prepare(`UPDATE users SET role = ?, department = ?, name = ?, position = ? WHERE id = ?`)
         .bind(body.role, body.department, body.name || '', body.position || '', id).run();
+
+      // 2. Find the user's email to sync the Staff table
+      const userRec: any = await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(id).first();
+      if (userRec && userRec.email) {
+        await env.DB.prepare(`UPDATE staff SET department = ?, position = ? WHERE email = ?`)
+          .bind(body.department, body.position || '', userRec.email).run();
+      }
+
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

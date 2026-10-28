@@ -96,11 +96,11 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
       const otData = getData(3); const flightsData = getData(4); const rampDraft = getData(5);
       const fodData = getData(6); const birdData = getData(7);
 
-      // Deduplicate roster strictly by staffId + date (prioritizing leave status over scheduled)
+      // Deduplicate roster by staffId + date. If duplicates exist, prioritize 'scheduled'.
       const rosterMap = new Map();
       rosterData.forEach((item: any) => {
         const key = `${item.staffId}-${item.date}`;
-        if (!rosterMap.has(key) || item.status !== 'scheduled') {
+        if (!rosterMap.has(key) || item.status === 'scheduled') {
           rosterMap.set(key, item);
         }
       });
@@ -156,16 +156,26 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const activeStaff = staff.filter((s) => s.status !== 'inactive');
   
-  // FIXED: Check strictly against approved Leave Requests to remove them from Today's Duty
+  // --- TODAY'S DUTY DEDUPLICATION & LEAVE EXCLUSION ---
+  // 1. Get a strict list of approved leaves for today
   const approvedLeavesToday = leaveReqs.filter(l => l.status === 'approved' && l.startDate <= todayStr && l.endDate >= todayStr);
-  const onLeaveIds = new Set(approvedLeavesToday.map(l => l.staffId));
-
-  const todayShiftsAll = roster.filter((r) => r.date === todayStr && r.status === 'scheduled' && !onLeaveIds.has(r.staffId));
   
-  // Deduplicate shifts just in case the same person was scheduled twice
-  const uniqueShiftsMap = new Map();
-  todayShiftsAll.forEach(r => uniqueShiftsMap.set(r.staffId, r));
-  const finalShifts = Array.from(uniqueShiftsMap.values());
+  // 2. Create a Set of IDs that MUST be excluded from Today's Duty
+  const excludeFromDuty = new Set();
+  approvedLeavesToday.forEach(l => excludeFromDuty.add(l.staffId));
+  roster.forEach(r => {
+    if (r.date === todayStr && r.status !== 'scheduled' && r.status !== 'OFF DAY') {
+      excludeFromDuty.add(r.staffId);
+    }
+  });
+
+  // 3. Filter shifts (strict exclusion & deduplication)
+  const rawShifts = roster.filter((r) => r.date === todayStr && r.status === 'scheduled' && !excludeFromDuty.has(r.staffId));
+  
+  // Deduplicate by staffId (ensures one person doesn't appear twice)
+  const shiftsMap = new Map();
+  rawShifts.forEach(r => shiftsMap.set(r.staffId, r));
+  const todayShiftsAll = Array.from(shiftsMap.values());
 
   const todayLeaveAll = roster.filter((r) => r.date === todayStr && r.status && r.status !== 'scheduled' && r.status !== 'OFF DAY');
   
@@ -173,7 +183,7 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
 
   const userDept = profile?.department;
   
-  const todayShifts = canSeeAllDepartments ? finalShifts : finalShifts.filter(r => r.staffDepartment === userDept);
+  const todayShifts = canSeeAllDepartments ? todayShiftsAll : todayShiftsAll.filter(r => r.staffDepartment === userDept);
   const todayLeave = canSeeAllDepartments ? todayLeaveAll : todayLeaveAll.filter(r => r.staffDepartment === userDept);
 
   const totalFODGrams = todayFOD.reduce((sum, f) => sum + (Number(f.grams) || 0), 0);
@@ -260,7 +270,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 <div style={{ fontSize: '14px', fontWeight: 700, color: '#93c5fd', marginLeft: 'auto' }}>{nextFlight.route}</div>
               </div>
 
-              {/* Scheduled Timings */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <div>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>CHECK-IN</div>
@@ -280,7 +289,6 @@ const DashboardPage: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </div>
               </div>
 
-              {/* Live Timings */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', background: 'rgba(0,0,0,0.3)', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
                 <div>
                   <div style={{ fontSize: '10px', color: '#cbd5e1', fontWeight: 600 }}>MLE DEP</div>
