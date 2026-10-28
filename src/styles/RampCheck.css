@@ -66,10 +66,9 @@
 }
 
 /* ==========================================
-   PRINT STYLES (COMFORTABLE A4 PORTRAIT)
+   PRINT STYLES (COMFORTABLE HEIGHT)
    ========================================== */
 @media print {
-  /* Height & spacing for the form (Only applies inside the Ramp Sheet) */
   .ramp-sheet { font-size: 10px !important; }
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 8px !important; }
   .ramp-sheet .company-header { margin-bottom: 8px !important; }
