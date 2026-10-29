@@ -88,7 +88,6 @@ function SettingsPage() {
 
   const smtStaff = staffList.filter(s => s.isSMT);
   const nonSecurityStaff = staffList.filter(s => !s.isSMT && s.department !== 'Security');
-  const inspectorIds = new Set(inspectorList.map(i => i.staffId));
 
   // FILTER OUT USERS WHO ALREADY HAVE ACCESS VIA ROLES
   const assignableSmtForRampsheet = smtStaff.filter(s => s.department !== 'Ground Operations');

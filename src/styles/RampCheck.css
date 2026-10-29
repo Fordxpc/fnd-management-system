@@ -68,12 +68,14 @@
 /* ==========================================
    PRINT STYLES (A4 LANDSCAPE, SINGLE PAGE)
    ========================================== */
+
+/* MUST be outside @media print for CSS parsers */
+@page {
+  size: A4 landscape;
+  margin: 5mm;
+}
+
 @media print {
-  @page {
-    size: A4 landscape;
-    margin: 5mm;
-  }
-  
   html, body {
     width: 100% !important;
     height: 100% !important;
