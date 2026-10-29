@@ -70,10 +70,12 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES: GLOBAL & SPECIFIC MODULES
    ========================================== */
 @media print {
-  /* 1. Reset all container heights to completely eliminate blank pages */
+  /* 1. Reset all container heights and widths to eliminate blank pages and allow Portrait */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content {
     height: auto !important;
     min-height: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
     overflow: visible !important;
     background: transparent !important;
   }

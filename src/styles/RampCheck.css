@@ -70,12 +70,16 @@
    ========================================== */
 @media print {
   .ramp-sheet { 
-    font-size: 8px !important; 
+    font-size: 9px !important; 
     width: 100% !important; 
     max-width: 100% !important; 
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
+    
+    /* Shrink the form slightly so it fits on Portrait */
+    transform: scale(0.65);
+    transform-origin: top left;
   }
 
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; }
