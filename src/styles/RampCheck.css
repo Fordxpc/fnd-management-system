@@ -93,13 +93,8 @@
   
   .ramp-sheet { 
     font-size: 8px !important; 
-    
-    /* Scaled to fit portrait perfectly */
-    transform: scale(0.65);
-    transform-origin: top left;
-    width: 153.8%; 
-    max-width: none !important; 
-    
+    width: 100% !important; 
+    max-width: 100% !important; 
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
