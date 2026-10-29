@@ -9,7 +9,7 @@ import { ConfirmDialog } from '../components/Dialogs';
 
 const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
-const STAFF_CREDENTIALS = [ { email: 'sn-0034@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Adam' } /* ... */ ]; // Add your full list here
+const STAFF_CREDENTIALS = [ { email: 'sn-0034@funadhooairport.com', password: 'Fnd@2026', name: 'Abdulla Adam' } /* ... */ ];
 
 function SettingsPage() {
   const { profile, logout } = useAuth();
@@ -70,22 +70,12 @@ function SettingsPage() {
   const handleSendReset = (email: string) => setResetPwTarget(email);
   const handleRemoveUser = (userId: string, email: string) => setDeleteUserTarget({ id: userId, email });
 
-  const toggleIncharge = async (staffId: string, currentVal: boolean) => {
+  const togglePermission = async (staffId: string, field: string, currentVal: boolean) => {
     try {
       const staffRec = staffList.find(s => s.id === staffId);
-      const updated = { ...staffRec, isIncharge: !currentVal };
+      const updated = { ...staffRec, [field]: !currentVal };
       await apiFetch(`/staff/${staffId}`, { method: 'PUT', body: JSON.stringify(updated) });
-      toast.success(`Incharge status updated for ${staffRec.name}`);
-      fetchSettings();
-    } catch (err: any) { toast.error(err.message); }
-  };
-
-  const toggleSpecialAccess = async (staffId: string, currentVal: boolean) => {
-    try {
-      const staffRec = staffList.find(s => s.id === staffId);
-      const updated = { ...staffRec, specialOpsAccess: !currentVal };
-      await apiFetch(`/staff/${staffId}`, { method: 'PUT', body: JSON.stringify(updated) });
-      toast.success(`Special Ops Access updated for ${staffRec.name}`);
+      toast.success(`Access updated for ${staffRec.name}`);
       fetchSettings();
     } catch (err: any) { toast.error(err.message); }
   };
@@ -93,6 +83,10 @@ function SettingsPage() {
   let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({ email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null, position: '—' }));
   activeUsers.forEach(a => { const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase()); if (idx >= 0) { allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }; } else { allMergedUsers.push({ email: a.email || '', name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }); } });
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
+
+  const smtStaff = staffList.filter(s => s.isSMT);
+  const nonSecurityStaff = staffList.filter(s => !s.isSMT && s.department !== 'Security');
+  const rwyBirdStaff = [...smtStaff, ...nonSecurityStaff].sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -122,51 +116,97 @@ function SettingsPage() {
 
       {activeTab === 'incharges' && canManageAccess && (
         <div className="dash-card border-l-4 border-purple-500">
-          <h3>👑 Department Incharges & Access</h3>
-          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Assign Incharges for departments and grant special access to specific staff members.</p>
+          <h3>👑 Department Incharges & Granular Access</h3>
+          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Assign Incharges for departments and grant specific feature access to staff.</p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+            
+            {/* TEMPORARY DEPT ACCESS (SMT) */}
             <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>Assign SMT Incharge</h4>
-              {DEPARTMENTS.map(dept => {
-                const smts = staffList.filter(s => s.department === dept && s.isSMT);
-                if (smts.length === 0) return null;
-                return (
-                  <div key={dept} style={{ marginBottom: '16px', borderBottom: '1px dashed #cbd5e1', paddingBottom: '12px' }}>
-                    <strong style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>{dept}</strong>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {smts.map(smt => (
-                        <label key={smt.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={smt.isIncharge === true} onChange={() => toggleIncharge(smt.id, smt.isIncharge === true)} style={{ width: '16px', height: '16px' }} />
-                          {smt.name} ({smt.position})
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>Special Operations Access (Staff)</h4>
-              <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>Grant ground operation staff access to view and edit Ops Boards without being SMT.</p>
-              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {staffList.filter(s => !s.isSMT).map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', padding: '4px 0' }}>
-                    <input type="checkbox" checked={s.specialOpsAccess === true} onChange={() => toggleSpecialAccess(s.id, s.specialOpsAccess === true)} style={{ width: '16px', height: '16px' }} />
-                    {s.name} <span style={{ color: '#94a3b8', fontSize: '11px' }}>({s.department})</span>
+              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🔑 Temporary Dept Access</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {smtStaff.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.tempDeptAccess === true} onChange={() => togglePermission(s.id, 'tempDeptAccess', s.tempDeptAccess === true)} style={{ width: '16px', height: '16px' }} />
+                    {s.name}
                   </label>
                 ))}
               </div>
             </div>
+
+            {/* RAMPSHEET EDIT ACCESS (SMT) */}
+            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>✈️ Rampsheet Edit Access</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {smtStaff.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.rampsheetEditAccess === true} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* RWY LIGHT EDIT ACCESS (SMT + NON-SECURITY) */}
+            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🚨 RWY Light Edit Access</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {rwyBirdStaff.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.rwyLightEditAccess === true} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                    {s.name} {s.isSMT && '⭐'}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* BIRDS COUNT EDIT ACCESS (SMT + NON-SECURITY) */}
+            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🦅 Birds Count Edit Access</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {rwyBirdStaff.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.birdCountEditAccess === true} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                    {s.name} {s.isSMT && '⭐'}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* OPS BOARD ACCESS (SMT) */}
+            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>📋 Ops Board Access</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {smtStaff.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.opsBoardAccess === true} onChange={() => togglePermission(s.id, 'opsBoardAccess', s.opsBoardAccess === true)} style={{ width: '16px', height: '16px' }} />
+                    {s.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* SMT INCHARGE ASSIGNMENT */}
+            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>⭐ Assign SMT Incharge</h4>
+              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {smtStaff.map(s => (
+                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} />
+                    {s.name} <span style={{ color: '#64748b', fontSize: '11px' }}>({s.department})</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       )}
 
       {activeTab === 'rules' && canManageAccess && (
         <div className="dash-card border-l-4 border-blue-500">
-          {/* ... (Keep your Overtime, Temp Access, and Lights Inspectors forms here) ... */}
           <h3>⚙️ System Rules & Access Control</h3>
+          {/* ... (Keep your existing OT rules and temp access section here) ... */}
         </div>
       )}
 
@@ -174,7 +214,6 @@ function SettingsPage() {
       {activeTab === 'console' && isDev && (<div className="dash-card border-l-4 border-slate-800" style={{ background: '#0f172a', color: '#e2e8f0', fontFamily: 'monospace' }}><h3 style={{ color: '#38bdf8' }}>💻 System Console</h3></div>)}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
-      
       {/* Keep your ConfirmDialogs here */}
     </div>
   );
