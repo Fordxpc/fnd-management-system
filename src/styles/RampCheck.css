@@ -66,12 +66,12 @@
 }
 
 /* ==========================================
-   PRINT STYLES (A4 LANDSCAPE, SINGLE PAGE)
+   PRINT STYLES (A4 PORTRAIT, SINGLE PAGE)
    ========================================== */
 
 /* MUST be outside @media print for CSS parsers */
 @page {
-  size: A4 landscape;
+  size: A4 portrait;
   margin: 5mm;
 }
 
@@ -92,7 +92,7 @@
   }
   
   .ramp-sheet { 
-    font-size: 9px !important; 
+    font-size: 8px !important; 
     width: 100% !important; 
     max-width: 100% !important; 
     margin: 0 !important;
@@ -100,7 +100,8 @@
     box-shadow: none !important;
     page-break-inside: avoid !important; 
     break-inside: avoid !important;
-    zoom: 0.92; /* Forces the height to shrink slightly so it fits on 1 page */
+    /* ZOOM: 0.65 scales the form down to fit the narrower A4 portrait width */
+    zoom: 0.65; 
   }
 
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; }
