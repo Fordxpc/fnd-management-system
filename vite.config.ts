@@ -1,10 +1,11 @@
+// @ts-ignore
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
   build: {
-    cssMinify: 'esbuild' // <--- ADD THIS TO FIX THE BUILDS
+    cssMinify: 'esbuild'
   },
   server: {
     proxy: {

@@ -69,8 +69,6 @@
    PRINT STYLES (A4 FIT)
    ========================================== */
 @media print {
-  /* NO @page rules here! This allows you to select Landscape or Portrait. */
-
   .ramp-sheet { 
     font-size: 8px !important; 
     width: 100% !important; 
