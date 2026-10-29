@@ -69,133 +69,50 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
 /* ==========================================
    PRINT STYLES: GLOBAL & SPECIFIC MODULES
    ========================================== */
-
-/* Default print layout: A4 Landscape, 5mm margins */
-@page {
-  size: A4 landscape;
-  margin: 5mm;
-}
-
-/* Specific layout for Ramp Check (Portrait) */
-@page ramp-portrait {
-  size: A4 portrait;
-  margin: 5mm;
-}
-
-/* Specific layout for Bird Count (Portrait) */
-@page bird-count-portrait {
-  size: A4 portrait;
-  margin: 10mm;
-}
-
 @media print {
-  /* --- GLOBAL RESETS --- */
-  html, body, #root, .dashboard-layout, .main-content, .page-content, 
-  .modal-backdrop, .modal-content, .modal-scrollable-body {
-    overflow: visible !important;
+  /* 1. Reset all container heights to completely eliminate blank pages */
+  html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content {
     height: auto !important;
-    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     background: transparent !important;
   }
+  
   ::-webkit-scrollbar { display: none !important; }
 
-  /* Force background colors to print */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* Hide all UI chrome, buttons, and navigation */
+  /* 2. Hide the app UI chrome */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs {
     display: none !important;
   }
 
-  /* Hide all content by default */
-  body > #root * {
-    visibility: hidden;
-  }
-
-  /* --- 1. ROSTER PRINT --- */
-  body.printing-roster .dashboard-layout, 
-  body.printing-roster .main-content, 
-  body.printing-roster .page-wrapper, 
-  body.printing-roster .page-content,
-  body.printing-roster .roster-export-area,
-  body.printing-roster .roster-export-area * {
-    visibility: visible !important;
-  }
+  /* 3. ROSTER */
   body.printing-roster .roster-export-area {
-    position: absolute; left: 0; top: 0; width: 100% !important;
-    box-shadow: none !important; padding: 0 !important; margin: 0 !important; 
-    border: none !important; zoom: 1 !important;
+    width: 100% !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; border: none !important; 
+  }
+  body.printing-roster .week-grid th, body.printing-roster .week-grid td {
+    border: 1px solid #000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
   }
 
-  /* --- 2. REPORTS (DFIS) PRINT --- */
-  body.printing-report .page-content, 
-  body.printing-report .page-content *,
-  body.printing-report .modal-backdrop, 
-  body.printing-report .modal-backdrop * {
-    visibility: visible !important;
-  }
-  body.printing-report .page-content, 
-  body.printing-report .modal-backdrop { 
-    position: absolute; left: 0; top: 0; width: 100% !important; max-width: 100% !important; 
-  }
-  body.printing-report table { 
-    width: 100% !important; table-layout: fixed !important; font-size: 7px !important; border-collapse: collapse !important;
-  }
-  body.printing-report th, body.printing-report td { 
-    border: 1px solid #000 !important; padding: 1px 2px !important; word-break: normal !important; vertical-align: middle !important;
-  }
-  body.printing-report .dfis-print-table table { font-size: 5.5px !important; }
-  body.printing-report .dfis-print-table th { padding: 2px 1px !important; font-size: 5.5px !important; text-align: center !important; vertical-align: middle !important; white-space: normal !important; word-break: break-word !important; line-height: 1.1 !important; }
-  body.printing-report .dfis-print-table td { padding: 1px !important; font-size: 5.5px !important; text-align: center !important; white-space: nowrap !important; }
+  /* 4. REPORTS */
+  body.printing-report .page-content { width: 100% !important; max-width: 100% !important; }
+  body.printing-report table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; border-collapse: collapse !important; }
+  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 1px 2px !important; word-break: normal !important; vertical-align: middle !important; }
 
-  /* --- 3. RAMP CHECK PRINT --- */
-  body.printing-ramp .ramp-container, 
-  body.printing-ramp .ramp-container *,
-  body.printing-ramp .ramp-sheet,
-  body.printing-ramp .ramp-sheet *,
-  body.printing-ramp .modal-backdrop,
-  body.printing-ramp .modal-backdrop * {
-    visibility: visible !important;
-  }
-  body.printing-ramp .ramp-container,
-  body.printing-ramp .modal-backdrop {
-    position: absolute; left: 0; top: 0; width: 100% !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
-  }
-  
-  /* Apply the named page to the ramp sheet */
-  body.printing-ramp .ramp-sheet {
-    page: ramp-portrait;
+  /* 5. RAMP CHECK */
+  body.printing-ramp .ramp-container {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
   }
 
-  /* --- 4. WILDLIFE (BIRD COUNT) PRINT --- */
-  body.printing-bird-count { page: bird-count-portrait; }
-  body.printing-bird-count .page-content,
-  body.printing-bird-count .modal-backdrop,
-  body.printing-bird-count .page-content *,
-  body.printing-bird-count .modal-backdrop * {
-    visibility: visible !important;
-  }
-  body.printing-bird-count .page-content,
-  body.printing-bird-count .modal-backdrop { 
-    position: absolute; left: 0; top: 0; width: 100% !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
-  }
-  
-  /* FORCE PAGE BREAKS FOR 2-PART FORMS */
-  body.printing-bird-count .bird-count-page-1 { 
-    page-break-after: always !important; 
-    break-after: page !important; 
-  }
-  body.printing-bird-count .bird-count-page-2 { 
-    page-break-before: always !important; 
-    break-before: page !important; 
-  }
-
+  /* 6. WILDLIFE (BIRD COUNT) */
+  body.printing-bird-count .bird-count-page-1 { page-break-after: always !important; break-after: page !important; }
+  body.printing-bird-count .bird-count-page-2 { page-break-before: always !important; break-before: page !important; }
   body.printing-bird-count table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; }
   body.printing-bird-count th, body.printing-bird-count td { padding: 2px 1px !important; border: 1px solid #000 !important; word-break: break-word !important; text-align: center !important; }
-  body.printing-bird-count select, body.printing-bird-count input { -webkit-appearance: none !important; appearance: none !important; border: none !important; background: transparent !important; font-size: 7px !important; text-align: center !important; padding: 0 !important; }
+  body.printing-bird-count select, body.printing-bird-count input { border: none !important; background: transparent !important; font-size: 7px !important; text-align: center !important; padding: 0 !important; }
 }
