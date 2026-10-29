@@ -74,9 +74,14 @@ function LeavePage() {
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   
-  // UPDATED LOGIC: Handle Incharge permissions
+  // Approval permission:
+  //   Dev/Manager → always
+  //   Safety → Security dept
+  //   Temp access → target dept
+  //   SMT requester → only Incharge of that dept
+  //   Standard requester → dept SMT or dept approver position
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
-    if (isDev || isManager || canApproveAnyDept) return true; // Managers/Devs can approve anyone
+    if (isDev || isManager || canApproveAnyDept) return true;
     
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (myStaff?.department || '').trim().toLowerCase();
@@ -86,13 +91,13 @@ function LeavePage() {
     if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === targetDept)) return true;
     if (currentDept === 'safety' && targetDept === 'security') return true;
 
-    // If requester is SMT, only Manager, Dev, or Department Incharge can approve
+    // If requester is SMT, only Manager/Dev or Department Incharge can approve
     if (isSMTRequester) {
       if (isActuallySMT && isIncharge && currentDept === targetDept) return true;
-      return false; // Standard SMT members cannot approve other SMT members
+      return false;
     }
 
-    // If requester is standard staff, Dept Manager or Dept Incharge can approve
+    // If requester is standard staff, Dept Manager or Dept SMT can approve
     if (isActuallySMT && currentDept === targetDept) return true;
     if (isDeptManager && currentDept === targetDept) return true;
     return false;
@@ -105,9 +110,15 @@ function LeavePage() {
     return canApproveThisDept(r.staffDepartment, r.staffIsSMT);
   };
 
+  // DELETE permission:
+  //   Dev/Manager → always
+  //   Own request → always
+  //   Dept SMT / Incharge / Temp → same scope as approval
   const canDeleteRequest = (r: any): boolean => {
     if (isDev || isManager) return true;
-    return myStaff && r.staffId === myStaff.id;
+    if (myStaff && r.staffId === myStaff.id) return true;
+    if (canApproveRequest(r)) return true;
+    return false;
   };
 
   const visibleRequests = requests.filter((r: any) => {

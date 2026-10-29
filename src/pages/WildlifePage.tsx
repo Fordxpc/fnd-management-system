@@ -33,8 +33,13 @@ const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW',
 
 function WildlifePage() {
   const { profile, user } = useAuth();
-  const isManager = ['developer', 'manager', 'smt'].includes(profile?.role || '');
-  
+
+  // EDIT — Ops SMT + full-access roles only
+  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
+  const isManager = isFullAccess || isOpsSMT;
+
   const [activeTab, setActiveTab] = useState<'form' | 'reports' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +144,6 @@ function WildlifePage() {
     setDate(record.date);
     setRefNo(record.refNo);
     
-    // Split wind back into dir and speed
     const windParts = (record.wind || '').split(' ');
     setWindDir(windParts[0] || 'N');
     setWindSpd(windParts[1]?.replace('km/h', '') || '');
@@ -171,7 +175,6 @@ function WildlifePage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  // --- CHART & TABLE DATA PROCESSING ---
   const trendData = useMemo(() => {
     const dailyData: Record<string, Record<string, number>> = {};
     const allSpecies = new Set<string>();
@@ -408,8 +411,12 @@ function WildlifePage() {
                     <td>{r.rows?.length || 0}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button className="quick-btn" onClick={() => setViewingRecord(r)} style={{ background: '#2563eb', color: 'white', padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>👁️ View / Print</button>
-                      <button className="edit-btn" onClick={() => handleEdit(r)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button>
-                      <button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>
+                      {isManager && (
+                        <>
+                          <button className="edit-btn" onClick={() => handleEdit(r)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button>
+                          <button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -429,7 +436,6 @@ function WildlifePage() {
         </div>
       )}
 
-      {/* PRINT PREVIEW MODAL FOR SAVED RECORDS */}
       {viewingRecord && (
         <div className="modal-backdrop" onClick={() => setViewingRecord(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>

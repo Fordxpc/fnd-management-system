@@ -17,8 +17,13 @@ const formatDisplayDate = (dateStr: string) => {
 
 function FlightsPage() {
   const { profile } = useAuth();
-  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(profile?.role || '');
-  
+
+  // EDIT — Ops SMT + full-access roles only
+  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
+  const isManager = isFullAccess || isOpsSMT;
+
   const [flights, setFlights] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(formatDate(new Date()));

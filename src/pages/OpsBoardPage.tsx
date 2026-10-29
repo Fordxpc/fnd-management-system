@@ -35,11 +35,20 @@ function OpsBoardPage() {
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'owner' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const dept = profile?.department || '';
-  const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
-  
-  const canEdit = isDev || isManager || (isSMT && isOpsOrSafety);
-  const canView = canEdit || isSMT || isOpsOrSafety;
+  const dept = (profile?.department || '').toLowerCase();
+
+  const isOpsSMT = isSMT && dept === 'ground operations';
+
+  // EDIT — Ops SMT + full-access roles only
+  const canEdit = isDev || isManager || isOpsSMT;
+
+  // VIEW — Ops SMT, other SMT, Ground Ops / Maintenance / Safety staff
+  const canView =
+    canEdit ||
+    isSMT ||
+    dept === 'ground operations' ||
+    dept === 'maintenance' ||
+    dept === 'safety';
 
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
   
@@ -53,7 +62,6 @@ function OpsBoardPage() {
   const [previewBaseScale, setPreviewBaseScale] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(1);
 
-  // Custom Dialog States
   const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [deleteFodTarget, setDeleteFodTarget] = useState<string | null>(null);
@@ -68,7 +76,6 @@ function OpsBoardPage() {
   const [lights, setLights] = useState<string[]>([]);
   const runwayRef = useRef<HTMLDivElement>(null);
 
-  // ---- TASK BOARDS (dynamic, persisted) ----
   const [tasks, setTasks] = useState<any[]>(() => {
     const saved = localStorage.getItem('ops_tasks');
     if (saved) {
@@ -84,7 +91,6 @@ function OpsBoardPage() {
     localStorage.setItem('ops_tasks', JSON.stringify(tasks));
   }, [tasks]);
 
-  // Add/Edit task modal state
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
@@ -149,7 +155,6 @@ function OpsBoardPage() {
     localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
   }, [rwy19, rwy01, lights, groundAssign]);
 
-  // ---- TASK BOARD ACTIONS ----
   const handleAddTask = () => {
     setEditingTaskId(null);
     setTaskForm({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
@@ -487,9 +492,9 @@ function OpsBoardPage() {
                         <label key={s} style={{ 
                           fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', 
                           background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', 
-                          padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: 'pointer'
+                          padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: canEdit ? 'pointer' : 'default'
                         }}>
-                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
+                          <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} disabled={!canEdit} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
                           <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
                         </label>
                       ))}
@@ -556,17 +561,19 @@ function OpsBoardPage() {
 
       {activeTab === 'fod' && (
         <div className="dash-grid">
-          <div className="dash-card">
-            <h3>🪨 Log FOD Collection</h3>
-            <form onSubmit={handleSaveFOD} className="staff-form" style={{ gridTemplateColumns: '1fr', padding: 0, boxShadow: 'none' }}>
-              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date</label><input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} required /></div>
-              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Stone Count (grams)</label><input type="number" placeholder="e.g. 15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required /></div>
-              <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Remarks / Details</label><input placeholder="e.g. Small rocks found near RWY 19" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required /></div>
-              <button type="submit" disabled={fodSubmitting} style={{ gridColumn: 'span 1' }}>{fodSubmitting ? 'Saving...' : 'Save FOD Entry'}</button>
-            </form>
-          </div>
+          {canEdit && (
+            <div className="dash-card">
+              <h3>🪨 Log FOD Collection</h3>
+              <form onSubmit={handleSaveFOD} className="staff-form" style={{ gridTemplateColumns: '1fr', padding: 0, boxShadow: 'none' }}>
+                <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date</label><input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} required /></div>
+                <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Stone Count (grams)</label><input type="number" placeholder="e.g. 15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required /></div>
+                <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Remarks / Details</label><input placeholder="e.g. Small rocks found near RWY 19" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required /></div>
+                <button type="submit" disabled={fodSubmitting} style={{ gridColumn: 'span 1' }}>{fodSubmitting ? 'Saving...' : 'Save FOD Entry'}</button>
+              </form>
+            </div>
+          )}
 
-          <div className="dash-card">
+          <div className="dash-card" style={!canEdit ? { gridColumn: 'span 2' } : undefined}>
             <h3>📋 Recent FOD Collections</h3>
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               <table className="mini-table">
@@ -824,7 +831,6 @@ function OpsBoardPage() {
         </div>
       )}
 
-      {/* ---- Add / Edit Task Board Modal ---- */}
       {showTaskModal && (
         <div className="modal-backdrop" onClick={() => setShowTaskModal(false)} style={{ zIndex: 10000 }}>
           <div

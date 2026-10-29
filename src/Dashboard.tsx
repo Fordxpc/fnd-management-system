@@ -34,17 +34,16 @@ function Dashboard(_props: any) {
   const dept = profile?.department || '';
   
   const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && !isAdmin;
-  const isOpsOrSafety = dept === 'Ground Operations' || dept === 'Safety';
+  const isOpsOrMaintenanceOrSafety = dept === 'Ground Operations' || dept === 'Maintenance' || dept === 'Safety';
   const canManageUsers = isDev || isManager || isAdmin;
   
-  const canSeeOpsBoard = isDev || isManager || isAdmin || isSMT || isOpsOrSafety;
+  const canSeeOpsBoard = isDev || isManager || isAdmin || isSMT || isOpsOrMaintenanceOrSafety;
   const canSeeRampCheck = isDev || isManager || isAdmin || isSMT;
   const canSeeStaffList = isDev || isManager || isAdmin || isSMT;
   
   const canSeeReports = !isStaff; 
   const canSeeWildlife = !isStaff;
   
-  // Lights Access Logic
   const myStaffId = profile?.id; 
   const isLightsInspector = lightsInspectors.some((i: any) => 
     i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
@@ -63,7 +62,7 @@ function Dashboard(_props: any) {
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
-    ...(isDev ? { migration: <MigrationTool /> } : {}), // ONLY DEV CAN ACCESS
+    ...(isDev ? { migration: <MigrationTool /> } : {}),
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
     rampcheck: <RampCheckSheetPage />,
@@ -115,7 +114,6 @@ function Dashboard(_props: any) {
             <>
               <div className="sidebar-section-title">System & Setting</div>
               
-              {/* MIGRATION TOOL - DEVELOPER ONLY */}
               {isDev && (
                 <button className={currentPage === 'migration' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('migration')} style={{ background: '#8b5cf6', color: 'white', marginBottom: '8px' }}>
                   🚀 Migration Tool

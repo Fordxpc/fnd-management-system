@@ -152,14 +152,24 @@ function RosterPage() {
   const userDepartment = myStaff?.department || profile?.department;
   const isAdmin = isDev || isManager || isSMT;
 
+  // ROSTER EDIT PERMISSION:
+  //   Dev / Manager / Admin / Owner → full access to all departments
+  //   Safety ↔ Security cross-access
+  //   Only Department Incharge can edit (standard SMT is VIEW-ONLY)
   const canEditDept = (dept: string) => {
     if (isDev || isManager) return true;
+
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (userDepartment || '').trim().toLowerCase();
+
+    // Safety has full access to Security department
     if (currentDept === 'safety' && targetDept === 'security') return true;
-    if (!isSMT) return false;
-    if (currentDept === targetDept) return true;
-    return false;
+
+    // Only Department Incharge can edit
+    if (myStaff?.isIncharge !== true) return false;
+
+    // Incharge can only edit their own department
+    return currentDept === targetDept;
   };
 
   const activeDeptName = isAdmin
@@ -332,7 +342,6 @@ function RosterPage() {
     setBulkSubmitting(false);
   };
 
-  // FIXED: Exact relative week/day mapping
   const handleCopyPreviousPeriod = async () => {
     const prevStart = new Date(periodStart); prevStart.setMonth(prevStart.getMonth() - 1);
     const prevEnd = new Date(periodEnd); prevEnd.setMonth(prevEnd.getMonth() - 1);
@@ -352,14 +361,12 @@ function RosterPage() {
 
       for (const e of prevEntries) {
         const oldDate = new Date(e.date + 'T00:00:00');
-        // Calculate exact day offset from the first Saturday of the period
         const diffDays = Math.floor((oldDate.getTime() - prevFirstSat.getTime()) / (1000 * 3600 * 24));
         
         const newDate = new Date(currentFirstSat);
         newDate.setDate(newDate.getDate() + diffDays);
         const newDateStr = formatDate(newDate);
 
-        // Skip if there's currently approved leave on this new date
         const isProtected = entries.some(curr => curr.staffId === e.staffId && curr.date === newDateStr && (isApprovedLeaveStatus(curr.status) || curr.leaveRequestId));
         if (isProtected) continue;
 

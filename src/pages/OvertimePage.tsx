@@ -114,20 +114,33 @@ function OvertimePage() {
   
   const canViewAll = isDev || isManager;
   
-  const canApproveThisDept = (dept: string) => {
+  // Approval: Dev/Manager → always; Safety→Security; Temp → target;
+  //           SMT requester → only Incharge of dept; standard → dept SMT
+  const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
     if (canViewAll) return true;
-    if (!isSMT) return false;
+
     const target = (dept || '').toLowerCase();
     const current = (myStaff?.department || '').toLowerCase();
-    
+    const isIncharge = myStaff?.isIncharge === true;
+
+    // Safety has full access to Security department
+    if (current === 'safety' && target === 'security') return true;
+
+    // Temp access
     if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === target)) return true;
 
-    if (current === 'safety' && target === 'security') return true;
+    // SMT requester → only Department Incharge can approve
+    if (isSMTRequester) {
+      return isIncharge && current === target;
+    }
+
+    // Standard requester → Dept SMT can approve within own dept
+    if (!isSMT) return false;
     return current === target;
   };
 
-  const canEditThisDept = (dept: string) => {
-    return canViewAll || canApproveThisDept(dept);
+  const canEditThisDept = (dept: string, isSMTRequester: boolean = false) => {
+    return canViewAll || canApproveThisDept(dept, isSMTRequester);
   };
 
   const isExcludedFromOT = (staffName: string, position: string) => {
@@ -146,7 +159,10 @@ function OvertimePage() {
       if (filterStaff !== 'all') {
         filtered = filtered.filter((e) => e.staffId === filterStaff);
       } else {
-        filtered = filtered.filter((e) => canApproveThisDept(e.staffDepartment));
+        filtered = filtered.filter((e) => {
+          const entryStaff = staff.find(s => s.id === e.staffId);
+          return canApproveThisDept(e.staffDepartment, entryStaff?.isSMT === true);
+        });
       }
     }
   } else {
@@ -367,14 +383,16 @@ function OvertimePage() {
                   <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Status / Approved By</th><th>Actions</th></tr></thead>
                   <tbody>
                     {weekEntries.map((e) => {
-                      const canManage = canEditThisDept(e.staffDepartment);
+                      const entryStaffRec = staff.find(s => s.id === e.staffId);
+                      const isEntrySMT = entryStaffRec?.isSMT === true;
+                      const canManage = canEditThisDept(e.staffDepartment, isEntrySMT);
                       const approverName = e.reviewedBy ? (staff.find(s => (s.email || '').toLowerCase() === e.reviewedBy.toLowerCase())?.name || e.reviewedBy) : null;
                       
                       return (
                         <tr key={e.id}>
                           <td>{formatDisplay(e.date)}</td>
                           <td>{getDayShort(e.date)}</td>
-                          {viewMode === 'department' && <td><strong>{e.staffName}</strong></td>}
+                          {viewMode === 'department' && <td><strong>{e.staffName}</strong> {isEntrySMT && '⭐'}</td>}
                           <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
                           <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{e.notes || '—'}</td>

@@ -31,8 +31,15 @@ function RampCheckSheetPage() {
   const { profile, user } = useAuth();
   
   const role = profile?.role || '';
-  const isSMTOrAbove = ['developer', 'manager', 'admin', 'owner', 'smt'].includes(role) || profile?.isSMT === true;
-  const isManager = ['developer', 'manager', 'owner', 'admin', 'smt'].includes(role);
+  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(role);
+  const isSMT = role === 'smt' || profile?.isSMT === true;
+  const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
+
+  // EDIT — Ops SMT + full access roles only
+  const isManager = isFullAccess || isOpsSMT;
+
+  // VIEW — anyone SMT or above
+  const isSMTOrAbove = isFullAccess || isSMT;
   
   // ---- All hooks first (rules of hooks) ----
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
@@ -78,7 +85,6 @@ function RampCheckSheetPage() {
     );
   }
 
-  // FIXED: Added HTMLSelectElement to the type union
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     if (!isManager) return;
     const { id, value } = e.target;
@@ -274,7 +280,7 @@ function RampCheckSheetPage() {
       )}
 
       {activeSubTab === 'reports' && (
-        <RampReportsPage onEdit={handleEditReport} />
+        <RampReportsPage onEdit={isManager ? handleEditReport : undefined} />
       )}
 
       <ConfirmDialog 
