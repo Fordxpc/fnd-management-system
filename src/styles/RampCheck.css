@@ -66,40 +66,19 @@
 }
 
 /* ==========================================
-   PRINT STYLES (A4 PORTRAIT, SINGLE PAGE)
+   PRINT STYLES (A4 FIT)
    ========================================== */
-
-/* NO !important ALLOWED HERE - Vite will crash */
-@page {
-  size: A4 portrait;
-  margin: 5mm;
-}
-
 @media print {
-  html, body {
-    width: 100% !important;
-    height: 100% !important;
-    overflow: hidden !important;
-    background: #fff !important;
-  }
+  /* NO @page rules here! This allows you to select Landscape or Portrait. */
 
-  .ramp-container { 
-    overflow: visible !important; 
-    padding: 0 !important; 
-    margin: 0 !important; 
-    width: 100% !important;
-    height: 100% !important;
-  }
-  
   .ramp-sheet { 
-    font-size: 8px !important; 
+    font-size: 9px !important; 
     width: 100% !important; 
     max-width: 100% !important; 
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
-    page-break-inside: avoid !important; 
-    break-inside: avoid !important;
+    zoom: 0.65; /* Fits the form perfectly on 1 page */
   }
 
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; }
