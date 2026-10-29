@@ -77,7 +77,7 @@
     max-width: 100% !important; 
     margin: 0 !important; 
     padding: 0 !important; 
-    /* This shrinks the form slightly to guarantee it fits on 1 page */
+    /* This guarantees it fits on 1 page */
     zoom: 0.85; 
   }
   
