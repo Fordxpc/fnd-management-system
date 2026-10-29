@@ -70,7 +70,9 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* FORCE PORTRAIT & REMOVE BLANK SPACE */
+  /* Forces Portrait and removes the huge blank top space */
+  @page { size: A4 portrait; margin: 5mm; }
+
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
     width: 100% !important;
     max-width: 100% !important;
@@ -83,6 +85,8 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     background: transparent !important;
     box-shadow: none !important;
     border: none !important;
+    /* This removes the forced flex height */
+    display: block !important;
   }
 
   ::-webkit-scrollbar { display: none !important; }
@@ -98,9 +102,7 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
 
   /* --- RAMP CHECK ISOLATION --- */
   body.printing-ramp .ramp-container, 
-  body.printing-ramp .ramp-container *,
-  body.printing-ramp .modal-backdrop, 
-  body.printing-ramp .modal-backdrop * { 
+  body.printing-ramp .ramp-container * { 
     visibility: visible !important; 
   }
   
