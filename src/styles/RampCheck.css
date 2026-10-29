@@ -70,18 +70,19 @@
    ========================================== */
 @media print {
   /* NO @page rules here! This allows you to select Landscape or Portrait. */
+  /* NO zoom or transform here! The browser's "Fit to page" will handle the sizing. */
 
   .ramp-sheet { 
-    font-size: 9px !important; 
+    font-size: 8px !important; 
     width: 100% !important; 
     max-width: 100% !important; 
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
-    zoom: 0.65; /* Fits the form perfectly on 1 page */
+    border: 1px solid #000 !important; 
   }
 
-  .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; }
+  .ramp-sheet .flight-form { border: none !important; padding: 6px !important; }
   
   .ramp-sheet .company-header { margin-bottom: 6px !important; }
   .ramp-sheet .company-header img { height: 40px !important; margin-bottom: 3px !important; }
