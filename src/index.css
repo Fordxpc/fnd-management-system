@@ -70,16 +70,24 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* 1. CRITICAL: Collapse all invisible height so it doesn't push content to page 2 */
-  html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
+  @page { margin: 5mm; }
+
+  /* 1. Establish the page as the coordinate system */
+  html, body {
+    position: relative !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  /* 2. Collapse ALL parent containers so they don't create blank pages */
+  #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
     display: block !important;
-    flex: none !important;
     position: static !important;
     width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
+    height: 0 !important;
     min-height: 0 !important;
-    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
@@ -88,17 +96,17 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     box-shadow: none !important;
   }
 
-  /* 2. Completely remove UI elements from taking up space */
+  /* 3. Hide UI that takes up space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
     display: none !important;
   }
 
-  /* 3. Hide everything */
+  /* 4. Hide all elements */
   body > #root * { visibility: hidden; }
   
-  /* 4. Show ONLY the form */
+  /* 5. Show ONLY the form */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container *,
   body.printing-ramp .modal-backdrop,
@@ -106,10 +114,15 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     visibility: visible !important; 
   }
 
-  /* 5. Ensure the form starts exactly on page 1 */
+  /* 6. Pin the form to the absolute top-left of Page 1 */
   body.printing-ramp .ramp-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 100% !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+    display: block !important;
   }
 }
