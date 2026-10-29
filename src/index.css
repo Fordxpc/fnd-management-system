@@ -69,16 +69,6 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
 /* ==========================================
    PRINT STYLES
    ========================================== */
-@page report-landscape {
-  size: A4 landscape;
-  margin: 5mm;
-}
-
-@page bird-count-portrait {
-  size: A4 portrait;
-  margin: 10mm;
-}
-
 @media print {
   /* 1. Reset base dimensions to unlock portrait and prevent blank pages */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content {
@@ -103,51 +93,21 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     display: none !important;
   }
 
-  /* --- REPORTS LANDSCAPE --- */
-  body.printing-report { page: report-landscape; }
-  body.printing-report .page-content, body.printing-report .modal-backdrop { page: report-landscape; }
-  body.printing-report .page-content, body.printing-report .page-content *,
-  body.printing-report .modal-backdrop, body.printing-report .modal-backdrop * { visibility: visible !important; }
-  body.printing-report .page-content, body.printing-report .modal-backdrop { 
-    position: absolute; left: 0; top: 0; width: 100% !important; max-width: 100% !important; 
-  }
+  /* --- REPORTS --- */
+  body.printing-report .page-content, body.printing-report .page-content * { visibility: visible !important; }
+  body.printing-report .page-content { position: absolute; left: 0; top: 0; width: 100% !important; }
   body.printing-report table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; border-collapse: collapse !important; }
-  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 1px 2px !important; vertical-align: middle !important; }
-  body.printing-report .dfis-print-table table { font-size: 5.5px !important; }
-  body.printing-report .dfis-print-table th { padding: 2px 1px !important; font-size: 5.5px !important; text-align: center !important; white-space: normal !important; word-break: break-word !important; line-height: 1.1 !important; }
-  body.printing-report .dfis-print-table td { padding: 1px !important; font-size: 5.5px !important; text-align: center !important; white-space: nowrap !important; }
+  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 1px 2px !important; }
 
-  /* --- BIRD COUNT PORTRAIT --- */
-  body.printing-bird-count { page: bird-count-portrait; }
-  body.printing-bird-count .page-content { page: bird-count-portrait; }
+  /* --- BIRD COUNT --- */
   body.printing-bird-count .page-content, body.printing-bird-count .page-content * { visibility: visible !important; }
-  body.printing-bird-count .page-content { position: absolute; left: 0; top: 0; width: 100%; padding: 0 !important; margin: 0 !important; }
+  body.printing-bird-count .page-content { position: absolute; left: 0; top: 0; width: 100% !important; }
   body.printing-bird-count .bird-count-page-1 { page-break-after: always; break-after: page; }
   body.printing-bird-count .bird-count-page-2 { page-break-before: always; break-before: page; }
   body.printing-bird-count table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; }
-  body.printing-bird-count th, body.printing-bird-count td { padding: 2px 1px !important; border: 1px solid #000 !important; word-break: break-word !important; text-align: center !important; }
-  body.printing-bird-count select, body.printing-bird-count input { border: none !important; background: transparent !important; font-size: 7px !important; text-align: center !important; padding: 0 !important; }
+  body.printing-bird-count th, body.printing-bird-count td { border: 1px solid #000 !important; padding: 2px 1px !important; }
 
-  /* --- RAMP CHECK ISOLATION --- */
-  /* Make the form AND the modal visible, but keep everything else hidden */
-  body.printing-ramp .ramp-container, 
-  body.printing-ramp .ramp-container *,
-  body.printing-ramp .modal-backdrop, 
-  body.printing-ramp .modal-backdrop * { 
-    visibility: visible !important; 
-  }
-  
-  /* Strip the modal backgrounds and positions so it fits on the page */
-  body.printing-ramp .modal-backdrop { 
-    position: absolute !important; left: 0 !important; top: 0 !important; background: transparent !important; padding: 0 !important; margin: 0 !important;
-  }
-  body.printing-ramp .modal-content { 
-    box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; 
-  }
-  body.printing-ramp .modal-scrollable-body { 
-    overflow: visible !important; padding: 0 !important; max-height: none !important; background: transparent !important;
-  }
-  body.printing-ramp .ramp-container { 
-    position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; padding: 0 !important; margin: 0 !important; 
-  }
+  /* --- RAMP CHECK --- */
+  body.printing-ramp .ramp-container, body.printing-ramp .ramp-container * { visibility: visible !important; }
+  body.printing-ramp .ramp-container { position: absolute; left: 0; top: 0; width: 100% !important; padding: 0 !important; margin: 0 !important; }
 }

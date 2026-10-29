@@ -71,7 +71,18 @@
 @media print {
   .ramp-container { overflow: visible !important; padding: 0 !important; margin: 0 !important; width: 100% !important; }
   
-  .ramp-sheet { font-size: 8px !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+  .ramp-sheet { 
+    font-size: 9px !important; 
+    /* Scale the form to 75% to fit it on exactly 1 page */
+    transform: scale(0.75);
+    transform-origin: top left;
+    /* Widen the box to offset the scaling so it fills the page width */
+    width: 133.33% !important; 
+    max-width: 133.33% !important; 
+    margin: 0 !important; 
+    padding: 0 !important; 
+  }
+  
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; width: 100% !important; }
   
   .ramp-sheet .company-header { margin-bottom: 6px !important; }
