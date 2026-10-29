@@ -82,23 +82,29 @@ function SettingsPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const updateTempDept = async (staffId: string, target: string) => {
-    try {
-      const staffRec = staffList.find(s => s.id === staffId);
-      const updated = { ...staffRec, tempDeptTarget: target, tempDeptAccess: target !== '' };
-      await apiFetch(`/staff/${staffId}`, { method: 'PUT', body: JSON.stringify(updated) });
-      toast.success(`Temp Dept updated for ${staffRec.name}`);
-      fetchSettings();
-    } catch (err: any) { toast.error(err.message); }
-  };
-
   let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({ email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null, position: '—' }));
   activeUsers.forEach(a => { const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase()); if (idx >= 0) { allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }; } else { allMergedUsers.push({ email: a.email || '', name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }); } });
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
 
   const smtStaff = staffList.filter(s => s.isSMT);
   const nonSecurityStaff = staffList.filter(s => !s.isSMT && s.department !== 'Security');
-  const rwyBirdStaff = [...smtStaff, ...nonSecurityStaff].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  const inspectorIds = new Set(inspectorList.map(i => i.staffId));
+
+  // FILTER OUT USERS WHO ALREADY HAVE ACCESS VIA ROLES
+  // Ops SMT already has default edit access to Rampsheet, Ops Board, RWY Lights, and Bird Count
+  const assignableSmtForRampsheet = smtStaff.filter(s => s.department !== 'Ground Operations');
+  const assignableSmtForOpsBoard = smtStaff.filter(s => s.department !== 'Ground Operations');
+  const assignableSmtForIncharge = smtStaff;
+
+  // Exclude Ops SMT and existing inspectors from RWY Light edit list
+  const assignableRwyLightStaff = [...smtStaff, ...nonSecurityStaff]
+    .filter(s => !(s.isSMT && s.department === 'Ground Operations') && !inspectorIds.has(s.id))
+    .sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    
+  // Exclude Ops SMT from Bird Count edit list
+  const assignableBirdCountStaff = [...smtStaff, ...nonSecurityStaff]
+    .filter(s => !(s.isSMT && s.department === 'Ground Operations'))
+    .sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -297,24 +303,10 @@ function SettingsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
             
             <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🔑 Temporary Dept Access</h4>
-              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {smtStaff.map(s => (
-                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', fontSize: '13px', paddingBottom: '4px', borderBottom: '1px dashed #e2e8f0' }}>
-                    <span style={{ flex: 1 }}>{s.name}</span>
-                    <select value={s.tempDeptTarget || ''} onChange={(e) => updateTempDept(s.id, e.target.value)} style={{ padding: '4px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', color: '#1e293b' }}>
-                      <option value="">-- None --</option>
-                      {DEPARTMENTS.filter(d => d !== s.department).map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>✈️ Rampsheet Edit Access</h4>
+              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>Ops SMT already have access by default.</p>
               <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {smtStaff.map(s => (
+                {assignableSmtForRampsheet.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={s.rampsheetEditAccess === true} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                     {s.name}
@@ -325,8 +317,9 @@ function SettingsPage() {
 
             <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🚨 RWY Light Edit Access</h4>
+              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>Ops SMT & Inspectors already have access.</p>
               <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {rwyBirdStaff.map(s => (
+                {assignableRwyLightStaff.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={s.rwyLightEditAccess === true} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                     {s.name} {s.isSMT && '⭐'}
@@ -337,8 +330,9 @@ function SettingsPage() {
 
             <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🦅 Birds Count Edit Access</h4>
+              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>Ops SMT already have access by default.</p>
               <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {rwyBirdStaff.map(s => (
+                {assignableBirdCountStaff.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={s.birdCountEditAccess === true} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                     {s.name} {s.isSMT && '⭐'}
@@ -349,8 +343,9 @@ function SettingsPage() {
 
             <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>📋 Ops Board Access</h4>
+              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>Ops SMT already have access by default.</p>
               <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {smtStaff.map(s => (
+                {assignableSmtForOpsBoard.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={s.opsBoardAccess === true} onChange={() => togglePermission(s.id, 'opsBoardAccess', s.opsBoardAccess === true)} style={{ width: '16px', height: '16px' }} />
                     {s.name}
@@ -362,7 +357,7 @@ function SettingsPage() {
             <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
               <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>⭐ Assign SMT Incharge</h4>
               <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {smtStaff.map(s => (
+                {assignableSmtForIncharge.map(s => (
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} />
                     {s.name} <span style={{ color: '#64748b', fontSize: '11px' }}>({s.department})</span>
@@ -387,7 +382,6 @@ function SettingsPage() {
                   <th>Name</th>
                   <th>Dept</th>
                   <th>Role</th>
-                  <th>Temp Dept Target</th>
                   <th>Rampsheet</th>
                   <th>RWY Lights</th>
                   <th>Bird Count</th>
@@ -401,7 +395,6 @@ function SettingsPage() {
                     <td><strong>{s.name}</strong></td>
                     <td>{s.department}</td>
                     <td style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: 700 }}>{s.isSMT ? 'SMT' : 'Staff'}</td>
-                    <td>{s.tempDeptTarget || '—'}</td>
                     <td style={{ textAlign: 'center', color: s.rampsheetEditAccess ? '#16a34a' : '#cbd5e1' }}>{s.rampsheetEditAccess ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center', color: s.rwyLightEditAccess ? '#16a34a' : '#cbd5e1' }}>{s.rwyLightEditAccess ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center', color: s.birdCountEditAccess ? '#16a34a' : '#cbd5e1' }}>{s.birdCountEditAccess ? '✅' : '❌'}</td>
