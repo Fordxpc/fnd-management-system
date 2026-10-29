@@ -70,36 +70,30 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* Force A4 Portrait and reset margins */
-  @page { size: A4 portrait; margin: 5mm; }
-
-  /* 
-    CRITICAL: Collapse all parent wrappers so they don't take up 
-    invisible height and push the form to page 2.
-  */
+  /* Unlock Portrait by dropping the width constraint */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
-    display: block !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 0 !important;
     height: auto !important;
     min-height: 0 !important;
-    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
+    display: block !important;
   }
 
-  /* Hide UI elements completely so they take up ZERO space */
+  /* Hide UI completely so it takes zero space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
     display: none !important;
   }
 
-  /* Hide everything */
+  /* Hide everything by default */
   body > #root * { visibility: hidden; }
   
   /* Show ONLY the form */
