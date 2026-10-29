@@ -70,39 +70,28 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES: GLOBAL & SPECIFIC MODULES
    ========================================== */
 @media print {
-  /* 1. Reset all container heights and widths to eliminate blank pages and allow Portrait */
+  /* Reset all widths and heights to unlock orientation and eliminate blank pages */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content {
     height: auto !important;
     min-height: 0 !important;
-    width: 100% !important;
+    width: auto !important;
     max-width: 100% !important;
     overflow: visible !important;
     background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   
   ::-webkit-scrollbar { display: none !important; }
 
-  /* 2. Hide the app UI chrome */
+  /* Hide the app UI chrome */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs {
     display: none !important;
   }
 
-  /* 3. ROSTER */
-  body.printing-roster .roster-export-area {
-    width: 100% !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; border: none !important; 
-  }
-  body.printing-roster .week-grid th, body.printing-roster .week-grid td {
-    border: 1px solid #000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
-  }
-
-  /* 4. REPORTS */
-  body.printing-report .page-content { width: 100% !important; max-width: 100% !important; }
-  body.printing-report table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; border-collapse: collapse !important; }
-  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 1px 2px !important; word-break: normal !important; vertical-align: middle !important; }
-
-  /* 5. RAMP CHECK */
+  /* Ramp Check */
   body.printing-ramp .ramp-container {
     display: block !important;
     width: 100% !important;
@@ -111,7 +100,18 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     overflow: visible !important;
   }
 
-  /* 6. WILDLIFE (BIRD COUNT) */
+  /* Other modules remain the same */
+  body.printing-roster .roster-export-area {
+    width: 100% !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; border: none !important; 
+  }
+  body.printing-roster .week-grid th, body.printing-roster .week-grid td {
+    border: 1px solid #000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;
+  }
+
+  body.printing-report .page-content { width: 100% !important; max-width: 100% !important; }
+  body.printing-report table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; border-collapse: collapse !important; }
+  body.printing-report th, body.printing-report td { border: 1px solid #000 !important; padding: 1px 2px !important; word-break: normal !important; vertical-align: middle !important; }
+
   body.printing-bird-count .bird-count-page-1 { page-break-after: always !important; break-after: page !important; }
   body.printing-bird-count .bird-count-page-2 { page-break-before: always !important; break-before: page !important; }
   body.printing-bird-count table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; }

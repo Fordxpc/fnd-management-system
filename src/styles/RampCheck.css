@@ -76,7 +76,7 @@
     margin: 0 !important;
     padding: 0 !important;
     box-shadow: none !important;
-    /* NO transform here! The form will naturally stretch to fill the page width. */
+    /* No transforms, so it stretches to fit A4 Portrait perfectly */
   }
 
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; }
