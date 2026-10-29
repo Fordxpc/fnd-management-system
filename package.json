@@ -10,10 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "better-auth": "^1.7.14",
+    "drizzle-orm": "^0.45.4",
     "firebase": "^13.0.0",
     "firebase-admin": "^14.5.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
+    "postgres": "^3.4.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "recharts": "^3.10.1",
@@ -25,6 +28,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "drizzle-kit": "^0.31.11",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
