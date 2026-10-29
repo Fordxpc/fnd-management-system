@@ -78,15 +78,15 @@ export const onRequest = async (context: any) => {
           id, sn, name, email, personalEmail, nid, joinDate, phone, gender, 
           department, position, isSMT, isIncharge, balanceVisible, notes, basicSalary, 
           dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex, 
-          tempDeptAccess, rampsheetEditAccess, rwyLightEditAccess, birdCountEditAccess, opsBoardAccess
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          tempDeptAccess, tempDeptTarget, rampsheetEditAccess, rwyLightEditAccess, birdCountEditAccess, opsBoardAccess
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id, body.sn || '', body.name, body.email, body.personalEmail || '', 
         body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
         body.department, body.position || '', body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0, body.balanceVisible ? 1 : 0, 
         body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
         body.holidayAllowanceRate || 0, body.bankAccount || '', 'active', createdAt, 9999, 
-        body.tempDeptAccess ? 1 : 0, body.rampsheetEditAccess ? 1 : 0, body.rwyLightEditAccess ? 1 : 0, body.birdCountEditAccess ? 1 : 0, body.opsBoardAccess ? 1 : 0
+        body.tempDeptAccess ? 1 : 0, body.tempDeptTarget || '', body.rampsheetEditAccess ? 1 : 0, body.rwyLightEditAccess ? 1 : 0, body.birdCountEditAccess ? 1 : 0, body.opsBoardAccess ? 1 : 0
       ).run();
 
       context.waitUntil(backupToFirebase('staff', id, { ...body, status: 'active', createdAt }));
@@ -104,7 +104,7 @@ export const onRequest = async (context: any) => {
           phone = ?, gender = ?, department = ?, position = ?, isSMT = ?, isIncharge = ?, 
           balanceVisible = ?, notes = ?, basicSalary = ?, dailyAllowance = ?, 
           holidayAllowanceRate = ?, bankAccount = ?, updatedAt = ?, 
-          tempDeptAccess = ?, rampsheetEditAccess = ?, rwyLightEditAccess = ?, birdCountEditAccess = ?, opsBoardAccess = ?
+          tempDeptAccess = ?, tempDeptTarget = ?, rampsheetEditAccess = ?, rwyLightEditAccess = ?, birdCountEditAccess = ?, opsBoardAccess = ?
         WHERE id = ?
       `).bind(
         body.sn || '', body.name, body.email, body.personalEmail || '', 
@@ -112,7 +112,7 @@ export const onRequest = async (context: any) => {
         body.department, body.position || '', body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0, body.balanceVisible ? 1 : 0, 
         body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
         body.holidayAllowanceRate || 0, body.bankAccount || '', updatedAt, 
-        body.tempDeptAccess ? 1 : 0, body.rampsheetEditAccess ? 1 : 0, body.rwyLightEditAccess ? 1 : 0, body.birdCountEditAccess ? 1 : 0, body.opsBoardAccess ? 1 : 0,
+        body.tempDeptAccess ? 1 : 0, body.tempDeptTarget || '', body.rampsheetEditAccess ? 1 : 0, body.rwyLightEditAccess ? 1 : 0, body.birdCountEditAccess ? 1 : 0, body.opsBoardAccess ? 1 : 0,
         id
       ).run();
 
