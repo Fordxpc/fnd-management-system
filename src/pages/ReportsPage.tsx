@@ -235,7 +235,9 @@ function ReportsPage() {
       ) : (
         <div className="dash-card" style={{ overflowX: 'auto' }}>
           
-          {/* DFIS TAB */}
+          {/* ========================================= */}
+          {/* 1. DFIS TAB */}
+          {/* ========================================= */}
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -289,7 +291,15 @@ function ReportsPage() {
                     const bgColor = AIRCRAFT_COLORS[r.acType] || '#fff';
                     
                     return (
-                      <tr key={r.id} style={{ backgroundColor: bgColor }}>
+                      /* FIXED: Apply red text and bold to the entire row if Air Ambulance */
+                      <tr 
+                        key={r.id} 
+                        style={{ 
+                          backgroundColor: bgColor,
+                          color: isAmbulance ? '#dc2626' : 'inherit',
+                          fontWeight: isAmbulance ? 700 : 400
+                        }}
+                      >
                         <td style={{ textAlign: 'center' }}>{index + 1}</td>
                         <td style={{ textAlign: 'center' }}>{r.date}</td>
                         <td style={{ textAlign: 'center' }}>{r.checkIn || '-'}</td>
@@ -342,8 +352,9 @@ function ReportsPage() {
                         <td style={{ textAlign: 'center' }}>{r.bagTrans || '0'}</td>
                         
                         <td style={{ textAlign: 'center' }}>{r.checkedBy || '-'}</td>
-                        {/* FIXED: Map from r.comments instead of r.remarks */}
-                        <td style={{ textAlign: 'center', fontWeight: isAmbulance ? 700 : 400, color: isAmbulance ? '#dc2626' : 'inherit', whiteSpace: 'normal', minWidth: '150px' }}>
+                        
+                        {/* FIXED: Applied nowrap to prevent wrapping */}
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                           {r.comments || r.medicalEmergency || 'NIL'}
                         </td>
                       </tr>
@@ -385,7 +396,9 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* STATISTICS TAB */}
+          {/* ========================================= */}
+          {/* 2. STATISTICS TAB */}
+          {/* ========================================= */}
           {activeTab === 'Statistics' && (
             <div style={{ padding: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -454,7 +467,9 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* TRAFFIC TAB */}
+          {/* ========================================= */}
+          {/* 3. TRAFFIC TAB */}
+          {/* ========================================= */}
           {activeTab === 'Traffic' && (
             <div style={{ padding: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -526,7 +541,7 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* WILDLIFE TAB */}
+          {/* 4. WILDLIFE TAB */}
           {activeTab === 'Wildlife' && (
             <table className="mini-table">
               <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Temp</th><th>Wind</th><th>Cloud</th><th>Species Count</th></tr></thead>
@@ -541,7 +556,7 @@ function ReportsPage() {
             </table>
           )}
 
-          {/* FOD TAB */}
+          {/* 5. FOD TAB */}
           {activeTab === 'FOD' && (
             <table className="mini-table">
               <thead><tr><th>Date</th><th>Grams</th><th>Remarks</th><th>Logged By</th></tr></thead>
