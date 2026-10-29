@@ -91,16 +91,10 @@ function SettingsPage() {
   const inspectorIds = new Set(inspectorList.map(i => i.staffId));
 
   // FILTER OUT USERS WHO ALREADY HAVE ACCESS VIA ROLES
-  // Ops SMT already has default edit access to Rampsheet, Ops Board, RWY Lights, and Bird Count
   const assignableSmtForRampsheet = smtStaff.filter(s => s.department !== 'Ground Operations');
   const assignableSmtForOpsBoard = smtStaff.filter(s => s.department !== 'Ground Operations');
   const assignableSmtForIncharge = smtStaff;
 
-  // Exclude Ops SMT and existing inspectors from RWY Light edit list
-  const assignableRwyLightStaff = [...smtStaff, ...nonSecurityStaff]
-    .filter(s => !(s.isSMT && s.department === 'Ground Operations') && !inspectorIds.has(s.id))
-    .sort((a,b) => (a.name||'').localeCompare(b.name||''));
-    
   // Exclude Ops SMT from Bird Count edit list
   const assignableBirdCountStaff = [...smtStaff, ...nonSecurityStaff]
     .filter(s => !(s.isSMT && s.department === 'Ground Operations'))
@@ -310,19 +304,6 @@ function SettingsPage() {
                   <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
                     <input type="checkbox" checked={s.rampsheetEditAccess === true} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                     {s.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🚨 RWY Light Edit Access</h4>
-              <p style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>Ops SMT & Inspectors already have access.</p>
-              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {assignableRwyLightStaff.map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={s.rwyLightEditAccess === true} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                    {s.name} {s.isSMT && '⭐'}
                   </label>
                 ))}
               </div>
