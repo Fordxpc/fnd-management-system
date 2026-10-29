@@ -5,7 +5,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Forward all /api requests to the local Cloudflare Worker
       '/api': {
         target: 'http://localhost:8788',
         changeOrigin: true,
