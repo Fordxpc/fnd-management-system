@@ -76,6 +76,12 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   margin: 5mm;
 }
 
+/* Specific layout for Ramp Check (Portrait) */
+@page ramp-portrait {
+  size: A4 portrait;
+  margin: 5mm;
+}
+
 /* Specific layout for Bird Count (Portrait) */
 @page bird-count-portrait {
   size: A4 portrait;
@@ -161,6 +167,11 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     position: absolute; left: 0; top: 0; width: 100% !important; padding: 0 !important; margin: 0 !important; background: transparent !important;
   }
   
+  /* Apply the named page to the ramp sheet */
+  body.printing-ramp .ramp-sheet {
+    page: ramp-portrait;
+  }
+
   /* --- 4. WILDLIFE (BIRD COUNT) PRINT --- */
   body.printing-bird-count { page: bird-count-portrait; }
   body.printing-bird-count .page-content,
