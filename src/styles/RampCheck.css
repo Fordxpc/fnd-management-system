@@ -71,7 +71,7 @@
 @media print {
   .ramp-container { overflow: visible !important; padding: 0 !important; margin: 0 !important; width: 100% !important; }
   
-  /* No transform or zoom! Just let the browser stretch it to fill the width */
+  /* No transform, no zoom. Just 100% width and small fonts so it fills the page. */
   .ramp-sheet { font-size: 10px !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 8px !important; width: 100% !important; }
   
