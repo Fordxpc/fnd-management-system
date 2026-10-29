@@ -67,13 +67,12 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
 .ramp-sheet input[readonly], .ramp-sheet textarea[readonly] { color: #475569 !important; -webkit-text-fill-color: #475569 !important; }
 
 /* ==========================================
-   PRINT STYLES
+   PRINT STYLES (GLOBAL ISOLATION)
    ========================================== */
 @media print {
-  /* CRITICAL: Unlock the print dialog and reset layout wrappers */
+  /* Collapse the Flexbox layout to prevent blank pages */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
     width: 100% !important;
-    max-width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
@@ -82,12 +81,11 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    /* Disable Flexbox so it doesn't reserve 100vh height */
     display: block !important; 
     flex: none !important;
   }
 
-  /* Hide all UI elements */
+  /* Hide UI completely so it takes zero space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
