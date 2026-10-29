@@ -70,32 +70,32 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* 1. Force reset ALL containers to remove heights and unlock Portrait */
+  /* 1. CRITICAL: Collapse all invisible height so it doesn't push content to page 2 */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
+    display: block !important;
+    flex: none !important;
+    position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-width: 0 !important;
     height: auto !important;
     min-height: 0 !important;
+    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    /* Use block to prevent flex layout from holding height */
-    display: block !important; 
   }
 
-  /* 2. Hide UI that takes up physical space */
+  /* 2. Completely remove UI elements from taking up space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
-  button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs,
-  .modal-header {
+  button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
     display: none !important;
   }
 
-  /* 3. Hide everything by default */
+  /* 3. Hide everything */
   body > #root * { visibility: hidden; }
   
   /* 4. Show ONLY the form */
@@ -106,13 +106,10 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     visibility: visible !important; 
   }
 
-  /* 5. Keep it in the normal flow so it starts exactly on Page 1 */
-  body.printing-ramp .ramp-container,
-  body.printing-ramp .modal-backdrop {
-    position: static !important;
+  /* 5. Ensure the form starts exactly on page 1 */
+  body.printing-ramp .ramp-container {
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
-    background: transparent !important;
   }
 }

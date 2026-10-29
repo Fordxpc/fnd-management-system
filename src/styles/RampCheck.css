@@ -78,7 +78,7 @@
     margin: 0 !important; 
     padding: 0 !important; 
     /* Shrinks to guarantee it fits on 1 page */
-    zoom: 0.8; 
+    zoom: 0.75; 
   }
   
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; width: 100% !important; }
