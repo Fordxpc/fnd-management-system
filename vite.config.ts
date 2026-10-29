@@ -3,6 +3,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    cssMinify: 'esbuild' // <--- ADD THIS TO FIX THE BUILDS
+  },
   server: {
     proxy: {
       // Forward all /api requests to the local Cloudflare Worker
