@@ -70,56 +70,51 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* 1. Reset containers so they don't take up invisible space */
-  html, body, #root {
+  /* Let the browser control the orientation, but reset the layout so it starts at the top */
+  html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content {
+    width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+    display: block !important;
   }
 
-  /* 2. Hide everything in the app by default */
-  body > #root * { visibility: hidden; }
-
-  /* 3. Hide app chrome completely */
+  /* Completely hide all UI chrome so it takes up ZERO space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
-  button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs {
+  button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs,
+  .modal-header, .modal-backdrop > div:not(.modal-content) {
     display: none !important;
   }
 
-  /* 4. Make the form visible */
+  /* Hide EVERYTHING by default */
+  body > #root * { visibility: hidden; }
+  
+  /* Show ONLY the ramp container and its contents */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container *,
   body.printing-ramp .modal-backdrop,
   body.printing-ramp .modal-backdrop * { 
     visibility: visible !important; 
   }
-
-  /* 5. Pull the form to the very top of the page */
-  body.printing-ramp .ramp-container,
-  body.printing-ramp .modal-backdrop {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-  }
-
-  /* 6. Clean up modal wrappers if printing from a modal */
+  
+  /* Strip modal wrappers if printing from the View Modal */
+  body.printing-ramp .modal-backdrop,
   body.printing-ramp .modal-content,
-  body.printing-ramp .modal-scrollable-body {
+  body.printing-ramp .modal-scrollable-body { 
     position: static !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    max-height: none !important;
-    margin: 0 !important;
+    background: transparent !important;
     padding: 0 !important;
-    border: none !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    height: auto !important;
     box-shadow: none !important;
+    border: none !important;
     overflow: visible !important;
     display: block !important;
   }
