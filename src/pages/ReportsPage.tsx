@@ -1,12 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
 
 const TABS = ['Custom Generator', 'DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
 
-// Exact pastel colors from your screenshot
-const ROW_COLORS = ['#fef3c7', '#dcfce7', '#dbeafe', '#f3e8ff', '#fce7f3'];
+// Aircraft colors based on your screenshot
+const AIRCRAFT_COLORS: Record<string, string> = {
+  'ATR-72/600': '#fef3c7', // Yellow
+  'ATR-42/600': '#dcfce7', // Green
+  'DASH-8/300': '#dbeafe', // Blue
+  'DH-8/300': '#dbeafe',
+  'DASH-8/200': '#f3e8ff', // Purple
+  'DH-8/200': '#f3e8ff',
+};
 
 function ReportsPage() {
   const [activeTab, setActiveTab] = useState('DFIS');
@@ -39,7 +45,6 @@ function ReportsPage() {
 
   useEffect(() => {
     fetchAllData();
-    // Poll every 15 seconds to automatically update when a Ramp Sheet is saved
     const interval = setInterval(fetchAllData, 15000);
     return () => clearInterval(interval);
   }, [fetchAllData]);
@@ -71,34 +76,140 @@ function ReportsPage() {
     return { from: parts[0], via: '', to: '' };
   };
 
+  const isAirAmbulance = (remarks: string) => {
+    const r = (remarks || '').toUpperCase();
+    return r.includes('AMBULANCE') || r.includes('MEDICAL');
+  };
+
+  const getKg = (val: string) => {
+    if (!val) return 0;
+    const parts = String(val).split('/');
+    return Number(parts[1]) || 0;
+  };
+
   const filteredRamp = useMemo(() => {
     return rampReports.filter(filterByDate).reverse();
   }, [rampReports, filterByDate]);
 
-  // --- STATISTICS TAB DATA PROCESSING ---
-  const statsData = useMemo(() => {
-    const grouped: Record<string, { paxIn: number, paxOut: number, cargoIn: number, cargoOut: number }> = {};
-    
+  const nonAirAmbulanceRamp = useMemo(() => {
+    return filteredRamp.filter(r => !isAirAmbulance(r.remarks));
+  }, [filteredRamp]);
+
+  // --- DFIS TOTALS ---
+  const dfisTotals = useMemo(() => {
+    let paxInAdult = 0, paxInInf = 0, paxInLocal = 0, paxInForeign = 0, paxInTotal = 0;
+    let paxOutAdult = 0, paxOutInf = 0, paxOutLocal = 0, paxOutForeign = 0, paxOutTotal = 0;
+    let paxTransAdult = 0, paxTransInf = 0;
+    let mailIn = 0, mailOut = 0, mailTrans = 0;
+    let cargoIn = 0, cargoOut = 0, cargoTrans = 0;
+    let otherIn = 0, otherOut = 0, otherTrans = 0;
+    let bagIn = 0, bagOut = 0, bagTrans = 0;
+    let mvmnts = 0;
+
     filteredRamp.forEach(r => {
-      const month = (r.date || '').substring(0, 7);
-      if (!month) return;
-      if (!grouped[month]) grouped[month] = { paxIn: 0, paxOut: 0, cargoIn: 0, cargoOut: 0 };
+      paxInAdult += Number(r.paxInAdult) || 0;
+      paxInInf += Number(r.paxInInf) || 0;
+      paxInLocal += Number(r.paxInLocal) || 0;
+      paxInForeign += Number(r.paxInForeign) || 0;
+      paxInTotal += Number(r.paxInTotal) || 0;
       
-      grouped[month].paxIn += Number(r.paxInTotal) || 0;
-      grouped[month].paxOut += Number(r.paxOutTotal) || 0;
-      
-      const parseKg = (val: string) => {
-        if (!val) return 0;
-        const parts = String(val).split('/');
-        return Number(parts[1]) || 0;
-      };
-      
-      grouped[month].cargoIn += parseKg(r.cargoIn);
-      grouped[month].cargoOut += parseKg(r.cargoOut);
+      paxOutAdult += Number(r.paxOutAdult) || 0;
+      paxOutInf += Number(r.paxOutInf) || 0;
+      paxOutLocal += Number(r.paxOutLocal) || 0;
+      paxOutForeign += Number(r.paxOutForeign) || 0;
+      paxOutTotal += Number(r.paxOutTotal) || 0;
+
+      paxTransAdult += Number(r.paxTransAdult) || 0;
+      paxTransInf += Number(r.paxTransInf) || 0;
+
+      mailIn += getKg(r.mailIn);
+      mailOut += getKg(r.mailOut);
+      mailTrans += getKg(r.mailTrans);
+
+      cargoIn += getKg(r.cargoIn);
+      cargoOut += getKg(r.cargoOut);
+      cargoTrans += getKg(r.cargoTrans);
+
+      otherIn += getKg(r.otherIn);
+      otherOut += getKg(r.otherOut);
+      otherTrans += getKg(r.otherTrans);
+
+      bagIn += getKg(r.bagIn);
+      bagOut += getKg(r.bagOut);
+      bagTrans += getKg(r.bagTrans);
+
+      mvmnts += 2; // Assuming 1 arrival + 1 departure per record
     });
 
-    return Object.entries(grouped).map(([month, data]) => ({ month, ...data })).sort((a,b) => a.month.localeCompare(b.month));
+    return { paxInAdult, paxInInf, paxInLocal, paxInForeign, paxInTotal, paxOutAdult, paxOutInf, paxOutLocal, paxOutForeign, paxOutTotal, paxTransAdult, paxTransInf, mailIn, mailOut, mailTrans, cargoIn, cargoOut, cargoTrans, otherIn, otherOut, otherTrans, bagIn, bagOut, bagTrans, mvmnts };
   }, [filteredRamp]);
+
+  // --- STATISTICS DATA ---
+  const statsData = useMemo(() => {
+    return nonAirAmbulanceRamp.map(r => ({
+      date: r.date,
+      operator: 'MALDIVIAN',
+      aircraft: r.acType,
+      mvmts: 2,
+      paxInAdult: Number(r.paxInAdult) || 0,
+      paxInInf: Number(r.paxInInf) || 0,
+      paxOutAdult: Number(r.paxOutAdult) || 0,
+      paxOutInf: Number(r.paxOutInf) || 0,
+      cargoIn: getKg(r.cargoIn),
+      cargoOut: getKg(r.cargoOut),
+      mailIn: getKg(r.mailIn),
+      mailOut: getKg(r.mailOut),
+    }));
+  }, [nonAirAmbulanceRamp]);
+
+  const statsTotals = useMemo(() => {
+    return statsData.reduce((acc, curr) => ({
+      mvmts: acc.mvmts + curr.mvmts,
+      paxInAdult: acc.paxInAdult + curr.paxInAdult,
+      paxInInf: acc.paxInInf + curr.paxInInf,
+      paxOutAdult: acc.paxOutAdult + curr.paxOutAdult,
+      paxOutInf: acc.paxOutInf + curr.paxOutInf,
+      cargoIn: acc.cargoIn + curr.cargoIn,
+      cargoOut: acc.cargoOut + curr.cargoOut,
+      mailIn: acc.mailIn + curr.mailIn,
+      mailOut: acc.mailOut + curr.mailOut,
+    }), { mvmts: 0, paxInAdult: 0, paxInInf: 0, paxOutAdult: 0, paxOutInf: 0, cargoIn: 0, cargoOut: 0, mailIn: 0, mailOut: 0 });
+  }, [statsData]);
+
+  // --- TRAFFIC DATA (Grouped by Month) ---
+  const trafficData = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    
+    nonAirAmbulanceRamp.forEach(r => {
+      const month = (r.date || '').substring(0, 7);
+      if (!month) return;
+      if (!grouped[month]) grouped[month] = [];
+      grouped[month].push(r);
+    });
+
+    const result = Object.entries(grouped).map(([month, records]) => {
+      const types = ['DASH-8/200', 'DH-8/200', 'DASH-8/300', 'DH-8/300', 'ATR-72/600', 'ATR-42/600'];
+      const rows = types.map(type => {
+        const filtered = records.filter(r => r.acType === type);
+        return {
+          type,
+          mvmts: filtered.length * 2,
+          paxInAdult: filtered.reduce((sum, r) => sum + (Number(r.paxInAdult) || 0), 0),
+          paxInInf: filtered.reduce((sum, r) => sum + (Number(r.paxInInf) || 0), 0),
+          paxOutAdult: filtered.reduce((sum, r) => sum + (Number(r.paxOutAdult) || 0), 0),
+          paxOutInf: filtered.reduce((sum, r) => sum + (Number(r.paxOutInf) || 0), 0),
+          mailIn: filtered.reduce((sum, r) => sum + getKg(r.mailIn), 0),
+          mailOut: filtered.reduce((sum, r) => sum + getKg(r.mailOut), 0),
+          cargoIn: filtered.reduce((sum, r) => sum + getKg(r.cargoIn), 0),
+          cargoOut: filtered.reduce((sum, r) => sum + getKg(r.cargoOut), 0),
+        };
+      }).filter(r => r.mvmts > 0); // Only show types with flights
+
+      return { month, rows };
+    }).sort((a, b) => a.month.localeCompare(b.month));
+
+    return result;
+  }, [nonAirAmbulanceRamp]);
 
   return (
     <div className="page-content">
@@ -132,7 +243,9 @@ function ReportsPage() {
       ) : (
         <div className="dash-card" style={{ overflowX: 'auto' }}>
           
-          {/* 1. DFIS TAB - WITH COLORS RESTORED */}
+          {/* ========================================= */}
+          {/* 1. DFIS TAB */}
+          {/* ========================================= */}
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -141,170 +254,282 @@ function ReportsPage() {
                 <h3 style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Funadhoo Airport</h3>
               </div>
 
-              <table className="mini-table" style={{ fontSize: '11px', whiteSpace: 'nowrap', backgroundColor: '#fff' }}>
+              <table className="mini-table" style={{ fontSize: '10px', whiteSpace: 'nowrap', backgroundColor: '#fff' }}>
                 <thead style={{ backgroundColor: '#f8fafc' }}>
                   <tr>
                     <th rowSpan={2}>S.No.</th>
                     <th rowSpan={2}>Date</th>
-                    <th rowSpan={2}>CHECK-IN</th>
-                    <th rowSpan={2}>Reg.</th>
-                    <th rowSpan={2}>Type of Aircraft</th>
-                    <th rowSpan={2}>Owner/Operator</th>
+                    <th rowSpan={2}>CHECK-IN<br/>Started</th>
+                    <th colSpan={2}>Reg.</th>
+                    <th rowSpan={2}>Type of<br/>Aircraft</th>
+                    <th rowSpan={2}>Owner<br/>or<br/>Operator</th>
                     <th colSpan={3}>Arrivals</th>
                     <th colSpan={3}>Route</th>
                     <th colSpan={2}>Departures</th>
-                    <th colSpan={3}>PAX IN</th>
-                    <th colSpan={3}>PAX OUT</th>
-                    <th colSpan={3}>TRANSIT</th>
+                    <th rowSpan={2}>Mvmnts</th>
+                    <th colSpan={5}>PAX IN</th>
+                    <th colSpan={5}>PAX OUT</th>
+                    <th colSpan={2}>TRANSIT</th>
                     <th colSpan={3}>MAIL</th>
                     <th colSpan={3}>CARGO</th>
                     <th colSpan={3}>OTHERS</th>
                     <th colSpan={3}>BAGGAGE</th>
-                    <th rowSpan={2}>Comments</th>
+                    <th rowSpan={2}>Data Collected by</th>
+                    <th rowSpan={2}>Remarks</th>
                   </tr>
                   <tr>
+                    <th>Prefix</th><th>Suffix</th>
                     <th>Flight No.</th><th>ETA</th><th>ATA</th>
                     <th>From</th><th>Via</th><th>To</th>
-                    <th>Flight No.</th><th>Time (DI)</th>
-                    <th>Adult</th><th>Inft</th><th>Total</th>
-                    <th>Adult</th><th>Inft</th><th>Total</th>
-                    <th>Adult</th><th>Inft</th><th>Total</th>
-                    <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
-                    <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
-                    <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
-                    <th>In(pcs/kg)</th><th>Out(pcs/kg)</th><th>Trans(pcs/kg)</th>
+                    <th>Flight No.</th><th>Time (DT)</th>
+                    <th>Adult</th><th>Inft.</th><th>Local</th><th>Foreign</th><th>Total</th>
+                    <th>Adult</th><th>Inft.</th><th>Local</th><th>Foreign</th><th>Total</th>
+                    <th>Adult</th><th>Inft.</th>
+                    <th>In(kg)</th><th>Out(kg)</th><th>Tran(kg)</th>
+                    <th>In(kg)</th><th>Out(kg)</th><th>Tran(kg)</th>
+                    <th>In(kg)</th><th>Out(kg)</th><th>Tran(kg)</th>
+                    <th>In(kg)</th><th>Out(kg)</th><th>Tran(kg)</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRamp.map((r, index) => {
                     const routeParts = parseRoute(r.route);
-                    const bgColor = ROW_COLORS[index % ROW_COLORS.length]; // Apply pastel colors
+                    const acRegParts = (r.acReg || '8Q-').split('-');
+                    const isAmbulance = isAirAmbulance(r.remarks);
+                    const bgColor = AIRCRAFT_COLORS[r.acType] || '#fff';
                     
                     return (
                       <tr key={r.id} style={{ backgroundColor: bgColor }}>
                         <td>{index + 1}</td>
                         <td>{r.date}</td>
-                        <td>{r.checkIn || '—'}</td>
-                        <td>{r.acReg || '—'}</td>
-                        <td>{r.acType || '—'}</td>
-                        <td>Island Aviation Services</td>
+                        <td>{r.checkIn || '-'}</td>
+                        <td>{acRegParts[0]}</td>
+                        <td>{acRegParts[1] || ''}</td>
+                        <td>{r.acType}</td>
+                        <td>Island Aviations Services</td>
                         
-                        <td>{r.fltNo || '—'}</td>
-                        <td>{r.eta || '—'}</td>
-                        <td>{r.ata || '—'}</td>
+                        <td>{r.fltNo || '-'}</td>
+                        <td>{r.eta || '-'}</td>
+                        <td>{r.ata || '-'}</td>
                         
                         <td>{routeParts.from}</td>
                         <td>{routeParts.via}</td>
                         <td>{routeParts.to}</td>
                         
-                        <td>{r.fltNo ? String(r.fltNo).replace('Q2', 'Q3') : '—'}</td>
-                        <td>{r.atd || r.sta || '—'}</td>
+                        <td>{r.fltNo ? String(r.fltNo).replace('Q2', 'Q3') : '-'}</td>
+                        <td>{r.atd || r.sta || '-'}</td>
+                        <td>2</td>
                         
                         <td>{r.paxInAdult || '0'}</td>
                         <td>{r.paxInInf || '0'}</td>
+                        <td>{r.paxInLocal || '0'}</td>
+                        <td>{r.paxInForeign || '0'}</td>
                         <td>{r.paxInTotal || '0'}</td>
                         
                         <td>{r.paxOutAdult || '0'}</td>
                         <td>{r.paxOutInf || '0'}</td>
+                        <td>{r.paxOutLocal || '0'}</td>
+                        <td>{r.paxOutForeign || '0'}</td>
                         <td>{r.paxOutTotal || '0'}</td>
                         
                         <td>{r.paxTransAdult || '0'}</td>
                         <td>{r.paxTransInf || '0'}</td>
-                        <td>{r.paxTransTotal || '0'}</td>
                         
-                        <td>{r.mailIn || '0 / 0'}</td>
-                        <td>{r.mailOut || '0 / 0'}</td>
-                        <td>{r.mailTrans || '0 / 0'}</td>
+                        <td>{r.mailIn || '0'}</td>
+                        <td>{r.mailOut || '0'}</td>
+                        <td>{r.mailTrans || '0'}</td>
                         
-                        <td>{r.cargoIn || '0 / 0'}</td>
-                        <td>{r.cargoOut || '0 / 0'}</td>
-                        <td>{r.cargoTrans || '0 / 0'}</td>
+                        <td>{r.cargoIn || '0'}</td>
+                        <td>{r.cargoOut || '0'}</td>
+                        <td>{r.cargoTrans || '0'}</td>
                         
-                        <td>{r.otherIn || '0 / 0'}</td>
-                        <td>{r.otherOut || '0 / 0'}</td>
-                        <td>{r.otherTrans || '0 / 0'}</td>
+                        <td>{r.otherIn || '0'}</td>
+                        <td>{r.otherOut || '0'}</td>
+                        <td>{r.otherTrans || '0'}</td>
                         
-                        <td>{r.bagIn || '0 / 0'}</td>
-                        <td>{r.bagOut || '0 / 0'}</td>
-                        <td>{r.bagTrans || '0 / 0'}</td>
+                        <td>{r.bagIn || '0'}</td>
+                        <td>{r.bagOut || '0'}</td>
+                        <td>{r.bagTrans || '0'}</td>
                         
-                        <td style={{ whiteSpace: 'normal', minWidth: '150px' }}>{r.comments || ''}</td>
+                        <td>{r.checkedBy || '-'}</td>
+                        <td style={{ fontWeight: isAmbulance ? 700 : 400, color: isAmbulance ? '#dc2626' : 'inherit' }}>
+                          {r.remarks || 'NIL'}
+                        </td>
                       </tr>
                     );
                   })}
-                  {filteredRamp.length === 0 && (
-                    <tr><td colSpan={32} style={{ textAlign: 'center', padding: '20px' }}>No records found.</td></tr>
+                  {filteredRamp.length > 0 && (
+                    <tr style={{ backgroundColor: '#e2e8f0', fontWeight: 700 }}>
+                      <td colSpan={15} style={{ textAlign: 'right' }}>Total:</td>
+                      <td>{dfisTotals.mvmnts}</td>
+                      <td>{dfisTotals.paxInAdult}</td>
+                      <td>{dfisTotals.paxInInf}</td>
+                      <td>{dfisTotals.paxInLocal}</td>
+                      <td>{dfisTotals.paxInForeign}</td>
+                      <td>{dfisTotals.paxInTotal}</td>
+                      <td>{dfisTotals.paxOutAdult}</td>
+                      <td>{dfisTotals.paxOutInf}</td>
+                      <td>{dfisTotals.paxOutLocal}</td>
+                      <td>{dfisTotals.paxOutForeign}</td>
+                      <td>{dfisTotals.paxOutTotal}</td>
+                      <td>{dfisTotals.paxTransAdult}</td>
+                      <td>{dfisTotals.paxTransInf}</td>
+                      <td>{dfisTotals.mailIn}</td>
+                      <td>{dfisTotals.mailOut}</td>
+                      <td>{dfisTotals.mailTrans}</td>
+                      <td>{dfisTotals.cargoIn}</td>
+                      <td>{dfisTotals.cargoOut}</td>
+                      <td>{dfisTotals.cargoTrans}</td>
+                      <td>{dfisTotals.otherIn}</td>
+                      <td>{dfisTotals.otherOut}</td>
+                      <td>{dfisTotals.otherTrans}</td>
+                      <td>{dfisTotals.bagIn}</td>
+                      <td>{dfisTotals.bagOut}</td>
+                      <td>{dfisTotals.bagTrans}</td>
+                      <td colSpan={2}></td>
+                    </tr>
                   )}
                 </tbody>
               </table>
             </div>
           )}
 
-          {/* 2. STATISTICS TAB - WITH CHARTS */}
+          {/* ========================================= */}
+          {/* 2. STATISTICS TAB */}
+          {/* ========================================= */}
           {activeTab === 'Statistics' && (
             <div style={{ padding: '20px' }}>
-              <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Monthly Statistics</h3>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: 0 }}>
-                  <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>Total PAX</h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={statsData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="paxIn" name="PAX IN" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="paxOut" name="PAX OUT" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div style={{ background: '#fff', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', minWidth: 0 }}>
-                  <h4 style={{ textAlign: 'center', marginBottom: '15px' }}>Total Cargo (KG)</h4>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={statsData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="cargoIn" name="Cargo IN (kg)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="cargoOut" name="Cargo OUT (kg)" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0, fontSize: '18px' }}>FUNADHOO AIRPORT</h2>
+                <h3 style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Statistics Report</h3>
               </div>
-            </div>
-          )}
 
-          {/* 3. TRAFFIC TAB - SUMMARY TABLE */}
-          {activeTab === 'Traffic' && (
-            <div style={{ padding: '20px' }}>
-              <h3 style={{ marginBottom: '20px', color: '#1e293b' }}>Flight Traffic Summary</h3>
               <table className="mini-table">
                 <thead>
                   <tr>
-                    <th>Month</th>
-                    <th>Total Flights</th>
-                    <th>Total PAX IN</th>
-                    <th>Total PAX OUT</th>
-                    <th>Total PAX</th>
+                    <th rowSpan={2}>Date</th>
+                    <th rowSpan={2}>Operator</th>
+                    <th rowSpan={2}>Type of Aircraft</th>
+                    <th rowSpan={2}>No. of Mvts</th>
+                    <th colSpan={2}>Pax In</th>
+                    <th colSpan={2}>Pax Out</th>
+                    <th rowSpan={2}>Cargo In (kg)</th>
+                    <th rowSpan={2}>Cargo Out (kg)</th>
+                    <th rowSpan={2}>Mail In (kg)</th>
+                    <th rowSpan={2}>Mail Out (kg)</th>
+                  </tr>
+                  <tr>
+                    <th>Adult</th><th>Infant</th>
+                    <th>Adult</th><th>Infant</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {statsData.map(stat => (
-                    <tr key={stat.month}>
-                      <td><strong>{stat.month}</strong></td>
-                      <td style={{ textAlign: 'center' }}>{filteredRamp.filter(r => r.date?.startsWith(stat.month)).length}</td>
-                      <td style={{ textAlign: 'center' }}>{stat.paxIn}</td>
-                      <td style={{ textAlign: 'center' }}>{stat.paxOut}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 700 }}>{stat.paxIn + stat.paxOut}</td>
+                  {statsData.map((r, idx) => (
+                    <tr key={idx}>
+                      <td>{r.date}</td>
+                      <td>{r.operator}</td>
+                      <td>{r.aircraft}</td>
+                      <td style={{ textAlign: 'center' }}>{r.mvmts}</td>
+                      <td style={{ textAlign: 'center' }}>{r.paxInAdult}</td>
+                      <td style={{ textAlign: 'center' }}>{r.paxInInf}</td>
+                      <td style={{ textAlign: 'center' }}>{r.paxOutAdult}</td>
+                      <td style={{ textAlign: 'center' }}>{r.paxOutInf}</td>
+                      <td style={{ textAlign: 'center' }}>{r.cargoIn}</td>
+                      <td style={{ textAlign: 'center' }}>{r.cargoOut}</td>
+                      <td style={{ textAlign: 'center' }}>{r.mailIn}</td>
+                      <td style={{ textAlign: 'center' }}>{r.mailOut}</td>
                     </tr>
                   ))}
+                  {statsData.length > 0 && (
+                    <tr style={{ backgroundColor: '#f1f5f9', fontWeight: 700 }}>
+                      <td colSpan={3} style={{ textAlign: 'right' }}>Total:</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.mvmts}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.paxInAdult}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.paxInInf}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.paxOutAdult}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.paxOutInf}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.cargoIn}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.cargoOut}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.mailIn}</td>
+                      <td style={{ textAlign: 'center' }}>{statsTotals.mailOut}</td>
+                    </tr>
+                  )}
+                  {statsData.length === 0 && (
+                    <tr><td colSpan={12} style={{ textAlign: 'center' }}>No statistics found for this period.</td></tr>
+                  )}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* ========================================= */}
+          {/* 3. TRAFFIC TAB */}
+          {/* ========================================= */}
+          {activeTab === 'Traffic' && (
+            <div style={{ padding: '20px' }}>
+              <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0, fontSize: '18px' }}>TRAFFIC MONTHLY REPORT</h2>
+                <h3 style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>Funadhoo Airport</h3>
+              </div>
+
+              {trafficData.map((monthData, mIdx) => (
+                <div key={mIdx} style={{ marginBottom: '30px', pageBreakInside: 'avoid' }}>
+                  <h4 style={{ margin: '0 0 10px', color: '#1e293b' }}>{monthData.month}</h4>
+                  <table className="mini-table">
+                    <thead>
+                      <tr>
+                        <th rowSpan={2}>S. No.</th>
+                        <th rowSpan={2}>Owner or Operator</th>
+                        <th rowSpan={2}>Type of Aircraft</th>
+                        <th rowSpan={2}>No. of Movements</th>
+                        <th colSpan={2}>PAX IN</th>
+                        <th colSpan={2}>PAX OUT</th>
+                        <th colSpan={2}>MAIL (Kgs)</th>
+                        <th colSpan={2}>CARGO (Kgs)</th>
+                      </tr>
+                      <tr>
+                        <th>Adult</th><th>Infant</th>
+                        <th>Adult</th><th>Infant</th>
+                        <th>IN</th><th>OUT</th>
+                        <th>IN</th><th>OUT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthData.rows.map((row: any, rIdx: number) => (
+                        <tr key={rIdx}>
+                          <td>{rIdx + 1}</td>
+                          <td>Maldivian</td>
+                          <td>{row.type}</td>
+                          <td style={{ textAlign: 'center' }}>{row.mvmts}</td>
+                          <td style={{ textAlign: 'center' }}>{row.paxInAdult}</td>
+                          <td style={{ textAlign: 'center' }}>{row.paxInInf}</td>
+                          <td style={{ textAlign: 'center' }}>{row.paxOutAdult}</td>
+                          <td style={{ textAlign: 'center' }}>{row.paxOutInf}</td>
+                          <td style={{ textAlign: 'center' }}>{row.mailIn}</td>
+                          <td style={{ textAlign: 'center' }}>{row.mailOut}</td>
+                          <td style={{ textAlign: 'center' }}>{row.cargoIn}</td>
+                          <td style={{ textAlign: 'center' }}>{row.cargoOut}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ backgroundColor: '#f8fafc', fontWeight: 700 }}>
+                        <td colSpan={3} style={{ textAlign: 'right' }}>Total:</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.mvmts, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.paxInAdult, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.paxInInf, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.paxOutAdult, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.paxOutInf, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.mailIn, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.mailOut, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.cargoIn, 0)}</td>
+                        <td style={{ textAlign: 'center' }}>{monthData.rows.reduce((s: number, r: any) => s + r.cargoOut, 0)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+              {trafficData.length === 0 && (
+                <div className="empty-state">No traffic data found for this period.</div>
+              )}
             </div>
           )}
 
