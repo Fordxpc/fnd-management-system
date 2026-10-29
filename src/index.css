@@ -70,47 +70,39 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* 1. Unlock Portrait by dropping the width */
-  html, body, #root {
+  /* Force A4 Portrait and reset margins */
+  @page { size: A4 portrait; margin: 5mm; }
+
+  /* 
+    CRITICAL: Collapse all parent wrappers so they don't take up 
+    invisible height and push the form to page 2.
+  */
+  html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
+    display: block !important;
     width: 100% !important;
     max-width: 100% !important;
-    min-width: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    display: block !important;
-    border: none !important;
-  }
-
-  /* 2. Remove invisible layout heights that push to Page 2 */
-  .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
-    display: block !important;
-    width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
-    position: static !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
   }
 
-  /* 3. Hide UI completely */
+  /* Hide UI elements completely so they take up ZERO space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
     display: none !important;
   }
 
-  /* 4. Hide EVERYTHING by default */
+  /* Hide everything */
   body > #root * { visibility: hidden; }
   
-  /* 5. Show ONLY the ramp form */
+  /* Show ONLY the form */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container *,
   body.printing-ramp .modal-backdrop,
