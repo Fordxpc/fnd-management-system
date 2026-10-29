@@ -1,11 +1,10 @@
-// @ts-ignore
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
   build: {
-    cssMinify: 'esbuild'
+    cssMinify: false // Disables the strict minifier that crashes on print styles
   },
   server: {
     proxy: {
