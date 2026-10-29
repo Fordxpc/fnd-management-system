@@ -57,6 +57,7 @@ export const onRequest = async (context: any) => {
       const formattedResults = results.map((row: any) => ({
         ...row,
         isSMT: row.isSMT === 1,
+        isIncharge: row.isIncharge === 1, // Added
         balanceVisible: row.balanceVisible === 1
       }));
       return new Response(JSON.stringify(formattedResults), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -70,13 +71,13 @@ export const onRequest = async (context: any) => {
       await env.DB.prepare(`
         INSERT INTO staff (
           id, sn, name, email, personalEmail, nid, joinDate, phone, gender, 
-          department, position, isSMT, balanceVisible, notes, basicSalary, 
+          department, position, isSMT, isIncharge, balanceVisible, notes, basicSalary, 
           dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id, body.sn || '', body.name, body.email, body.personalEmail || '', 
         body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
-        body.department, body.position || '', body.isSMT ? 1 : 0, body.balanceVisible ? 1 : 0, 
+        body.department, body.position || '', body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0, body.balanceVisible ? 1 : 0, 
         body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
         body.holidayAllowanceRate || 0, body.bankAccount || '', 'active', createdAt, 9999
       ).run();
@@ -93,14 +94,14 @@ export const onRequest = async (context: any) => {
       await env.DB.prepare(`
         UPDATE staff SET 
           sn = ?, name = ?, email = ?, personalEmail = ?, nid = ?, joinDate = ?, 
-          phone = ?, gender = ?, department = ?, position = ?, isSMT = ?, 
+          phone = ?, gender = ?, department = ?, position = ?, isSMT = ?, isIncharge = ?, 
           balanceVisible = ?, notes = ?, basicSalary = ?, dailyAllowance = ?, 
           holidayAllowanceRate = ?, bankAccount = ?, updatedAt = ?
         WHERE id = ?
       `).bind(
         body.sn || '', body.name, body.email, body.personalEmail || '', 
         body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
-        body.department, body.position || '', body.isSMT ? 1 : 0, body.balanceVisible ? 1 : 0, 
+        body.department, body.position || '', body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0, body.balanceVisible ? 1 : 0, 
         body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
         body.holidayAllowanceRate || 0, body.bankAccount || '', updatedAt, id
       ).run();
@@ -342,18 +343,8 @@ export const onRequest = async (context: any) => {
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
-      
-      // 1. Update the Users table
       await env.DB.prepare(`UPDATE users SET role = ?, department = ?, name = ?, position = ? WHERE id = ?`)
         .bind(body.role, body.department, body.name || '', body.position || '', id).run();
-
-      // 2. Find the user's email to sync the Staff table
-      const userRec: any = await env.DB.prepare("SELECT email FROM users WHERE id = ?").bind(id).first();
-      if (userRec && userRec.email) {
-        await env.DB.prepare(`UPDATE staff SET department = ?, position = ? WHERE email = ?`)
-          .bind(body.department, body.position || '', userRec.email).run();
-      }
-
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -363,9 +354,6 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ==========================================
-    // CREATE FIREBASE AUTH USER & PRE-REGISTER
-    // ==========================================
     if (url.pathname === "/api/users/create-auth" && method === "POST") {
       const body: any = await request.json();
       const { email, password, role, department, name, position } = body;
@@ -374,13 +362,11 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ message: "Email and password are required" }), { status: 400, headers: corsHeaders });
       }
 
-      // Check if user is already ACTIVE in our system
       const activeUser = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
       if (activeUser) {
         return new Response(JSON.stringify({ message: "This user is already active in the system." }), { status: 400, headers: corsHeaders });
       }
 
-      // Try to create in Firebase Auth
       const firebaseUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`;
       const firebaseRes = await fetch(firebaseUrl, {
         method: 'POST',
@@ -392,8 +378,6 @@ export const onRequest = async (context: any) => {
 
       if (firebaseData.error) {
         if (firebaseData.error.message === 'EMAIL_EXISTS') {
-          // User exists in Firebase but not active in our DB. 
-          // We will just add them to the pre-registration list.
           const id = crypto.randomUUID();
           await env.DB.prepare(`
             INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) 
@@ -408,7 +392,6 @@ export const onRequest = async (context: any) => {
         return new Response(JSON.stringify({ message: msg }), { status: 400, headers: corsHeaders });
       }
 
-      // If Firebase creation was successful, save to D1
       const id = crypto.randomUUID();
       await env.DB.prepare(`
         INSERT OR REPLACE INTO user_presets (id, email, role, department, name, position, createdAt, createdBy) 
@@ -420,9 +403,6 @@ export const onRequest = async (context: any) => {
       return new Response(JSON.stringify({ success: true, id, message: "User created and pre-registered." }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // ==========================================
-    // USER PRESETS MODULE
-    // ==========================================
     if (url.pathname === "/api/user-presets" && method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM user_presets").all();
       return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -662,6 +642,22 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // REPORTS MODULE (Save Monthly Reports)
+    // ==========================================
+    if (url.pathname === "/api/reports/save-monthly" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      
+      await env.DB.prepare(`
+        INSERT INTO saved_reports (id, month, dateFrom, dateTo, type, createdBy, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, body.month, body.dateFrom, body.dateTo, body.type, body.createdBy || 'System', createdAt).run();
+
+      return new Response(JSON.stringify({ success: true, id, message: 'Report saved.' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
     // TIMESHEET / ATTENDANCE MODULE
     // ==========================================
     if (url.pathname === "/api/timesheets" && method === "GET") {
@@ -734,41 +730,6 @@ export const onRequest = async (context: any) => {
     if (url.pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
       const id = url.pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM lights_inspectors WHERE staffId = ?").bind(id).run();
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ==========================================
-    // BIRDSTRIKE REPORT MODULE
-    // ==========================================
-    if (url.pathname === "/api/birdstrikes" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM bird_strikes ORDER BY date DESC, time DESC").all();
-      return new Response(JSON.stringify(results), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname === "/api/birdstrikes" && method === "POST") {
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      
-      await env.DB.prepare(`
-        INSERT INTO bird_strikes (
-          id, reportNo, date, time, reporterName, contactNo, organization, email, 
-          category, occurrenceType, birdSize, place, metConditions, peopleInvolved, 
-          aircraftInfo, explanation, correctiveAction, submittedBy, designation, photoBase64, createdAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        id, body.reportNo, body.date, body.time, body.reporterName, body.contactNo, body.organization, body.email,
-        body.category, body.occurrenceType, body.birdSize, body.place, body.metConditions, JSON.stringify(body.peopleInvolved),
-        JSON.stringify(body.aircraftInfo), body.explanation, body.correctiveAction, body.submittedBy, body.designation, body.photoBase64 || '', new Date().toISOString()
-      ).run();
-
-      context.waitUntil(backupToFirebase('bird_strikes', id, body));
-      return new Response(JSON.stringify({ success: true, id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    if (url.pathname.startsWith("/api/birdstrikes/") && method === "DELETE") {
-      const id = url.pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM bird_strikes WHERE id = ?").bind(id).run();
-      context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/bird_strikes/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
