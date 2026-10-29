@@ -77,13 +77,13 @@
     max-width: 100% !important; 
     margin: 0 !important; 
     padding: 0 !important; 
-    /* This guarantees it fits on 1 page */
-    zoom: 0.85; 
+    /* Shrinks to guarantee it fits on 1 page */
+    zoom: 0.8; 
   }
   
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; width: 100% !important; }
   
-  /* CRITICAL: Prevent grid items from forcing horizontal scrolling */
+  /* Prevent grid items from forcing horizontal scrolling */
   .ramp-sheet .main-grid > div,
   .ramp-sheet .bottom-section > table,
   .ramp-sheet .bottom-section-2 > table {

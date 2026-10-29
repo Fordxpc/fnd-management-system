@@ -70,29 +70,35 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* 1. Reset all layout wrappers to have NO height, NO padding, and NO margins */
-  html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content {
+  /* 1. Force reset ALL containers to remove heights and unlock Portrait */
+  html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
     height: auto !important;
     min-height: 0 !important;
-    overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
     background: transparent !important;
     border: none !important;
-    display: block !important;
+    box-shadow: none !important;
+    /* Use block to prevent flex layout from holding height */
+    display: block !important; 
   }
 
-  /* 2. COMPLETELY remove UI elements from the layout flow */
+  /* 2. Hide UI that takes up physical space */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
-  button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs {
+  button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs,
+  .modal-header {
     display: none !important;
   }
 
   /* 3. Hide everything by default */
   body > #root * { visibility: hidden; }
   
-  /* 4. Show ONLY the ramp container and its contents */
+  /* 4. Show ONLY the form */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container *,
   body.printing-ramp .modal-backdrop,
@@ -100,31 +106,13 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     visibility: visible !important; 
   }
 
-  /* 5. Ensure the container starts exactly at the top left */
+  /* 5. Keep it in the normal flow so it starts exactly on Page 1 */
   body.printing-ramp .ramp-container,
   body.printing-ramp .modal-backdrop {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
+    position: static !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     background: transparent !important;
-  }
-
-  /* 6. Strip modal wrapper styles */
-  body.printing-ramp .modal-content,
-  body.printing-ramp .modal-scrollable-body {
-    position: static !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
-    max-height: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    overflow: visible !important;
-    display: block !important;
   }
 }
