@@ -75,23 +75,28 @@ function ReportsPage() {
   const filterByDate = useCallback((item: any) => {
     const d = item.date || item.createdAt?.split('T')[0];
     if (!d) return true;
-    if (selectedMonth && !d.startsWith(`-${selectedMonth}-`)) return false; // crude check, assumes YYYY-MM-DD
+    if (selectedMonth && !d.startsWith(`2026-${selectedMonth}`)) return false; // Assuming current year, adjust if needed
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
     return true;
   }, [dateFrom, dateTo, selectedMonth]);
 
+  // FIXED: Robust Route Parsing (handles /, -, and spaces)
   const parseRoute = (routeStr: string) => {
     if (!routeStr) return { from: '', via: '', to: '' };
-    const parts = routeStr.split('/');
-    if (parts.length === 3) return { from: parts[0], via: parts[1], to: parts[2] };
+    const cleanStr = routeStr.trim().toUpperCase();
+    const parts = cleanStr.split(/[\/\-\s]+/).filter(Boolean);
+    
+    if (parts.length >= 3) return { from: parts[0], via: parts[1], to: parts[2] };
     if (parts.length === 2) return { from: parts[0], via: '', to: parts[1] };
-    return { from: parts[0], via: '', to: '' };
+    if (parts.length === 1) return { from: parts[0], via: '', to: '' };
+    return { from: cleanStr, via: '', to: '' };
   };
 
-  const isAirAmbulance = (remarks: string) => {
-    const r = (remarks || '').toUpperCase();
-    return r.includes('AMBULANCE') || r.includes('MEDICAL');
+  // FIXED: Check comments and medical emergency for Air Ambulance
+  const isAirAmbulance = (record: any) => {
+    const text = `${record.comments || ''} ${record.medicalEmergency || ''}`.toUpperCase();
+    return text.includes('AMBULANCE') || text.includes('MEDICAL');
   };
 
   const getKg = (val: string) => {
@@ -108,7 +113,7 @@ function ReportsPage() {
   }, [rampReports, filterByDate]);
 
   const nonAirAmbulanceRamp = useMemo(() => {
-    return filteredRamp.filter(r => !isAirAmbulance(r.remarks));
+    return filteredRamp.filter(r => !isAirAmbulance(r));
   }, [filteredRamp]);
 
   // --- DFIS TOTALS ---
@@ -159,7 +164,7 @@ function ReportsPage() {
     }), { mvmts: 0, paxInAdult: 0, paxInInf: 0, paxOutAdult: 0, paxOutInf: 0, cargoIn: 0, cargoOut: 0, mailIn: 0, mailOut: 0 });
   }, [statsData]);
 
-  // --- TRAFFIC DATA (Grouped by Month) ---
+  // --- TRAFFIC DATA ---
   const trafficData = useMemo(() => {
     const grouped: Record<string, any[]> = {};
     nonAirAmbulanceRamp.forEach(r => {
@@ -187,7 +192,7 @@ function ReportsPage() {
       }).filter(r => r.mvmts > 0);
 
       return { month, rows };
-    }).sort((a, b) => b.month.localeCompare(a.month)); // LATEST MONTH FIRST
+    }).sort((a, b) => b.month.localeCompare(a.month));
 
     return result;
   }, [nonAirAmbulanceRamp]);
@@ -230,9 +235,7 @@ function ReportsPage() {
       ) : (
         <div className="dash-card" style={{ overflowX: 'auto' }}>
           
-          {/* ========================================= */}
-          {/* 1. DFIS TAB */}
-          {/* ========================================= */}
+          {/* DFIS TAB */}
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -282,7 +285,7 @@ function ReportsPage() {
                   {filteredRamp.map((r, index) => {
                     const routeParts = parseRoute(r.route);
                     const acRegParts = (r.acReg || '8Q-').split('-');
-                    const isAmbulance = isAirAmbulance(r.remarks);
+                    const isAmbulance = isAirAmbulance(r);
                     const bgColor = AIRCRAFT_COLORS[r.acType] || '#fff';
                     
                     return (
@@ -339,8 +342,9 @@ function ReportsPage() {
                         <td style={{ textAlign: 'center' }}>{r.bagTrans || '0'}</td>
                         
                         <td style={{ textAlign: 'center' }}>{r.checkedBy || '-'}</td>
-                        <td style={{ textAlign: 'center', fontWeight: isAmbulance ? 700 : 400, color: isAmbulance ? '#dc2626' : 'inherit' }}>
-                          {r.remarks || 'NIL'}
+                        {/* FIXED: Map from r.comments instead of r.remarks */}
+                        <td style={{ textAlign: 'center', fontWeight: isAmbulance ? 700 : 400, color: isAmbulance ? '#dc2626' : 'inherit', whiteSpace: 'normal', minWidth: '150px' }}>
+                          {r.comments || r.medicalEmergency || 'NIL'}
                         </td>
                       </tr>
                     );
@@ -381,9 +385,7 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* ========================================= */}
-          {/* 2. STATISTICS TAB */}
-          {/* ========================================= */}
+          {/* STATISTICS TAB */}
           {activeTab === 'Statistics' && (
             <div style={{ padding: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -452,9 +454,7 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* ========================================= */}
-          {/* 3. TRAFFIC TAB */}
-          {/* ========================================= */}
+          {/* TRAFFIC TAB */}
           {activeTab === 'Traffic' && (
             <div style={{ padding: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -526,7 +526,7 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* 4. WILDLIFE TAB */}
+          {/* WILDLIFE TAB */}
           {activeTab === 'Wildlife' && (
             <table className="mini-table">
               <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Temp</th><th>Wind</th><th>Cloud</th><th>Species Count</th></tr></thead>
@@ -541,7 +541,7 @@ function ReportsPage() {
             </table>
           )}
 
-          {/* 5. FOD TAB */}
+          {/* FOD TAB */}
           {activeTab === 'FOD' && (
             <table className="mini-table">
               <thead><tr><th>Date</th><th>Grams</th><th>Remarks</th><th>Logged By</th></tr></thead>
