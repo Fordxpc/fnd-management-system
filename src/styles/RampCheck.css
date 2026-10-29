@@ -71,7 +71,6 @@
 @media print {
   .ramp-container { overflow: visible !important; padding: 0 !important; margin: 0 !important; width: 100% !important; }
   
-  /* Increased font sizes and heights for better view */
   .ramp-sheet { font-size: 9.5px !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 8px !important; width: 100% !important; }
   
