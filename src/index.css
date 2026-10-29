@@ -70,10 +70,12 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* Forces Portrait and removes the huge blank top space */
-  @page { size: A4 portrait; margin: 5mm; }
+  /* Let browser handle orientation, just set margins */
+  @page { margin: 5mm; }
 
+  /* Reset all containers so the page height collapses to the form */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
+    display: block !important;
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0 !important;
@@ -85,31 +87,27 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     background: transparent !important;
     box-shadow: none !important;
     border: none !important;
-    /* This removes the forced flex height */
-    display: block !important;
   }
 
-  ::-webkit-scrollbar { display: none !important; }
-
-  /* Hide everything by default */
-  body > #root * { visibility: hidden; }
-  
+  /* Hide all UI buttons and sidebars */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs {
     display: none !important;
   }
 
-  /* --- RAMP CHECK ISOLATION --- */
+  /* Hide EVERYTHING by default */
+  body > #root * { visibility: hidden; }
+  
+  /* Show ONLY the ramp container and its contents */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container * { 
     visibility: visible !important; 
   }
   
+  /* Ensure it flows naturally at the top of the page */
   body.printing-ramp .ramp-container { 
-    position: absolute !important; 
-    left: 0 !important; 
-    top: 0 !important; 
+    display: block !important;
     width: 100% !important; 
     padding: 0 !important; 
     margin: 0 !important; 
