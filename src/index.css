@@ -70,11 +70,10 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  /* Unlock Portrait by dropping the width constraint */
+  /* CRITICAL: Unlock the print dialog and reset layout wrappers */
   html, body, #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
     width: 100% !important;
     max-width: 100% !important;
-    min-width: 0 !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
@@ -83,10 +82,12 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    display: block !important;
+    /* Disable Flexbox so it doesn't reserve 100vh height */
+    display: block !important; 
+    flex: none !important;
   }
 
-  /* Hide UI completely so it takes zero space */
+  /* Hide all UI elements */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
@@ -96,7 +97,7 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   /* Hide everything by default */
   body > #root * { visibility: hidden; }
   
-  /* Show ONLY the form */
+  /* Show ONLY the ramp form */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container *,
   body.printing-ramp .modal-backdrop,
