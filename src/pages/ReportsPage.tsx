@@ -5,9 +5,12 @@ import { toast } from 'sonner';
 const TABS = ['Custom Generator', 'DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
 
 const AIRCRAFT_COLORS: Record<string, string> = {
-  'ATR-72/600': '#fef3c7', 'ATR-42/600': '#dcfce7', 
-  'DASH-8/300': '#dbeafe', 'DH-8/300': '#dbeafe',
-  'DASH-8/200': '#f3e8ff', 'DH-8/200': '#f3e8ff',
+  'ATR-72/600': '#fef3c7', 
+  'ATR-42/600': '#dcfce7', 
+  'DASH-8/300': '#dbeafe', 
+  'DH-8/300': '#dbeafe',
+  'DASH-8/200': '#f3e8ff', 
+  'DH-8/200': '#f3e8ff',
 };
 
 const MONTHS = [
@@ -22,20 +25,23 @@ function ReportsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [zoom, setZoom] = useState(1);
 
   const [loading, setLoading] = useState(true);
   const [rampReports, setRampReports] = useState<any[]>([]);
   const [wildlifeReports, setWildlifeReports] = useState<any[]>([]);
   const [fodReports, setFodReports] = useState<any[]>([]);
+  const [staffList, setStaffList] = useState<any[]>([]);
 
   const fetchAllData = useCallback(async () => {
     try {
-      const [ramp, wildlife, fod] = await Promise.allSettled([
-        apiFetch('/ramp/reports'), apiFetch('/wildlife'), apiFetch('/fod')
+      const [ramp, wildlife, fod, staff] = await Promise.allSettled([
+        apiFetch('/ramp/reports'), apiFetch('/wildlife'), apiFetch('/fod'), apiFetch('/staff')
       ]);
       if (ramp.status === 'fulfilled') setRampReports(ramp.value);
       if (wildlife.status === 'fulfilled') setWildlifeReports(wildlife.value);
       if (fod.status === 'fulfilled') setFodReports(fod.value);
+      if (staff.status === 'fulfilled') setStaffList(staff.value);
       setLoading(false);
     } catch (err: any) { toast.error('Failed to load data: ' + err.message); setLoading(false); }
   }, []);
@@ -75,7 +81,12 @@ function ReportsPage() {
     return true;
   }, [dateFrom, dateTo, selectedMonth]);
 
-  // FIXED: Extracts FROM, TO, and joins all MIDDLE points with '/' for TRANSIT
+  const getStaffName = (email: string) => {
+    if (!email) return '—';
+    const s = staffList.find(st => (st.email || '').toLowerCase() === email.toLowerCase());
+    return s ? s.name : email.split('@')[0];
+  };
+
   const parseRoute = (routeStr: string) => {
     if (!routeStr) return { from: '', transit: '', to: '' };
     const cleanStr = routeStr.trim().toUpperCase();
@@ -191,9 +202,14 @@ function ReportsPage() {
     <div className="page-content">
       <div className="staff-header no-print">
         <h2>📊 Operations Reports</h2>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <select value={zoom} onChange={e => setZoom(Number(e.target.value))} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
+            <option value="1">100%</option>
+            <option value="0.75">75%</option>
+            <option value="0.5">50%</option>
+          </select>
           <button className="add-staff-btn" style={{ background: '#f1f5f9', color: '#475569' }} onClick={handleSaveReport}>💾 Save Report</button>
-          <button className="add-staff-btn" style={{ background: '#16a34a', color: 'white' }} onClick={handlePrint}>🖨️ Print / Save as PDF</button>
+          <button className="add-staff-btn" style={{ background: '#16a34a', color: 'white' }} onClick={handlePrint}>🖨️ Print / PDF</button>
         </div>
       </div>
 
@@ -223,7 +239,7 @@ function ReportsPage() {
       {loading ? (
         <div className="empty-state">Loading report data...</div>
       ) : (
-        <div className="dash-card" style={{ overflowX: 'auto' }}>
+        <div className="dash-card" style={{ overflowX: 'auto', zoom: zoom }}>
           
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
@@ -337,7 +353,7 @@ function ReportsPage() {
                         <td style={tdStyle}>{r.bagOut || '0'}</td>
                         <td style={tdStyle}>{r.bagTrans || '0'}</td>
                         
-                        <td style={tdStyle}>{r.checkedBy || '-'}</td>
+                        <td style={tdStyle}>{getStaffName(r.checkedBy) || '-'}</td>
                         
                         <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                           {r.comments || r.medicalEmergency || 'NIL'}

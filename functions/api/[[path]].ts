@@ -57,8 +57,9 @@ export const onRequest = async (context: any) => {
       const formattedResults = results.map((row: any) => ({
         ...row,
         isSMT: row.isSMT === 1,
-        isIncharge: row.isIncharge === 1, // Added
-        balanceVisible: row.balanceVisible === 1
+        isIncharge: row.isIncharge === 1,
+        balanceVisible: row.balanceVisible === 1,
+        specialOpsAccess: row.specialOpsAccess === 1
       }));
       return new Response(JSON.stringify(formattedResults), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
@@ -72,14 +73,14 @@ export const onRequest = async (context: any) => {
         INSERT INTO staff (
           id, sn, name, email, personalEmail, nid, joinDate, phone, gender, 
           department, position, isSMT, isIncharge, balanceVisible, notes, basicSalary, 
-          dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex, specialOpsAccess
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id, body.sn || '', body.name, body.email, body.personalEmail || '', 
         body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
         body.department, body.position || '', body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0, body.balanceVisible ? 1 : 0, 
         body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
-        body.holidayAllowanceRate || 0, body.bankAccount || '', 'active', createdAt, 9999
+        body.holidayAllowanceRate || 0, body.bankAccount || '', 'active', createdAt, 9999, body.specialOpsAccess ? 1 : 0
       ).run();
 
       context.waitUntil(backupToFirebase('staff', id, { ...body, status: 'active', createdAt }));
@@ -96,14 +97,14 @@ export const onRequest = async (context: any) => {
           sn = ?, name = ?, email = ?, personalEmail = ?, nid = ?, joinDate = ?, 
           phone = ?, gender = ?, department = ?, position = ?, isSMT = ?, isIncharge = ?, 
           balanceVisible = ?, notes = ?, basicSalary = ?, dailyAllowance = ?, 
-          holidayAllowanceRate = ?, bankAccount = ?, updatedAt = ?
+          holidayAllowanceRate = ?, bankAccount = ?, updatedAt = ?, specialOpsAccess = ?
         WHERE id = ?
       `).bind(
         body.sn || '', body.name, body.email, body.personalEmail || '', 
         body.nid || '', body.joinDate || '', body.phone || '', body.gender || '',
         body.department, body.position || '', body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0, body.balanceVisible ? 1 : 0, 
         body.notes || '', body.basicSalary || 0, body.dailyAllowance || 0, 
-        body.holidayAllowanceRate || 0, body.bankAccount || '', updatedAt, id
+        body.holidayAllowanceRate || 0, body.bankAccount || '', updatedAt, body.specialOpsAccess ? 1 : 0, id
       ).run();
 
       context.waitUntil(backupToFirebase('staff', id!, { ...body, updatedAt }));
@@ -430,6 +431,22 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // REPORTS MODULE (Save Monthly Reports)
+    // ==========================================
+    if (url.pathname === "/api/reports/save-monthly" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      const createdAt = new Date().toISOString();
+      
+      await env.DB.prepare(`
+        INSERT INTO saved_reports (id, month, dateFrom, dateTo, type, createdBy, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, body.month, body.dateFrom, body.dateTo, body.type, body.createdBy || 'System', createdAt).run();
+
+      return new Response(JSON.stringify({ success: true, id, message: 'Report saved.' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ==========================================
     // OVERTIME MODULE
     // ==========================================
     if (url.pathname === "/api/overtime" && method === "GET") {
@@ -639,22 +656,6 @@ export const onRequest = async (context: any) => {
       await env.DB.prepare("DELETE FROM ramp_inspections WHERE id = ?").bind(id).run();
       context.waitUntil(fetch(`https://firestore.googleapis.com/v1/projects/fnd-ops-management/databases/(default)/documents/ramp_inspections/${id}?key=AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU`, { method: 'DELETE' }));
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // ==========================================
-    // REPORTS MODULE (Save Monthly Reports)
-    // ==========================================
-    if (url.pathname === "/api/reports/save-monthly" && method === "POST") {
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-      
-      await env.DB.prepare(`
-        INSERT INTO saved_reports (id, month, dateFrom, dateTo, type, createdBy, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).bind(id, body.month, body.dateFrom, body.dateTo, body.type, body.createdBy || 'System', createdAt).run();
-
-      return new Response(JSON.stringify({ success: true, id, message: 'Report saved.' }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // ==========================================

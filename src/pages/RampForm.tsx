@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import '../styles/RampCheck.css';
 
+const FALLBACK_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
+
 interface RampFormProps {
   formData: any;
   handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
@@ -68,12 +70,12 @@ function SplitInput({ prefix, label, formData, handleChange, isManager, onOpenKe
 
 export default function RampForm({ formData, handleChange, isManager, acTypes, routeCodes, handleAddAcType, handleAddRoute, appendRoute, isViewOnlyMode = false }: RampFormProps) {
   
-  // --- TIME POPUP STATE (For Start/Stop, ATA, ATD) ---
+  const availableAcTypes = acTypes && acTypes.length > 0 ? acTypes : FALLBACK_AC_TYPES;
+
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [tempHour, setTempHour] = useState<string>('00');
   const [tempMin, setTempMin] = useState<string>('00');
 
-  // --- IN-APP KEYBOARD STATE ---
   const [keypadTarget, setKeypadTarget] = useState<string | null>(null);
   const [keypadType, setKeypadType] = useState<'numeric' | 'alpha' | 'time'>('numeric');
   const [keypadValue, setKeypadValue] = useState('');
@@ -96,7 +98,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     return d;
   }, [formData]);
 
-  // --- TIME POPUP HANDLERS ---
   const executeFillNow = () => {
     if (!confirmId) return;
     const finalTime = `${tempHour}:${tempMin}`;
@@ -122,12 +123,10 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
     e.target.blur();
   };
 
-  // --- CUSTOM KEYPAD HANDLERS ---
   const openKeypad = (id: string, type: 'numeric' | 'alpha' | 'time') => {
     if (!isManager) return;
     setKeypadTarget(id);
     setKeypadType(type);
-    // Strip colon if it's an existing time value
     const currentVal = formData[id] || '';
     setKeypadValue(type === 'time' ? currentVal.replace(/[^0-9]/g, '') : currentVal);
   };
@@ -135,24 +134,21 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
   const handleKeypadPress = (key: string) => {
     if (key === 'OK') {
       let finalVal = keypadValue;
-      
-      // Auto-format time if the keypad type is 'time'
       if (keypadType === 'time') {
         if (finalVal.length === 4) finalVal = finalVal.slice(0, 2) + ':' + finalVal.slice(2);
         else if (finalVal.length === 3) finalVal = '0' + finalVal.slice(0, 1) + ':' + finalVal.slice(1);
         else if (finalVal.length === 2) finalVal = finalVal + ':00';
         else if (finalVal.length === 1) finalVal = '0' + finalVal + ':00';
       }
-
       handleChange({ target: { id: keypadTarget, value: finalVal } } as any);
       setKeypadTarget(null);
     } else if (key === 'C') {
       setKeypadValue('');
-    } else if (key === '⌫') {
+    } else if (key === 'X' || key === '⌫') {
       setKeypadValue(prev => prev.slice(0, -1));
     } else {
       if (keypadType === 'numeric' && keypadValue.length >= 6) return;
-      if (keypadType === 'time' && keypadValue.length >= 4) return; // Max 4 digits for HHMM
+      if (keypadType === 'time' && keypadValue.length >= 4) return;
       setKeypadValue(prev => prev + key);
     }
   };
@@ -189,25 +185,22 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                     }}
                   >
                     <option value="">-- Select --</option>
-                    {acTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                    {availableAcTypes.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                   {isManager && !isViewOnlyMode && <button type="button" className="btn-plus" onClick={handleAddAcType}>➕</button>}
                 </div>
               </div>
               
-              {/* FLT.NO - Custom Keypad */}
               <div className="header-row">
                 <span className="header-label">FLT.NO :</span>
                 <input className="header-value" id="fltNo" type="text" value={formData.fltNo} readOnly onClick={() => openKeypad('fltNo', 'alpha')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* ATA - Current Time Popup */}
               <div className="header-row">
                 <span className="header-label">ATA:</span>
                 <input className="header-value" id="ata" type="text" value={formData.ata} readOnly onClick={() => handleTimeClick('ata')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* STA - Custom Keypad */}
               <div className="header-row">
                 <span className="header-label">STA:</span>
                 <input className="header-value" id="sta" type="text" value={formData.sta} readOnly onClick={() => openKeypad('sta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
@@ -239,13 +232,11 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
             <div>
               <div className="header-row"><span className="header-label">DATE :</span><input className="header-value" id="date" type="date" value={formData.date} onChange={handleChange} readOnly={!isManager} /></div>
               
-              {/* ETA - Custom Keypad */}
               <div className="header-row">
                 <span className="header-label">ETA :</span>
                 <input className="header-value" id="eta" type="text" value={formData.eta} readOnly onClick={() => openKeypad('eta', 'time')} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
               </div>
               
-              {/* ATD - Current Time Popup */}
               <div className="header-row">
                 <span className="header-label">ATD :</span>
                 <input className="header-value" id="atd" type="text" value={formData.atd} readOnly onClick={() => handleTimeClick('atd')} onFocus={preventKeyboard} style={{ cursor: isManager ? 'pointer' : 'default', borderBottom: '1px solid #000' }} />
@@ -273,7 +264,6 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
 
               <table className="inner-table info-table" style={{ marginTop: '15px' }}>
                 <tbody>
-                  {/* CHECK-IN - Custom Keypad */}
                   <tr>
                     <td>CHECK-IN</td>
                     <td><input type="text" id="checkIn" value={formData.checkIn} readOnly onClick={() => openKeypad('checkIn', 'time')} style={{ cursor: isManager ? 'pointer' : 'default' }} /></td>
@@ -363,67 +353,38 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
         </div>
       </div>
 
-      {/* ========================================= */}
-      {/* 1. CURRENT TIME POPUP MODAL (Start/Stop, ATA, ATD)  */}
-      {/* ========================================= */}
       {confirmId && (
         <div className="modal-backdrop" onClick={() => setConfirmId(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '350px', padding: '30px 20px' }}>
             <h3 style={{ marginTop: 0, color: '#1e293b', fontSize: '20px' }}>Set Time (24h)</h3>
-            <p style={{ color: '#64748b', fontSize: '14px', marginBottom: '16px' }}>
-              Adjust the time below or clear it.
-            </p>
-            
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', margin: '0 auto 24px auto' }}>
               <select value={tempHour} onChange={(e) => setTempHour(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
-                {Array.from({ length: 24 }).map((_, i) => {
-                  const h = String(i).padStart(2, '0');
-                  return <option key={h} value={h}>{h}</option>;
-                })}
+                {Array.from({ length: 24 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>)}
               </select>
               <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>:</span>
               <select value={tempMin} onChange={(e) => setTempMin(e.target.value)} style={{ padding: '10px', fontSize: '24px', borderRadius: '8px', border: '2px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff', fontWeight: 'bold' }}>
-                {Array.from({ length: 60 }).map((_, i) => {
-                  const m = String(i).padStart(2, '0');
-                  return <option key={m} value={m}>{m}</option>;
-                })}
+                {Array.from({ length: 60 }).map((_, i) => <option key={i} value={String(i).padStart(2, '0')}>{String(i).padStart(2, '0')}</option>)}
               </select>
             </div>
-
-            <button onClick={handleClearField} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px', display: 'block', margin: '0 auto 20px auto' }}>
-              Clear this field
-            </button>
-
+            <button onClick={handleClearField} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, fontSize: '14px', textDecoration: 'underline', cursor: 'pointer', marginBottom: '20px' }}>Clear this field</button>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '20px' }}>
-              <button onClick={() => setConfirmId(null)} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(220, 38, 38, 0.2)' }} title="Cancel">
-                ✕
-              </button>
-              <button onClick={executeFillNow} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#dcfce7', color: '#16a34a', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(22, 163, 74, 0.2)' }} title="Confirm">
-                ✓
-              </button>
+              <button onClick={() => setConfirmId(null)} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#fee2e2', color: '#dc2626', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              <button onClick={executeFillNow} style={{ width: '60px', height: '60px', borderRadius: '50%', border: 'none', background: '#dcfce7', color: '#16a34a', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ========================================= */}
-      {/* 2. CUSTOM IN-APP NUMERIC/ALPHA KEYBOARD   */}
-      {/* ========================================= */}
       {keypadTarget && (
         <div className="modal-backdrop" onClick={() => setKeypadTarget(null)} style={{ zIndex: 9999, backdropFilter: 'blur(4px)' }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center', maxWidth: '400px', padding: '24px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <h3 style={{ marginTop: 0, marginBottom: '8px', color: '#1e293b', fontSize: '18px' }}>
               {keypadType === 'time' ? 'Enter Time (24h)' : 'Enter Value'}
             </h3>
-            <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>
-              {keypadType === 'time' ? 'Type 4 digits (e.g. 0930 for 09:30)' : 'Using custom in-app keyboard'}
-            </p>
-            
             <div style={{ fontSize: '32px', fontWeight: 900, color: '#0f172a', letterSpacing: '1px', marginBottom: '20px', background: '#f1f5f9', padding: '12px', borderRadius: '8px', border: '2px solid #cbd5e1', minHeight: '60px', display: 'flex', alignItems: 'center', justifyContent: 'center', wordBreak: 'break-all' }}>
               {keypadValue || <span style={{ color: '#cbd5e1' }}>Type...</span>}
             </div>
 
-            {/* ALPHA KEYBOARD */}
             {keypadType === 'alpha' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
@@ -438,10 +399,13 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
                   {['1','2','3','4','5','6','7','8','9','0'].map(k => <button key={k} onClick={() => handleKeypadPress(k)} style={{ padding: '12px 8px', fontSize: '16px', fontWeight: 'bold', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', cursor: 'pointer', flex: 1 }}>{k}</button>)}
                 </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <button onClick={() => handleKeypadPress('C')} style={{ flex: 1, padding: '16px', fontSize: '18px', fontWeight: 'bold', background: '#fee2e2', border: 'none', borderRadius: '8px', color: '#dc2626', cursor: 'pointer' }}>Clear (C)</button>
+                  <button onClick={() => handleKeypadPress('X')} style={{ flex: 1, padding: '16px', fontSize: '18px', fontWeight: 'bold', background: '#fef3c7', border: 'none', borderRadius: '8px', color: '#d97706', cursor: 'pointer' }}>Backspace (X)</button>
+                </div>
               </div>
             )}
 
-            {/* NUMERIC / TIME KEYBOARD */}
             {(keypadType === 'numeric' || keypadType === 'time') && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => (
@@ -449,7 +413,7 @@ export default function RampForm({ formData, handleChange, isManager, acTypes, r
                 ))}
                 <button onClick={() => handleKeypadPress('C')} style={{ padding: '16px', fontSize: '18px', fontWeight: 'bold', background: '#fee2e2', border: 'none', borderRadius: '8px', color: '#dc2626', cursor: 'pointer' }}>C</button>
                 <button onClick={() => handleKeypadPress('0')} style={{ padding: '16px', fontSize: '24px', fontWeight: 'bold', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '8px', color: '#1e293b', cursor: 'pointer' }}>0</button>
-                <button onClick={() => handleKeypadPress('⌫')} style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', background: '#fef3c7', border: 'none', borderRadius: '8px', color: '#d97706', cursor: 'pointer' }}>⌫</button>
+                <button onClick={() => handleKeypadPress('X')} style={{ padding: '16px', fontSize: '20px', fontWeight: 'bold', background: '#fef3c7', border: 'none', borderRadius: '8px', color: '#d97706', cursor: 'pointer' }}>X</button>
               </div>
             )}
 
