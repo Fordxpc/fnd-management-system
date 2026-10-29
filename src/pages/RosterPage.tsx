@@ -454,7 +454,9 @@ function RosterPage() {
 
   const handlePrint = () => {
     document.body.classList.add('printing-roster');
-    setTimeout(() => { window.print(); document.body.classList.remove('printing-roster'); }, 100);
+    window.print();
+    // Wait 1 second before removing the class so the print preview has time to generate
+    setTimeout(() => document.body.classList.remove('printing-roster'), 1000);
   };
 
   const editableStaffList = visibleStaff.filter(s => canEditDept(s.department));
