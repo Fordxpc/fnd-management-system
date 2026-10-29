@@ -116,14 +116,32 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     padding: 1px 2px !important; 
     -webkit-print-color-adjust: exact !important; 
     print-color-adjust: exact !important; 
-    word-break: normal !important; /* FIXED: Prevents breaking words like AMBULANCE */
+    word-break: normal !important; 
+    vertical-align: middle !important;
   }
   
+  /* --- DFIS TABLE SPECIFIC FIXES --- */
   body.printing-report .dfis-print-table { overflow: visible !important; width: 100% !important; }
-  body.printing-report .dfis-print-table table { font-size: 5.5px !important; }
-  body.printing-report .dfis-print-table th, body.printing-report .dfis-print-table td { 
-    padding: 0px 1px !important; 
-    white-space: nowrap !important; /* FIXED: Forces text to stay on one line */
+  
+  body.printing-report .dfis-print-table table { 
+    font-size: 5.5px !important; 
+  }
+  
+  body.printing-report .dfis-print-table th { 
+    padding: 2px 1px !important; 
+    font-size: 5.5px !important;
+    text-align: center !important; 
+    vertical-align: middle !important;
+    white-space: normal !important; 
+    word-break: break-word !important;
+    line-height: 1.1 !important;
+  }
+  
+  body.printing-report .dfis-print-table td { 
+    padding: 1px !important; 
+    font-size: 5.5px !important;
+    text-align: center !important;
+    white-space: nowrap !important; 
   }
 
   /* --- BIRD COUNT PORTRAIT --- */
@@ -139,6 +157,6 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
   body.printing-bird-count .bird-count-page-2 { page-break-before: always; break-before: page; }
 
   body.printing-bird-count table { width: 100% !important; table-layout: fixed !important; font-size: 7px !important; }
-  body.printing-bird-count th, body.printing-bird-count td { padding: 2px 1px !important; border: 1px solid #000 !important; word-break: break-word !important; }
+  body.printing-bird-count th, body.printing-bird-count td { padding: 2px 1px !important; border: 1px solid #000 !important; word-break: break-word !important; text-align: center !important; }
   body.printing-bird-count select, body.printing-bird-count input { -webkit-appearance: none !important; appearance: none !important; border: none !important; background: transparent !important; font-size: 7px !important; text-align: center !important; padding: 0 !important; }
 }

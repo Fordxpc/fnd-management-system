@@ -4,14 +4,10 @@ import { toast } from 'sonner';
 
 const TABS = ['Custom Generator', 'DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
 
-// Aircraft colors based on your screenshot
 const AIRCRAFT_COLORS: Record<string, string> = {
-  'ATR-72/600': '#fef3c7', // Yellow
-  'ATR-42/600': '#dcfce7', // Green
-  'DASH-8/300': '#dbeafe', // Blue
-  'DH-8/300': '#dbeafe',
-  'DASH-8/200': '#f3e8ff', // Purple
-  'DH-8/200': '#f3e8ff',
+  'ATR-72/600': '#fef3c7', 'ATR-42/600': '#dcfce7', 
+  'DASH-8/300': '#dbeafe', 'DH-8/300': '#dbeafe',
+  'DASH-8/200': '#f3e8ff', 'DH-8/200': '#f3e8ff',
 };
 
 const MONTHS = [
@@ -68,32 +64,34 @@ function ReportsPage() {
     }
   };
 
-  const handleClearFilter = () => {
-    setDateFrom(''); setDateTo(''); setSelectedMonth('');
-  };
+  const handleClearFilter = () => { setDateFrom(''); setDateTo(''); setSelectedMonth(''); };
 
   const filterByDate = useCallback((item: any) => {
     const d = item.date || item.createdAt?.split('T')[0];
     if (!d) return true;
-    if (selectedMonth && !d.startsWith(`2026-${selectedMonth}`)) return false; // Assuming current year, adjust if needed
+    if (selectedMonth && !d.startsWith(`2026-${selectedMonth}`)) return false;
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
     return true;
   }, [dateFrom, dateTo, selectedMonth]);
 
-  // FIXED: Robust Route Parsing (handles /, -, and spaces)
+  // FIXED: Extracts FROM, TO, and joins all MIDDLE points with '/' for TRANSIT
   const parseRoute = (routeStr: string) => {
-    if (!routeStr) return { from: '', via: '', to: '' };
+    if (!routeStr) return { from: '', transit: '', to: '' };
     const cleanStr = routeStr.trim().toUpperCase();
     const parts = cleanStr.split(/[\/\-\s]+/).filter(Boolean);
     
-    if (parts.length >= 3) return { from: parts[0], via: parts[1], to: parts[2] };
-    if (parts.length === 2) return { from: parts[0], via: '', to: parts[1] };
-    if (parts.length === 1) return { from: parts[0], via: '', to: '' };
-    return { from: cleanStr, via: '', to: '' };
+    if (parts.length >= 3) {
+      const from = parts[0];
+      const to = parts[parts.length - 1];
+      const transit = parts.slice(1, parts.length - 1).join('/');
+      return { from, transit, to };
+    }
+    if (parts.length === 2) return { from: parts[0], transit: '', to: parts[1] };
+    if (parts.length === 1) return { from: parts[0], transit: '', to: '' };
+    return { from: cleanStr, transit: '', to: '' };
   };
 
-  // FIXED: Check comments and medical emergency for Air Ambulance
   const isAirAmbulance = (record: any) => {
     const text = `${record.comments || ''} ${record.medicalEmergency || ''}`.toUpperCase();
     return text.includes('AMBULANCE') || text.includes('MEDICAL');
@@ -105,18 +103,14 @@ function ReportsPage() {
     return Number(parts[1]) || 0;
   };
 
-  // SORT LATEST FIRST
   const filteredRamp = useMemo(() => {
-    return rampReports
-      .filter(filterByDate)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    return rampReports.filter(filterByDate).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   }, [rampReports, filterByDate]);
 
   const nonAirAmbulanceRamp = useMemo(() => {
     return filteredRamp.filter(r => !isAirAmbulance(r));
   }, [filteredRamp]);
 
-  // --- DFIS TOTALS ---
   const dfisTotals = useMemo(() => {
     let paxInAdult = 0, paxInInf = 0, paxInLocal = 0, paxInForeign = 0, paxInTotal = 0;
     let paxOutAdult = 0, paxOutInf = 0, paxOutLocal = 0, paxOutForeign = 0, paxOutTotal = 0;
@@ -128,11 +122,9 @@ function ReportsPage() {
       paxInAdult += Number(r.paxInAdult) || 0; paxInInf += Number(r.paxInInf) || 0;
       paxInLocal += Number(r.paxInLocal) || 0; paxInForeign += Number(r.paxInForeign) || 0;
       paxInTotal += Number(r.paxInTotal) || 0;
-      
       paxOutAdult += Number(r.paxOutAdult) || 0; paxOutInf += Number(r.paxOutInf) || 0;
       paxOutLocal += Number(r.paxOutLocal) || 0; paxOutForeign += Number(r.paxOutForeign) || 0;
       paxOutTotal += Number(r.paxOutTotal) || 0;
-
       paxTransAdult += Number(r.paxTransAdult) || 0; paxTransInf += Number(r.paxTransInf) || 0;
       mailIn += getKg(r.mailIn); mailOut += getKg(r.mailOut); mailTrans += getKg(r.mailTrans);
       cargoIn += getKg(r.cargoIn); cargoOut += getKg(r.cargoOut); cargoTrans += getKg(r.cargoTrans);
@@ -144,27 +136,24 @@ function ReportsPage() {
     return { paxInAdult, paxInInf, paxInLocal, paxInForeign, paxInTotal, paxOutAdult, paxOutInf, paxOutLocal, paxOutForeign, paxOutTotal, paxTransAdult, paxTransInf, mailIn, mailOut, mailTrans, cargoIn, cargoOut, cargoTrans, otherIn, otherOut, otherTrans, bagIn, bagOut, bagTrans, mvmnts };
   }, [filteredRamp]);
 
-  // --- STATISTICS DATA ---
   const statsData = useMemo(() => {
     return nonAirAmbulanceRamp.map(r => ({
       date: r.date, operator: 'MALDIVIAN', aircraft: r.acType, mvmts: 2,
       paxInAdult: Number(r.paxInAdult) || 0, paxInInf: Number(r.paxInInf) || 0,
       paxOutAdult: Number(r.paxOutAdult) || 0, paxOutInf: Number(r.paxOutInf) || 0,
-      cargoIn: getKg(r.cargoIn), cargoOut: getKg(r.cargoOut),
-      mailIn: getKg(r.mailIn), mailOut: getKg(r.mailOut),
+      cargoIn: getKg(r.cargoIn), cargoOut: getKg(r.cargoOut), mailIn: getKg(r.mailIn), mailOut: getKg(r.mailOut),
     }));
   }, [nonAirAmbulanceRamp]);
 
   const statsTotals = useMemo(() => {
     return statsData.reduce((acc, curr) => ({
-      mvmts: acc.mvmts + curr.mvmts, paxInAdult: acc.paxInAdult + curr.paxInAdult,
-      paxInInf: acc.paxInInf + curr.paxInInf, paxOutAdult: acc.paxOutAdult + curr.paxOutAdult,
-      paxOutInf: acc.paxOutInf + curr.paxOutInf, cargoIn: acc.cargoIn + curr.cargoIn,
-      cargoOut: acc.cargoOut + curr.cargoOut, mailIn: acc.mailIn + curr.mailIn, mailOut: acc.mailOut + curr.mailOut,
+      mvmts: acc.mvmts + curr.mvmts, paxInAdult: acc.paxInAdult + curr.paxInAdult, paxInInf: acc.paxInInf + curr.paxInInf,
+      paxOutAdult: acc.paxOutAdult + curr.paxOutAdult, paxOutInf: acc.paxOutInf + curr.paxOutInf,
+      cargoIn: acc.cargoIn + curr.cargoIn, cargoOut: acc.cargoOut + curr.cargoOut,
+      mailIn: acc.mailIn + curr.mailIn, mailOut: acc.mailOut + curr.mailOut,
     }), { mvmts: 0, paxInAdult: 0, paxInInf: 0, paxOutAdult: 0, paxOutInf: 0, cargoIn: 0, cargoOut: 0, mailIn: 0, mailOut: 0 });
   }, [statsData]);
 
-  // --- TRAFFIC DATA ---
   const trafficData = useMemo(() => {
     const grouped: Record<string, any[]> = {};
     nonAirAmbulanceRamp.forEach(r => {
@@ -190,12 +179,13 @@ function ReportsPage() {
           cargoOut: filtered.reduce((sum, r) => sum + getKg(r.cargoOut), 0),
         };
       }).filter(r => r.mvmts > 0);
-
       return { month, rows };
     }).sort((a, b) => b.month.localeCompare(a.month));
-
     return result;
   }, [nonAirAmbulanceRamp]);
+
+  const thStyle = { textAlign: 'center' as const, verticalAlign: 'middle' as const, fontSize: '5.5px', padding: '2px 1px', lineHeight: '1.1' };
+  const tdStyle = { textAlign: 'center' as const, verticalAlign: 'middle' as const, fontSize: '5.5px', padding: '1px' };
 
   return (
     <div className="page-content">
@@ -235,9 +225,6 @@ function ReportsPage() {
       ) : (
         <div className="dash-card" style={{ overflowX: 'auto' }}>
           
-          {/* ========================================= */}
-          {/* 1. DFIS TAB */}
-          {/* ========================================= */}
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -249,38 +236,38 @@ function ReportsPage() {
               <table className="mini-table" style={{ fontSize: '10px', whiteSpace: 'nowrap', backgroundColor: '#fff' }}>
                 <thead style={{ backgroundColor: '#f8fafc' }}>
                   <tr>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>S.No.</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>Date</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>CHECK-IN<br/>Started</th>
-                    <th colSpan={2} style={{ textAlign: 'center' }}>Reg.</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>Type of<br/>Aircraft</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>Owner<br/>or<br/>Operator</th>
-                    <th colSpan={3} style={{ textAlign: 'center' }}>Arrivals</th>
-                    <th colSpan={3} style={{ textAlign: 'center' }}>Route</th>
-                    <th colSpan={2} style={{ textAlign: 'center' }}>Departures</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>Mvmnts</th>
-                    <th colSpan={5} style={{ textAlign: 'center' }}>PAX IN</th>
-                    <th colSpan={5} style={{ textAlign: 'center' }}>PAX OUT</th>
-                    <th colSpan={2} style={{ textAlign: 'center' }}>TRANSIT</th>
-                    <th colSpan={3} style={{ textAlign: 'center' }}>MAIL</th>
-                    <th colSpan={3} style={{ textAlign: 'center' }}>CARGO</th>
-                    <th colSpan={3} style={{ textAlign: 'center' }}>OTHERS</th>
-                    <th colSpan={3} style={{ textAlign: 'center' }}>BAGGAGE</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>Data Collected by</th>
-                    <th rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle' }}>Remarks</th>
+                    <th rowSpan={2} style={thStyle}>S.No.</th>
+                    <th rowSpan={2} style={thStyle}>Date</th>
+                    <th rowSpan={2} style={thStyle}>CHECK-IN<br/>Started</th>
+                    <th colSpan={2} style={thStyle}>Reg.</th>
+                    <th rowSpan={2} style={thStyle}>Type of<br/>Aircraft</th>
+                    <th rowSpan={2} style={thStyle}>Owner<br/>or<br/>Operator</th>
+                    <th colSpan={3} style={thStyle}>Arrivals</th>
+                    <th colSpan={3} style={thStyle}>Route</th>
+                    <th colSpan={2} style={thStyle}>Departures</th>
+                    <th rowSpan={2} style={thStyle}>Mvmnts</th>
+                    <th colSpan={5} style={thStyle}>PAX IN</th>
+                    <th colSpan={5} style={thStyle}>PAX OUT</th>
+                    <th colSpan={2} style={thStyle}>TRANSIT</th>
+                    <th colSpan={3} style={thStyle}>MAIL</th>
+                    <th colSpan={3} style={thStyle}>CARGO</th>
+                    <th colSpan={3} style={thStyle}>OTHERS</th>
+                    <th colSpan={3} style={thStyle}>BAGGAGE</th>
+                    <th rowSpan={2} style={thStyle}>Data Collected by</th>
+                    <th rowSpan={2} style={thStyle}>Remarks</th>
                   </tr>
                   <tr>
-                    <th style={{ textAlign: 'center' }}>Prefix</th><th style={{ textAlign: 'center' }}>Suffix</th>
-                    <th style={{ textAlign: 'center' }}>Flight No.</th><th style={{ textAlign: 'center' }}>ETA</th><th style={{ textAlign: 'center' }}>ATA</th>
-                    <th style={{ textAlign: 'center' }}>From</th><th style={{ textAlign: 'center' }}>Via</th><th style={{ textAlign: 'center' }}>To</th>
-                    <th style={{ textAlign: 'center' }}>Flight No.</th><th style={{ textAlign: 'center' }}>Time (DT)</th>
-                    <th style={{ textAlign: 'center' }}>Adult</th><th style={{ textAlign: 'center' }}>Inft.</th><th style={{ textAlign: 'center' }}>Local</th><th style={{ textAlign: 'center' }}>Foreign</th><th style={{ textAlign: 'center' }}>Total</th>
-                    <th style={{ textAlign: 'center' }}>Adult</th><th style={{ textAlign: 'center' }}>Inft.</th><th style={{ textAlign: 'center' }}>Local</th><th style={{ textAlign: 'center' }}>Foreign</th><th style={{ textAlign: 'center' }}>Total</th>
-                    <th style={{ textAlign: 'center' }}>Adult</th><th style={{ textAlign: 'center' }}>Inft.</th>
-                    <th style={{ textAlign: 'center' }}>In(kg)</th><th style={{ textAlign: 'center' }}>Out(kg)</th><th style={{ textAlign: 'center' }}>Tran(kg)</th>
-                    <th style={{ textAlign: 'center' }}>In(kg)</th><th style={{ textAlign: 'center' }}>Out(kg)</th><th style={{ textAlign: 'center' }}>Tran(kg)</th>
-                    <th style={{ textAlign: 'center' }}>In(kg)</th><th style={{ textAlign: 'center' }}>Out(kg)</th><th style={{ textAlign: 'center' }}>Tran(kg)</th>
-                    <th style={{ textAlign: 'center' }}>In(kg)</th><th style={{ textAlign: 'center' }}>Out(kg)</th><th style={{ textAlign: 'center' }}>Tran(kg)</th>
+                    <th style={thStyle}>Prefix</th><th style={thStyle}>Suffix</th>
+                    <th style={thStyle}>Flight No.</th><th style={thStyle}>ETA</th><th style={thStyle}>ATA</th>
+                    <th style={thStyle}>From</th><th style={thStyle}>Transit</th><th style={thStyle}>To</th>
+                    <th style={thStyle}>Flight No.</th><th style={thStyle}>Time (DT)</th>
+                    <th style={thStyle}>Adult</th><th style={thStyle}>Inft.</th><th style={thStyle}>Local</th><th style={thStyle}>Foreign</th><th style={thStyle}>Total</th>
+                    <th style={thStyle}>Adult</th><th style={thStyle}>Inft.</th><th style={thStyle}>Local</th><th style={thStyle}>Foreign</th><th style={thStyle}>Total</th>
+                    <th style={thStyle}>Adult</th><th style={thStyle}>Inft.</th>
+                    <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
+                    <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
+                    <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
+                    <th style={thStyle}>In(kg)</th><th style={thStyle}>Out(kg)</th><th style={thStyle}>Tran(kg)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -291,7 +278,6 @@ function ReportsPage() {
                     const bgColor = AIRCRAFT_COLORS[r.acType] || '#fff';
                     
                     return (
-                      /* FIXED: Apply red text and bold to the entire row if Air Ambulance */
                       <tr 
                         key={r.id} 
                         style={{ 
@@ -300,61 +286,60 @@ function ReportsPage() {
                           fontWeight: isAmbulance ? 700 : 400
                         }}
                       >
-                        <td style={{ textAlign: 'center' }}>{index + 1}</td>
-                        <td style={{ textAlign: 'center' }}>{r.date}</td>
-                        <td style={{ textAlign: 'center' }}>{r.checkIn || '-'}</td>
-                        <td style={{ textAlign: 'center' }}>{acRegParts[0]}</td>
-                        <td style={{ textAlign: 'center' }}>{acRegParts[1] || ''}</td>
-                        <td style={{ textAlign: 'center' }}>{r.acType}</td>
-                        <td style={{ textAlign: 'center' }}>Island Aviations Services</td>
+                        <td style={tdStyle}>{index + 1}</td>
+                        <td style={tdStyle}>{r.date}</td>
+                        <td style={tdStyle}>{r.checkIn || '-'}</td>
+                        <td style={tdStyle}>{acRegParts[0]}</td>
+                        <td style={tdStyle}>{acRegParts[1] || ''}</td>
+                        <td style={tdStyle}>{r.acType}</td>
+                        <td style={tdStyle}>Island Aviations Services</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.fltNo || '-'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.eta || '-'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.ata || '-'}</td>
+                        <td style={tdStyle}>{r.fltNo || '-'}</td>
+                        <td style={tdStyle}>{r.eta || '-'}</td>
+                        <td style={tdStyle}>{r.ata || '-'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{routeParts.from}</td>
-                        <td style={{ textAlign: 'center' }}>{routeParts.via}</td>
-                        <td style={{ textAlign: 'center' }}>{routeParts.to}</td>
+                        <td style={tdStyle}>{routeParts.from}</td>
+                        <td style={tdStyle}>{routeParts.transit}</td>
+                        <td style={tdStyle}>{routeParts.to}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.fltNo ? String(r.fltNo).replace('Q2', 'Q3') : '-'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.atd || r.sta || '-'}</td>
-                        <td style={{ textAlign: 'center' }}>2</td>
+                        <td style={tdStyle}>{r.fltNo ? String(r.fltNo).replace('Q2', 'Q3') : '-'}</td>
+                        <td style={tdStyle}>{r.atd || r.sta || '-'}</td>
+                        <td style={tdStyle}>2</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.paxInAdult || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxInInf || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxInLocal || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxInForeign || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxInTotal || '0'}</td>
+                        <td style={tdStyle}>{r.paxInAdult || '0'}</td>
+                        <td style={tdStyle}>{r.paxInInf || '0'}</td>
+                        <td style={tdStyle}>{r.paxInLocal || '0'}</td>
+                        <td style={tdStyle}>{r.paxInForeign || '0'}</td>
+                        <td style={tdStyle}>{r.paxInTotal || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.paxOutAdult || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxOutInf || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxOutLocal || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxOutForeign || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxOutTotal || '0'}</td>
+                        <td style={tdStyle}>{r.paxOutAdult || '0'}</td>
+                        <td style={tdStyle}>{r.paxOutInf || '0'}</td>
+                        <td style={tdStyle}>{r.paxOutLocal || '0'}</td>
+                        <td style={tdStyle}>{r.paxOutForeign || '0'}</td>
+                        <td style={tdStyle}>{r.paxOutTotal || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.paxTransAdult || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.paxTransInf || '0'}</td>
+                        <td style={tdStyle}>{r.paxTransAdult || '0'}</td>
+                        <td style={tdStyle}>{r.paxTransInf || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.mailIn || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.mailOut || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.mailTrans || '0'}</td>
+                        <td style={tdStyle}>{r.mailIn || '0'}</td>
+                        <td style={tdStyle}>{r.mailOut || '0'}</td>
+                        <td style={tdStyle}>{r.mailTrans || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.cargoIn || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.cargoOut || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.cargoTrans || '0'}</td>
+                        <td style={tdStyle}>{r.cargoIn || '0'}</td>
+                        <td style={tdStyle}>{r.cargoOut || '0'}</td>
+                        <td style={tdStyle}>{r.cargoTrans || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.otherIn || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.otherOut || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.otherTrans || '0'}</td>
+                        <td style={tdStyle}>{r.otherIn || '0'}</td>
+                        <td style={tdStyle}>{r.otherOut || '0'}</td>
+                        <td style={tdStyle}>{r.otherTrans || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.bagIn || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.bagOut || '0'}</td>
-                        <td style={{ textAlign: 'center' }}>{r.bagTrans || '0'}</td>
+                        <td style={tdStyle}>{r.bagIn || '0'}</td>
+                        <td style={tdStyle}>{r.bagOut || '0'}</td>
+                        <td style={tdStyle}>{r.bagTrans || '0'}</td>
                         
-                        <td style={{ textAlign: 'center' }}>{r.checkedBy || '-'}</td>
+                        <td style={tdStyle}>{r.checkedBy || '-'}</td>
                         
-                        {/* FIXED: Applied nowrap to prevent wrapping */}
-                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                           {r.comments || r.medicalEmergency || 'NIL'}
                         </td>
                       </tr>
@@ -362,32 +347,32 @@ function ReportsPage() {
                   })}
                   {filteredRamp.length > 0 && (
                     <tr style={{ backgroundColor: '#e2e8f0', fontWeight: 700 }}>
-                      <td colSpan={15} style={{ textAlign: 'right' }}>Total:</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.mvmnts}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxInAdult}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxInInf}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxInLocal}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxInForeign}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxInTotal}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxOutAdult}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxOutInf}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxOutLocal}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxOutForeign}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxOutTotal}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxTransAdult}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.paxTransInf}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.mailIn}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.mailOut}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.mailTrans}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.cargoIn}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.cargoOut}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.cargoTrans}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.otherIn}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.otherOut}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.otherTrans}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.bagIn}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.bagOut}</td>
-                      <td style={{ textAlign: 'center' }}>{dfisTotals.bagTrans}</td>
+                      <td colSpan={15} style={{ textAlign: 'right', fontSize: '5.5px', padding: '1px' }}>Total:</td>
+                      <td style={tdStyle}>{dfisTotals.mvmnts}</td>
+                      <td style={tdStyle}>{dfisTotals.paxInAdult}</td>
+                      <td style={tdStyle}>{dfisTotals.paxInInf}</td>
+                      <td style={tdStyle}>{dfisTotals.paxInLocal}</td>
+                      <td style={tdStyle}>{dfisTotals.paxInForeign}</td>
+                      <td style={tdStyle}>{dfisTotals.paxInTotal}</td>
+                      <td style={tdStyle}>{dfisTotals.paxOutAdult}</td>
+                      <td style={tdStyle}>{dfisTotals.paxOutInf}</td>
+                      <td style={tdStyle}>{dfisTotals.paxOutLocal}</td>
+                      <td style={tdStyle}>{dfisTotals.paxOutForeign}</td>
+                      <td style={tdStyle}>{dfisTotals.paxOutTotal}</td>
+                      <td style={tdStyle}>{dfisTotals.paxTransAdult}</td>
+                      <td style={tdStyle}>{dfisTotals.paxTransInf}</td>
+                      <td style={tdStyle}>{dfisTotals.mailIn}</td>
+                      <td style={tdStyle}>{dfisTotals.mailOut}</td>
+                      <td style={tdStyle}>{dfisTotals.mailTrans}</td>
+                      <td style={tdStyle}>{dfisTotals.cargoIn}</td>
+                      <td style={tdStyle}>{dfisTotals.cargoOut}</td>
+                      <td style={tdStyle}>{dfisTotals.cargoTrans}</td>
+                      <td style={tdStyle}>{dfisTotals.otherIn}</td>
+                      <td style={tdStyle}>{dfisTotals.otherOut}</td>
+                      <td style={tdStyle}>{dfisTotals.otherTrans}</td>
+                      <td style={tdStyle}>{dfisTotals.bagIn}</td>
+                      <td style={tdStyle}>{dfisTotals.bagOut}</td>
+                      <td style={tdStyle}>{dfisTotals.bagTrans}</td>
                       <td colSpan={2}></td>
                     </tr>
                   )}
@@ -396,9 +381,6 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* ========================================= */}
-          {/* 2. STATISTICS TAB */}
-          {/* ========================================= */}
           {activeTab === 'Statistics' && (
             <div style={{ padding: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -467,9 +449,6 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* ========================================= */}
-          {/* 3. TRAFFIC TAB */}
-          {/* ========================================= */}
           {activeTab === 'Traffic' && (
             <div style={{ padding: '20px' }}>
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
@@ -541,7 +520,6 @@ function ReportsPage() {
             </div>
           )}
 
-          {/* 4. WILDLIFE TAB */}
           {activeTab === 'Wildlife' && (
             <table className="mini-table">
               <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Temp</th><th>Wind</th><th>Cloud</th><th>Species Count</th></tr></thead>
@@ -556,7 +534,6 @@ function ReportsPage() {
             </table>
           )}
 
-          {/* 5. FOD TAB */}
           {activeTab === 'FOD' && (
             <table className="mini-table">
               <thead><tr><th>Date</th><th>Grams</th><th>Remarks</th><th>Logged By</th></tr></thead>
@@ -571,7 +548,6 @@ function ReportsPage() {
             </table>
           )}
 
-          {/* Placeholders */}
           {['Custom Generator', 'RWY Lights'].includes(activeTab) && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
               <p>Content for <strong>{activeTab}</strong> will appear here.</p>
