@@ -66,22 +66,26 @@
 }
 
 /* ==========================================
-   PRINT STYLES (FITS ON EXACTLY ONE PAGE)
+   PRINT STYLES (SHRUNK TO FIT A4 PORTRAIT)
    ========================================== */
 @media print {
   .ramp-container { overflow: visible !important; padding: 0 !important; margin: 0 !important; width: 100% !important; }
   
   .ramp-sheet { 
-    font-size: 8px !important; 
-    width: 100% !important; 
-    max-width: 100% !important; 
+    font-size: 9px !important; 
     margin: 0 !important; 
     padding: 0 !important; 
+    
+    /* THIS IS THE FIX: Scale down the width and height to fit exactly */
+    transform: scale(0.65);
+    transform-origin: top left;
+    width: 153.8% !important; /* Offsets the scale so it fills the page width perfectly */
+    max-width: none !important;
   }
   
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; width: 100% !important; }
   
-  /* CRITICAL: Prevent grid items from forcing horizontal scrolling */
+  /* Prevent grid items from forcing horizontal scrolling */
   .ramp-sheet .main-grid > div,
   .ramp-sheet .bottom-section > table,
   .ramp-sheet .bottom-section-2 > table {
@@ -89,33 +93,33 @@
   }
 
   .ramp-sheet .company-header { margin-bottom: 6px !important; }
-  .ramp-sheet .company-header img { height: 30px !important; margin-bottom: 2px !important; }
-  .ramp-sheet .company-title { font-size: 10px !important; }
-  .ramp-sheet .company-subtitle { font-size: 8px !important; margin-top: 1px !important; }
-  .ramp-sheet .company-unit-text { font-size: 7px !important; margin-top: 1px !important; }
-  .ramp-sheet .title { margin: 3px 0 !important; font-size: 9px !important; }
+  .ramp-sheet .company-header img { height: 35px !important; margin-bottom: 3px !important; }
+  .ramp-sheet .company-title { font-size: 11px !important; }
+  .ramp-sheet .company-subtitle { font-size: 9px !important; margin-top: 1px !important; }
+  .ramp-sheet .company-unit-text { font-size: 8px !important; margin-top: 1px !important; }
+  .ramp-sheet .title { margin: 4px 0 !important; font-size: 10px !important; }
   
   .ramp-sheet .main-grid { gap: 4px !important; margin-bottom: 4px !important; }
   .ramp-sheet .bottom-section { gap: 4px !important; margin-bottom: 4px !important; }
-  .ramp-sheet .bottom-section-2 { gap: 3px !important; margin-bottom: 4px !important; }
+  .ramp-sheet .bottom-section-2 { gap: 4px !important; margin-bottom: 4px !important; }
   
   .ramp-sheet .header-row { margin-bottom: 2px !important; }
-  .ramp-sheet .header-label { font-size: 7.5px !important; width: 45px !important; }
+  .ramp-sheet .header-label { font-size: 8px !important; width: 45px !important; }
   
-  .ramp-sheet .inner-table th, .ramp-sheet .inner-table td { padding: 1px !important; font-size: 7px !important; line-height: 1.1 !important; }
-  .ramp-sheet .inner-table input, .ramp-sheet .header-value { font-size: 7.5px !important; height: 14px !important; line-height: 14px !important; padding: 0 !important; max-width: none !important; }
+  .ramp-sheet .inner-table th, .ramp-sheet .inner-table td { padding: 1px 2px !important; font-size: 7.5px !important; line-height: 1.1 !important; }
+  .ramp-sheet .inner-table input, .ramp-sheet .header-value { font-size: 8px !important; height: 16px !important; line-height: 16px !important; padding: 0 1px !important; max-width: none !important; }
   .ramp-sheet .header-value { border-bottom: 1px solid #000 !important; }
   
-  .ramp-sheet .footer-section { padding-top: 3px !important; gap: 3px !important; }
-  .ramp-sheet .footer-box label { font-size: 7.5px !important; margin-bottom: 1px !important; }
-  .ramp-sheet .footer-box textarea { height: 20px !important; padding: 1px !important; font-size: 7.5px !important; }
+  .ramp-sheet .footer-section { padding-top: 4px !important; gap: 4px !important; }
+  .ramp-sheet .footer-box label { font-size: 8px !important; margin-bottom: 1px !important; }
+  .ramp-sheet .footer-box textarea { height: 25px !important; padding: 2px !important; font-size: 8px !important; }
   
   .ramp-sheet .route-select, .ramp-sheet .btn-plus { display: none !important; }
   .ramp-sheet .route-wrapper { display: block !important; padding: 0 !important; }
-  .ramp-sheet .special-load-textarea { height: 20px !important; font-size: 7px !important; padding: 1px !important; }
-  .ramp-sheet .inner-table[style*="margin-top"] { margin-top: 3px !important; }
-  .ramp-sheet .bottom-section-2 input[type="text"] { height: 14px !important; font-size: 7.5px !important; padding: 0 !important; border: none !important; border-radius: 0 !important; }
-  .ramp-sheet .bottom-section-2 td span { font-size: 8px !important; }
+  .ramp-sheet .special-load-textarea { height: 25px !important; font-size: 7.5px !important; padding: 1px !important; }
+  .ramp-sheet .inner-table[style*="margin-top"] { margin-top: 4px !important; }
+  .ramp-sheet .bottom-section-2 input[type="text"] { height: 16px !important; font-size: 8px !important; padding: 0 1px !important; border: none !important; border-radius: 0 !important; }
+  .ramp-sheet .bottom-section-2 td span { font-size: 9px !important; }
   .ramp-sheet .bottom-section-2 td > div { gap: 1px !important; }
   
   /* Prevent page breaks inside the form */

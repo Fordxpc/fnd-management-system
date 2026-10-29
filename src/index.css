@@ -70,59 +70,51 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
    PRINT STYLES
    ========================================== */
 @media print {
-  @page { margin: 5mm; }
-
-  /* 1. Establish the page as the coordinate system */
-  html, body {
-    position: relative !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-  }
-
-  /* 2. Collapse ALL parent containers so they don't create blank pages */
-  #root, .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
-    display: block !important;
-    position: static !important;
+  /* 1. Unlock Portrait by dropping the width */
+  html, body, #root {
     width: 100% !important;
-    height: 0 !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: hidden !important;
+    display: block !important;
+    border: none !important;
+  }
+
+  /* 2. Remove invisible layout heights that push to Page 2 */
+  .dashboard-layout, .main-content, .page-wrapper, .page-content, .modal-backdrop, .modal-content, .modal-scrollable-body {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow: visible !important;
+    position: static !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
   }
 
-  /* 3. Hide UI that takes up space */
+  /* 3. Hide UI completely */
   .sidebar, .top-tabs-container, .main-app-header, .staff-header, 
   .week-nav, .dept-tabs, .no-print, .reorder-col, .bulk-form, .staff-form,
   button, .quick-btn, .add-staff-btn, .export-btn, .ops-tabs, .modal-header {
     display: none !important;
   }
 
-  /* 4. Hide all elements */
+  /* 4. Hide EVERYTHING by default */
   body > #root * { visibility: hidden; }
   
-  /* 5. Show ONLY the form */
+  /* 5. Show ONLY the ramp form */
   body.printing-ramp .ramp-container, 
   body.printing-ramp .ramp-container *,
   body.printing-ramp .modal-backdrop,
   body.printing-ramp .modal-backdrop * { 
     visibility: visible !important; 
-  }
-
-  /* 6. Pin the form to the absolute top-left of Page 1 */
-  body.printing-ramp .ramp-container {
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    display: block !important;
   }
 }
