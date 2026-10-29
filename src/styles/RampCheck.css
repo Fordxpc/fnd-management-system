@@ -70,7 +70,7 @@
    ========================================== */
 @page {
   size: A4 portrait;
-  margin: 8mm;
+  margin: 5mm;
 }
 
 @media print {
@@ -89,7 +89,7 @@
     width: 100% !important;
     max-width: 100% !important;
     font-size: 9px !important;
-    zoom: 0.92;
+    zoom: 0.85; /* Adjusted slightly to ensure the taller inputs fit on exactly 1 page */
   }
 
   .main-grid {
@@ -127,6 +127,18 @@
     min-width: 0 !important;
   }
 
+  /* --- YOUR REQUESTED HEIGHT CHANGES --- */
+  .ramp-sheet .inner-table input,
+  .ramp-sheet .header-value {
+    height: 28px !important;
+    line-height: 28px !important;
+  }
+
+  .ramp-sheet .footer-box textarea {
+    height: 55px !important;
+  } 
+  /* ------------------------------------- */
+
   /* Extra styles for neatness and page fitting */
   .ramp-sheet .flight-form { border: 1px solid #000 !important; padding: 6px !important; width: 100% !important; }
   .ramp-sheet .company-header { margin-bottom: 6px !important; }
@@ -144,18 +156,17 @@
   .ramp-sheet .header-label { font-size: 8px !important; width: 45px !important; }
   
   .ramp-sheet .inner-table th, .ramp-sheet .inner-table td { padding: 1px 2px !important; font-size: 7.5px !important; line-height: 1.1 !important; }
-  .ramp-sheet .inner-table input, .ramp-sheet .header-value { font-size: 8px !important; height: 16px !important; line-height: 16px !important; padding: 0 1px !important; max-width: none !important; }
   .ramp-sheet .header-value { border-bottom: 1px solid #000 !important; }
   
   .ramp-sheet .footer-section { padding-top: 4px !important; gap: 4px !important; }
   .ramp-sheet .footer-box label { font-size: 8px !important; margin-bottom: 1px !important; }
-  .ramp-sheet .footer-box textarea { height: 25px !important; padding: 2px !important; font-size: 8px !important; }
+  .ramp-sheet .footer-box textarea { padding: 2px !important; font-size: 8px !important; }
   
   .ramp-sheet .route-select, .ramp-sheet .btn-plus { display: none !important; }
   .ramp-sheet .route-wrapper { display: block !important; padding: 0 !important; }
   .ramp-sheet .special-load-textarea { height: 25px !important; font-size: 7.5px !important; padding: 1px !important; }
   .ramp-sheet .inner-table[style*="margin-top"] { margin-top: 4px !important; }
-  .ramp-sheet .bottom-section-2 input[type="text"] { height: 16px !important; font-size: 8px !important; padding: 0 1px !important; border: none !important; border-radius: 0 !important; }
+  .ramp-sheet .bottom-section-2 input[type="text"] { height: 28px !important; font-size: 8px !important; padding: 0 1px !important; border: none !important; border-radius: 0 !important; }
   .ramp-sheet .bottom-section-2 td span { font-size: 9px !important; }
   .ramp-sheet .bottom-section-2 td > div { gap: 1px !important; }
   
