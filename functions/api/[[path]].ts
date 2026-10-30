@@ -1,10 +1,10 @@
 // functions/api/[[path]].ts
 
-import { requireAuth } from "../middleware/auth";
+import { requireAuth } from "../middleware/auth.js";
 import {
   requireManager,
   requireSMT
-} from "../middleware/authorization";
+} from "../middleware/authorization.js";
 
 export interface Env {
   DB: D1Database;
