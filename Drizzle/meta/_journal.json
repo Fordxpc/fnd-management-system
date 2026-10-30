@@ -8,6 +8,27 @@
       "when": 1793324204345,
       "tag": "0000_superb_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793327972011,
+      "tag": "0001_swift_valeria_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793328521867,
+      "tag": "0002_cheerful_toad",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793328878447,
+      "tag": "0003_sturdy_guardian",
+      "breakpoints": true
     }
   ]
 }
