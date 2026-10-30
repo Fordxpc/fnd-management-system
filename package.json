@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "better-auth": "^1.7.14",
+    "dotenv": "^18.0.9",
     "drizzle-orm": "^0.45.4",
     "firebase": "^13.0.0",
     "firebase-admin": "^14.5.0",
