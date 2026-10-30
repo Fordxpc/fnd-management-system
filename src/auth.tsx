@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { apiFetch } from './lib/api';
 
@@ -19,16 +19,21 @@ export function AuthProvider({ children }: any) {
 
       if (currentUser) {
         const email = (currentUser.email || "").trim().toLowerCase();
-        
+
         try {
           let staffData: any = null;
           try {
-            const staffSnap = await getDocs(collection(db, "staff"));
-            const match = staffSnap.docs.find(d => (d.data().email || "").trim().toLowerCase() === email);
-            if (match) staffData = match.data();
+            const staffList = await apiFetch('/staff');
+            const match = staffList.find(
+              (s: any) =>
+                (s.email || '')
+                  .trim()
+                  .toLowerCase() === email
+            );
+            if (match) staffData = match;
           } catch (e) { console.warn(e); }
 
-          const staffDept = staffData?.department || ""; 
+          const staffDept = staffData?.department || "";
           const isSMT = staffData?.isSMT === true;
           const isManagerPos = (staffData?.position || '').toLowerCase().includes('manager');
 
@@ -46,21 +51,21 @@ export function AuthProvider({ children }: any) {
               if (isSMT) { updates.role = 'smt'; needsUpdate = true; }
               else if (isManagerPos) { updates.role = 'manager'; needsUpdate = true; }
             }
-            
+
             // DO NOT overwrite department if it exists. Only set it if missing.
             if (!userData.department) {
               updates.department = staffDept || 'Ground Operations';
               needsUpdate = true;
             }
-            
+
             // DO NOT overwrite name/position if they exist.
-            if (!userData.name) { 
-              updates.name = staffData?.name || currentUser.email?.split('@')[0] || 'User'; 
-              needsUpdate = true; 
+            if (!userData.name) {
+              updates.name = staffData?.name || currentUser.email?.split('@')[0] || 'User';
+              needsUpdate = true;
             }
-            if (!userData.position) { 
-              updates.position = staffData?.position || 'Staff'; 
-              needsUpdate = true; 
+            if (!userData.position) {
+              updates.position = staffData?.position || 'Staff';
+              needsUpdate = true;
             }
 
             if (needsUpdate) {
@@ -72,9 +77,14 @@ export function AuthProvider({ children }: any) {
           } else {
             let presetDoc: any = null; let presetId: string | null = null;
             try {
-              const q = query(collection(db, "user_presets"), where("email", "==", email));
-              const presetSnap = await getDocs(q);
-              if (!presetSnap.empty) { presetDoc = presetSnap.docs[0].data(); presetId = presetSnap.docs[0].id; }
+              const presets = await apiFetch('/user-presets');
+              const presetMatch = presets.find(
+                (p: any) =>
+                  (p.email || '')
+                    .trim()
+                    .toLowerCase() === email
+              );
+              if (presetMatch) { presetDoc = presetMatch; presetId = presetMatch.id; }
             } catch (e) {}
 
             let initialRole = presetDoc?.role || "staff";
@@ -82,7 +92,7 @@ export function AuthProvider({ children }: any) {
             if (initialRole === "staff" && isManagerPos) initialRole = "manager";
 
             const newProfile = {
-              email: currentUser.email, 
+              email: currentUser.email,
               role: initialRole,
               department: presetDoc?.department || staffDept || "Ground Operations",
               name: staffData?.name || currentUser.email?.split('@')[0] || 'User',
@@ -100,7 +110,7 @@ export function AuthProvider({ children }: any) {
           try {
             const tAccess = await apiFetch('/temp-access');
             const today = new Date().toISOString().split('T')[0];
-            const activeAccess = tAccess.filter((t: any) => 
+            const activeAccess = tAccess.filter((t: any) =>
               t.email.toLowerCase() === email && t.startDate <= today && t.endDate >= today
             );
             setTempAccess(activeAccess);
@@ -118,7 +128,7 @@ export function AuthProvider({ children }: any) {
                 method: 'POST',
                 body: JSON.stringify({
                   uid: currentUser.uid, email: currentUser.email,
-                  role: finalProfile.role || 'staff', 
+                  role: finalProfile.role || 'staff',
                   department: finalProfile.department || 'Ground Operations',
                   name: finalProfile.name,
                   position: finalProfile.position

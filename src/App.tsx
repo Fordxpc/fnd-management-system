@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from './auth';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { apiFetch } from './lib/api';
 import Dashboard from './Dashboard';
 import PublicLiveView from './pages/PublicLiveView';
 import './App.css';
@@ -37,14 +38,19 @@ function App() {
       // 1. Log in first
       const cred = await login(email, password);
 
-      // 2. Fetch the TRUE department from the STAFF collection (client-side filtering for accuracy)
+      // 2. Fetch the TRUE department from the STAFF API (D1)
       let staffDept = "";
       try {
         const emailLower = email.trim().toLowerCase();
-        const staffSnap = await getDocs(collection(db, "staff"));
-        const match = staffSnap.docs.find(d => (d.data().email || "").trim().toLowerCase() === emailLower);
+        const staffData = await apiFetch('/staff');
+        const match = staffData.find(
+          (s: any) =>
+            (s.email || '')
+              .trim()
+              .toLowerCase() === emailLower
+        );
         if (match) {
-          staffDept = match.data().department || "";
+          staffDept = match.department || "";
         }
       } catch (e) { console.warn(e); }
 
@@ -52,7 +58,7 @@ function App() {
       const userRef = doc(db, 'users', cred.user.uid);
       const userSnap = await getDoc(userRef);
       const data = userSnap.exists() ? userSnap.data() : {};
-      
+
       const role = data.role || 'staff';
       // Fallback logic: use staffDept, then users doc, then Ground Ops
       const userDept = staffDept || data.department || 'Ground Operations';
@@ -80,7 +86,7 @@ function App() {
         setChecking(false);
         return;
       }
-      
+
     } catch (error: any) {
       console.error(error);
       toast.error('Error: ' + error.message);
@@ -122,17 +128,17 @@ function App() {
           <div className="input-group">
             <label>Password</label>
             <div style={{ position: 'relative' }}>
-              <input 
-                type={showPassword ? "text" : "password"} 
-                placeholder="Your password" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
                 style={{ width: '100%', paddingRight: '40px' }}
               />
-              <button 
-                type="button" 
-                onClick={() => setShowPassword(!showPassword)} 
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
                 style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#64748b' }}
                 title={showPassword ? "Hide password" : "Show password"}
               >
