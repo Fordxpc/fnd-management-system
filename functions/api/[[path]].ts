@@ -108,7 +108,13 @@ export const onRequest = async (context: any) => {
       );
     }
 
+    // ==========================================
+    // CREATE STAFF (manager only)
+    // ==========================================
     if (pathname === "/api/staff" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
@@ -146,6 +152,9 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // UPDATE STAFF (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/staff/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -180,7 +189,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // DELETE STAFF (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/staff/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM staff WHERE id = ?").bind(id).run();
       context.waitUntil(deleteFromFirebase("staff", id!));
@@ -195,7 +210,13 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
+    // ==========================================
+    // CREATE HOLIDAY (manager only)
+    // ==========================================
     if (pathname === "/api/holidays" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
@@ -206,7 +227,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // DELETE HOLIDAY (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM holidays WHERE id = ?").bind(id).run();
       context.waitUntil(deleteFromFirebase("holidays", id!));
@@ -223,6 +250,7 @@ export const onRequest = async (context: any) => {
       return json(results.map((row: any) => ({ ...row, staffIsSMT: row.staffIsSMT === 1 })));
     }
 
+    // Staff submit leave requests — deliberately NOT protected.
     if (pathname === "/api/leave-requests" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
@@ -247,6 +275,9 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // APPROVE LEAVE REQUEST (SMT+ only)
+    // ==========================================
     if (
       url.pathname.startsWith("/api/leave-requests/") &&
       url.pathname.endsWith("/approve") &&
@@ -301,6 +332,9 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // REJECT LEAVE REQUEST (SMT+ only)
+    // ==========================================
     if (
       url.pathname.startsWith("/api/leave-requests/") &&
       url.pathname.endsWith("/reject") &&
@@ -337,6 +371,7 @@ export const onRequest = async (context: any) => {
 
     // ==========================================
     // ROSTER MODULE
+    // Deliberately unprotected — departmental permissions TBD.
     // ==========================================
     if (pathname === "/api/roster" && method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM roster_entries").all();
@@ -399,7 +434,13 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
+    // ==========================================
+    // CREATE FLIGHT (manager only)
+    // ==========================================
     if (pathname === "/api/flights" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
@@ -418,7 +459,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // UPDATE FLIGHT (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/flights/") && method === "PUT") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       const updatedAt = new Date().toISOString();
@@ -439,7 +486,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // DELETE FLIGHT (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/flights/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM flights WHERE id = ?").bind(id).run();
       context.waitUntil(deleteFromFirebase("flights", id!));
@@ -455,7 +508,13 @@ export const onRequest = async (context: any) => {
       return json(rule || { adminHours: 40, regularHours: 48, deductLeaves: [] });
     }
 
+    // ==========================================
+    // UPDATE OT RULES (manager only)
+    // ==========================================
     if (pathname === "/api/settings/ot_rules" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       await env.DB.prepare(`
         INSERT INTO settings (id, adminHours, regularHours, deductLeaves)
@@ -473,7 +532,13 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
+    // ==========================================
+    // SYNC USER (manager only)
+    // ==========================================
     if (pathname === "/api/users/sync" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const existing: any = await env.DB.prepare(
         "SELECT id FROM users WHERE email = ?"
@@ -698,9 +763,12 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // REPORTS MODULE
+    // SAVE MONTHLY REPORT (manager only)
     // ==========================================
     if (pathname === "/api/reports/save-monthly" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
@@ -726,6 +794,7 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
+    // Staff submit OT requests — deliberately NOT protected.
     if (pathname === "/api/overtime" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
@@ -760,7 +829,7 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // APPROVE OVERTIME (SMT only)
+    // APPROVE OVERTIME (SMT+ only)
     // ==========================================
     if (
       url.pathname.startsWith("/api/overtime/") &&
@@ -786,7 +855,7 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // REJECT OVERTIME (SMT only)
+    // REJECT OVERTIME (SMT+ only)
     // ==========================================
     if (
       url.pathname.startsWith("/api/overtime/") &&
@@ -835,7 +904,13 @@ export const onRequest = async (context: any) => {
       );
     }
 
+    // ==========================================
+    // CREATE RUNWAY SNAPSHOT (SMT+ only)
+    // ==========================================
     if (pathname === "/api/ops/runway" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
@@ -861,7 +936,13 @@ export const onRequest = async (context: any) => {
       );
     }
 
+    // ==========================================
+    // CREATE GROUND SNAPSHOT (SMT+ only)
+    // ==========================================
     if (pathname === "/api/ops/ground" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
@@ -879,7 +960,13 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
+    // ==========================================
+    // CREATE FOD COLLECTION (SMT+ only)
+    // ==========================================
     if (pathname === "/api/fod" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
@@ -890,7 +977,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // DELETE FOD COLLECTION (SMT+ only)
+    // ==========================================
     if (pathname.startsWith("/api/fod/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM fod_collections WHERE id = ?").bind(id).run();
       context.waitUntil(deleteFromFirebase("fod_collections", id!));
@@ -907,7 +1000,13 @@ export const onRequest = async (context: any) => {
       return json(results.map((row: any) => ({ ...row, rows: JSON.parse(row.rows || "[]") })));
     }
 
+    // ==========================================
+    // CREATE BIRD COUNT (SMT+ only)
+    // ==========================================
     if (pathname === "/api/wildlife" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
@@ -940,6 +1039,7 @@ export const onRequest = async (context: any) => {
       return json(row ? JSON.parse(row.payload) : {});
     }
 
+    // Ramp draft — deliberately unprotected, departmental permissions TBD.
     if (pathname === "/api/ramp/draft" && method === "POST") {
       const body: any = await request.json();
       await env.DB.prepare(`
@@ -962,7 +1062,13 @@ export const onRequest = async (context: any) => {
       );
     }
 
+    // ==========================================
+    // CREATE RAMP INSPECTION (SMT+ only)
+    // ==========================================
     if (pathname === "/api/ramp/reports" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
 
@@ -986,7 +1092,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // UPDATE RAMP INSPECTION (SMT+ only)
+    // ==========================================
     if (pathname.startsWith("/api/ramp/reports/") && method === "PUT") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/").pop();
       const body: any = await request.json();
 
@@ -1010,7 +1122,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // DELETE RAMP INSPECTION (SMT+ only)
+    // ==========================================
     if (pathname.startsWith("/api/ramp/reports/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM ramp_inspections WHERE id = ?").bind(id).run();
       context.waitUntil(deleteFromFirebase("ramp_inspections", id!));
@@ -1019,6 +1137,7 @@ export const onRequest = async (context: any) => {
 
     // ==========================================
     // TIMESHEET / ATTENDANCE MODULE
+    // POST deliberately unprotected — staff log their own time.
     // ==========================================
     if (pathname === "/api/timesheets" && method === "GET") {
       const { results } = await env.DB.prepare(
@@ -1132,7 +1251,13 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
+    // ==========================================
+    // ADD LIGHTS INSPECTOR (SMT+ only)
+    // ==========================================
     if (pathname === "/api/lights-inspectors" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       await env.DB.prepare(
         "INSERT OR REPLACE INTO lights_inspectors (staffId, staffName, staffSN) VALUES (?, ?, ?)"
@@ -1140,7 +1265,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // DELETE LIGHTS INSPECTOR (SMT+ only)
+    // ==========================================
     if (pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM lights_inspectors WHERE staffId = ?").bind(id).run();
       return json({ success: true });
@@ -1154,7 +1285,13 @@ export const onRequest = async (context: any) => {
       return json(results.map((row: any) => ({ ...row, data: JSON.parse(row.data || "{}") })));
     }
 
+    // ==========================================
+    // CREATE RUNWAY LIGHTS INSPECTION (SMT+ only)
+    // ==========================================
     if (pathname === "/api/lights" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
@@ -1167,7 +1304,13 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // DELETE RUNWAY LIGHTS INSPECTION (SMT+ only)
+    // ==========================================
     if (pathname.startsWith("/api/lights/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM rwy_lights WHERE id = ?").bind(id).run();
       return json({ success: true });
