@@ -561,7 +561,17 @@ export const onRequest = async (context: any) => {
       );
     }
 
-    if (pathname === "/api/users/create-auth" && method === "POST") {
+    // ==========================================
+    // CREATE AUTH USER (manager only)
+    // ==========================================
+    if (url.pathname === "/api/users/create-auth" && method === "POST") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const { email, password, role, department, name, position } = body;
 
@@ -620,12 +630,25 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id, message: "User created and pre-registered." });
     }
 
+    // ==========================================
+    // USER PRESETS
+    // ==========================================
     if (pathname === "/api/user-presets" && method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM user_presets").all();
       return json(results);
     }
 
+    // ==========================================
+    // CREATE USER PRESET (manager only)
+    // ==========================================
     if (pathname === "/api/user-presets" && method === "POST") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await env.DB.prepare(`
@@ -639,7 +662,17 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    // ==========================================
+    // UPDATE USER PRESET (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/user-presets/") && method === "PUT") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireManager(currentUser.role);
+
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       await env.DB.prepare(`
@@ -648,7 +681,17 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // DELETE USER PRESET (manager only)
+    // ==========================================
     if (pathname.startsWith("/api/user-presets/") && method === "DELETE") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireManager(currentUser.role);
+
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM user_presets WHERE id = ?").bind(id).run();
       return json({ success: true });
