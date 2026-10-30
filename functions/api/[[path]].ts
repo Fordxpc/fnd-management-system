@@ -466,21 +466,14 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ---------------------------------------------------------------
-    // USER :id handlers.
-    // Match exactly /api/users/<id> — no extra path segments, and
-    // exclude reserved static routes (/api/users/sync, /api/users/create-auth)
-    // so future non-ID routes never get swallowed by these handlers.
-    // ---------------------------------------------------------------
-    const usersIdMatch = pathname.match(/^\/api\/users\/([^/]+)$/);
-    const isReservedUserPath =
-      pathname === "/api/users/sync" || pathname === "/api/users/create-auth";
-
-    if (usersIdMatch && !isReservedUserPath && method === "PUT") {
+    // ==========================================
+    // UPDATE USER (manager only)
+    // ==========================================
+    if (pathname.startsWith("/api/users/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
-      const id = usersIdMatch[1];
+      const id = pathname.split("/").pop();
       const body: any = await request.json();
 
       await env.DB.prepare(`
@@ -492,11 +485,14 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    if (usersIdMatch && !isReservedUserPath && method === "DELETE") {
+    // ==========================================
+    // DELETE USER (manager only)
+    // ==========================================
+    if (pathname.startsWith("/api/users/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
-      const id = usersIdMatch[1];
+      const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
       return json({ success: true });
     }
