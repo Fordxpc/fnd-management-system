@@ -8,4 +8,4 @@ const client = postgres(process.env.DATABASE_URL!, {
   max: 1,
 });
 
-export const d1Db = drizzleD1(client);
+export const db = drizzle(client);

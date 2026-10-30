@@ -6,8 +6,9 @@ import {
   requireSMT
 } from "../middleware/authorization.js";
 
-import { d1Db } from "../../src/lib/db.js";
-import { users, staff, holidays } from "../../src/db/schema.js";
+import { db } from "../../src/lib/db.js";
+import { users } from "../../src/db/schema.js";
+import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 
 export interface Env {
   DB: D1Database;
@@ -70,6 +71,7 @@ async function deleteFromFirebase(collectionName: string, docId: string) {
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
+  const d1Db = drizzleD1(env.DB);
   const url = new URL(request.url);
   const method = request.method;
   const pathname = url.pathname;
@@ -93,22 +95,11 @@ export const onRequest = async (context: any) => {
     // STAFF MODULE
     // ==========================================
     if (pathname === "/api/staff" && method === "GET") {
-      try {
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM staff"
+      ).all();
 
-        const results = await d1Db.execute(
-          `SELECT COUNT(*) FROM staff`
-        );
-
-        return json(results);
-
-      } catch (error: any) {
-        return json({
-          message: error?.message,
-          cause: String(error?.cause),
-          name: error?.name,
-          stack: error?.stack,
-        }, 500);
-      }
+      return json(results);
     }
 
     // ==========================================
@@ -209,9 +200,9 @@ export const onRequest = async (context: any) => {
     // HOLIDAYS MODULE
     // ==========================================
     if (pathname === "/api/holidays" && method === "GET") {
-      const results = await d1Db
-        .select()
-        .from(holidays);
+      const { results } = await env.DB.prepare(
+        "SELECT * FROM holidays ORDER BY date ASC"
+      ).all();
 
       return json(results);
     }
@@ -534,12 +525,12 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // USERS — Drizzle version
+    // USERS (Neon)
     // ==========================================
     if (pathname === "/api/users" && method === "GET") {
       try {
 
-        const results = await d1Db
+        const results = await db
           .select()
           .from(users);
 
