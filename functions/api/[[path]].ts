@@ -7,16 +7,25 @@ import {
 } from "../middleware/authorization.js";
 
 import { db } from "../../src/lib/db.js";
-import { users } from "../../src/db/schema.js";
+import {
+  users,
+  staff,
+  holidays,
+  flights,
+  leaveRequests,
+  overtimeEntries,
+  rosterEntries,
+  birdCounts,
+  rampInspections,
+  tempAccess,
+  settings
+} from "../../src/db/schema.js";
 import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 
 export interface Env {
   DB: D1Database;
 }
 
-// ---------------------------------------------------------------
-// Firebase / Firestore config (single source of truth)
-// ---------------------------------------------------------------
 const FIREBASE_PROJECT_ID = "fnd-ops-management";
 const FIREBASE_API_KEY = "AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU";
 const FIRESTORE_BASE =
@@ -69,6 +78,9 @@ async function deleteFromFirebase(collectionName: string, docId: string) {
   }
 }
 
+const toBool = (v: any): boolean => v === 1 || v === "1" || v === true;
+const toDate = (v: any): Date | null => (v ? new Date(v) : null);
+
 export const onRequest = async (context: any) => {
   const { request, env } = context;
   const d1Db = drizzleD1(env.DB);
@@ -102,9 +114,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // CREATE STAFF (manager only)
-    // ==========================================
     if (pathname === "/api/staff" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -136,8 +145,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ⚠️ IMPORTANT: reorder MUST be handled BEFORE the generic staff/:id PUT,
-    // otherwise `startsWith("/api/staff/")` swallows it.
     if (pathname === "/api/staff/reorder" && method === "PUT") {
       const body: any = await request.json();
       const stmt = env.DB.prepare("UPDATE staff SET orderIndex = ? WHERE id = ?");
@@ -146,9 +153,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // UPDATE STAFF (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/staff/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -183,9 +187,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // DELETE STAFF (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/staff/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -207,9 +208,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // CREATE HOLIDAY (manager only)
-    // ==========================================
     if (pathname === "/api/holidays" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -224,9 +222,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // DELETE HOLIDAY (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -247,7 +242,6 @@ export const onRequest = async (context: any) => {
       return json(results.map((row: any) => ({ ...row, staffIsSMT: row.staffIsSMT === 1 })));
     }
 
-    // Staff submit leave requests — deliberately NOT protected.
     if (pathname === "/api/leave-requests" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
@@ -272,9 +266,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // APPROVE LEAVE REQUEST (SMT+ only)
-    // ==========================================
     if (
       url.pathname.startsWith("/api/leave-requests/") &&
       url.pathname.endsWith("/approve") &&
@@ -329,9 +320,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // REJECT LEAVE REQUEST (SMT+ only)
-    // ==========================================
     if (
       url.pathname.startsWith("/api/leave-requests/") &&
       url.pathname.endsWith("/reject") &&
@@ -368,7 +356,6 @@ export const onRequest = async (context: any) => {
 
     // ==========================================
     // ROSTER MODULE
-    // Deliberately unprotected — departmental permissions TBD.
     // ==========================================
     if (pathname === "/api/roster" && method === "GET") {
       const { results } = await env.DB.prepare("SELECT * FROM roster_entries").all();
@@ -431,9 +418,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // CREATE FLIGHT (manager only)
-    // ==========================================
     if (pathname === "/api/flights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -456,9 +440,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // UPDATE FLIGHT (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/flights/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -483,9 +464,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // DELETE FLIGHT (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/flights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -505,9 +483,6 @@ export const onRequest = async (context: any) => {
       return json(rule || { adminHours: 40, regularHours: 48, deductLeaves: [] });
     }
 
-    // ==========================================
-    // UPDATE OT RULES (manager only)
-    // ==========================================
     if (pathname === "/api/settings/ot_rules" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -529,13 +504,11 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/users" && method === "GET") {
       try {
-
         const results = await db
           .select()
           .from(users);
 
         return json(results);
-
       } catch (error: any) {
         console.error("USERS ROUTE ERROR:", error);
 
@@ -550,91 +523,33 @@ export const onRequest = async (context: any) => {
       }
     }
 
-    // ==========================================
-    // SYNC USER (unauthenticated — required for first-login bootstrap)
-    // ==========================================
     if (pathname === "/api/users/sync" && method === "POST") {
-
       try {
         const body: any = await request.json();
-
-        console.log("SYNC USER:", body);
 
         const existing: any = await env.DB.prepare(
           "SELECT id FROM users WHERE email = ?"
         ).bind(body.email).first();
 
         if (existing) {
-          console.log("UPDATING:", body.email);
-
-          const result = await env.DB.prepare(
+          await env.DB.prepare(
             "UPDATE users SET role = ?, department = ? WHERE email = ?"
-          )
-          .bind(
-            body.role,
-            body.department,
-            body.email
-          )
-          .run();
-
-          console.log("UPDATE RESULT:", result);
-
+          ).bind(body.role, body.department, body.email).run();
         } else {
-          console.log("INSERTING:", body.email);
-
-          const result = await env.DB.prepare(
+          await env.DB.prepare(
             "INSERT INTO users (id, email, role, department) VALUES (?, ?, ?, ?)"
-          )
-          .bind(
-            body.uid,
-            body.email,
-            body.role,
-            body.department
-          )
-          .run();
-
-          console.log("INSERT RESULT:", result);
+          ).bind(body.uid, body.email, body.role, body.department).run();
         }
 
-        const count = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM users"
-        ).first();
-
-        console.log("USERS COUNT:", count);
-
-        const usersAfter = await env.DB.prepare(
-          "SELECT * FROM users"
-        ).all();
-
-        console.log("USERS AFTER:", usersAfter);
-
-        const usersAfter2 = await env.DB.prepare(
-          "SELECT COUNT(*) as count FROM users"
-        ).first();
-
-        console.log("USERS COUNT INSIDE API:", usersAfter2);
-
         return json({ success: true });
-
       } catch (error) {
         console.error("SYNC ERROR:", error);
-
-        return json({
-          success: false,
-          error: String(error)
-        }, 500);
+        return json({ success: false, error: String(error) }, 500);
       }
     }
 
-    // ==========================================
-    // UPDATE USER (manager only)
-    // ==========================================
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
+      const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
       const id = url.pathname.split("/").pop();
@@ -665,23 +580,14 @@ export const onRequest = async (context: any) => {
       );
     }
 
-    // ==========================================
-    // DELETE USER (manager only)
-    // ==========================================
     if (url.pathname.startsWith("/api/users/") && method === "DELETE") {
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
+      const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
       const id = url.pathname.split("/").pop();
 
       await env.DB
-        .prepare(
-          "DELETE FROM users WHERE id = ?"
-        )
+        .prepare("DELETE FROM users WHERE id = ?")
         .bind(id)
         .run();
 
@@ -696,15 +602,8 @@ export const onRequest = async (context: any) => {
       );
     }
 
-    // ==========================================
-    // CREATE AUTH USER (manager only)
-    // ==========================================
     if (url.pathname === "/api/users/create-auth" && method === "POST") {
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
+      const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
       const body: any = await request.json();
@@ -773,15 +672,8 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // CREATE USER PRESET (manager only)
-    // ==========================================
     if (pathname === "/api/user-presets" && method === "POST") {
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
+      const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
       const body: any = await request.json();
@@ -797,15 +689,8 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // UPDATE USER PRESET (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/user-presets/") && method === "PUT") {
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
+      const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
       const id = pathname.split("/").pop();
@@ -816,15 +701,8 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // DELETE USER PRESET (manager only)
-    // ==========================================
     if (pathname.startsWith("/api/user-presets/") && method === "DELETE") {
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
+      const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
       const id = pathname.split("/").pop();
@@ -864,7 +742,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // Staff submit OT requests — deliberately NOT protected.
     if (pathname === "/api/overtime" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
@@ -898,9 +775,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // APPROVE OVERTIME (SMT+ only)
-    // ==========================================
     if (
       url.pathname.startsWith("/api/overtime/") &&
       url.pathname.endsWith("/approve") &&
@@ -924,9 +798,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // REJECT OVERTIME (SMT+ only)
-    // ==========================================
     if (
       url.pathname.startsWith("/api/overtime/") &&
       url.pathname.endsWith("/reject") &&
@@ -974,9 +845,6 @@ export const onRequest = async (context: any) => {
       );
     }
 
-    // ==========================================
-    // CREATE RUNWAY SNAPSHOT (SMT+ only)
-    // ==========================================
     if (pathname === "/api/ops/runway" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1006,9 +874,6 @@ export const onRequest = async (context: any) => {
       );
     }
 
-    // ==========================================
-    // CREATE GROUND SNAPSHOT (SMT+ only)
-    // ==========================================
     if (pathname === "/api/ops/ground" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1030,9 +895,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // CREATE FOD COLLECTION (SMT+ only)
-    // ==========================================
     if (pathname === "/api/fod" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1047,9 +909,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // DELETE FOD COLLECTION (SMT+ only)
-    // ==========================================
     if (pathname.startsWith("/api/fod/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1070,9 +929,6 @@ export const onRequest = async (context: any) => {
       return json(results.map((row: any) => ({ ...row, rows: JSON.parse(row.rows || "[]") })));
     }
 
-    // ==========================================
-    // CREATE BIRD COUNT (SMT+ only)
-    // ==========================================
     if (pathname === "/api/wildlife" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1093,7 +949,6 @@ export const onRequest = async (context: any) => {
     }
 
     if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
-
       const currentUser = await requireAuth(
         request,
         env
@@ -1123,7 +978,6 @@ export const onRequest = async (context: any) => {
       return json(row ? JSON.parse(row.payload) : {});
     }
 
-    // Ramp draft — deliberately unprotected, departmental permissions TBD.
     if (pathname === "/api/ramp/draft" && method === "POST") {
       const body: any = await request.json();
       await env.DB.prepare(`
@@ -1146,9 +1000,6 @@ export const onRequest = async (context: any) => {
       );
     }
 
-    // ==========================================
-    // CREATE RAMP INSPECTION (SMT+ only)
-    // ==========================================
     if (pathname === "/api/ramp/reports" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1176,9 +1027,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // UPDATE RAMP INSPECTION (SMT+ only)
-    // ==========================================
     if (pathname.startsWith("/api/ramp/reports/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1206,9 +1054,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // DELETE RAMP INSPECTION (SMT+ only)
-    // ==========================================
     if (pathname.startsWith("/api/ramp/reports/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1221,7 +1066,6 @@ export const onRequest = async (context: any) => {
 
     // ==========================================
     // TIMESHEET / ATTENDANCE MODULE
-    // POST deliberately unprotected — staff log their own time.
     // ==========================================
     if (pathname === "/api/timesheets" && method === "GET") {
       const { results } = await env.DB.prepare(
@@ -1273,9 +1117,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // CREATE TEMP ACCESS (manager only)
-    // ==========================================
     if (url.pathname === "/api/temp-access" && method === "POST") {
       const currentUser = await requireAuth(
         request,
@@ -1305,9 +1146,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // DELETE TEMP ACCESS (manager only)
-    // ==========================================
     if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
       const currentUser = await requireAuth(
         request,
@@ -1335,9 +1173,6 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    // ==========================================
-    // ADD LIGHTS INSPECTOR (SMT+ only)
-    // ==========================================
     if (pathname === "/api/lights-inspectors" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1349,9 +1184,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // DELETE LIGHTS INSPECTOR (SMT+ only)
-    // ==========================================
     if (pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1369,9 +1201,6 @@ export const onRequest = async (context: any) => {
       return json(results.map((row: any) => ({ ...row, data: JSON.parse(row.data || "{}") })));
     }
 
-    // ==========================================
-    // CREATE RUNWAY LIGHTS INSPECTION (SMT+ only)
-    // ==========================================
     if (pathname === "/api/lights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1388,9 +1217,6 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    // ==========================================
-    // DELETE RUNWAY LIGHTS INSPECTION (SMT+ only)
-    // ==========================================
     if (pathname.startsWith("/api/lights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -1398,6 +1224,187 @@ export const onRequest = async (context: any) => {
       const id = pathname.split("/").pop();
       await env.DB.prepare("DELETE FROM rwy_lights WHERE id = ?").bind(id).run();
       return json({ success: true });
+    }
+
+    // ==========================================
+    // ONE-TIME DATA MIGRATION: D1 → Neon
+    // ==========================================
+    if (pathname === "/api/admin/migrate-d1-to-neon" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+
+      const summary: Record<string, any> = {};
+
+      const migrate = async (
+        name: string,
+        d1Sql: string,
+        neonTable: any,
+        transform: (r: any) => any
+      ) => {
+        try {
+          const { results } = await env.DB.prepare(d1Sql).all();
+          if (!results || results.length === 0) {
+            summary[name] = { d1Rows: 0, migrated: 0 };
+            return;
+          }
+          const transformed = results.map(transform);
+
+          for (const row of transformed) {
+            await db
+              .insert(neonTable)
+              .values(row)
+              .onConflictDoNothing();
+          }
+
+          summary[name] = { d1Rows: transformed.length, migrated: transformed.length };
+        } catch (e: any) {
+          summary[name] = { error: String(e), message: e?.message };
+        }
+      };
+
+      await migrate("staff", "SELECT * FROM staff", staff, (r: any) => ({
+        id: r.id,
+        sn: r.sn,
+        name: r.name,
+        email: r.email,
+        personalEmail: r.personalEmail,
+        nid: r.nid,
+        joinDate: r.joinDate,
+        phone: r.phone,
+        gender: r.gender,
+        department: r.department,
+        position: r.position,
+        isSMT: toBool(r.isSMT),
+        isIncharge: toBool(r.isIncharge),
+        balanceVisible: toBool(r.balanceVisible),
+        specialOpsAccess: toBool(r.specialOpsAccess),
+        tempDeptAccess: toBool(r.tempDeptAccess),
+        rampsheetEditAccess: toBool(r.rampsheetEditAccess),
+        rwyLightEditAccess: toBool(r.rwyLightEditAccess),
+        birdCountEditAccess: toBool(r.birdCountEditAccess),
+        opsBoardAccess: toBool(r.opsBoardAccess),
+        tempDeptTarget: r.tempDeptTarget,
+        notes: r.notes,
+        basicSalary: r.basicSalary,
+        dailyAllowance: r.dailyAllowance,
+        holidayAllowanceRate: r.holidayAllowanceRate,
+        bankAccount: r.bankAccount,
+        status: r.status,
+        orderIndex: r.orderIndex,
+        createdAt: toDate(r.createdAt),
+        updatedAt: toDate(r.updatedAt),
+      }));
+
+      await migrate("holidays", "SELECT * FROM holidays", holidays, (r: any) => ({
+        id: r.id,
+        date: r.date,
+        name: r.name,
+        createdAt: toDate(r.createdAt),
+      }));
+
+      await migrate("flights", "SELECT * FROM flights", flights, (r: any) => ({
+        id: r.id,
+        date: r.date,
+        flightNo: r.flightNo,
+        type: r.type,
+        aircraft: r.aircraft,
+        bookedFigure: r.bookedFigure,
+        checkInTime: r.checkInTime,
+        arrivalTime: r.arrivalTime,
+        departureTime: r.departureTime,
+        route: r.route,
+        originDepTime: r.originDepTime,
+        status: r.status,
+        remarks: r.remarks,
+        createdAt: toDate(r.createdAt),
+        updatedAt: toDate(r.updatedAt),
+      }));
+
+      await migrate("leave_requests", "SELECT * FROM leave_requests", leaveRequests, (r: any) => ({
+        id: r.id,
+        staffId: r.staffId,
+        staffName: r.staffName,
+        staffDepartment: r.staffDepartment,
+        staffSN: r.staffSN,
+        staffGender: r.staffGender,
+        leaveType: r.leaveType,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        days: r.days,
+        reason: r.reason,
+        status: r.status,
+        requestedBy: r.requestedBy,
+        requestedAt: toDate(r.requestedAt),
+        reviewedBy: r.reviewedBy,
+        reviewedAt: toDate(r.reviewedAt),
+        reviewNotes: r.reviewNotes,
+      }));
+
+      await migrate("overtime_entries", "SELECT * FROM overtime_entries", overtimeEntries, (r: any) => ({
+        id: r.id,
+        staffId: r.staffId,
+        staffName: r.staffName,
+        staffSN: r.staffSN,
+        staffDepartment: r.staffDepartment,
+        date: r.date,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        hours: r.hours,
+        notes: r.notes,
+        status: r.status,
+        createdBy: r.createdBy,
+        reviewedBy: r.reviewedBy,
+        createdAt: toDate(r.createdAt),
+        reviewedAt: toDate(r.reviewedAt),
+      }));
+
+      await migrate("roster_entries", "SELECT * FROM roster_entries", rosterEntries, (r: any) => ({
+        id: r.id,
+        staffId: r.staffId,
+        staffName: r.staffName,
+        staffDepartment: r.staffDepartment,
+        date: r.date,
+        shiftTime: r.shiftTime,
+        status: r.status,
+        leaveRequestId: r.leaveRequestId,
+        createdAt: toDate(r.createdAt),
+      }));
+
+      await migrate("wildlife", "SELECT * FROM bird_counts", birdCounts, (r: any) => ({
+        id: r.id,
+        date: r.date,
+        refNo: r.refNo,
+        observer: r.observer,
+        rows: r.rows,
+        createdAt: toDate(r.createdAt),
+      }));
+
+      await migrate("ramp_inspections", "SELECT * FROM ramp_inspections", rampInspections, (r: any) => ({
+        id: r.id,
+        date: r.date,
+        fltNo: r.fltNo,
+        acReg: r.acReg,
+        payload: r.payload,
+        createdAt: toDate(r.createdAt),
+        updatedAt: toDate(r.updatedAt),
+      }));
+
+      await migrate("temp_access", "SELECT * FROM temp_access", tempAccess, (r: any) => ({
+        id: r.id,
+        email: r.email,
+        targetDept: r.targetDept,
+        startDate: r.startDate,
+        endDate: r.endDate,
+      }));
+
+      await migrate("settings", "SELECT * FROM settings", settings, (r: any) => ({
+        id: r.id,
+        adminHours: r.adminHours,
+        regularHours: r.regularHours,
+        deductLeaves: r.deductLeaves,
+      }));
+
+      return json({ success: true, summary });
     }
 
     return json({ message: "Not Found" }, 404);
