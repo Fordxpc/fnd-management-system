@@ -43,6 +43,13 @@
       "when": 1793330447893,
       "tag": "0005_hesitant_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793352509614,
+      "tag": "0006_friendly_colleen_wing",
+      "breakpoints": true
     }
   ]
 }
