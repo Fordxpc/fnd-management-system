@@ -716,7 +716,21 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    if (pathname.startsWith("/api/overtime/") && pathname.endsWith("/approve") && method === "PUT") {
+    // ==========================================
+    // APPROVE OVERTIME (SMT only)
+    // ==========================================
+    if (
+      url.pathname.startsWith("/api/overtime/") &&
+      url.pathname.endsWith("/approve") &&
+      method === "PUT"
+    ) {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/")[3];
       const body: any = await request.json();
       await env.DB.prepare(
@@ -728,7 +742,21 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    if (pathname.startsWith("/api/overtime/") && pathname.endsWith("/reject") && method === "PUT") {
+    // ==========================================
+    // REJECT OVERTIME (SMT only)
+    // ==========================================
+    if (
+      url.pathname.startsWith("/api/overtime/") &&
+      url.pathname.endsWith("/reject") &&
+      method === "PUT"
+    ) {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/")[3];
       const body: any = await request.json();
       await env.DB.prepare(
