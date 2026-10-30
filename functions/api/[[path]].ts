@@ -5,9 +5,9 @@ import {
   requireManager,
   requireSMT
 } from "../middleware/authorization.js";
-import { drizzle as drizzleD1 } from "drizzle-orm/d1";
-import { users } from "../../src/db/schema.js";
-import { db } from "../../src/lib/db.js";
+
+import { d1Db } from "../../src/lib/db.js";
+import { users, staff, holidays } from "../../src/db/schema.js";
 
 export interface Env {
   DB: D1Database;
@@ -95,7 +95,7 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/staff" && method === "GET") {
       try {
 
-        const results = await db.execute(
+        const results = await d1Db.execute(
           `SELECT COUNT(*) FROM staff`
         );
 
@@ -110,7 +110,7 @@ export const onRequest = async (context: any) => {
         }, 500);
       }
     }
-     
+
     // ==========================================
     // CREATE STAFF (manager only)
     // ==========================================
@@ -209,7 +209,10 @@ export const onRequest = async (context: any) => {
     // HOLIDAYS MODULE
     // ==========================================
     if (pathname === "/api/holidays" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM holidays ORDER BY date ASC").all();
+      const results = await d1Db
+        .select()
+        .from(holidays);
+
       return json(results);
     }
 
@@ -535,9 +538,8 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/users" && method === "GET") {
       try {
-        const db = drizzleD1(env.DB);
 
-        const results = await db
+        const results = await d1Db
           .select()
           .from(users);
 
