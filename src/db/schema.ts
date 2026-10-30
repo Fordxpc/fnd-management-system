@@ -262,3 +262,38 @@ export const rampInspections = pgTable("ramp_inspections", {
 
   updatedAt: timestamp("updated_at"),
 });
+export const userPresets = pgTable("user_presets", {
+  id: text("id").primaryKey(),
+
+  email: text("email"),
+
+  role: text("role"),
+
+  department: text("department"),
+
+  name: text("name"),
+
+  position: text("position"),
+
+  createdAt: timestamp("created_at"),
+});
+export const tempAccess = pgTable("temp_access", {
+  id: text("id").primaryKey(),
+
+  email: text("email"),
+
+  targetDept: text("target_dept"),
+
+  startDate: text("start_date"),
+
+  endDate: text("end_date"),
+});
+export const settings = pgTable("settings", {
+  id: text("id").primaryKey(),
+
+  adminHours: integer("admin_hours"),
+
+  regularHours: integer("regular_hours"),
+
+  deductLeaves: text("deduct_leaves"),
+});
