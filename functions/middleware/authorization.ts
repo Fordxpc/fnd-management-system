@@ -4,6 +4,7 @@ export function requireManager(role?: string) {
     "developer",
     "manager",
     "admin"
+    "smt"
   ];
 
   if (!allowed.includes(role || "")) {

@@ -1,7 +1,10 @@
 // functions/api/[[path]].ts
 
 import { requireAuth } from "../middleware/auth";
-import { requireManager } from "../middleware/authorization";
+import {
+  requireManager,
+  requireSMT
+} from "../middleware/authorization";
 
 export interface Env {
   DB: D1Database;
@@ -244,7 +247,18 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    if (pathname.startsWith("/api/leave-requests/") && pathname.endsWith("/approve") && method === "PUT") {
+    if (
+      url.pathname.startsWith("/api/leave-requests/") &&
+      url.pathname.endsWith("/approve") &&
+      method === "PUT"
+    ) {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/")[3];
       const body: any = await request.json();
       const reviewedAt = new Date().toISOString();
@@ -287,7 +301,18 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    if (pathname.startsWith("/api/leave-requests/") && pathname.endsWith("/reject") && method === "PUT") {
+    if (
+      url.pathname.startsWith("/api/leave-requests/") &&
+      url.pathname.endsWith("/reject") &&
+      method === "PUT"
+    ) {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireSMT(currentUser.role);
+
       const id = pathname.split("/")[3];
       const body: any = await request.json();
       const reviewedAt = new Date().toISOString();
@@ -974,18 +999,57 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
 
-    if (pathname === "/api/temp-access" && method === "POST") {
+    // ==========================================
+    // CREATE TEMP ACCESS (manager only)
+    // ==========================================
+    if (url.pathname === "/api/temp-access" && method === "POST") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireManager(currentUser.role);
+
       const body: any = await request.json();
+
       const id = crypto.randomUUID();
-      await env.DB.prepare(
-        "INSERT INTO temp_access (id, email, targetDept, startDate, endDate) VALUES (?, ?, ?, ?, ?)"
-      ).bind(id, body.email, body.targetDept, body.startDate, body.endDate).run();
+
+      await env.DB.prepare(`
+        INSERT INTO temp_access
+        (id, email, targetDept, startDate, endDate)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+        .bind(
+          id,
+          body.email,
+          body.targetDept,
+          body.startDate,
+          body.endDate
+        )
+        .run();
+
       return json({ success: true, id });
     }
 
-    if (pathname.startsWith("/api/temp-access/") && method === "DELETE") {
-      const id = pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM temp_access WHERE id = ?").bind(id).run();
+    // ==========================================
+    // DELETE TEMP ACCESS (manager only)
+    // ==========================================
+    if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireManager(currentUser.role);
+
+      const id = url.pathname.split("/").pop();
+
+      await env.DB.prepare(
+        "DELETE FROM temp_access WHERE id = ?"
+      )
+        .bind(id)
+        .run();
+
       return json({ success: true });
     }
 
