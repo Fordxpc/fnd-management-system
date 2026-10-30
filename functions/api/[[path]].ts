@@ -1022,9 +1022,23 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
-    if (pathname.startsWith("/api/wildlife/") && method === "DELETE") {
-      const id = pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM bird_counts WHERE id = ?").bind(id).run();
+    if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
+
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      requireSMT(currentUser.role);
+
+      const id = url.pathname.split("/").pop();
+
+      await env.DB.prepare(
+        "DELETE FROM bird_counts WHERE id = ?"
+      )
+        .bind(id)
+        .run();
+
       context.waitUntil(deleteFromFirebase("bird_counts", id!));
       return json({ success: true });
     }
