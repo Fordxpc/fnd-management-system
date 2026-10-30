@@ -469,32 +469,71 @@ export const onRequest = async (context: any) => {
     // ==========================================
     // UPDATE USER (manager only)
     // ==========================================
-    if (pathname.startsWith("/api/users/") && method === "PUT") {
-      const currentUser = await requireAuth(request, env);
+    if (url.pathname.startsWith("/api/users/") && method === "PUT") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
       requireManager(currentUser.role);
 
-      const id = pathname.split("/").pop();
+      const id = url.pathname.split("/").pop();
       const body: any = await request.json();
 
       await env.DB.prepare(`
-        UPDATE users SET role = ?, department = ?, name = ?, position = ? WHERE id = ?
-      `).bind(
-        body.role, body.department, body.name || "", body.position || "", id
-      ).run();
+        UPDATE users
+        SET role = ?, department = ?, name = ?, position = ?
+        WHERE id = ?
+      `)
+        .bind(
+          body.role,
+          body.department,
+          body.name || '',
+          body.position || '',
+          id
+        )
+        .run();
 
-      return json({ success: true });
+      return new Response(
+        JSON.stringify({ success: true }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json"
+          }
+        }
+      );
     }
 
     // ==========================================
     // DELETE USER (manager only)
     // ==========================================
-    if (pathname.startsWith("/api/users/") && method === "DELETE") {
-      const currentUser = await requireAuth(request, env);
+    if (url.pathname.startsWith("/api/users/") && method === "DELETE") {
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
       requireManager(currentUser.role);
 
-      const id = pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
-      return json({ success: true });
+      const id = url.pathname.split("/").pop();
+
+      await env.DB
+        .prepare(
+          "DELETE FROM users WHERE id = ?"
+        )
+        .bind(id)
+        .run();
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json"
+          }
+        }
+      );
     }
 
     if (pathname === "/api/users/create-auth" && method === "POST") {
