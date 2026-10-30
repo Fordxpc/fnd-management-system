@@ -6,6 +6,9 @@ import {
   requireSMT
 } from "../middleware/authorization.js";
 
+import { drizzle } from "drizzle-orm/d1";
+import { users } from "../../src/db/schema.js";
+
 export interface Env {
   DB: D1Database;
 }
@@ -527,33 +530,107 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // USERS — Drizzle version
+    // ==========================================
     if (pathname === "/api/users" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM users").all();
-      return json(results);
+      try {
+        const db = drizzle(env.DB);
+
+        const results = await db
+          .select()
+          .from(users);
+
+        return json(results);
+
+      } catch (error: any) {
+        console.error("USERS ROUTE ERROR:", error);
+
+        return json(
+          {
+            message: error?.message,
+            cause: error?.cause,
+            stack: error?.stack,
+          },
+          500
+        );
+      }
     }
 
     // ==========================================
-    // SYNC USER (manager only)
+    // SYNC USER (unauthenticated — required for first-login bootstrap)
     // ==========================================
     if (pathname === "/api/users/sync" && method === "POST") {
-      const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
 
-      const body: any = await request.json();
-      const existing: any = await env.DB.prepare(
-        "SELECT id FROM users WHERE email = ?"
-      ).bind(body.email).first();
+      try {
+        const body: any = await request.json();
 
-      if (existing) {
-        await env.DB.prepare(
-          "UPDATE users SET role = ?, department = ?, name = ?, position = ? WHERE email = ?"
-        ).bind(body.role, body.department, body.name || "", body.position || "", body.email).run();
-      } else {
-        await env.DB.prepare(
-          "INSERT INTO users (id, email, role, department, name, position) VALUES (?, ?, ?, ?, ?, ?)"
-        ).bind(body.uid, body.email, body.role, body.department, body.name || "", body.position || "").run();
+        console.log("SYNC USER:", body);
+
+        const existing: any = await env.DB.prepare(
+          "SELECT id FROM users WHERE email = ?"
+        ).bind(body.email).first();
+
+        if (existing) {
+          console.log("UPDATING:", body.email);
+
+          const result = await env.DB.prepare(
+            "UPDATE users SET role = ?, department = ? WHERE email = ?"
+          )
+          .bind(
+            body.role,
+            body.department,
+            body.email
+          )
+          .run();
+
+          console.log("UPDATE RESULT:", result);
+
+        } else {
+          console.log("INSERTING:", body.email);
+
+          const result = await env.DB.prepare(
+            "INSERT INTO users (id, email, role, department) VALUES (?, ?, ?, ?)"
+          )
+          .bind(
+            body.uid,
+            body.email,
+            body.role,
+            body.department
+          )
+          .run();
+
+          console.log("INSERT RESULT:", result);
+        }
+
+        const count = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM users"
+        ).first();
+
+        console.log("USERS COUNT:", count);
+
+        const usersAfter = await env.DB.prepare(
+          "SELECT * FROM users"
+        ).all();
+
+        console.log("USERS AFTER:", usersAfter);
+
+        const usersAfter2 = await env.DB.prepare(
+          "SELECT COUNT(*) as count FROM users"
+        ).first();
+
+        console.log("USERS COUNT INSIDE API:", usersAfter2);
+
+        return json({ success: true });
+
+      } catch (error) {
+        console.error("SYNC ERROR:", error);
+
+        return json({
+          success: false,
+          error: String(error)
+        }, 500);
       }
-      return json({ success: true });
     }
 
     // ==========================================
