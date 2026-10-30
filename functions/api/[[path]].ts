@@ -1,5 +1,8 @@
 // functions/api/[[path]].ts
 
+import { requireAuth } from "../middleware/auth";
+import { requireManager } from "../middleware/authorization";
+
 export interface Env {
   DB: D1Database;
 }
@@ -94,8 +97,18 @@ export const onRequest = async (context: any) => {
     }
 
     if (url.pathname.startsWith("/api/staff/") && method === "PUT") {
+
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+  requireManager(currentUser.role);
+
       const id = url.pathname.split("/").pop();
+
       const body: any = await request.json();
+
       const updatedAt = new Date().toISOString();
 
       await env.DB.prepare(`
