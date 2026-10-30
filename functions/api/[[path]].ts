@@ -8,6 +8,8 @@ import {
 
 import { drizzle } from "drizzle-orm/d1";
 import { users } from "../../src/db/schema.js";
+import { db } from "../../src/lib/db.js";
+import { users, staff } from "../../src/db/schema.js";
 
 export interface Env {
   DB: D1Database;
@@ -93,24 +95,24 @@ export const onRequest = async (context: any) => {
     // STAFF MODULE
     // ==========================================
     if (pathname === "/api/staff" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM staff ORDER BY orderIndex ASC, name ASC"
-      ).all();
-      return json(
-        results.map((row: any) => ({
-          ...row,
-          isSMT: row.isSMT === 1,
-          isIncharge: row.isIncharge === 1,
-          balanceVisible: row.balanceVisible === 1,
-          tempDeptAccess: row.tempDeptAccess === 1,
-          rampsheetEditAccess: row.rampsheetEditAccess === 1,
-          rwyLightEditAccess: row.rwyLightEditAccess === 1,
-          birdCountEditAccess: row.birdCountEditAccess === 1,
-          opsBoardAccess: row.opsBoardAccess === 1
-        }))
-      );
-    }
+      try {
 
+        const results = await db.execute(
+          `SELECT COUNT(*) FROM staff`
+        );
+
+        return json(results);
+
+      } catch (error: any) {
+        return json({
+          message: error?.message,
+          cause: String(error?.cause),
+          name: error?.name,
+          stack: error?.stack,
+        }, 500);
+      }
+    }
+     
     // ==========================================
     // CREATE STAFF (manager only)
     // ==========================================
