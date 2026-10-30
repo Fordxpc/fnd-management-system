@@ -5,11 +5,9 @@ import {
   requireManager,
   requireSMT
 } from "../middleware/authorization.js";
-
-import { drizzle } from "drizzle-orm/d1";
+import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 import { users } from "../../src/db/schema.js";
 import { db } from "../../src/lib/db.js";
-import { users, staff } from "../../src/db/schema.js";
 
 export interface Env {
   DB: D1Database;
@@ -537,7 +535,7 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/users" && method === "GET") {
       try {
-        const db = drizzle(env.DB);
+        const db = drizzleD1(env.DB);
 
         const results = await db
           .select()
