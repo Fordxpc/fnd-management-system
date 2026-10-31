@@ -359,6 +359,10 @@ export const onRequest = async (context: any) => {
 
         const actualStaffId = staffRec ? staffRec.id : reqData.staffId;
 
+        if (!actualStaffId) {
+          return json({ message: "Staff ID not found" }, 400);
+        }
+
         const start = new Date(reqData.startDate + "T00:00:00");
         const end = new Date(reqData.endDate + "T00:00:00");
 
