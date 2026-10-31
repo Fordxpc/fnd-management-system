@@ -169,6 +169,12 @@ export const flights = pgTable("flights", {
 
   originDepTime: text("origin_dep_time"),
 
+  eta: text("eta"),
+
+  ata: text("ata"),
+
+  atd: text("atd"),
+
   status: text("status"),
 
   remarks: text("remarks"),
@@ -308,6 +314,69 @@ export const settings = pgTable("settings", {
   regularHours: integer("regular_hours"),
 
   deductLeaves: text("deduct_leaves"),
+});
+
+// =============================================================
+// Ops Board / FOD / Lights / Reports / Ramp Draft tables
+// =============================================================
+
+export const opsGroundHistory = pgTable("ops_ground_history", {
+  id: text("id").primaryKey(),
+  date: text("date"),
+  time: text("time"),
+  createdAt: timestamp("created_at"),
+  assignments: text("assignments"),
+});
+
+export const opsRunwayHistory = pgTable("ops_runway_history", {
+  id: text("id").primaryKey(),
+  date: text("date"),
+  time: text("time"),
+  createdAt: timestamp("created_at"),
+  rwy19: text("rwy19"),
+  rwy01: text("rwy01"),
+  lights: text("lights"),
+});
+
+export const fodCollections = pgTable("fod_collections", {
+  id: text("id").primaryKey(),
+  date: text("date"),
+  grams: real("grams"),
+  remarks: text("remarks"),
+  loggedBy: text("logged_by"),
+  createdAt: timestamp("created_at"),
+});
+
+export const lightsInspectors = pgTable("lights_inspectors", {
+  staffId: text("staff_id").primaryKey(),
+  staffName: text("staff_name"),
+  staffSN: text("staff_sn"),
+});
+
+export const rwyLights = pgTable("rwy_lights", {
+  id: text("id").primaryKey(),
+  date: text("date"),
+  time: text("time"),
+  weather: text("weather"),
+  inspectorName: text("inspector_name"),
+  data: text("data"),
+  remarks: text("remarks"),
+  createdAt: timestamp("created_at"),
+});
+
+export const savedReports = pgTable("saved_reports", {
+  id: text("id").primaryKey(),
+  month: text("month"),
+  dateFrom: text("date_from"),
+  dateTo: text("date_to"),
+  type: text("type"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at"),
+});
+
+export const rampLiveDraft = pgTable("ramp_live_draft", {
+  id: text("id").primaryKey(),
+  payload: text("payload"),
 });
 
 // =============================================================
