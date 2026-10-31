@@ -1,11 +1,6 @@
-/// <reference types="node" />
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 
-import postgres from "postgres";
-import { drizzle } from "drizzle-orm/postgres-js";
+const sql = neon("postgresql://neondb_owner:npg_nB8vaQVjS3Ch@ep-wispy-bread-aoe2biqc-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require");
 
-const client = postgres(process.env.DATABASE_URL!, {
-  ssl: "require",
-  max: 1,
-});
-
-export const db = drizzle(client);
+export const db = drizzle(sql);

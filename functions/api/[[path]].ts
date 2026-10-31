@@ -107,9 +107,7 @@ export const onRequest = async (context: any) => {
     // STAFF MODULE
     // ==========================================
     if (pathname === "/api/staff" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM staff"
-      ).all();
+      const results = await db.select().from(staff);
 
       return json(results);
     }
@@ -201,9 +199,7 @@ export const onRequest = async (context: any) => {
     // HOLIDAYS MODULE
     // ==========================================
     if (pathname === "/api/holidays" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM holidays ORDER BY date ASC"
-      ).all();
+      const results = await db.select().from(holidays);
 
       return json(results);
     }
@@ -236,10 +232,9 @@ export const onRequest = async (context: any) => {
     // LEAVE REQUESTS MODULE
     // ==========================================
     if (pathname === "/api/leave-requests" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM leave_requests ORDER BY requestedAt DESC"
-      ).all();
-      return json(results.map((row: any) => ({ ...row, staffIsSMT: row.staffIsSMT === 1 })));
+      const results = await db.select().from(leaveRequests);
+
+      return json(results);
     }
 
     if (pathname === "/api/leave-requests" && method === "POST") {
@@ -414,7 +409,8 @@ export const onRequest = async (context: any) => {
     // FLIGHTS MODULE
     // ==========================================
     if (pathname === "/api/flights" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM flights").all();
+      const results = await db.select().from(flights);
+
       return json(results);
     }
 
@@ -736,9 +732,8 @@ export const onRequest = async (context: any) => {
     // OVERTIME MODULE
     // ==========================================
     if (pathname === "/api/overtime" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM overtime_entries ORDER BY date DESC"
-      ).all();
+      const results = await db.select().from(overtimeEntries);
+
       return json(results);
     }
 
@@ -1227,9 +1222,12 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // ONE-TIME DATA MIGRATION: D1 → Neon
+    // ONE-TIME DATA MIGRATION: D1 → Neon (manager only)
     // ==========================================
     if (pathname === "/api/admin/migrate-d1-to-neon" && method === "POST") {
+
+      console.log("MIGRATION STARTED");
+
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
 
@@ -1258,7 +1256,15 @@ export const onRequest = async (context: any) => {
 
           summary[name] = { d1Rows: transformed.length, migrated: transformed.length };
         } catch (e: any) {
-          summary[name] = { error: String(e), message: e?.message };
+          console.error("MIGRATION ERROR:", e);
+          console.error("CAUSE:", e?.cause);
+
+          summary[name] = {
+            error: String(e),
+            message: e?.message,
+            cause: e?.cause,
+            stack: e?.stack
+          };
         }
       };
 
@@ -1407,7 +1413,11 @@ export const onRequest = async (context: any) => {
       return json({ success: true, summary });
     }
 
-    return json({ message: "Not Found" }, 404);
+    return json({
+      message: "Not Found",
+      pathname,
+      method
+    }, 404);
   } catch (err: any) {
     return json({ message: err.message, stack: err.stack }, 500);
   }

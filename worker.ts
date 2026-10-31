@@ -1,12 +1,10 @@
-import { onRequest } from './functions/api/[[path]]';
+import { onRequest } from "./functions/api/[[path]]";
 
 export default {
-  // Changed ExecutionContext to any to fix the red squiggly line
   async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname.startsWith('/api/')) {
-      // Construct a context object that perfectly mimics Cloudflare Pages
+    if (url.pathname.startsWith("/api/")) {
       const context = {
         request,
         env,
@@ -17,11 +15,10 @@ export default {
         data: {},
         functionPath: url.pathname,
       };
-      
+
       return onRequest(context as any);
     }
 
-    // Serve the static React files from the 'dist' folder
     return env.ASSETS.fetch(request);
   },
 };
