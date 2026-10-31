@@ -51,7 +51,13 @@ function SettingsPage() {
         apiFetch('/settings/ot_rules'), apiFetch('/users'), apiFetch('/temp-access'), apiFetch('/staff'), apiFetch('/lights-inspectors')
       ]);
       if (rulesData) setOtRules(rulesData);
-      setActiveUsers(usersData); setTempAccessList(tempAccessData);
+      
+      // DEBUG LOGS MOVED HERE (Runs every 15s when API fetches)
+      console.log("ACTIVE USERS:", usersData.length);
+      console.log("FULL USERS DATA:", usersData);
+
+      setActiveUsers(usersData);
+      setTempAccessList(tempAccessData);
       setStaffList(staffData); setInspectorList(inspectorsData);
     } catch (err: any) { console.error("Failed to load settings", err); }
   }, []);
@@ -82,7 +88,7 @@ function SettingsPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  let allMergedUsers: any[] = STAFF_CREDENTIALS.map(c => ({ email: c.email, name: c.name, password: c.password, role: 'staff', department: '—', status: 'Default', id: null, position: '—' }));
+  let allMergedUsers: any[] = [];
   activeUsers.forEach(a => { const idx = allMergedUsers.findIndex(u => u.email.toLowerCase() === (a.email || '').toLowerCase()); if (idx >= 0) { allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }; } else { allMergedUsers.push({ email: a.email || '', name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }); } });
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
 
@@ -170,7 +176,9 @@ function SettingsPage() {
           {isDev && (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
-                <div><h4 style={{ margin: 0, color: '#1e293b' }}>👥 Master User List ({allMergedUsers.length})</h4></div>
+                <div>
+                  <h4 style={{ margin: 0, color: '#1e293b' }}>👥 Master User List ({activeUsers.length})</h4>
+                </div>
                 <input type="text" placeholder="🔍 Search name or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '250px', fontSize: '13px', color: '#1e293b' }} />
               </div>
               <div style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>

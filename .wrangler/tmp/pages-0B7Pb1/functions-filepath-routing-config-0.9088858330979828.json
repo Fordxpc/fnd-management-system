@@ -1,0 +1,21 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/auth/auth.disabled",
+      "mountPath": "/api/auth",
+      "method": "",
+      "module": [
+        "api/auth/auth.disabled.ts:onRequest"
+      ]
+    },
+    {
+      "routePath": "/api/:path*",
+      "mountPath": "/api",
+      "method": "",
+      "module": [
+        "api/[[path]].ts:onRequest"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

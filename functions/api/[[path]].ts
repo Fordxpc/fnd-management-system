@@ -92,7 +92,8 @@ export const onRequest = async (context: any) => {
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, x-user-email"
   };
 
   const json = (data: any, status = 200) =>
@@ -665,34 +666,30 @@ export const onRequest = async (context: any) => {
       try {
         const body: any = await request.json();
 
-        const existing = await db
-          .select()
-          .from(users)
-          .where(eq(users.email, body.email))
-          .limit(1);
-
-        if (existing.length > 0) {
-          await db
-            .update(users)
-            .set({ role: body.role, department: body.department })
-            .where(eq(users.email, body.email));
-        } else {
-          await db
-            .insert(users)
-            .values({
-              id: body.uid,
-              email: body.email,
-              role: body.role,
-              department: body.department,
-              createdAt: new Date(),
-            })
-            .onConflictDoNothing();
-        }
+        await db
+          .insert(users)
+          .values({
+            id: body.uid,
+            email: body.email.toLowerCase(),
+            role: body.role || "user",
+            department: body.department || "",
+            createdAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: users.email,
+            set: {
+              role: body.role || "user",
+              department: body.department || "",
+            },
+          });
 
         return json({ success: true });
       } catch (error) {
         console.error("SYNC ERROR:", error);
-        return json({ success: false, error: String(error) }, 500);
+        return json(
+          { success: false, error: String(error) },
+          500
+        );
       }
     }
 
