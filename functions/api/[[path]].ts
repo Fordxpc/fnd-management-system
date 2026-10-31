@@ -22,6 +22,7 @@ import {
   userPresets,
   timesheets
 } from "../../src/db/schema.js";
+import { eq } from "drizzle-orm";
 
 export interface Env {
   DB: D1Database;
@@ -118,28 +119,46 @@ export const onRequest = async (context: any) => {
 
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
+      const createdAt = new Date();
 
-      await env.DB.prepare(`
-        INSERT INTO staff (
-          id, sn, name, email, personalEmail, nid, joinDate, phone, gender,
-          department, position, isSMT, isIncharge, balanceVisible, notes, basicSalary,
-          dailyAllowance, holidayAllowanceRate, bankAccount, status, createdAt, orderIndex,
-          tempDeptAccess, tempDeptTarget, rampsheetEditAccess, rwyLightEditAccess, birdCountEditAccess, opsBoardAccess
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).bind(
-        id, body.sn || "", body.name, body.email, body.personalEmail || "",
-        body.nid || "", body.joinDate || "", body.phone || "", body.gender || "",
-        body.department, body.position || "", body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0,
-        body.balanceVisible ? 1 : 0, body.notes || "", body.basicSalary || 0,
-        body.dailyAllowance || 0, body.holidayAllowanceRate || 0, body.bankAccount || "",
-        "active", createdAt, 9999,
-        body.tempDeptAccess ? 1 : 0, body.tempDeptTarget || "",
-        body.rampsheetEditAccess ? 1 : 0, body.rwyLightEditAccess ? 1 : 0,
-        body.birdCountEditAccess ? 1 : 0, body.opsBoardAccess ? 1 : 0
-      ).run();
+      await db.insert(staff).values({
+        id,
+        sn: body.sn || "",
+        name: body.name,
+        email: body.email,
+        personalEmail: body.personalEmail || "",
+        nid: body.nid || "",
+        joinDate: body.joinDate || "",
+        phone: body.phone || "",
+        gender: body.gender || "",
+        department: body.department,
+        position: body.position || "",
+        isSMT: !!body.isSMT,
+        isIncharge: !!body.isIncharge,
+        balanceVisible: !!body.balanceVisible,
+        tempDeptAccess: !!body.tempDeptAccess,
+        rampsheetEditAccess: !!body.rampsheetEditAccess,
+        rwyLightEditAccess: !!body.rwyLightEditAccess,
+        birdCountEditAccess: !!body.birdCountEditAccess,
+        opsBoardAccess: !!body.opsBoardAccess,
+        tempDeptTarget: body.tempDeptTarget || "",
+        notes: body.notes || "",
+        basicSalary: body.basicSalary || 0,
+        dailyAllowance: body.dailyAllowance || 0,
+        holidayAllowanceRate: body.holidayAllowanceRate || 0,
+        bankAccount: body.bankAccount || "",
+        status: "active",
+        orderIndex: 9999,
+        createdAt,
+      });
 
-      context.waitUntil(backupToFirebase("staff", id, { ...body, status: "active", createdAt }));
+      context.waitUntil(
+        backupToFirebase("staff", id, {
+          ...body,
+          status: "active",
+          createdAt: createdAt.toISOString()
+        })
+      );
       return json({ success: true, id });
     }
 
@@ -157,31 +176,45 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      const updatedAt = new Date().toISOString();
+      const updatedAt = new Date();
 
-      await env.DB.prepare(`
-        UPDATE staff SET
-          sn = ?, name = ?, email = ?, personalEmail = ?, nid = ?, joinDate = ?,
-          phone = ?, gender = ?, department = ?, position = ?, isSMT = ?, isIncharge = ?,
-          balanceVisible = ?, notes = ?, basicSalary = ?, dailyAllowance = ?,
-          holidayAllowanceRate = ?, bankAccount = ?, updatedAt = ?,
-          tempDeptAccess = ?, tempDeptTarget = ?, rampsheetEditAccess = ?,
-          rwyLightEditAccess = ?, birdCountEditAccess = ?, opsBoardAccess = ?
-        WHERE id = ?
-      `).bind(
-        body.sn || "", body.name, body.email, body.personalEmail || "",
-        body.nid || "", body.joinDate || "", body.phone || "", body.gender || "",
-        body.department, body.position || "", body.isSMT ? 1 : 0, body.isIncharge ? 1 : 0,
-        body.balanceVisible ? 1 : 0, body.notes || "", body.basicSalary || 0,
-        body.dailyAllowance || 0, body.holidayAllowanceRate || 0, body.bankAccount || "",
-        updatedAt,
-        body.tempDeptAccess ? 1 : 0, body.tempDeptTarget || "",
-        body.rampsheetEditAccess ? 1 : 0, body.rwyLightEditAccess ? 1 : 0,
-        body.birdCountEditAccess ? 1 : 0, body.opsBoardAccess ? 1 : 0,
-        id
-      ).run();
+      await db
+        .update(staff)
+        .set({
+          sn: body.sn || "",
+          name: body.name,
+          email: body.email,
+          personalEmail: body.personalEmail || "",
+          nid: body.nid || "",
+          joinDate: body.joinDate || "",
+          phone: body.phone || "",
+          gender: body.gender || "",
+          department: body.department,
+          position: body.position || "",
+          isSMT: !!body.isSMT,
+          isIncharge: !!body.isIncharge,
+          balanceVisible: !!body.balanceVisible,
+          tempDeptAccess: !!body.tempDeptAccess,
+          rampsheetEditAccess: !!body.rampsheetEditAccess,
+          rwyLightEditAccess: !!body.rwyLightEditAccess,
+          birdCountEditAccess: !!body.birdCountEditAccess,
+          opsBoardAccess: !!body.opsBoardAccess,
+          tempDeptTarget: body.tempDeptTarget || "",
+          notes: body.notes || "",
+          basicSalary: body.basicSalary || 0,
+          dailyAllowance: body.dailyAllowance || 0,
+          holidayAllowanceRate: body.holidayAllowanceRate || 0,
+          bankAccount: body.bankAccount || "",
+          updatedAt,
+        })
+        .where(eq(staff.id, id!));
 
-      context.waitUntil(backupToFirebase("staff", id!, { ...body, updatedAt }));
+      context.waitUntil(
+        backupToFirebase("staff", id!, {
+          ...body,
+          updatedAt: updatedAt.toISOString()
+        })
+      );
       return json({ success: true });
     }
 
@@ -190,7 +223,11 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
 
       const id = pathname.split("/").pop();
-      await env.DB.prepare("DELETE FROM staff WHERE id = ?").bind(id).run();
+
+      await db
+        .delete(staff)
+        .where(eq(staff.id, id!));
+
       context.waitUntil(deleteFromFirebase("staff", id!));
       return json({ success: true });
     }
