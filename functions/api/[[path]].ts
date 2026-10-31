@@ -354,7 +354,7 @@ export const onRequest = async (context: any) => {
         const [staffRec] = await db
           .select()
           .from(staff)
-          .where(eq(staff.name, reqData.staffName))
+          .where(eq(staff.name, reqData.staffName!))
           .limit(1);
 
         const actualStaffId = staffRec ? staffRec.id : reqData.staffId;
