@@ -1,0 +1,69 @@
+{
+  "routes": [
+    {
+      "routePath": "/api/auth/:all*",
+      "mountPath": "/api/auth",
+      "method": "",
+      "module": [
+        "api/auth/[[all]].ts:onRequest"
+      ]
+    },
+    {
+      "routePath": "/api/debug-session",
+      "mountPath": "/api",
+      "method": "GET",
+      "module": [
+        "api/debug-session.ts:onRequestGet"
+      ]
+    },
+    {
+      "routePath": "/api/import-firebase-users",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/import-firebase-users.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/import-staff-users",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/import-staff-users.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/migrate-all-users",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/migrate-all-users.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/migrate-user",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/migrate-user.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/test-better-auth",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/test-better-auth.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/:path*",
+      "mountPath": "/api",
+      "method": "",
+      "module": [
+        "api/[[path]].ts:onRequest"
+      ]
+    }
+  ],
+  "baseURL": "/"
+}

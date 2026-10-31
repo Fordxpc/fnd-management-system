@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from './auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from './firebase';
 import { apiFetch } from './lib/api';
 import Dashboard from './Dashboard';
 import PublicLiveView from './pages/PublicLiveView';
@@ -35,10 +33,10 @@ function App() {
         return;
       }
 
-      // 1. Log in first
-      const cred = await login(email, password);
+      // 1. Log in first (Better Auth)
+      await login(email, password);
 
-      // 2. Fetch the TRUE department from the STAFF API (D1)
+      // 2. Fetch the TRUE department from the STAFF API
       let staffDept = "";
       try {
         const emailLower = email.trim().toLowerCase();
@@ -54,10 +52,15 @@ function App() {
         }
       } catch (e) { console.warn(e); }
 
-      // 3. Fetch role from USERS collection
-      const userRef = doc(db, 'users', cred.user.uid);
-      const userSnap = await getDoc(userRef);
-      const data = userSnap.exists() ? userSnap.data() : {};
+      // 3. Fetch role from USERS API
+      const users = await apiFetch('/users');
+      
+      const data =
+        users.find(
+          (u: any) =>
+            (u.email || '').toLowerCase() ===
+            email.toLowerCase()
+        ) || {};
 
       const role = data.role || 'staff';
       // Fallback logic: use staffDept, then users doc, then Ground Ops
@@ -89,7 +92,7 @@ function App() {
 
     } catch (error: any) {
       console.error(error);
-      toast.error('Error: ' + error.message);
+      toast.error(String(error));
     } finally {
       setChecking(false);
     }
