@@ -31,10 +31,6 @@ import {
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql } from "drizzle-orm";
 
-export interface Env {
-  DB: D1Database;  // ⚠️ ONLY used by /api/admin/migrate-d1-to-neon — delete binding after migration
-}
-
 const FIREBASE_PROJECT_ID = "fnd-ops-management";
 const FIREBASE_API_KEY = "AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU";
 const FIRESTORE_BASE =
@@ -86,9 +82,6 @@ async function deleteFromFirebase(collectionName: string, docId: string) {
     console.error("Firebase delete failed:", err);
   }
 }
-
-const toBool = (v: any): boolean => v === 1 || v === "1" || v === true;
-const toDate = (v: any): Date | null => (v ? new Date(v) : null);
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -1465,172 +1458,6 @@ export const onRequest = async (context: any) => {
       const id = pathname.split("/").pop();
       await db.delete(rwyLights).where(eq(rwyLights.id, id!));
       return json({ success: true });
-    }
-
-    // ==========================================
-    // ⚠️ TEMPORARY — ONE-TIME DATA MIGRATION (D1 → Neon)
-    // DELETE THIS ENTIRE BLOCK after verification + D1 binding removal
-    // ==========================================
-    if (pathname === "/api/admin/migrate-d1-to-neon" && method === "POST") {
-      console.log("MIGRATION STARTED");
-
-      const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
-
-      const summary: Record<string, any> = {};
-
-      const migrate = async (
-        name: string,
-        d1Sql: string,
-        neonTable: any,
-        transform: (r: any) => any
-      ) => {
-        try {
-          const { results } = await env.DB.prepare(d1Sql).all();
-          if (!results || results.length === 0) {
-            summary[name] = { d1Rows: 0, migrated: 0 };
-            return;
-          }
-          const transformed = results.map(transform);
-
-          for (const row of transformed) {
-            await db.insert(neonTable).values(row).onConflictDoNothing();
-          }
-
-          summary[name] = { d1Rows: transformed.length, migrated: transformed.length };
-        } catch (e: any) {
-          console.error("MIGRATION ERROR:", e);
-          console.error("CAUSE:", e?.cause);
-          summary[name] = {
-            error: String(e),
-            message: e?.message,
-            cause: e?.cause,
-            stack: e?.stack
-          };
-        }
-      };
-
-      await migrate("staff", "SELECT * FROM staff", staff, (r: any) => ({
-        id: r.id, sn: r.sn, name: r.name, email: r.email,
-        personalEmail: r.personalEmail, nid: r.nid, joinDate: r.joinDate,
-        phone: r.phone, gender: r.gender, department: r.department,
-        position: r.position, isSMT: toBool(r.isSMT), isIncharge: toBool(r.isIncharge),
-        balanceVisible: toBool(r.balanceVisible), specialOpsAccess: toBool(r.specialOpsAccess),
-        tempDeptAccess: toBool(r.tempDeptAccess), rampsheetEditAccess: toBool(r.rampsheetEditAccess),
-        rwyLightEditAccess: toBool(r.rwyLightEditAccess), birdCountEditAccess: toBool(r.birdCountEditAccess),
-        opsBoardAccess: toBool(r.opsBoardAccess), tempDeptTarget: r.tempDeptTarget,
-        notes: r.notes, basicSalary: r.basicSalary, dailyAllowance: r.dailyAllowance,
-        holidayAllowanceRate: r.holidayAllowanceRate, bankAccount: r.bankAccount,
-        status: r.status, orderIndex: r.orderIndex,
-        createdAt: toDate(r.createdAt), updatedAt: toDate(r.updatedAt),
-      }));
-
-      await migrate("holidays", "SELECT * FROM holidays", holidays, (r: any) => ({
-        id: r.id, date: r.date, name: r.name, createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("flights", "SELECT * FROM flights", flights, (r: any) => ({
-        id: r.id, date: r.date, flightNo: r.flightNo, type: r.type,
-        aircraft: r.aircraft, bookedFigure: r.bookedFigure,
-        checkInTime: r.checkInTime, arrivalTime: r.arrivalTime,
-        departureTime: r.departureTime, route: r.route,
-        originDepTime: r.originDepTime,
-        eta: r.eta || null,
-        ata: r.ata || null,
-        atd: r.atd || null,
-        status: r.status, remarks: r.remarks,
-        createdAt: toDate(r.createdAt), updatedAt: toDate(r.updatedAt),
-      }));
-
-      await migrate("leave_requests", "SELECT * FROM leave_requests", leaveRequests, (r: any) => ({
-        id: r.id, staffId: r.staffId, staffName: r.staffName,
-        staffDepartment: r.staffDepartment, staffSN: r.staffSN, staffGender: r.staffGender,
-        leaveType: r.leaveType, startDate: r.startDate, endDate: r.endDate,
-        days: r.days, reason: r.reason, status: r.status,
-        requestedBy: r.requestedBy, requestedAt: toDate(r.requestedAt),
-        reviewedBy: r.reviewedBy, reviewedAt: toDate(r.reviewedAt), reviewNotes: r.reviewNotes,
-      }));
-
-      await migrate("overtime_entries", "SELECT * FROM overtime_entries", overtimeEntries, (r: any) => ({
-        id: r.id, staffId: r.staffId, staffName: r.staffName, staffSN: r.staffSN,
-        staffDepartment: r.staffDepartment, date: r.date, startTime: r.startTime,
-        endTime: r.endTime, hours: r.hours, notes: r.notes, status: r.status,
-        createdBy: r.createdBy, reviewedBy: r.reviewedBy,
-        createdAt: toDate(r.createdAt), reviewedAt: toDate(r.reviewedAt),
-      }));
-
-      await migrate("roster_entries", "SELECT * FROM roster_entries", rosterEntries, (r: any) => ({
-        id: r.id, staffId: r.staffId, staffName: r.staffName,
-        staffDepartment: r.staffDepartment, date: r.date, shiftTime: r.shiftTime,
-        status: r.status, leaveRequestId: r.leaveRequestId, createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("wildlife", "SELECT * FROM bird_counts", birdCounts, (r: any) => ({
-        id: r.id, date: r.date, refNo: r.refNo, observer: r.observer,
-        rows: r.rows, createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("ramp_inspections", "SELECT * FROM ramp_inspections", rampInspections, (r: any) => ({
-        id: r.id, date: r.date, fltNo: r.fltNo, acReg: r.acReg,
-        payload: r.payload, createdAt: toDate(r.createdAt), updatedAt: toDate(r.updatedAt),
-      }));
-
-      await migrate("temp_access", "SELECT * FROM temp_access", tempAccess, (r: any) => ({
-        id: r.id, email: r.email, targetDept: r.targetDept,
-        startDate: r.startDate, endDate: r.endDate,
-      }));
-
-      await migrate("settings", "SELECT * FROM settings", settings, (r: any) => ({
-        id: r.id, adminHours: r.adminHours, regularHours: r.regularHours, deductLeaves: r.deductLeaves,
-      }));
-
-      await migrate("user_presets", "SELECT * FROM user_presets", userPresets, (r: any) => ({
-        id: r.id, email: r.email, role: r.role, department: r.department,
-        name: r.name, position: r.position, createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("timesheets", "SELECT * FROM timesheets", timesheets, (r: any) => ({
-        id: r.id, staffId: r.staffId, staffName: r.staffName,
-        staffDepartment: r.staffDepartment, date: r.date, clockIn: r.clockIn,
-        clockOut: r.clockOut, status: r.status, notes: r.notes,
-        createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("ops_ground_history", "SELECT * FROM ops_ground_history", opsGroundHistory, (r: any) => ({
-        id: r.id, date: r.date, time: r.time,
-        createdAt: toDate(r.createdAt), assignments: r.assignments,
-      }));
-
-      await migrate("ops_runway_history", "SELECT * FROM ops_runway_history", opsRunwayHistory, (r: any) => ({
-        id: r.id, date: r.date, time: r.time, createdAt: toDate(r.createdAt),
-        rwy19: r.rwy19, rwy01: r.rwy01, lights: r.lights,
-      }));
-
-      await migrate("fod_collections", "SELECT * FROM fod_collections", fodCollections, (r: any) => ({
-        id: r.id, date: r.date, grams: r.grams, remarks: r.remarks,
-        loggedBy: r.loggedBy, createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("lights_inspectors", "SELECT * FROM lights_inspectors", lightsInspectors, (r: any) => ({
-        staffId: r.staffId, staffName: r.staffName, staffSN: r.staffSN,
-      }));
-
-      await migrate("rwy_lights", "SELECT * FROM rwy_lights", rwyLights, (r: any) => ({
-        id: r.id, date: r.date, time: r.time, weather: r.weather,
-        inspectorName: r.inspectorName, data: r.data, remarks: r.remarks,
-        createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("saved_reports", "SELECT * FROM saved_reports", savedReports, (r: any) => ({
-        id: r.id, month: r.month, dateFrom: r.dateFrom, dateTo: r.dateTo,
-        type: r.type, createdBy: r.createdBy, createdAt: toDate(r.createdAt),
-      }));
-
-      await migrate("ramp_live_draft", "SELECT * FROM ramp_live_draft", rampLiveDraft, (r: any) => ({
-        id: r.id, payload: r.payload,
-      }));
-
-      return json({ success: true, summary });
     }
 
     return json({ message: "Not Found", pathname, method }, 404);

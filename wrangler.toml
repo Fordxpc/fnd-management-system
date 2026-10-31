@@ -10,8 +10,3 @@ DATABASE_URL = "postgresql://neondb_owner:npg_nB8vaQVjS3Ch@ep-wispy-bread-aoe2bi
 directory = "./dist"
 not_found_handling = "single-page-application"
 binding = "ASSETS"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "fnd-ops-database"
-database_id = "d6a25af5-0090-48a2-9943-dd7eb7b3946c"
