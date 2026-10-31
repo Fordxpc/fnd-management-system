@@ -475,7 +475,11 @@ export const onRequest = async (context: any) => {
     // SETTINGS & USERS MODULE
     // ==========================================
     if (pathname === "/api/settings/ot_rules" && method === "GET") {
-      const rule: any = await env.DB.prepare("SELECT * FROM settings WHERE id = 'ot_rules'").first();
+      const rule: any = (
+        await db.select()
+          .from(settings)
+      ).find((r: any) => r.id === "ot_rules");
+
       if (rule) rule.deductLeaves = JSON.parse(rule.deductLeaves || "[]");
       return json(rule || { adminHours: 40, regularHours: 48, deductLeaves: [] });
     }
@@ -622,7 +626,11 @@ export const onRequest = async (context: any) => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, returnSecureToken: false })
+          body: JSON.stringify({
+            email,
+            password,
+            returnSecureToken: false
+          })
         }
       );
       const firebaseData: any = await firebaseRes.json();
@@ -919,10 +927,18 @@ export const onRequest = async (context: any) => {
     // WILDLIFE MODULE
     // ==========================================
     if (pathname === "/api/wildlife" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM bird_counts ORDER BY createdAt DESC"
-      ).all();
-      return json(results.map((row: any) => ({ ...row, rows: JSON.parse(row.rows || "[]") })));
+      const results = await db
+        .select()
+        .from(birdCounts);
+
+      return json(
+        results.map((row: any) => ({
+          ...row,
+          rows: typeof row.rows === "string"
+            ? JSON.parse(row.rows)
+            : row.rows
+        }))
+      );
     }
 
     if (pathname === "/api/wildlife" && method === "POST") {
@@ -984,14 +1000,19 @@ export const onRequest = async (context: any) => {
     }
 
     if (pathname === "/api/ramp/reports" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM ramp_inspections ORDER BY date DESC, createdAt DESC"
-      ).all();
+      const results = await db
+        .select()
+        .from(rampInspections);
+
       return json(
         results.map((row: any) => ({
           ...JSON.parse(row.payload),
-          id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg,
-          createdAt: row.createdAt, updatedAt: row.updatedAt
+          id: row.id,
+          date: row.date,
+          fltNo: row.fltNo,
+          acReg: row.acReg,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
         }))
       );
     }
@@ -1109,7 +1130,10 @@ export const onRequest = async (context: any) => {
     // TEMPORARY ACCESS MODULE
     // ==========================================
     if (pathname === "/api/temp-access" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM temp_access").all();
+      const results = await db
+        .select()
+        .from(tempAccess);
+
       return json(results);
     }
 
