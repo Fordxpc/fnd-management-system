@@ -20,7 +20,6 @@ import {
   tempAccess,
   settings
 } from "../../src/db/schema.js";
-import { drizzle as drizzleD1 } from "drizzle-orm/d1";
 
 export interface Env {
   DB: D1Database;
@@ -83,7 +82,6 @@ const toDate = (v: any): Date | null => (v ? new Date(v) : null);
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
-  const d1Db = drizzleD1(env.DB);
   const url = new URL(request.url);
   const method = request.method;
   const pathname = url.pathname;
