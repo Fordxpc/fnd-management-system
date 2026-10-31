@@ -351,7 +351,10 @@ export const onRequest = async (context: any) => {
     // ROSTER MODULE
     // ==========================================
     if (pathname === "/api/roster" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM roster_entries").all();
+      const results = await db
+        .select()
+        .from(rosterEntries);
+
       return json(results);
     }
 
