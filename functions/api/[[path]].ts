@@ -18,7 +18,9 @@ import {
   birdCounts,
   rampInspections,
   tempAccess,
-  settings
+  settings,
+  userPresets,
+  timesheets
 } from "../../src/db/schema.js";
 
 export interface Env {
@@ -673,7 +675,10 @@ export const onRequest = async (context: any) => {
     // USER PRESETS
     // ==========================================
     if (pathname === "/api/user-presets" && method === "GET") {
-      const { results } = await env.DB.prepare("SELECT * FROM user_presets").all();
+      const results = await db
+        .select()
+        .from(userPresets);
+
       return json(results);
     }
 
@@ -1085,9 +1090,10 @@ export const onRequest = async (context: any) => {
     // TIMESHEET / ATTENDANCE MODULE
     // ==========================================
     if (pathname === "/api/timesheets" && method === "GET") {
-      const { results } = await env.DB.prepare(
-        "SELECT * FROM timesheets ORDER BY date DESC, clockIn DESC"
-      ).all();
+      const results = await db
+        .select()
+        .from(timesheets);
+
       return json(results);
     }
 
@@ -1433,6 +1439,29 @@ export const onRequest = async (context: any) => {
         adminHours: r.adminHours,
         regularHours: r.regularHours,
         deductLeaves: r.deductLeaves,
+      }));
+
+      await migrate("user_presets", "SELECT * FROM user_presets", userPresets, (r: any) => ({
+        id: r.id,
+        email: r.email,
+        role: r.role,
+        department: r.department,
+        name: r.name,
+        position: r.position,
+        createdAt: toDate(r.createdAt),
+      }));
+
+      await migrate("timesheets", "SELECT * FROM timesheets", timesheets, (r: any) => ({
+        id: r.id,
+        staffId: r.staffId,
+        staffName: r.staffName,
+        staffDepartment: r.staffDepartment,
+        date: r.date,
+        clockIn: r.clockIn,
+        clockOut: r.clockOut,
+        status: r.status,
+        notes: r.notes,
+        createdAt: toDate(r.createdAt),
       }));
 
       return json({ success: true, summary });
