@@ -1,5 +1,80 @@
 import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreignKey, serial, doublePrecision } from "drizzle-orm/pg-core"
 
+// ==========================================
+// BETTER AUTH TABLES (Timestamp mode: 'date')
+// ==========================================
+
+export const user = pgTable("user", {
+	id: text().primaryKey().notNull(),
+	name: text().notNull(),
+	email: text().notNull(),
+	emailVerified: boolean("email_verified").default(false).notNull(),
+	image: text(),
+	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
+	role: text(),
+	department: text(),
+}, (table) => [
+	unique("user_email_unique").on(table.email),
+]);
+
+export const session = pgTable("session", {
+	id: text().primaryKey().notNull(),
+	expiresAt: timestamp("expires_at", { mode: 'date' }).notNull(),
+	token: text().notNull(),
+	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'date' }).notNull(),
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	userId: text("user_id").notNull(),
+}, (table) => [
+	index("session_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "session_user_id_user_id_fk"
+		}).onDelete("cascade"),
+	unique("session_token_unique").on(table.token),
+]);
+
+export const account = pgTable("account", {
+	id: text().primaryKey().notNull(),
+	accountId: text("account_id").notNull(),
+	providerId: text("provider_id").notNull(),
+	userId: text("user_id").notNull(),
+	accessToken: text("access_token"),
+	refreshToken: text("refresh_token"),
+	idToken: text("id_token"),
+	accessTokenExpiresAt: timestamp("access_token_expires_at", { mode: 'date' }),
+	refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { mode: 'date' }),
+	scope: text(),
+	password: text(),
+	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'date' }).notNull(),
+}, (table) => [
+	index("account_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "account_user_id_user_id_fk"
+		}).onDelete("cascade"),
+]);
+
+export const verification = pgTable("verification", {
+	id: text().primaryKey().notNull(),
+	identifier: text().notNull(),
+	value: text().notNull(),
+	expiresAt: timestamp("expires_at", { mode: 'date' }).notNull(),
+	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
+}, (table) => [
+	index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast().op("text_ops")),
+]);
+
+// ==========================================
+// APPLICATION TABLES (Timestamp mode: 'string')
+// ==========================================
+
 export const birdCounts = pgTable("bird_counts", {
 	id: text().primaryKey().notNull(),
 	date: text(),
@@ -72,7 +147,6 @@ export const staff = pgTable("staff", {
 	unique("staff_email_unique").on(table.email),
 ]);
 
-// Legacy App Users Table
 export const users = pgTable("users", {
 	id: text().primaryKey().notNull(),
 	email: text(),
@@ -81,21 +155,6 @@ export const users = pgTable("users", {
 	createdAt: timestamp("created_at", { mode: 'string' }),
 }, (table) => [
 	unique("users_email_unique").on(table.email),
-]);
-
-// Better Auth User Table
-export const user = pgTable("user", {
-	id: text().primaryKey().notNull(),
-	name: text().notNull(),
-	email: text().notNull(),
-	emailVerified: boolean("email_verified").default(false).notNull(),
-	image: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
-	role: text(),
-	department: text(),
-}, (table) => [
-	unique("user_email_unique").on(table.email),
 ]);
 
 export const rampInspections = pgTable("ramp_inspections", {
@@ -120,40 +179,6 @@ export const timesheets = pgTable("timesheets", {
 	notes: text(),
 	createdAt: timestamp("created_at", { mode: 'string' }),
 });
-
-export const verification = pgTable("verification", {
-	id: text().primaryKey().notNull(),
-	identifier: text().notNull(),
-	value: text().notNull(),
-	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
-	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
-}, (table) => [
-	index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast().op("text_ops")),
-]);
-
-export const account = pgTable("account", {
-	id: text().primaryKey().notNull(),
-	accountId: text("account_id").notNull(),
-	providerId: text("provider_id").notNull(),
-	userId: text("user_id").notNull(),
-	accessToken: text("access_token"),
-	refreshToken: text("refresh_token"),
-	idToken: text("id_token"),
-	accessTokenExpiresAt: timestamp("access_token_expires_at", { mode: 'string' }),
-	refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { mode: 'string' }),
-	scope: text(),
-	password: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).notNull(),
-}, (table) => [
-	index("account_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "account_user_id_user_id_fk"
-		}).onDelete("cascade"),
-]);
 
 export const playingWithNeon = pgTable("playing_with_neon", {
 	id: serial().primaryKey().notNull(),
@@ -248,25 +273,6 @@ export const leaveRequests = pgTable("leave_requests", {
 	staffGender: text("staff_gender"),
 	requestedBy: text("requested_by"),
 });
-
-export const session = pgTable("session", {
-	id: text().primaryKey().notNull(),
-	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
-	token: text().notNull(),
-	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
-	updatedAt: timestamp("updated_at", { mode: 'string' }).notNull(),
-	ipAddress: text("ip_address"),
-	userAgent: text("user_agent"),
-	userId: text("user_id").notNull(),
-}, (table) => [
-	index("session_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
-	foreignKey({
-			columns: [table.userId],
-			foreignColumns: [user.id],
-			name: "session_user_id_user_id_fk"
-		}).onDelete("cascade"),
-	unique("session_token_unique").on(table.token),
-]);
 
 export const userPresets = pgTable("user_presets", {
 	id: text().primaryKey().notNull(),

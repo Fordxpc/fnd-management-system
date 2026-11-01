@@ -4,14 +4,19 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../db/schema";
 
-declare const process: any;
-
 export function getAuth(env: any) {
-  const sql = neon(env?.DATABASE_URL || process.env.DATABASE_URL || "");
+  // 1. Ensure we grab the URL from the Worker env
+  const dbUrl = env?.DATABASE_URL;
+  
+  if (!dbUrl) {
+    console.error("CRITICAL ERROR: DATABASE_URL is missing in Cloudflare Secrets!");
+  }
+
+  const sql = neon(dbUrl || "");
   const db = drizzle(sql, { schema });
 
-  const APP_URL = env?.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || "https://management.funadhooairport.com";
-  const AUTH_SECRET = env?.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || "lvbme4++789LX827t+nxsRmpjbzfEEpTI4BMtvQr304=";
+  const APP_URL = env?.BETTER_AUTH_URL || "https://management.funadhooairport.com";
+  const AUTH_SECRET = env?.BETTER_AUTH_SECRET || "fallback-secret-change-me-in-production";
 
   return betterAuth({
     baseURL: APP_URL,
