@@ -26,7 +26,7 @@ export default {
       return onRequest(context as any);
     }
 
-    // 3. Serve static assets
+    // 3. Serve static React files
     return env.ASSETS.fetch(request);
   },
 };

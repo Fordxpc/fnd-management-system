@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 DATABASE_URL = "postgresql://neondb_owner:npg_nB8vaQVjS3Ch@ep-wispy-bread-aoe2biqc-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+BETTER_AUTH_URL = "https://management.funadhooairport.com"
 
 [assets]
 directory = "./dist"
