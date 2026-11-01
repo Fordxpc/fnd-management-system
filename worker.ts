@@ -5,21 +5,24 @@ export default {
   async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
 
-    // 1. Route Better Auth requests to its handler
     if (url.pathname.startsWith("/api/auth/")) {
       const auth = getAuth(env);
       try {
         return await auth.handler(request);
       } catch (err: any) {
-        console.error("BETTER AUTH CRASH:", err); // <--- THIS WILL PRINT THE REAL ERROR
+        // This will print the underlying Postgres error
+        console.error("BETTER AUTH CRASH:", err.cause || err); 
         return new Response(
-          JSON.stringify({ message: "Better Auth crashed", error: err.message }), 
+          JSON.stringify({ 
+            message: "Better Auth crashed", 
+            error: err.message, 
+            cause: err.cause?.message || String(err.cause)
+          }), 
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
     }
 
-    // 2. Route all other API requests to your custom handler
     if (url.pathname.startsWith("/api/")) {
       const context = {
         request,
@@ -35,7 +38,6 @@ export default {
       return onRequest(context as any);
     }
 
-    // 3. Serve static React files
     return env.ASSETS.fetch(request);
   },
 };
