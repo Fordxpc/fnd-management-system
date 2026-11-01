@@ -1,5 +1,5 @@
 import { onRequest } from "./functions/api/[[path]]";
-import { auth } from "./src/lib/auth";
+import { getAuth } from "./src/lib/auth";
 
 export default {
   async fetch(request: Request, env: any, ctx: any): Promise<Response> {
@@ -7,6 +7,7 @@ export default {
 
     // 1. Route Better Auth requests to its handler
     if (url.pathname.startsWith("/api/auth/")) {
+      const auth = getAuth(env); // Create auth instance per-request
       return auth.handler(request);
     }
 

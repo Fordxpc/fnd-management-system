@@ -1,36 +1,34 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "./db";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../db/schema";
 
-// This tells TypeScript to ignore the red line for process.env in Cloudflare Workers
-declare const process: any; 
+export function getAuth(env: any) {
+  // Create the DB connection inside the function using env bindings
+  const sql = neon(env.DATABASE_URL);
+  const db = drizzle(sql, { schema });
 
-// Fallbacks are provided just in case, but these should be set in wrangler.toml or Cloudflare Secrets
-const APP_URL = process.env.BETTER_AUTH_URL || "https://management.funadhooairport.com";
-const AUTH_SECRET = process.env.BETTER_AUTH_SECRET || "lvbme4++789LX827t+nxsRmpjbzfEEpTI4BMtvQr304=";
+  // Fallbacks ensure it works even if vars are missing, but they should be set
+  const APP_URL = env.BETTER_AUTH_URL || "https://management.funadhooairport.com";
+  const AUTH_SECRET = env.BETTER_AUTH_SECRET || "lvbme4++789LX827t+nxsRmpjbzfEEpTI4BMtvQr304=";
 
-export const auth = betterAuth({
-  baseURL: APP_URL,
-  secret: AUTH_SECRET, // <-- This is the critical fix for the 500 error
-  trustedOrigins: [APP_URL],
-  database: drizzleAdapter(db, {
-    provider: "pg",
-    schema,
-  }),
-  emailAndPassword: {
-    enabled: true,
-  },
-  user: {
-    additionalFields: {
-      role: {
-        type: "string",
-        required: false,
-      },
-      department: {
-        type: "string",
-        required: false,
+  return betterAuth({
+    baseURL: APP_URL,
+    secret: AUTH_SECRET,
+    trustedOrigins: [APP_URL],
+    database: drizzleAdapter(db, {
+      provider: "pg",
+      schema,
+    }),
+    emailAndPassword: {
+      enabled: true,
+    },
+    user: {
+      additionalFields: {
+        role: { type: "string", required: false },
+        department: { type: "string", required: false },
       },
     },
-  },
-});
+  });
+}
