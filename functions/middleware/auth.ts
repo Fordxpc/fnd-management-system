@@ -1,10 +1,10 @@
-import { auth } from "../../src/lib/auth.js";
+import { getAuth } from "../../src/lib/auth.js";
 import { db } from "../../src/lib/db.js";
-import { users } from "../../src/db/schema.js";
+import { user as users } from "../../src/db/schema.js"; // <--- Changed to user as users
 import { eq } from "drizzle-orm";
 
-export async function requireAuth(request: Request, _env: any) {
-  const session = await auth.api.getSession({
+export async function requireAuth(request: Request, env: any) {
+  const session = await getAuth(env).api.getSession({ 
     headers: request.headers,
   });
 

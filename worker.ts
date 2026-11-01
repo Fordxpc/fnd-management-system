@@ -7,7 +7,7 @@ export default {
 
     // 1. Route Better Auth requests to its handler
     if (url.pathname.startsWith("/api/auth/")) {
-      const auth = getAuth(env); // Create auth instance per-request
+      const auth = getAuth(env); // <--- Create instance here
       return auth.handler(request);
     }
 

@@ -6,7 +6,7 @@ import {
   requireSMT
 } from "../middleware/authorization.js";
 
-import { auth } from "../../src/lib/auth.js";
+import { getAuth } from "../../src/lib/auth.js";
 import { db } from "../../src/lib/db.js";
 import {
   user as users,
@@ -58,7 +58,7 @@ export const onRequest = async (context: any) => {
     // AUTO-SYNC BETTER AUTH USER → users TABLE
     // ==========================================
     if (pathname === "/api/users/me/sync" && method === "POST") {
-      const session = await auth.api.getSession({ headers: request.headers });
+      const session = await getAuth(env).api.getSession({ headers: request.headers });
       if (!session?.user) return json({ message: "Unauthorized" }, 401);
 
       const email = session.user.email.toLowerCase();
