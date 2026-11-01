@@ -101,3 +101,20 @@
 .login-form select:focus {
   border-color: #2563eb;
 }
+
+/* Add this to the bottom of your CSS file */
+.table-scroll-wrapper {
+  max-height: 65vh; /* Takes up 65% of the screen height */
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+/* Optional: Make the header stick to the top when scrolling */
+.table-scroll-wrapper thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f8fafc;
+  z-index: 10;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
