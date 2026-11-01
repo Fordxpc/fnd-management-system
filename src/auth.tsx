@@ -24,14 +24,33 @@ export function AuthProvider({ children }: any) {
         }
 
         const email = data.user.email.toLowerCase();
+        const snPart = email.split('@')[0]; // e.g. "sn-0729"
         
-        // Auto-sync user to Neon
         await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
 
-        const users = await apiFetch("/users");
-        const existingUser = users.find((u: any) => (u.email || "").toLowerCase() === email);
+        const [users, staffData] = await Promise.all([
+          apiFetch("/users"),
+          apiFetch("/staff")
+        ]);
 
-        setProfile(existingUser || null);
+        const userRecord = users.find((u: any) => (u.email || "").toLowerCase() === email);
+        
+        // Match by email OR by SN
+        const staffRecord = staffData.find((s: any) => {
+          const sEmail = (s.email || "").toLowerCase();
+          const sSn = (s.sn || "").toLowerCase();
+          return sEmail === email || sSn === snPart || sSn === snPart.replace('sn-', '') || `sn-${sSn}` === snPart;
+        });
+
+        setProfile({
+          ...userRecord,
+          ...staffRecord,
+          role: userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff'),
+          email: email,
+          sn: staffRecord?.sn || snPart.replace('sn-', ''),
+          designation: staffRecord?.position || '—'
+        });
+
       } catch (err) {
         console.error(err);
       } finally {

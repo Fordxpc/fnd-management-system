@@ -24,7 +24,7 @@ import {
   savedReports,
   rampLiveDraft
 } from "../../src/db/schema.js";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, sql, asc } from "drizzle-orm";
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -446,7 +446,8 @@ export const onRequest = async (context: any) => {
     // FLIGHTS MODULE
     // ==========================================
     if (pathname === "/api/flights" && method === "GET") {
-      const results = await db.select().from(flights);
+      const results = await db.select().from(flights)
+        .orderBy(asc(flights.date), asc(flights.departureTime));
       return json(results);
     }
 
