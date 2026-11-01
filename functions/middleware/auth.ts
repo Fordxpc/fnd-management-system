@@ -1,6 +1,6 @@
 import { getAuth } from "../../src/lib/auth.js";
-import { db } from "../../src/lib/db.js";
-import { users } from "../../src/db/schema.js"; // Import the legacy "users" table
+import { getDb } from "../../src/lib/db.js";
+import { users } from "../../src/db/schema.js";
 import { eq } from "drizzle-orm";
 
 export async function requireAuth(request: Request, env: any) {
@@ -16,7 +16,9 @@ export async function requireAuth(request: Request, env: any) {
 
   const email = session.user.email?.toLowerCase() || "";
 
-  // Look up role and department from the legacy `users` table
+  // Get DB instance inside the function using env
+  const db = getDb(env); 
+
   const [userRecord] = await db
     .select()
     .from(users)

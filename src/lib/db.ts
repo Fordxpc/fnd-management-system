@@ -9,5 +9,6 @@ export function getDb(env: any) {
   return drizzle(sql, { schema });
 }
 
+// Fallback for local scripts that don't have env
 const defaultSql = neon(process.env.DATABASE_URL || "postgresql://placeholder");
 export const db = drizzle(defaultSql, { schema });

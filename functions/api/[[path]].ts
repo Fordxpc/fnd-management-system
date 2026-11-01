@@ -1,9 +1,7 @@
-// functions/api/[[path]].ts
-
 import { requireAuth } from "../middleware/auth.js";
 import { requireManager, requireSMT } from "../middleware/authorization.js";
 import { getAuth } from "../../src/lib/auth.js";
-import { db } from "../../src/lib/db.js";
+import { getDb } from "../../src/lib/db.js";
 import {
   users,
   staff,
@@ -30,6 +28,7 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
+  const db = getDb(env); // <--- THIS IS THE CRITICAL FIX
   const url = new URL(request.url);
   const method = request.method;
   const pathname = url.pathname;
