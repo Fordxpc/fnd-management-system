@@ -16,16 +16,16 @@ import { relations } from "drizzle-orm";
 // Application tables
 // =============================================================
 
-export const users = pgTable("users", {
+export const user = pgTable("users", {
   id: text("id").primaryKey(),
-
+  name: text("name"),
   email: text("email").unique(),
-
+  emailVerified: boolean("email_verified").default(false),
+  image: text("image"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
   role: text("role"),
-
   department: text("department"),
-
-  createdAt: timestamp("created_at"),
 });
 
 export const staff = pgTable("staff", {

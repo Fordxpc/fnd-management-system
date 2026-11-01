@@ -9,7 +9,7 @@ import {
 import { auth } from "../../src/lib/auth.js";
 import { db } from "../../src/lib/db.js";
 import {
-  users,
+  user as users,
   staff,
   holidays,
   flights,
