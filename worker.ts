@@ -7,8 +7,16 @@ export default {
 
     // 1. Route Better Auth requests to its handler
     if (url.pathname.startsWith("/api/auth/")) {
-      const auth = getAuth(env); // <--- Create instance here
-      return auth.handler(request);
+      const auth = getAuth(env);
+      try {
+        return await auth.handler(request);
+      } catch (err: any) {
+        console.error("BETTER AUTH CRASH:", err); // <--- THIS WILL PRINT THE REAL ERROR
+        return new Response(
+          JSON.stringify({ message: "Better Auth crashed", error: err.message }), 
+          { status: 500, headers: { "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // 2. Route all other API requests to your custom handler
