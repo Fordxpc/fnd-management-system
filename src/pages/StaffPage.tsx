@@ -16,7 +16,6 @@ function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed' | 'console'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
-  // Safe role checking
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSmt === true;
@@ -121,16 +120,27 @@ function SettingsPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  // Safe mapping
+  // 🚨 THIS IS THE FIX: Look up the real name from the staffList
   let allMergedUsers: any[] = [];
   activeUsers.forEach(a => { 
-    if (!a.email) return; // Skip if no email
+    if (!a.email) return; 
     const emailLower = a.email.toLowerCase();
+    const snPart = emailLower.split('@')[0];
+    
+    // Find matching staff member to get the real name
+    const staffMatch = staffList.find(s => 
+      (s.email || '').toLowerCase() === emailLower || 
+      (s.sn || '').toLowerCase() === snPart ||
+      `sn-${(s.sn || '').toLowerCase()}` === snPart
+    );
+    
+    const realName = staffMatch?.name || a.name || (a.email || '').split('@')[0];
+
     const idx = allMergedUsers.findIndex(u => (u.email || '').toLowerCase() === emailLower); 
     if (idx >= 0) { 
-      allMergedUsers[idx] = { ...allMergedUsers[idx], role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }; 
+      allMergedUsers[idx] = { ...allMergedUsers[idx], name: realName, role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' }; 
     } else { 
-      allMergedUsers.push({ email: a.email, name: a.name || (a.email || '').split('@')[0], password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: a.position || '—' }); 
+      allMergedUsers.push({ email: a.email, name: realName, password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' }); 
     } 
   });
 
@@ -216,7 +226,7 @@ function SettingsPage() {
         </div>
       )}
 
-      {/* ... (Keep the rest of your incharges, detailed, and console tabs exactly as they were) ... */}
+      {/* Keep the rest of the tabs (incharges, detailed, console) as they were in your file */}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
 
