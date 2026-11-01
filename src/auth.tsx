@@ -25,7 +25,7 @@ export function AuthProvider({ children }: any) {
 
         const email = data.user.email.toLowerCase();
         
-        // Auto-sync the user to Neon (requires Step 6)
+        // Auto-sync user to Neon
         await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
 
         const users = await apiFetch("/users");

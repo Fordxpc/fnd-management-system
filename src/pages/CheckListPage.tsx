@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, addDoc, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
+import type { FormEvent } from 'react';
 import { useAuth } from '../auth';
+import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
 
 const CATEGORIES = ['Runway Check', 'FOD Collection', 'RWY Lights Inspection', 'Flight Ops Task'];
@@ -11,6 +11,7 @@ function ChecklistPage() {
   const { profile, user } = useAuth();
   const [checks, setChecks] = useState<any[]>([]);
   const [dateFilter, setDateFilter] = useState(formatDate(new Date()));
+  const [loading, setLoading] = useState(true);
   
   const [showForm, setShowForm] = useState(false);
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -18,32 +19,49 @@ function ChecklistPage() {
   const [status, setStatus] = useState('Completed - OK');
   const [remarks, setRemarks] = useState('');
 
+  const fetchChecks = async () => {
+    try {
+      setLoading(true);
+      // Make sure you create a /api/checklist GET route in [[path]].ts!
+      const data = await apiFetch('/checklist').catch(() => []);
+      setChecks(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'ops_checks'), (snap) => {
-      setChecks(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
+    fetchChecks();
+    const interval = setInterval(fetchChecks, 15000); // Poll every 15s
+    return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = async (e: any) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await addDoc(collection(db, 'ops_checks'), {
-        date: dateFilter, category, time, status, remarks,
-        checkedBy: user?.email || '',
-        createdAt: new Date().toISOString()
+      await apiFetch('/checklist', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: dateFilter, category, time, status, remarks,
+          checkedBy: user?.email || '',
+          createdAt: new Date().toISOString()
+        })
       });
       toast.success('Check logged successfully');
       setShowForm(false);
       setRemarks('');
-    } catch (err: any) { toast.error(err.message); }
+      fetchChecks();
+    } catch (err: any) { toast.error(err.message || 'Failed to save check'); }
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'ops_checks', id));
+      await apiFetch(`/checklist/${id}`, { method: 'DELETE' });
       toast.success('Record deleted');
-    } catch (err: any) { toast.error(err.message); }
+      fetchChecks();
+    } catch (err: any) { toast.error(err.message || 'Failed to delete'); }
   };
 
   const visibleChecks = checks.filter(c => c.date === dateFilter).sort((a,b) => a.time.localeCompare(b.time));
@@ -75,7 +93,7 @@ function ChecklistPage() {
       )}
 
       <div className="staff-list">
-        {visibleChecks.length === 0 ? <div className="empty-state"><p>No checks logged for {dateFilter}</p></div> : (
+        {loading ? <p>Loading...</p> : visibleChecks.length === 0 ? <div className="empty-state"><p>No checks logged for {dateFilter}</p></div> : (
           <table>
             <thead><tr><th>Time</th><th>Category</th><th>Status</th><th>Remarks</th><th>Checked By</th><th></th></tr></thead>
             <tbody>

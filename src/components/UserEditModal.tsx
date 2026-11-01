@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
@@ -25,16 +23,7 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // 1. Update Firestore (so the auth session respects it)
-      if (!isPreset) {
-        try {
-          await updateDoc(doc(db, 'users', user.id), { role, department: dept, name, position });
-        } catch (e) {
-          console.warn("Could not sync to Firestore", e);
-        }
-      }
-
-      // 2. Update Cloudflare D1
+      // Update Neon via API
       await apiFetch(endpoint, {
         method: 'PUT',
         body: JSON.stringify({ role, department: dept, name, position })

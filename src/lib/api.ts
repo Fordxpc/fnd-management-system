@@ -6,7 +6,7 @@ export const apiFetch = async (
 ) => {
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    credentials: "include", // Sends the Better Auth cookie
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -17,8 +17,7 @@ export const apiFetch = async (
     let errorMessage = `HTTP Error ${response.status}`;
     try {
       const errorData = await response.json();
-      errorMessage =
-        errorData.message || errorData.error || JSON.stringify(errorData);
+      errorMessage = errorData.message || errorData.error || JSON.stringify(errorData);
     } catch {
       const textError = await response.text();
       errorMessage = textError.substring(0, 100);
