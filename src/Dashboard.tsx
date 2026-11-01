@@ -15,7 +15,6 @@ import RampCheckSheetPage from './pages/RampCheckSheetPage';
 import WildlifePage from './pages/WildlifePage';
 import ReportsPage from './pages/ReportsPage';
 import RWYLightsPage from './pages/RWYLightsPage';
-import MigrationTool from './pages/MigrationTool';
 
 const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const USER_ADMIN_ROLES = ['developer', 'manager'];
@@ -62,7 +61,6 @@ function Dashboard(_props: any) {
 
   const pages: { [key: string]: any } = {
     dashboard: <DashboardPage onNavigate={navigate} />,
-    ...(isDev ? { migration: <MigrationTool /> } : {}),
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
     rampcheck: <RampCheckSheetPage />,
