@@ -4,7 +4,7 @@ compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-DATABASE_URL = "postgresql://neondb_owner:npg_nB8vaQVjS3Ch@ep-wispy-bread-aoe2biqc-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL = "postgresql://neondb_owner:npg_nB8vaQVjS3Ch@ep-wispy-bread-aoe2biqc-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
 BETTER_AUTH_URL = "https://management.funadhooairport.com"
 BETTER_AUTH_SECRET = "lvbme4++789LX827t+nxsRmpjbzfEEpTI4BMtvQr304="
 

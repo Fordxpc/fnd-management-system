@@ -5,12 +5,13 @@ export default {
   async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
 
+    // 1. Route Better Auth requests
     if (url.pathname.startsWith("/api/auth/")) {
-      const auth = getAuth(env);
       try {
+        // Moved inside try/catch so we can catch initialization errors
+        const auth = getAuth(env); 
         return await auth.handler(request);
       } catch (err: any) {
-        // This will print the underlying Postgres error
         console.error("BETTER AUTH CRASH:", err.cause || err); 
         return new Response(
           JSON.stringify({ 
@@ -23,6 +24,7 @@ export default {
       }
     }
 
+    // 2. Route all other API requests
     if (url.pathname.startsWith("/api/")) {
       const context = {
         request,
@@ -38,6 +40,7 @@ export default {
       return onRequest(context as any);
     }
 
+    // 3. Serve static files
     return env.ASSETS.fetch(request);
   },
 };
