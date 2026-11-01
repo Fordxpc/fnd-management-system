@@ -1,15 +1,11 @@
 // functions/api/[[path]].ts
 
 import { requireAuth } from "../middleware/auth.js";
-import {
-  requireManager,
-  requireSMT
-} from "../middleware/authorization.js";
-
+import { requireManager, requireSMT } from "../middleware/authorization.js";
 import { getAuth } from "../../src/lib/auth.js";
 import { db } from "../../src/lib/db.js";
 import {
-  user as users,
+  users,
   staff,
   holidays,
   flights,
@@ -80,7 +76,7 @@ export const onRequest = async (context: any) => {
           email,
           role: preset[0]?.role || "user",
           department: preset[0]?.department || "",
-          createdAt: new Date(),
+          createdAt: new Date().toISOString(),
         });
       }
 
@@ -101,7 +97,7 @@ export const onRequest = async (context: any) => {
 
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date();
+      const createdAt = new Date().toISOString();
 
       await db.insert(staff).values({
         id,
@@ -115,7 +111,7 @@ export const onRequest = async (context: any) => {
         gender: body.gender || "",
         department: body.department,
         position: body.position || "",
-        isSMT: !!body.isSMT,
+        isSmt: !!body.isSMT,
         isIncharge: !!body.isIncharge,
         balanceVisible: !!body.balanceVisible,
         tempDeptAccess: !!body.tempDeptAccess,
@@ -158,7 +154,7 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      const updatedAt = new Date();
+      const updatedAt = new Date().toISOString();
 
       await db
         .update(staff)
@@ -173,7 +169,7 @@ export const onRequest = async (context: any) => {
           gender: body.gender || "",
           department: body.department,
           position: body.position || "",
-          isSMT: !!body.isSMT,
+          isSmt: !!body.isSMT,
           isIncharge: !!body.isIncharge,
           balanceVisible: !!body.balanceVisible,
           tempDeptAccess: !!body.tempDeptAccess,
@@ -219,7 +215,7 @@ export const onRequest = async (context: any) => {
 
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date();
+      const createdAt = new Date().toISOString();
 
       await db.insert(holidays).values({
         id,
@@ -253,14 +249,14 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const finalStatus = body.status || "pending";
-      const requestedAt = new Date();
+      const requestedAt = new Date().toISOString();
 
       await db.insert(leaveRequests).values({
         id,
         staffId: body.staffId,
         staffName: body.staffName,
         staffDepartment: body.staffDepartment,
-        staffSN: body.staffSN || "",
+        staffSn: body.staffSN || "",
         staffGender: body.staffGender || "",
         leaveType: body.leaveType,
         startDate: body.startDate,
@@ -285,7 +281,7 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date();
+      const reviewedAt = new Date().toISOString();
 
       const [reqData] = await db
         .update(leaveRequests)
@@ -328,7 +324,7 @@ export const onRequest = async (context: any) => {
             shiftTime: "",
             status: reqData.leaveType,
             leaveRequestId: id,
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
           });
         }
 
@@ -356,7 +352,7 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date();
+      const reviewedAt = new Date().toISOString();
 
       await db
         .update(leaveRequests)
@@ -405,7 +401,7 @@ export const onRequest = async (context: any) => {
       }
 
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
-      const createdAt = new Date();
+      const createdAt = new Date().toISOString();
 
       if (existing.length > 0) {
         await db.delete(rosterEntries).where(eq(rosterEntries.id, id));
@@ -437,7 +433,7 @@ export const onRequest = async (context: any) => {
         date: entry.date,
         shiftTime: entry.shiftTime || "",
         status: entry.status,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       }));
 
       if (values.length > 0) {
@@ -461,7 +457,7 @@ export const onRequest = async (context: any) => {
 
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date();
+      const createdAt = new Date().toISOString();
 
       await db.insert(flights).values({
         id,
@@ -492,7 +488,7 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      const updatedAt = new Date();
+      const updatedAt = new Date().toISOString();
 
       await db
         .update(flights)
@@ -591,7 +587,7 @@ export const onRequest = async (context: any) => {
             email: body.email.toLowerCase(),
             role: body.role || "user",
             department: body.department || "",
-            createdAt: new Date(),
+            createdAt: new Date().toISOString(),
           })
           .onConflictDoUpdate({
             target: users.email,
@@ -667,7 +663,7 @@ export const onRequest = async (context: any) => {
         department,
         name: name || "",
         position: position || "",
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
 
       return json({ success: true, id, message: "User pre-registered." });
@@ -695,7 +691,7 @@ export const onRequest = async (context: any) => {
         department: body.department,
         name: body.name || "",
         position: body.position || "",
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
 
       return json({ success: true, id });
@@ -738,7 +734,7 @@ export const onRequest = async (context: any) => {
         const body: any = await request.json();
 
         const id = crypto.randomUUID();
-        const createdAt = new Date();
+        const createdAt = new Date().toISOString();
 
         await db.insert(savedReports).values({
           id,
@@ -770,13 +766,13 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/overtime" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date();
+      const createdAt = new Date().toISOString();
 
       await db.insert(overtimeEntries).values({
         id,
         staffId: body.staffId,
         staffName: body.staffName,
-        staffSN: body.staffSN || "",
+        staffSn: body.staffSN || "",
         staffDepartment: body.staffDepartment,
         date: body.date,
         startTime: body.startTime,
@@ -824,7 +820,7 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date();
+      const reviewedAt = new Date().toISOString();
 
       await db
         .update(overtimeEntries)
@@ -844,7 +840,7 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date();
+      const reviewedAt = new Date().toISOString();
 
       await db
         .update(overtimeEntries)
@@ -887,7 +883,7 @@ export const onRequest = async (context: any) => {
         id,
         date: body.date,
         time: body.time,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
         rwy19: JSON.stringify(body.rwy19),
         rwy01: JSON.stringify(body.rwy01),
         lights: JSON.stringify(body.lights),
@@ -923,7 +919,7 @@ export const onRequest = async (context: any) => {
         id,
         date: body.date,
         time: body.time,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
         assignments: JSON.stringify(body.assignments),
       });
 
@@ -951,7 +947,7 @@ export const onRequest = async (context: any) => {
         grams: body.grams,
         remarks: body.remarks,
         loggedBy: body.loggedBy || "",
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       });
 
       return json({ success: true, id });
@@ -993,7 +989,7 @@ export const onRequest = async (context: any) => {
         refNo: body.refNo,
         observer: body.observer || "",
         rows: JSON.stringify(body.rows),
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       });
 
       return json({ success: true, id });
@@ -1039,7 +1035,7 @@ export const onRequest = async (context: any) => {
 
       return json(
         results.map((row: any) => ({
-          ...JSON.parse(row.payload),
+          ...JSON.parse(row.payload || "{}"),
           id: row.id,
           date: row.date,
           fltNo: row.fltNo,
@@ -1063,7 +1059,7 @@ export const onRequest = async (context: any) => {
         fltNo: body.fltNo || "",
         acReg: body.acReg || "",
         payload: JSON.stringify(body),
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       });
 
       if (body.fltNo && body.date) {
@@ -1102,7 +1098,7 @@ export const onRequest = async (context: any) => {
           fltNo: body.fltNo || "",
           acReg: body.acReg || "",
           payload: JSON.stringify(body),
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         })
         .where(eq(rampInspections.id, id!));
 
@@ -1184,7 +1180,7 @@ export const onRequest = async (context: any) => {
         clockOut: body.clockOut || "",
         status: body.status || "Present",
         notes: body.notes || "",
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       });
 
       return json({ success: true, id });
@@ -1250,13 +1246,13 @@ export const onRequest = async (context: any) => {
         .values({
           staffId: body.staffId,
           staffName: body.staffName,
-          staffSN: body.staffSN || "",
+          staffSn: body.staffSN || "",
         })
         .onConflictDoUpdate({
           target: lightsInspectors.staffId,
           set: {
             staffName: body.staffName,
-            staffSN: body.staffSN || "",
+            staffSn: body.staffSN || "",
           },
         });
 
@@ -1301,7 +1297,7 @@ export const onRequest = async (context: any) => {
         inspectorName: body.inspectorName,
         data: JSON.stringify(body.data),
         remarks: body.remarks || "",
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(),
       });
 
       return json({ success: true, id });

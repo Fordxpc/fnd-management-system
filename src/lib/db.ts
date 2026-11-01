@@ -2,9 +2,12 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../db/schema";
 
-// This tells TypeScript to ignore the red line
-declare const process: any; 
+declare const process: any;
 
-const sql = neon(process.env.DATABASE_URL as string);
+export function getDb(env: any) {
+  const sql = neon(env?.DATABASE_URL || process.env.DATABASE_URL);
+  return drizzle(sql, { schema });
+}
 
-export const db = drizzle(sql, { schema });
+const defaultSql = neon(process.env.DATABASE_URL || "postgresql://placeholder");
+export const db = drizzle(defaultSql, { schema });

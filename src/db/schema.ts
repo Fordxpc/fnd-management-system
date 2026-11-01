@@ -1,306 +1,323 @@
-import { pgTable, text, timestamp, boolean, integer, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreignKey, serial, doublePrecision } from "drizzle-orm/pg-core"
 
-// ==========================================
-// BETTER AUTH TABLES
-// ==========================================
-
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name"),
-  email: text("email").unique(),
-  emailVerified: boolean("email_verified").default(false),
-  image: text("image"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-  role: text("role"),
-  department: text("department"),
-});
-
-export const session = pgTable("session", {
-  id: text("id").primaryKey(),
-  expiresAt: timestamp("expires_at").notNull(),
-  token: text("token").notNull().unique(),
-  createdAt: timestamp("created_at").notNull(),
-  updatedAt: timestamp("updated_at").notNull(),
-  ipAddress: text("ip_address"),
-  userAgent: text("user_agent"),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-});
-
-export const account = pgTable("account", {
-  id: text("id").primaryKey(),
-  accountId: text("account_id").notNull(),
-  providerId: text("provider_id").notNull(),
-  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  accessToken: text("access_token"),
-  refreshToken: text("refresh_token"),
-  idToken: text("id_token"),
-  accessTokenExpiresAt: timestamp("access_token_expires_at"),
-  refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
-  scope: text("scope"),
-  password: text("password"),
-  createdAt: timestamp("created_at").notNull(),
-  updatedAt: timestamp("updated_at").notNull(),
-});
-
-export const verification = pgTable("verification", {
-  id: text("id").primaryKey(),
-  identifier: text("identifier").notNull(),
-  value: text("value").notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at"),
-  updatedAt: timestamp("updated_at"),
-});
-
-// ==========================================
-// APPLICATION TABLES
-// ==========================================
-
-export const users = pgTable("users", {
-  id: text("id").primaryKey(),
-  email: text("email").unique(),
-  role: text("role"),
-  department: text("department"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const usersBackup = pgTable("users_backup", {
-  id: text("id").primaryKey(),
-  email: text("email"),
-  role: text("role"),
-  department: text("department"),
-  createdAt: timestamp("created_at"),
-});
-
-export const playingWithNeon = pgTable("playing_with_neon", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  value: integer("value"),
-});
-
-export const staff = pgTable("staff", {
-  id: text("id").primaryKey(),
-  sn: text("sn"),
-  name: text("name"),
-  email: text("email"),
-  personalEmail: text("personal_email"),
-  nid: text("nid"),
-  joinDate: text("join_date"),
-  phone: text("phone"),
-  gender: text("gender"),
-  department: text("department"),
-  position: text("position"),
-  isSMT: boolean("is_smt").default(false),
-  isIncharge: boolean("is_incharge").default(false),
-  balanceVisible: boolean("balance_visible").default(false),
-  tempDeptAccess: boolean("temp_dept_access").default(false),
-  rampsheetEditAccess: boolean("rampsheet_edit_access").default(false),
-  rwyLightEditAccess: boolean("rwy_light_edit_access").default(false),
-  birdCountEditAccess: boolean("bird_count_edit_access").default(false),
-  opsBoardAccess: boolean("ops_board_access").default(false),
-  specialOpsAccess: boolean("special_ops_access").default(false), // <-- RESTORED
-  tempDeptTarget: text("temp_dept_target"),
-  notes: text("notes"),
-  basicSalary: integer("basic_salary").default(0),
-  dailyAllowance: integer("daily_allowance").default(0),
-  holidayAllowanceRate: integer("holiday_allowance_rate").default(0),
-  bankAccount: text("bank_account"),
-  status: text("status").default("active"),
-  orderIndex: integer("order_index").default(9999),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at"),
+export const birdCounts = pgTable("bird_counts", {
+	id: text().primaryKey().notNull(),
+	date: text(),
+	refNo: text("ref_no"),
+	observer: text(),
+	rows: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
 export const holidays = pgTable("holidays", {
-  id: text("id").primaryKey(),
-  date: text("date").notNull(),
-  name: text("name").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-export const leaveRequests = pgTable("leave_requests", {
-  id: text("id").primaryKey(),
-  staffId: text("staff_id"),
-  staffName: text("staff_name"),
-  staffDepartment: text("staff_department"),
-  staffSN: text("staff_sn"),
-  staffGender: text("staff_gender"),
-  leaveType: text("leave_type"),
-  startDate: text("start_date"),
-  endDate: text("end_date"),
-  days: integer("days"),
-  reason: text("reason"),
-  status: text("status"),
-  requestedBy: text("requested_by"),
-  requestedAt: timestamp("requested_at"),
-  reviewedBy: text("reviewed_by"),
-  reviewedAt: timestamp("reviewed_at"),
-  reviewNotes: text("review_notes"),
-});
-
-export const rosterEntries = pgTable("roster_entries", {
-  id: text("id").primaryKey(),
-  staffId: text("staff_id"),
-  staffName: text("staff_name"),
-  staffDepartment: text("staff_department"),
-  date: text("date"),
-  shiftTime: text("shift_time"),
-  status: text("status"),
-  leaveRequestId: text("leave_request_id"),
-  createdAt: timestamp("created_at"),
+	id: text().primaryKey().notNull(),
+	date: text(),
+	name: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
 export const flights = pgTable("flights", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  flightNo: text("flight_no"),
-  type: text("type"),
-  aircraft: text("aircraft"),
-  bookedFigure: text("booked_figure"),
-  checkInTime: text("check_in_time"),
-  arrivalTime: text("arrival_time"),
-  departureTime: text("departure_time"),
-  route: text("route"),
-  originDepTime: text("origin_dep_time"),
-  eta: timestamp("eta"),
-  ata: timestamp("ata"),
-  atd: timestamp("atd"),
-  status: text("status"),
-  remarks: text("remarks"),
-  createdAt: timestamp("created_at"),
-  updatedAt: timestamp("updated_at"),
+	id: text().primaryKey().notNull(),
+	date: text(),
+	flightNo: text("flight_no"),
+	type: text(),
+	aircraft: text(),
+	route: text(),
+	status: text(),
+	remarks: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+	bookedFigure: text("booked_figure"),
+	originDepTime: text("origin_dep_time"),
+	checkInTime: text("check_in_time"),
+	arrivalTime: text("arrival_time"),
+	departureTime: text("departure_time"),
+	updatedAt: timestamp("updated_at", { mode: 'string' }),
+	eta: text(),
+	ata: text(),
+	atd: text(),
 });
 
-export const overtimeEntries = pgTable("overtime_entries", {
-  id: text("id").primaryKey(),
-  staffId: text("staff_id"),
-  staffName: text("staff_name"),
-  staffSN: text("staff_sn"),
-  staffDepartment: text("staff_department"),
-  date: text("date"),
-  startTime: text("start_time"),
-  endTime: text("end_time"),
-  hours: integer("hours"),
-  notes: text("notes"),
-  status: text("status"),
-  createdBy: text("created_by"),
-  createdAt: timestamp("created_at"),
-  reviewedBy: text("reviewed_by"),
-  reviewedAt: timestamp("reviewed_at"),
-});
+export const staff = pgTable("staff", {
+	id: text().primaryKey().notNull(),
+	sn: text(),
+	name: text(),
+	email: text(),
+	department: text(),
+	position: text(),
+	isSmt: boolean("is_smt").default(false),
+	balanceVisible: boolean("balance_visible").default(false),
+	personalEmail: text("personal_email"),
+	isIncharge: boolean("is_incharge").default(false),
+	basicSalary: real("basic_salary").default(0),
+	dailyAllowance: real("daily_allowance").default(0),
+	holidayAllowanceRate: real("holiday_allowance_rate").default(0),
+	status: text().default('active'),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+	nid: text(),
+	joinDate: text("join_date"),
+	phone: text(),
+	gender: text(),
+	specialOpsAccess: boolean("special_ops_access").default(false),
+	tempDeptAccess: boolean("temp_dept_access").default(false),
+	rampsheetEditAccess: boolean("rampsheet_edit_access").default(false),
+	rwyLightEditAccess: boolean("rwy_light_edit_access").default(false),
+	birdCountEditAccess: boolean("bird_count_edit_access").default(false),
+	opsBoardAccess: boolean("ops_board_access").default(false),
+	tempDeptTarget: text("temp_dept_target"),
+	notes: text(),
+	bankAccount: text("bank_account"),
+	orderIndex: integer("order_index").default(9999),
+	updatedAt: timestamp("updated_at", { mode: 'string' }),
+}, (table) => [
+	unique("staff_email_unique").on(table.email),
+]);
 
-export const settings = pgTable("settings", {
-  id: text("id").primaryKey(),
-  adminHours: integer("admin_hours"),
-  regularHours: integer("regular_hours"),
-  deductLeaves: text("deduct_leaves"),
-});
+// Legacy App Users Table
+export const users = pgTable("users", {
+	id: text().primaryKey().notNull(),
+	email: text(),
+	role: text(),
+	department: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+}, (table) => [
+	unique("users_email_unique").on(table.email),
+]);
 
-export const userPresets = pgTable("user_presets", {
-  id: text("id").primaryKey(),
-  email: text("email").unique(),
-  role: text("role"),
-  department: text("department"),
-  name: text("name"),
-  position: text("position"),
-  createdAt: timestamp("created_at"),
-});
-
-export const savedReports = pgTable("saved_reports", {
-  id: text("id").primaryKey(),
-  month: text("month"),
-  dateFrom: text("date_from"),
-  dateTo: text("date_to"),
-  type: text("type"),
-  createdBy: text("created_by"),
-  createdAt: timestamp("created_at"),
-});
-
-export const opsRunwayHistory = pgTable("ops_runway_history", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  time: text("time"),
-  rwy19: text("rwy19"),
-  rwy01: text("rwy01"),
-  lights: text("lights"),
-  createdAt: timestamp("created_at"),
-});
-
-export const opsGroundHistory = pgTable("ops_ground_history", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  time: text("time"),
-  assignments: text("assignments"),
-  createdAt: timestamp("created_at"),
-});
-
-export const fodCollections = pgTable("fod_collections", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  grams: integer("grams"),
-  remarks: text("remarks"),
-  loggedBy: text("logged_by"),
-  createdAt: timestamp("created_at"),
-});
-
-export const birdCounts = pgTable("bird_counts", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  refNo: text("ref_no"),
-  observer: text("observer"),
-  rows: text("rows"),
-  createdAt: timestamp("created_at"),
-});
+// Better Auth User Table
+export const user = pgTable("user", {
+	id: text().primaryKey().notNull(),
+	name: text().notNull(),
+	email: text().notNull(),
+	emailVerified: boolean("email_verified").default(false).notNull(),
+	image: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+	role: text(),
+	department: text(),
+}, (table) => [
+	unique("user_email_unique").on(table.email),
+]);
 
 export const rampInspections = pgTable("ramp_inspections", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  fltNo: text("flt_no"),
-  acReg: text("ac_reg"),
-  payload: text("payload"),
-  createdAt: timestamp("created_at"),
-  updatedAt: timestamp("updated_at"),
-});
-
-export const rampLiveDraft = pgTable("ramp_live_draft", {
-  id: text("id").primaryKey(),
-  payload: text("payload"),
+	id: text().primaryKey().notNull(),
+	date: text(),
+	fltNo: text("flt_no"),
+	acReg: text("ac_reg"),
+	payload: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+	updatedAt: timestamp("updated_at", { mode: 'string' }),
 });
 
 export const timesheets = pgTable("timesheets", {
-  id: text("id").primaryKey(),
-  staffId: text("staff_id"),
-  staffName: text("staff_name"),
-  staffDepartment: text("staff_department"),
-  date: text("date"),
-  clockIn: text("clock_in"),
-  clockOut: text("clock_out"),
-  status: text("status"),
-  notes: text("notes"),
-  createdAt: timestamp("created_at"),
+	id: text().primaryKey().notNull(),
+	staffId: text("staff_id"),
+	staffName: text("staff_name"),
+	staffDepartment: text("staff_department"),
+	date: text(),
+	clockIn: text("clock_in"),
+	clockOut: text("clock_out"),
+	status: text(),
+	notes: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
-export const tempAccess = pgTable("temp_access", {
-  id: text("id").primaryKey(),
-  email: text("email"),
-  targetDept: text("target_dept"),
-  startDate: text("start_date"),
-  endDate: text("end_date"),
+export const verification = pgTable("verification", {
+	id: text().primaryKey().notNull(),
+	identifier: text().notNull(),
+	value: text().notNull(),
+	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast().op("text_ops")),
+]);
+
+export const account = pgTable("account", {
+	id: text().primaryKey().notNull(),
+	accountId: text("account_id").notNull(),
+	providerId: text("provider_id").notNull(),
+	userId: text("user_id").notNull(),
+	accessToken: text("access_token"),
+	refreshToken: text("refresh_token"),
+	idToken: text("id_token"),
+	accessTokenExpiresAt: timestamp("access_token_expires_at", { mode: 'string' }),
+	refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { mode: 'string' }),
+	scope: text(),
+	password: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).notNull(),
+}, (table) => [
+	index("account_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "account_user_id_user_id_fk"
+		}).onDelete("cascade"),
+]);
+
+export const playingWithNeon = pgTable("playing_with_neon", {
+	id: serial().primaryKey().notNull(),
+	name: text().notNull(),
+	value: real(),
+});
+
+export const usersBackup = pgTable("users_backup", {
+	id: text(),
+	email: text(),
+	role: text(),
+	department: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
 export const lightsInspectors = pgTable("lights_inspectors", {
-  staffId: text("staff_id").primaryKey(),
-  staffName: text("staff_name"),
-  staffSN: text("staff_sn"),
+	staffId: text("staff_id").primaryKey().notNull(),
+	staffName: text("staff_name"),
+	staffSn: text("staff_sn"),
+});
+
+export const fodCollections = pgTable("fod_collections", {
+	id: text().primaryKey().notNull(),
+	date: text(),
+	grams: doublePrecision(),
+	remarks: text(),
+	loggedBy: text("logged_by"),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+});
+
+export const settings = pgTable("settings", {
+	id: text().primaryKey().notNull(),
+	adminHours: integer("admin_hours"),
+	regularHours: integer("regular_hours"),
+	deductLeaves: text("deduct_leaves"),
+});
+
+export const rosterEntries = pgTable("roster_entries", {
+	id: text().primaryKey().notNull(),
+	staffId: text("staff_id"),
+	staffName: text("staff_name"),
+	staffDepartment: text("staff_department"),
+	date: text(),
+	shiftTime: text("shift_time"),
+	status: text(),
+	leaveRequestId: text("leave_request_id"),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+});
+
+export const tempAccess = pgTable("temp_access", {
+	id: text().primaryKey().notNull(),
+	email: text(),
+	targetDept: text("target_dept"),
+	startDate: text("start_date"),
+	endDate: text("end_date"),
+});
+
+export const overtimeEntries = pgTable("overtime_entries", {
+	id: text().primaryKey().notNull(),
+	staffId: text("staff_id"),
+	staffName: text("staff_name"),
+	staffSn: text("staff_sn"),
+	staffDepartment: text("staff_department"),
+	date: text(),
+	startTime: text("start_time"),
+	endTime: text("end_time"),
+	hours: real(),
+	notes: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+	createdBy: text("created_by"),
+	status: text(),
+	reviewedBy: text("reviewed_by"),
+	reviewedAt: timestamp("reviewed_at", { mode: 'string' }),
+});
+
+export const leaveRequests = pgTable("leave_requests", {
+	id: text().primaryKey().notNull(),
+	staffId: text("staff_id"),
+	staffName: text("staff_name"),
+	leaveType: text("leave_type"),
+	startDate: text("start_date"),
+	endDate: text("end_date"),
+	days: integer(),
+	reason: text(),
+	status: text().default('pending'),
+	requestedAt: timestamp("requested_at", { mode: 'string' }),
+	reviewedAt: timestamp("reviewed_at", { mode: 'string' }),
+	staffDepartment: text("staff_department"),
+	reviewedBy: text("reviewed_by"),
+	reviewNotes: text("review_notes"),
+	staffSn: text("staff_sn"),
+	staffGender: text("staff_gender"),
+	requestedBy: text("requested_by"),
+});
+
+export const session = pgTable("session", {
+	id: text().primaryKey().notNull(),
+	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
+	token: text().notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).notNull(),
+	ipAddress: text("ip_address"),
+	userAgent: text("user_agent"),
+	userId: text("user_id").notNull(),
+}, (table) => [
+	index("session_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [user.id],
+			name: "session_user_id_user_id_fk"
+		}).onDelete("cascade"),
+	unique("session_token_unique").on(table.token),
+]);
+
+export const userPresets = pgTable("user_presets", {
+	id: text().primaryKey().notNull(),
+	email: text(),
+	role: text(),
+	department: text(),
+	name: text(),
+	position: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+});
+
+export const rampLiveDraft = pgTable("ramp_live_draft", {
+	id: text().primaryKey().notNull(),
+	payload: text(),
+});
+
+export const opsGroundHistory = pgTable("ops_ground_history", {
+	id: text().primaryKey().notNull(),
+	date: text(),
+	time: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+	assignments: text(),
+});
+
+export const opsRunwayHistory = pgTable("ops_runway_history", {
+	id: text().primaryKey().notNull(),
+	date: text(),
+	time: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+	rwy19: text(),
+	rwy01: text(),
+	lights: text(),
+});
+
+export const savedReports = pgTable("saved_reports", {
+	id: text().primaryKey().notNull(),
+	month: text(),
+	dateFrom: text("date_from"),
+	dateTo: text("date_to"),
+	type: text(),
+	createdBy: text("created_by"),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
 export const rwyLights = pgTable("rwy_lights", {
-  id: text("id").primaryKey(),
-  date: text("date"),
-  time: text("time"),
-  weather: text("weather"),
-  inspectorName: text("inspector_name"),
-  data: text("data"),
-  remarks: text("remarks"),
-  createdAt: timestamp("created_at"),
+	id: text().primaryKey().notNull(),
+	date: text(),
+	time: text(),
+	weather: text(),
+	inspectorName: text("inspector_name"),
+	data: text(),
+	remarks: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });

@@ -4,13 +4,14 @@ import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../db/schema";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const process: any;
+
 export function getAuth(env: any) {
-  const sql = neon(env.DATABASE_URL);
+  const sql = neon(env?.DATABASE_URL || process.env.DATABASE_URL || "");
   const db = drizzle(sql, { schema });
 
-  const APP_URL = env.BETTER_AUTH_URL || "https://management.funadhooairport.com";
-  const AUTH_SECRET = env.BETTER_AUTH_SECRET || "lvbme4++789LX827t+nxsRmpjbzfEEpTI4BMtvQr304=";
+  const APP_URL = env?.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL || "https://management.funadhooairport.com";
+  const AUTH_SECRET = env?.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET || "lvbme4++789LX827t+nxsRmpjbzfEEpTI4BMtvQr304=";
 
   return betterAuth({
     baseURL: APP_URL,

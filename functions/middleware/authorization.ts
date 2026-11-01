@@ -1,33 +1,15 @@
-export function requireManager(role?: string) {
-
-  const allowed = [
-    "developer",
-    "manager",
-    "admin"
-  ];
-
-  if (!allowed.includes(role || "")) {
-    throw new Error("Forbidden");
+export function requireManager(role: string) {
+  if (!["developer", "manager", "admin", "owner"].includes(role)) {
+    const err: any = new Error("Forbidden: Manager access required");
+    err.status = 403;
+    throw err;
   }
 }
 
-export function requireSMT(role?: string) {
-
-  const allowed = [
-    "developer",
-    "manager",
-    "admin",
-    "smt"
-  ];
-
-  if (!allowed.includes(role || "")) {
-    throw new Error("Forbidden");
-  }
-}
-
-export function requireDeveloper(role?: string) {
-
-  if (role !== "developer") {
-    throw new Error("Forbidden");
+export function requireSMT(role: string) {
+  if (!["developer", "manager", "admin", "owner", "smt"].includes(role)) {
+    const err: any = new Error("Forbidden: SMT access required");
+    err.status = 403;
+    throw err;
   }
 }
