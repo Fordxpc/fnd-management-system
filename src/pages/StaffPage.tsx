@@ -1,262 +1,456 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { FormEvent } from 'react';
-import { authClient } from '../lib/auth-client';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import ChangePasswordModal from './ChangePasswordModal';
 import { ConfirmDialog } from '../components/Dialogs';
-import { UserEditModal } from '../components/UserEditModal';
 
-const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
+const FND_ALL_STAFF = [
+  { sn: 'SN-0037', name: 'Adam Faisal', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0038', name: 'Adam Shakir', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0439', name: 'Hassan Shujaau', position: 'Senior Airport Officer', department: 'Ground Operations' },
+  { sn: 'SN-0725', name: 'Ahmed Aseel', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0729', name: 'Mohamed Fuadhu', position: 'Operations Officer', department: 'Ground Operations' },
+  { sn: 'SN-0730', name: 'Mohamed Nadheem', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0733', name: 'Thoriq Mohamed', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0754', name: 'Ali Shameem', position: 'Assistant Operations Officer', department: 'Ground Operations' },
+  { sn: 'SN-0757', name: 'Mohamed Adam', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-1173', name: 'Mohamed Sameeh', position: 'Airport Hand', department: 'Ground Operations' },
+  { sn: 'SN-0042', name: 'Aiminath Moosa', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0049', name: 'Mohamed Zaki', position: 'Maintenance Agent', department: 'Maintenance' },
+  { sn: 'SN-0480', name: 'Mohamed Ibrahim', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0481', name: 'Zimla Ayyoob', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0484', name: 'Abdul Ghanee Mohamed', position: 'Assistant Manager', department: 'Maintenance' },
+  { sn: 'SN-0980', name: 'Ismail Kameel', position: 'Maintenance Agent', department: 'Maintenance' },
+  { sn: 'SN-1007', name: 'Muna Abdhul Qafoor', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-1008', name: 'Aiminath Maha', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-1009', name: 'Hassan Naafis', position: 'Cleaning & Gardening', department: 'Maintenance' },
+  { sn: 'SN-0034', name: 'Abdulla Adam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0035', name: 'Abdulla Aslam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0036', name: 'Abdulla Mohamed', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0044', name: 'Hassan Abdul Rahman', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0437', name: 'Aminath Shehereeza', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0726', name: 'Mohamed Karam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0727', name: 'Ahmed Jinah', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0728', name: 'Ibrahim Khalaf Ahmed', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0731', name: 'Aishath Maiha Adam', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0732', name: 'Aishath Sahana', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0755', name: 'Adam Maaidh', position: 'Security Agent', department: 'Security' },
+  { sn: 'SN-0995', name: 'Mohamed Vishal', position: 'Assistant Security Officer', department: 'Security' },
+  { sn: 'SN-0039', name: 'Adam Yaeesh', position: 'Leading Fireman', department: 'Fire & Rescue' },
+  { sn: 'SN-0040', name: 'Ahmed Raushaan', position: 'Leading Fireman', department: 'Fire & Rescue' },
+  { sn: 'SN-0041', name: 'Ali Navshad', position: 'Leading Fireman', department: 'Fire & Rescue' },
+  { sn: 'SN-0047', name: 'Ismail Nifaaz Adam', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0048', name: 'Maazin Hassan', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0434', name: 'Ismail Shafeeq', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0435', name: 'Ahmed Naahee', position: 'Junior Firefighter', department: 'Fire & Rescue' },
+  { sn: 'SN-0959', name: 'Vishan Mohamed', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0960', name: 'Ahmed Ilham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0961', name: 'Mohamed Hisham', position: 'Firefighter Trainee', department: 'Fire & Rescue' },
+  { sn: 'SN-0967', name: 'Hassan Malaz', position: 'Assistant Safety Officer', department: 'Safety' },
+  { sn: 'SN-0753', name: 'Mohamed Maayal', position: 'Airport Manager', department: 'Administration' },
+  { sn: 'SN-0985', name: 'Aishath Nabaa', position: 'Assistant Administrative Officer', department: 'Administration' },
+];
 
-function SettingsPage() {
-  const { user, profile, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed' | 'console'>('general');
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration','Safety'];
+
+const DESIGNATIONS = [
+  'Airport Manager', 'Assistant Manager', 'Assistant Safety Officer',
+  'Senior Airport Officer', 'Operations Officer', 'Assistant Operations Officer',
+  'Assistant Security Officer', 'Assistant Administrative Officer',
+  'Leading Fireman', 'Junior Firefighter', 'Firefighter Trainee',
+  'Airport Hand', 'Security Agent', 'Maintenance Agent', 'Cleaning & Gardening',
+];
+
+const SENSITIVE_INFO_ROLES = ['developer'];
+
+function StaffPage() {
+  const { profile, user } = useAuth();
+  const canSeeSensitive = SENSITIVE_INFO_ROLES.includes(profile?.role || '');
+
+  const [staff, setStaff] = useState<any[]>([]);
+  const [myStaff, setMyStaff] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const [importing, setImporting] = useState<boolean>(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedDept, setSelectedDept] = useState<string>('all');
+  const [showFinancials, setShowFinancials] = useState<boolean>(false);
   
-  const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
-  const isSMT = profile?.role === 'smt' || profile?.isSmt === true;
-  const canManageAccess = isDev || isManager;
-  
-  const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
-  const [savingRules, setSavingRules] = useState(false);
-  const [activeUsers, setActiveUsers] = useState<any[]>([]);
-  const [staffList, setStaffList] = useState<any[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
-  const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
-  const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
-  const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string, sn: string } | null>(null);
 
-  const [tempAccessList, setTempAccessList] = useState<any[]>([]);
-  const [tempStaffId, setTempStaffId] = useState('');
-  const [tempDept, setTempDept] = useState('Maintenance');
-  const [tempStart, setTempStart] = useState('');
-  const [tempEnd, setTempEnd] = useState('');
+  // Form states
+  const [sn, setSn] = useState<string>('');
+  const [name, setName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [personalEmail, setPersonalEmail] = useState<string>('');
+  const [nid, setNid] = useState<string>('');
+  const [joinDate, setJoinDate] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
+  const [gender, setGender] = useState<string>('');
+  const [department, setDepartment] = useState<string>('Ground Operations');
+  const [position, setPosition] = useState<string>('');
+  const [isSMT, setIsSMT] = useState<boolean>(false);
+  const [isIncharge, setIsIncharge] = useState<boolean>(false);
+  const [balanceVisible, setBalanceVisible] = useState<boolean>(false);
+  const [notes, setNotes] = useState<string>('');
+  const [basicSalary, setBasicSalary] = useState<string>('');
+  const [dailyAllowance, setDailyAllowance] = useState<string>('');
+  const [holidayAllowanceRate, setHolidayAllowanceRate] = useState<string>('');
+  const [bankAccount, setBankAccount] = useState<string>('');
+  const [createUserAccount, setCreateUserAccount] = useState<boolean>(true);
 
-  const [inspectorStaffId, setInspectorStaffId] = useState('');
-  const [inspectorList, setInspectorList] = useState<any[]>([]);
-
-  const fetchSettings = useCallback(async () => {
+  const fetchStaff = useCallback(async () => {
     try {
-      const [rulesData, usersData, tempAccessData, staffData, inspectorsData] = await Promise.all([
-        apiFetch('/settings/ot_rules').catch(() => null), 
-        apiFetch('/users').catch(() => []), 
-        apiFetch('/temp-access').catch(() => []), 
-        apiFetch('/staff').catch(() => []), 
-        apiFetch('/lights-inspectors').catch(() => [])
-      ]);
-      
-      if (rulesData) setOtRules(rulesData);
-      setActiveUsers(Array.isArray(usersData) ? usersData : []);
-      setTempAccessList(Array.isArray(tempAccessData) ? tempAccessData : []);
-      setStaffList(Array.isArray(staffData) ? staffData : []); 
-      setInspectorList(Array.isArray(inspectorsData) ? inspectorsData : []);
-    } catch (err: any) { 
-      console.error("Failed to load settings", err); 
+      const data = await apiFetch('/staff');
+      setStaff(data);
+      const mine = data.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+      setMyStaff(mine || null);
+      setLoading(false);
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Error: ' + err.message);
+      setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    fetchSettings();
-    const interval = setInterval(fetchSettings, 15000);
+    fetchStaff();
+    const interval = setInterval(fetchStaff, 10000);
     return () => clearInterval(interval);
-  }, [fetchSettings]);
+  }, [fetchStaff]);
 
-  const saveRules = async (e: FormEvent) => { 
-    e.preventDefault(); 
-    setSavingRules(true); 
-    try { 
-      await apiFetch('/settings/ot_rules', { method: 'POST', body: JSON.stringify(otRules) }); 
-      toast.success('System rules updated!'); 
-    } catch (err: any) { 
-      toast.error('Error: ' + err.message); 
-    } 
-    setSavingRules(false); 
+  const resetForm = () => {
+    setSn(''); setName(''); setEmail(''); setPersonalEmail('');
+    setNid(''); setJoinDate(''); setPhone(''); setGender('');
+    setDepartment('Ground Operations'); setPosition('');
+    setIsSMT(false); setIsIncharge(false); setBalanceVisible(false); setNotes('');
+    setBasicSalary(''); setDailyAllowance('');
+    setHolidayAllowanceRate(''); setBankAccount('');
+    setCreateUserAccount(true);
+    setEditingId(null);
   };
 
-  const toggleDeductLeave = (l: string) => { 
-    setOtRules(prev => { 
-      const exists = prev.deductLeaves.includes(l); 
-      return { ...prev, deductLeaves: exists ? prev.deductLeaves.filter(x => x !== l) : [...prev.deductLeaves, l] }; 
-    }); 
-  };
-  
-  const handleAddTempAccess = async (e: FormEvent) => { 
-    e.preventDefault(); 
-    const staff = staffList.find(s => s.id === tempStaffId); 
-    if (!staff || !tempStart || !tempEnd) { toast.error("Fill all fields"); return; } 
-    try { 
-      await apiFetch('/temp-access', { method: 'POST', body: JSON.stringify({ email: staff.email, targetDept: tempDept, startDate: tempStart, endDate: tempEnd }) }); 
-      toast.success('Temporary access granted'); 
-      setTempStart(''); setTempEnd(''); fetchSettings(); 
-    } catch (err: any) { toast.error(err.message); } 
-  };
+  const handleSubmit = async (e: any) => {
+    e.preventDefault();
+    if (!name || !email) {
+      toast.error('Name and Email are required');
+      return;
+    }
+    
+    const payload: any = {
+      sn, name, email, personalEmail, nid, joinDate, phone, gender,
+      department, position, isSMT, isIncharge, balanceVisible,
+      basicSalary: Number(basicSalary) || 0,
+      dailyAllowance: Number(dailyAllowance) || 0,
+      holidayAllowanceRate: Number(holidayAllowanceRate) || 0,
+      bankAccount,
+    };
+    
+    if (canSeeSensitive) payload.notes = notes;
 
-  const handleAddInspector = async (e: FormEvent) => { 
-    e.preventDefault(); 
-    const staff = staffList.find(s => s.id === inspectorStaffId); 
-    if (!staff) { toast.error("Select a staff member"); return; } 
-    try { 
-      await apiFetch('/lights-inspectors', { method: 'POST', body: JSON.stringify({ staffId: staff.id, staffName: staff.name, staffSN: staff.sn }) }); 
-      toast.success('Inspector added'); 
-      setInspectorStaffId(''); fetchSettings(); 
-    } catch (err: any) { toast.error(err.message); } 
-  };
-
-  const togglePermission = async (staffId: string, field: string, currentVal: boolean) => {
     try {
-      const staffRec = staffList.find(s => s.id === staffId);
-      if (!staffRec) return;
-      const updated = { ...staffRec, [field]: !currentVal };
-      await apiFetch(`/staff/${staffId}`, { method: 'PUT', body: JSON.stringify(updated) });
-      toast.success(`Access updated for ${staffRec.name}`);
-      fetchSettings();
-    } catch (err: any) { toast.error(err.message); }
+      if (editingId) {
+        await apiFetch(`/staff/${editingId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+        toast.success('Staff member updated successfully!');
+      } else {
+        await apiFetch('/staff', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        toast.success('Staff added successfully!');
+      }
+
+      if (!editingId && createUserAccount) {
+        try {
+          const userRole = isSMT ? 'smt' : 'staff';
+          await apiFetch('/user-presets', {
+            method: 'POST',
+            body: JSON.stringify({ email, role: userRole, department, createdBy: profile?.email || '' })
+          });
+          toast.success(`Login account pre-registered as ${userRole.toUpperCase()}!`);
+        } catch (userErr: any) {
+          console.error("Failed to pre-register user", userErr);
+          toast.error('Staff saved, but failed to create user login. Use Users page to pre-register manually.');
+        }
+      }
+
+      fetchStaff();
+      resetForm();
+      setShowForm(false);
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    }
   };
 
-  // 🚨 THIS IS THE FIX: Look up the real name from the staffList
-  let allMergedUsers: any[] = [];
-  activeUsers.forEach(a => { 
-    if (!a.email) return; 
-    const emailLower = a.email.toLowerCase();
-    const snPart = emailLower.split('@')[0];
-    
-    // Find matching staff member to get the real name
-    const staffMatch = staffList.find(s => 
-      (s.email || '').toLowerCase() === emailLower || 
-      (s.sn || '').toLowerCase() === snPart ||
-      `sn-${(s.sn || '').toLowerCase()}` === snPart
-    );
-    
-    const realName = staffMatch?.name || a.name || (a.email || '').split('@')[0];
+  const handleEdit = (s: any) => {
+    setEditingId(s.id);
+    setSn(s.sn || '');
+    setName(s.name || '');
+    setEmail(s.email || '');
+    setPersonalEmail(s.personalEmail || '');
+    setNid(s.nid || '');
+    setJoinDate(s.joinDate || '');
+    setPhone(s.phone || '');
+    setGender(s.gender || '');
+    setDepartment(s.department || 'Ground Operations');
+    setPosition(s.position || '');
+    setIsSMT(!!s.isSMT);
+    setIsIncharge(!!s.isIncharge);
+    setBalanceVisible(!!s.balanceVisible);
+    setNotes(s.notes || '');
+    setBasicSalary(s.basicSalary ? String(s.basicSalary) : '');
+    setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : '');
+    setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : '');
+    setBankAccount(s.bankAccount || '');
+    setCreateUserAccount(false);
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    const idx = allMergedUsers.findIndex(u => (u.email || '').toLowerCase() === emailLower); 
-    if (idx >= 0) { 
-      allMergedUsers[idx] = { ...allMergedUsers[idx], name: realName, role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' }; 
-    } else { 
-      allMergedUsers.push({ email: a.email, name: realName, password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' }); 
-    } 
-  });
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await apiFetch(`/staff/${deleteTarget.id}`, { method: 'DELETE' });
+      toast.success('Staff member deleted.');
+      fetchStaff();
+      setDeleteTarget(null);
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    }
+  };
 
-  const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
+  const handleImportAll = async () => {
+    const missing = FND_ALL_STAFF.filter((m) => !staff.some((s) => s.sn === m.sn));
+    if (missing.length === 0) {
+      toast.info(`All ${FND_ALL_STAFF.length} staff members are already in the system.`);
+      return;
+    }
 
-  const smtStaff = staffList.filter(s => s.isSmt);
-  const nonSecurityStaff = staffList.filter(s => !s.isSmt && s.department !== 'Security');
-  const assignableSmtForRampsheet = smtStaff.filter(s => s.department !== 'Ground Operations');
-  const assignableSmtForOpsBoard = smtStaff.filter(s => s.department !== 'Ground Operations');
-  const assignableSmtForIncharge = smtStaff;
-  const assignableBirdCountStaff = [...smtStaff, ...nonSecurityStaff].filter(s => !(s.isSmt && s.department === 'Ground Operations')).sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    setImporting(true);
+    let added = 0;
+    try {
+      for (const member of missing) {
+        const payload = {
+          sn: member.sn, name: member.name, email: `${member.sn.toLowerCase()}@funadhooairport.com`,
+          department: member.department, position: member.position, isSMT: false, isIncharge: false, balanceVisible: false,
+        };
+        await apiFetch('/staff', { method: 'POST', body: JSON.stringify(payload) });
+        await apiFetch('/user-presets', { method: 'POST', body: JSON.stringify({ email: payload.email, role: 'staff', department: payload.department }) });
+        added++;
+      }
+      toast.success(`Imported ${added} staff member(s).`);
+      fetchStaff();
+    } catch (error: any) {
+      toast.error('Import failed: ' + error.message);
+    }
+    setImporting(false);
+  };
+
+  const showImportButton = staff.length === 0;
+
+  // PERMISSION LOGIC (FIXED VARIABLE NAMES)
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const hasSMTStatus = profile?.role === 'smt' || myStaff?.isSMT === true;
+  const isDeptIncharge = myStaff?.isIncharge === true;
+  const myDept = myStaff?.department;
+  const isSafetyIncharge = isDeptIncharge && myDept === 'Safety';
+
+  const canEditStaff = (targetDept: string) => {
+    if (isDev || isManager) return true;
+    if (!isDeptIncharge) return false; // Standard SMT can only view
+    if (targetDept === myDept) return true;
+    if (isSafetyIncharge && targetDept === 'Security') return true;
+    return false;
+  };
+
+  const canAddStaff = isDev || isManager;
+
+  const visibleStaff = staff
+    .filter((s) => {
+      if (selectedDept === 'all') return true;
+      if (selectedDept === 'SMT') return s.isSMT === true;
+      return s.department === selectedDept;
+    })
+    .sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
+
+  if (loading) return <div className="page-content"><p>Loading data from D1...</p></div>;
 
   return (
-    <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      <div className="staff-header" style={{ justifyContent: 'center', marginBottom: '20px' }}><h2 style={{ fontSize: '24px' }}>⚙️ Settings</h2></div>
+    <div className="page-content">
+      <datalist id="designation-options">
+        {DESIGNATIONS.map((d) => (<option key={d} value={d} />))}
+      </datalist>
 
-      <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px', margin: '0 auto 24px auto' }}>
-        <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General</button>
-        {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ Rules & Users</button>}
-        {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'incharges' ? 'active' : ''}`} onClick={() => setActiveTab('incharges')}>🔐 Access Control</button>}
-        {isDev && <button className={`ops-tab-btn ${activeTab === 'detailed' ? 'active' : ''}`} onClick={() => setActiveTab('detailed')}>📋 Access Details</button>}
-        {isDev && <button className={`ops-tab-btn ${activeTab === 'console' ? 'active' : ''}`} onClick={() => setActiveTab('console')}>💻 Console</button>}
-      </div>
-
-      {activeTab === 'general' && (
-        <>
-          <div className="dash-card mb-4 border-l-4 border-slate-500" style={{ textAlign: 'center', padding: '30px' }}>
-            <h3 style={{ marginBottom: '16px' }}>👤 Account Information</h3>
-            <p style={{ margin: '0 0 8px', color: '#475569', fontSize: '16px' }}>Logged in as: <strong style={{ color: '#0f172a', fontSize: '18px' }}>{profile?.name || user?.name || 'User'}</strong></p>
-            <p style={{ margin: '0 0 20px', color: '#475569', fontSize: '14px' }}>Role: <span style={{ textTransform: 'uppercase', fontWeight: 800, color: '#2563eb', background: '#eff6ff', padding: '4px 10px', borderRadius: '12px' }}>{profile?.role || 'Staff'}</span></p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button className="change-pw-btn" style={{ width: 'auto', padding: '10px 20px' }} onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
-              <button className="logout-btn" style={{ width: 'auto', padding: '10px 20px' }} onClick={logout}>Log Out</button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {activeTab === 'rules' && canManageAccess && (
-        <div className="dash-card border-l-4 border-blue-500">
-          <h3>⚙️ System Rules & Access Control</h3>
-          <form onSubmit={saveRules} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px', marginTop: '16px' }}>
-            <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>Overtime Thresholds</h4>
-            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>Regular Staff Weekly Hours</label>
-                <input type="number" value={otRules.regularHours} onChange={e => setOtRules({...otRules, regularHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px', color: '#1e293b' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '6px' }}>Admin Staff Weekly Hours</label>
-                <input type="number" value={otRules.adminHours} onChange={e => setOtRules({...otRules, adminHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px', color: '#1e293b' }} />
-              </div>
-            </div>
-            <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
-          </form>
-
-          {isDev && (
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
-              <h4 style={{ margin: 0, color: '#1e293b', marginBottom: '12px' }}>👥 Master User List ({activeUsers.length})</h4>
-              <input type="text" placeholder="🔍 Search..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '100%', maxWidth: '300px', marginBottom: '12px', fontSize: '13px' }} />
-              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                <table className="mini-table" style={{ margin: 0, width: '100%' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: '#f8fafc' }}>
-                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map(u => (
-                      <tr key={u.email}>
-                        <td><strong>{u.name}</strong></td>
-                        <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
-                        <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
-                        <td>
-                          <button className="edit-btn" onClick={() => setEditingUser(u)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button>
-                          <button className="delete-btn" onClick={() => setDeleteUserTarget({ id: u.id!, email: u.email })} style={{ padding: '4px 8px', fontSize: '11px' }}>Remove</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+      <div className="staff-header">
+        <h2>
+          Staff Management
+          <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
+            ({selectedDept === 'all' ? 'All Departments' : selectedDept})
+          </span>
+        </h2>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button className={showFinancials ? 'export-btn pdf-btn' : 'export-btn print-btn'} onClick={() => setShowFinancials(!showFinancials)}>
+            {showFinancials ? '🙈 Hide Financials' : '💰 Show Financials'}
+          </button>
+          {showImportButton && canAddStaff && (
+            <button className="export-btn jpg-btn" onClick={handleImportAll} disabled={importing}>
+              {importing ? 'Importing...' : '📥 Import All FND Staff'}
+            </button>
+          )}
+          {canAddStaff && (
+            <button className="add-staff-btn" onClick={() => (showForm ? resetForm() : setShowForm(true))}>
+              {showForm ? 'Cancel' : '+ Add Staff'}
+            </button>
           )}
         </div>
+      </div>
+
+      <div className="dept-tabs">
+        <button className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('all')}>All Departments</button>
+        {DEPARTMENTS.map((d) => (
+          <button key={d} className={selectedDept === d ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept(d)}>{d}</button>
+        ))}
+        <button className={selectedDept === 'SMT' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('SMT')} style={{ borderColor: '#f59e0b', color: selectedDept === 'SMT' ? '#fff' : '#92400e', backgroundColor: selectedDept === 'SMT' ? '#f59e0b' : '#fef3c7' }}>⭐ SMT Members</button>
+      </div>
+
+      {showForm && (
+        <form className="staff-form" onSubmit={handleSubmit}>
+          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>
+            {editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}
+          </div>
+
+          <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '4px' }}>👤 Personal Information</div>
+          <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
+          <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
+          <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <select value={gender} onChange={(e) => setGender(e.target.value)}>
+            <option value="">Gender — select...</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+          <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} title="Join Date" />
+          <input placeholder="NID (National ID)" value={nid} onChange={(e) => setNid(e.target.value)} />
+          <input type="email" placeholder="Work Email *" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <input type="email" placeholder="Personal Email" value={personalEmail} onChange={(e) => setPersonalEmail(e.target.value)} />
+
+          <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '8px' }}>💼 Job Information</div>
+          <input list="designation-options" placeholder="Designation (type or pick from list)" value={position} onChange={(e) => setPosition(e.target.value)} />
+          <select value={department} onChange={(e) => setDepartment(e.target.value)}>
+            {DEPARTMENTS.map((d) => (<option key={d} value={d}>{d}</option>))}
+          </select>
+
+          <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#16a34a', marginTop: '8px' }}>💰 Salary & Allowances</div>
+          <input type="number" placeholder="Basic Salary (MVR)" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} step="0.01" min="0" />
+          <input type="number" placeholder="Daily Allowance (MVR)" value={dailyAllowance} onChange={(e) => setDailyAllowance(e.target.value)} step="0.01" min="0" />
+          <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
+          <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+
+          {canSeeSensitive && (
+            <>
+              <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>📝 Internal Notes <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>(developer only)</span></div>
+              <textarea placeholder="Internal notes about this staff member (only visible to developer)" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ gridColumn: 'span 2', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontFamily: 'inherit', fontSize: '14px', resize: 'vertical' }} />
+            </>
+          )}
+
+          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e', fontSize: '14px' }}>
+            <input type="checkbox" checked={isSMT} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />⭐ Mark as SMT (Senior Management Team) member
+          </label>
+
+          {isSMT && (
+            <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#e0f2fe', border: '1px solid #0284c7', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#0369a1', fontSize: '14px' }}>
+              <input type="checkbox" checked={isIncharge} onChange={(e) => setIsIncharge(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />👑 Assign as Department Incharge (Can approve SMT leaves)
+            </label>
+          )}
+
+          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#eff6ff', border: '1px solid #2563eb', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#1e40af', fontSize: '14px' }}>
+            <input type="checkbox" checked={balanceVisible} onChange={(e) => setBalanceVisible(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />👁 Allow this staff member to view their own leave balance
+          </label>
+
+          {!editingId && (
+            <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#166534', fontSize: '14px' }}>
+              <input type="checkbox" checked={createUserAccount} onChange={(e) => setCreateUserAccount(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />🔑 Create User Login (Pre-register email for system access)
+            </label>
+          )}
+
+          <button type="submit">{editingId ? '💾 Save Changes' : 'Save Staff Member'}</button>
+        </form>
       )}
 
-      {/* Keep the rest of the tabs (incharges, detailed, console) as they were in your file */}
+      <div className="staff-list">
+        {visibleStaff.length === 0 ? (
+          <div className="empty-state">
+            <p>No staff members found for <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>SN</th><th>Name</th><th>Designation</th><th>Dept</th><th>Gender</th><th>Join Date</th>
+                  {showFinancials && (<><th>Basic Salary</th><th>Daily Allow.</th><th>Holiday Allow.</th></>)}
+                  {canSeeSensitive && <th>Notes</th>}
+                  <th>SMT</th><th>👑</th><th>👁</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleStaff.map((s) => {
+                  const hasEditPermission = canEditStaff(s.department);
+                  
+                  return (
+                    <tr key={s.id}>
+                      <td>{s.sn || '—'}</td>
+                      <td><strong>{s.name}</strong></td>
+                      <td>{s.position || '—'}</td>
+                      <td style={{ fontSize: '12px' }}>{s.department}</td>
+                      <td>{s.gender || '—'}</td>
+                      <td>{s.joinDate || '—'}</td>
+                      {showFinancials && (
+                        <>
+                          <td style={{ textAlign: 'right', fontWeight: 600 }}>{s.basicSalary ? `MVR ${Number(s.basicSalary).toLocaleString()}` : '—'}</td>
+                          <td style={{ textAlign: 'right' }}>{s.dailyAllowance ? `MVR ${Number(s.dailyAllowance).toLocaleString()}` : '—'}</td>
+                          <td style={{ textAlign: 'right' }}>{s.holidayAllowanceRate ? `MVR ${Number(s.holidayAllowanceRate).toLocaleString()}` : '—'}</td>
+                        </>
+                      )}
+                      {canSeeSensitive && (
+                        <td style={{ maxWidth: '200px', fontSize: '12px', color: s.notes ? '#1e293b' : '#94a3b8', whiteSpace: 'normal', wordBreak: 'break-word' }}>{s.notes || '—'}</td>
+                      )}
+                      <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.isSMT ? '⭐' : '—'}</td>
+                      <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.isIncharge ? '👑' : '—'}</td>
+                      <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.balanceVisible ? '👁' : '🚫'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        {hasEditPermission && (
+                          <>
+                            <button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>Edit</button>
+                            {canAddStaff && (
+                              <button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>Delete</button>
+                            )}
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-      {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
-
-      <ConfirmDialog 
-        isOpen={!!deleteUserTarget}
-        title="Remove User?"
-        message={`Are you sure you want to remove ${deleteUserTarget?.email} from the database?`}
-        confirmText="Remove"
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete Staff Member?"
+        message={`Are you sure you want to delete ${deleteTarget?.name} (${deleteTarget?.sn || 'No SN'})?\n\nThis will permanently remove them from the staff list.`}
+        confirmText="Delete"
         isDanger={true}
-        onConfirm={async () => {
-          if (!deleteUserTarget) return;
-          try {
-            await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' });
-            toast.success(`${deleteUserTarget.email} removed.`);
-            fetchSettings();
-          } catch (err: any) { toast.error('Error: ' + err.message); }
-          setDeleteUserTarget(null);
-        }}
-        onCancel={() => setDeleteUserTarget(null)}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
       />
-
-      {editingUser && (
-        <UserEditModal 
-          user={editingUser} 
-          onClose={() => setEditingUser(null)} 
-          onSaved={fetchSettings} 
-        />
-      )}
     </div>
   );
 }
 
-export default SettingsPage;
+export default StaffPage;
