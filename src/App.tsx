@@ -33,7 +33,7 @@ function App() {
         return;
       }
 
-      // 1. Log in first (Better Auth)
+      // 1. Log in first (Better Auth creates the cookie)
       await login(email, password);
 
       // 2. Fetch the TRUE department from the STAFF API
@@ -42,10 +42,7 @@ function App() {
         const emailLower = email.trim().toLowerCase();
         const staffData = await apiFetch('/staff');
         const match = staffData.find(
-          (s: any) =>
-            (s.email || '')
-              .trim()
-              .toLowerCase() === emailLower
+          (s: any) => (s.email || '').trim().toLowerCase() === emailLower
         );
         if (match) {
           staffDept = match.department || "";
@@ -54,18 +51,12 @@ function App() {
 
       // 3. Fetch role from USERS API
       const users = await apiFetch('/users');
-      
-      const data =
-        users.find(
-          (u: any) =>
-            (u.email || '').toLowerCase() ===
-            email.toLowerCase()
-        ) || {};
+      const data = users.find(
+        (u: any) => (u.email || '').toLowerCase() === email.toLowerCase()
+      ) || {};
 
       const role = data.role || 'staff';
-      // Fallback logic: use staffDept, then users doc, then Ground Ops
       const userDept = staffDept || data.department || 'Ground Operations';
-
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
       // 4. Perform checks
@@ -90,10 +81,12 @@ function App() {
         return;
       }
 
+      // 5. If all checks pass, reload the page to let AuthProvider load the new session
+      window.location.reload();
+
     } catch (error: any) {
       console.error(error);
       toast.error(String(error));
-    } finally {
       setChecking(false);
     }
   };

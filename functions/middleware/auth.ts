@@ -1,39 +1,32 @@
-// functions/middleware/auth.ts
-
-import { sql } from "drizzle-orm";
+import { auth } from "../../src/lib/auth.js";
 import { db } from "../../src/lib/db.js";
 import { users } from "../../src/db/schema.js";
+import { eq } from "drizzle-orm";
 
-export interface AuthUser {
-  email: string;
-  role: string;
-}
+export async function requireAuth(request: Request, _env: any) {
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
 
-export async function requireAuth(
-  request: Request,
-  env: any
-): Promise<AuthUser> {
-  const email = request.headers.get("x-user-email")?.trim();
-
-  if (!email) {
-    throw new Error("Unauthorized: missing x-user-email header");
+  if (!session?.user) {
+    const err: any = new Error("Unauthorized");
+    err.status = 401;
+    throw err;
   }
 
-  const [user] = await db
-    .select({
-      email: users.email,
-      role: users.role,
-    })
+  const email = session.user.email?.toLowerCase() || "";
+
+  const [userRecord] = await db
+    .select()
     .from(users)
-    .where(sql`LOWER(${users.email}) = LOWER(${email})`)
+    .where(eq(users.email, email))
     .limit(1);
 
-  if (!user) {
-    throw new Error(`Unauthorized: user not found (${email})`);
-  }
-
   return {
-    email: user.email!,
-    role: user.role || "",
+    id: session.user.id,
+    email: email,
+    name: session.user.name || "",
+    role: userRecord?.role || "user",
+    department: userRecord?.department || "",
   };
 }

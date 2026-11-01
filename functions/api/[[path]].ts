@@ -6,6 +6,7 @@ import {
   requireSMT
 } from "../middleware/authorization.js";
 
+import { auth } from "../../src/lib/auth.js";
 import { db } from "../../src/lib/db.js";
 import {
   users,
@@ -31,58 +32,6 @@ import {
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql } from "drizzle-orm";
 
-const FIREBASE_PROJECT_ID = "fnd-ops-management";
-const FIREBASE_API_KEY = "AIzaSyAOP4-blrEyJJpvXwLcrNCaKZAyKCB9NxU";
-const FIRESTORE_BASE =
-  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`;
-
-async function backupToFirebase(
-  collectionName: string,
-  docId: string,
-  data: Record<string, any>
-) {
-  const url = `${FIRESTORE_BASE}/${collectionName}/${docId}?key=${FIREBASE_API_KEY}`;
-
-  const fields = Object.keys(data).reduce(
-    (acc: Record<string, any>, key: string) => {
-      const val = data[key];
-      if (val === null || val === undefined) return acc;
-      if (typeof val === "string") acc[key] = { stringValue: val };
-      else if (typeof val === "number") acc[key] = { doubleValue: val };
-      else if (typeof val === "boolean") acc[key] = { booleanValue: val };
-      return acc;
-    },
-    {}
-  );
-
-  try {
-    const res = await fetch(url, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fields })
-    });
-    if (!res.ok) {
-      console.error(
-        `Firebase backup failed [${collectionName}/${docId}]:`,
-        res.status,
-        await res.text()
-      );
-    }
-  } catch (err) {
-    console.error("Firebase backup failed:", err);
-  }
-}
-
-async function deleteFromFirebase(collectionName: string, docId: string) {
-  try {
-    await fetch(`${FIRESTORE_BASE}/${collectionName}/${docId}?key=${FIREBASE_API_KEY}`, {
-      method: "DELETE"
-    });
-  } catch (err) {
-    console.error("Firebase delete failed:", err);
-  }
-}
-
 export const onRequest = async (context: any) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -105,6 +54,39 @@ export const onRequest = async (context: any) => {
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // ==========================================
+    // AUTO-SYNC BETTER AUTH USER → users TABLE
+    // ==========================================
+    if (pathname === "/api/users/me/sync" && method === "POST") {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session?.user) return json({ message: "Unauthorized" }, 401);
+
+      const email = session.user.email.toLowerCase();
+      const existing = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, email))
+        .limit(1);
+
+      if (existing.length === 0) {
+        const preset = await db
+          .select()
+          .from(userPresets)
+          .where(eq(userPresets.email, email))
+          .limit(1);
+
+        await db.insert(users).values({
+          id: session.user.id,
+          email,
+          role: preset[0]?.role || "user",
+          department: preset[0]?.department || "",
+          createdAt: new Date(),
+        });
+      }
+
+      return json({ success: true });
+    }
+
     // ==========================================
     // STAFF MODULE
     // ==========================================
@@ -152,13 +134,6 @@ export const onRequest = async (context: any) => {
         createdAt,
       });
 
-      context.waitUntil(
-        backupToFirebase("staff", id, {
-          ...body,
-          status: "active",
-          createdAt: createdAt.toISOString()
-        })
-      );
       return json({ success: true, id });
     }
 
@@ -216,12 +191,6 @@ export const onRequest = async (context: any) => {
         })
         .where(eq(staff.id, id!));
 
-      context.waitUntil(
-        backupToFirebase("staff", id!, {
-          ...body,
-          updatedAt: updatedAt.toISOString()
-        })
-      );
       return json({ success: true });
     }
 
@@ -233,7 +202,6 @@ export const onRequest = async (context: any) => {
 
       await db.delete(staff).where(eq(staff.id, id!));
 
-      context.waitUntil(deleteFromFirebase("staff", id!));
       return json({ success: true });
     }
 
@@ -260,13 +228,6 @@ export const onRequest = async (context: any) => {
         createdAt,
       });
 
-      context.waitUntil(
-        backupToFirebase("holidays", id, {
-          date: body.date,
-          name: body.name,
-          createdAt: createdAt.toISOString()
-        })
-      );
       return json({ success: true, id });
     }
 
@@ -277,7 +238,6 @@ export const onRequest = async (context: any) => {
       const id = pathname.split("/").pop();
       await db.delete(holidays).where(eq(holidays.id, id!));
 
-      context.waitUntil(deleteFromFirebase("holidays", id!));
       return json({ success: true });
     }
 
@@ -312,13 +272,6 @@ export const onRequest = async (context: any) => {
         requestedAt,
       });
 
-      context.waitUntil(
-        backupToFirebase("leave_requests", id, {
-          ...body,
-          status: finalStatus,
-          requestedAt: requestedAt.toISOString()
-        })
-      );
       return json({ success: true, id });
     }
 
@@ -390,13 +343,6 @@ export const onRequest = async (context: any) => {
         }
       }
 
-      context.waitUntil(
-        backupToFirebase("leave_requests", id, {
-          status: "approved",
-          reviewedBy: body.reviewedBy,
-          reviewedAt: reviewedAt.toISOString()
-        })
-      );
       return json({ success: true });
     }
 
@@ -422,14 +368,6 @@ export const onRequest = async (context: any) => {
         })
         .where(eq(leaveRequests.id, id!));
 
-      context.waitUntil(
-        backupToFirebase("leave_requests", id, {
-          status: "rejected",
-          reviewedBy: body.reviewedBy,
-          reviewedAt: reviewedAt.toISOString(),
-          reviewNotes: body.reviewNotes
-        })
-      );
       return json({ success: true });
     }
 
@@ -437,7 +375,6 @@ export const onRequest = async (context: any) => {
       const id = pathname.split("/").pop();
       await db.delete(leaveRequests).where(eq(leaveRequests.id, id!));
       await db.delete(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
-      context.waitUntil(deleteFromFirebase("leave_requests", id!));
       return json({ success: true });
     }
 
@@ -485,7 +422,6 @@ export const onRequest = async (context: any) => {
           status: body.status,
           createdAt,
         });
-        context.waitUntil(backupToFirebase("roster_entries", id, body));
       }
       return json({ success: true, id });
     }
@@ -506,11 +442,6 @@ export const onRequest = async (context: any) => {
 
       if (values.length > 0) {
         await db.insert(rosterEntries).values(values);
-        for (let i = 0; i < values.length; i++) {
-          context.waitUntil(
-            backupToFirebase("roster_entries", values[i].id, body.entries[i])
-          );
-        }
       }
 
       return json({ success: true });
@@ -552,12 +483,6 @@ export const onRequest = async (context: any) => {
         createdAt,
       });
 
-      context.waitUntil(
-        backupToFirebase("flights", id, {
-          ...body,
-          createdAt: createdAt.toISOString()
-        })
-      );
       return json({ success: true, id });
     }
 
@@ -591,12 +516,6 @@ export const onRequest = async (context: any) => {
         })
         .where(eq(flights.id, id!));
 
-      context.waitUntil(
-        backupToFirebase("flights", id!, {
-          ...body,
-          updatedAt: updatedAt.toISOString()
-        })
-      );
       return json({ success: true });
     }
 
@@ -606,7 +525,6 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/").pop();
       await db.delete(flights).where(eq(flights.id, id!));
-      context.waitUntil(deleteFromFirebase("flights", id!));
       return json({ success: true });
     }
 
@@ -725,10 +643,10 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
 
       const body: any = await request.json();
-      const { email, password, role, department, name, position } = body;
+      const { email, role, department, name, position } = body;
 
-      if (!email || !password) {
-        return json({ message: "Email and password are required" }, 400);
+      if (!email) {
+        return json({ message: "Email is required" }, 400);
       }
 
       const activeUser = await db
@@ -739,38 +657,6 @@ export const onRequest = async (context: any) => {
 
       if (activeUser.length > 0) {
         return json({ message: "This user is already active in the system." }, 400);
-      }
-
-      const firebaseRes = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, returnSecureToken: false })
-        }
-      );
-      const firebaseData: any = await firebaseRes.json();
-
-      if (firebaseData.error) {
-        if (firebaseData.error.message === "EMAIL_EXISTS") {
-          const id = crypto.randomUUID();
-          await db.insert(userPresets).values({
-            id,
-            email,
-            role,
-            department,
-            name: name || "",
-            position: position || "",
-            createdAt: new Date(),
-          }).onConflictDoNothing();
-          return json({ success: true, message: "Existing Firebase user added to pre-registrations." });
-        }
-
-        let msg = firebaseData.error.message;
-        if (msg === "WEAK_PASSWORD : Password should be at least 6 characters") {
-          msg = "Password must be at least 6 characters.";
-        }
-        return json({ message: msg }, 400);
       }
 
       const id = crypto.randomUUID();
@@ -784,7 +670,7 @@ export const onRequest = async (context: any) => {
         createdAt: new Date(),
       }).onConflictDoNothing();
 
-      return json({ success: true, id, message: "User created and pre-registered." });
+      return json({ success: true, id, message: "User pre-registered." });
     }
 
     // ==========================================
@@ -845,24 +731,32 @@ export const onRequest = async (context: any) => {
     // SAVE MONTHLY REPORT (Neon)
     // ==========================================
     if (pathname === "/api/reports/save-monthly" && method === "POST") {
-      const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
+      try {
+        const currentUser = await requireAuth(request, env);
+        requireManager(currentUser.role);
 
-      const body: any = await request.json();
-      const id = crypto.randomUUID();
-      const createdAt = new Date();
+        const body: any = await request.json();
 
-      await db.insert(savedReports).values({
-        id,
-        month: body.month,
-        dateFrom: body.dateFrom,
-        dateTo: body.dateTo,
-        type: body.type,
-        createdBy: body.createdBy || "System",
-        createdAt,
-      });
+        const id = crypto.randomUUID();
+        const createdAt = new Date();
 
-      return json({ success: true, id, message: "Report saved." });
+        await db.insert(savedReports).values({
+          id,
+          month: body.month,
+          dateFrom: body.dateFrom,
+          dateTo: body.dateTo,
+          type: body.type,
+          createdBy: body.createdBy || "System",
+          createdAt,
+        });
+
+        return json({ success: true, id });
+      } catch (err: any) {
+        return json({
+          error: err.message,
+          stack: err.stack
+        }, 500);
+      }
     }
 
     // ==========================================
@@ -894,13 +788,6 @@ export const onRequest = async (context: any) => {
         createdAt,
       });
 
-      context.waitUntil(
-        backupToFirebase("overtime_entries", id, {
-          ...body,
-          status: "pending",
-          createdAt: createdAt.toISOString()
-        })
-      );
       return json({ success: true, id });
     }
 
@@ -924,7 +811,6 @@ export const onRequest = async (context: any) => {
         })
         .where(eq(overtimeEntries.id, id!));
 
-      context.waitUntil(backupToFirebase("overtime_entries", id!, body));
       return json({ success: true });
     }
 
@@ -945,13 +831,6 @@ export const onRequest = async (context: any) => {
         .set({ status: "approved", reviewedBy: body.reviewedBy, reviewedAt })
         .where(eq(overtimeEntries.id, id!));
 
-      context.waitUntil(
-        backupToFirebase("overtime_entries", id, {
-          status: "approved",
-          reviewedBy: body.reviewedBy,
-          reviewedAt: reviewedAt.toISOString()
-        })
-      );
       return json({ success: true });
     }
 
@@ -972,20 +851,12 @@ export const onRequest = async (context: any) => {
         .set({ status: "rejected", reviewedBy: body.reviewedBy, reviewedAt })
         .where(eq(overtimeEntries.id, id!));
 
-      context.waitUntil(
-        backupToFirebase("overtime_entries", id, {
-          status: "rejected",
-          reviewedBy: body.reviewedBy,
-          reviewedAt: reviewedAt.toISOString()
-        })
-      );
       return json({ success: true });
     }
 
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
       const id = pathname.split("/").pop();
       await db.delete(overtimeEntries).where(eq(overtimeEntries.id, id!));
-      context.waitUntil(deleteFromFirebase("overtime_entries", id!));
       return json({ success: true });
     }
 
@@ -1022,7 +893,6 @@ export const onRequest = async (context: any) => {
         lights: JSON.stringify(body.lights),
       });
 
-      context.waitUntil(backupToFirebase("ops_runway_history", id, body));
       return json({ success: true, id });
     }
 
@@ -1057,7 +927,6 @@ export const onRequest = async (context: any) => {
         assignments: JSON.stringify(body.assignments),
       });
 
-      context.waitUntil(backupToFirebase("ops_ground_history", id, body));
       return json({ success: true, id });
     }
 
@@ -1085,7 +954,6 @@ export const onRequest = async (context: any) => {
         createdAt: new Date(),
       });
 
-      context.waitUntil(backupToFirebase("fod_collections", id, { ...body }));
       return json({ success: true, id });
     }
 
@@ -1095,7 +963,6 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/").pop();
       await db.delete(fodCollections).where(eq(fodCollections.id, id!));
-      context.waitUntil(deleteFromFirebase("fod_collections", id!));
       return json({ success: true });
     }
 
@@ -1129,7 +996,6 @@ export const onRequest = async (context: any) => {
         createdAt: new Date(),
       });
 
-      context.waitUntil(backupToFirebase("bird_counts", id, { ...body }));
       return json({ success: true, id });
     }
 
@@ -1139,7 +1005,6 @@ export const onRequest = async (context: any) => {
 
       const id = url.pathname.split("/").pop();
       await db.delete(birdCounts).where(eq(birdCounts.id, id!));
-      context.waitUntil(deleteFromFirebase("bird_counts", id!));
       return json({ success: true });
     }
 
@@ -1220,7 +1085,6 @@ export const onRequest = async (context: any) => {
           );
       }
 
-      context.waitUntil(backupToFirebase("ramp_inspections", id, { ...body }));
       return json({ success: true, id });
     }
 
@@ -1261,7 +1125,6 @@ export const onRequest = async (context: any) => {
           );
       }
 
-      context.waitUntil(backupToFirebase("ramp_inspections", id!, { ...body }));
       return json({ success: true });
     }
 
@@ -1271,7 +1134,6 @@ export const onRequest = async (context: any) => {
 
       const id = pathname.split("/").pop();
       await db.delete(rampInspections).where(eq(rampInspections.id, id!));
-      context.waitUntil(deleteFromFirebase("ramp_inspections", id!));
       return json({ success: true });
     }
 
@@ -1308,7 +1170,6 @@ export const onRequest = async (context: any) => {
           })
           .where(eq(timesheets.id, existing[0].id));
 
-        context.waitUntil(backupToFirebase("timesheets", existing[0].id, body));
         return json({ success: true, id: existing[0].id });
       }
 
@@ -1326,14 +1187,12 @@ export const onRequest = async (context: any) => {
         createdAt: new Date(),
       });
 
-      context.waitUntil(backupToFirebase("timesheets", id, body));
       return json({ success: true, id });
     }
 
     if (pathname.startsWith("/api/timesheets/") && method === "DELETE") {
       const id = pathname.split("/").pop();
       await db.delete(timesheets).where(eq(timesheets.id, id!));
-      context.waitUntil(deleteFromFirebase("timesheets", id!));
       return json({ success: true });
     }
 

@@ -9,6 +9,14 @@
       ]
     },
     {
+      "routePath": "/api/create-dev-user",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/create-dev-user.ts:onRequestPost"
+      ]
+    },
+    {
       "routePath": "/api/debug-session",
       "mountPath": "/api",
       "method": "GET",
@@ -46,6 +54,14 @@
       "method": "POST",
       "module": [
         "api/migrate-user.ts:onRequestPost"
+      ]
+    },
+    {
+      "routePath": "/api/reset-developer",
+      "mountPath": "/api",
+      "method": "POST",
+      "module": [
+        "api/reset-developer.ts:onRequestPost"
       ]
     },
     {

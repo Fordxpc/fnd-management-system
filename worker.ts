@@ -1,9 +1,16 @@
 import { onRequest } from "./functions/api/[[path]]";
+import { auth } from "./src/lib/auth";
 
 export default {
   async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
 
+    // 1. Route Better Auth requests to its handler
+    if (url.pathname.startsWith("/api/auth/")) {
+      return auth.handler(request);
+    }
+
+    // 2. Route all other API requests to your custom handler
     if (url.pathname.startsWith("/api/")) {
       const context = {
         request,
@@ -19,6 +26,7 @@ export default {
       return onRequest(context as any);
     }
 
+    // 3. Serve static assets
     return env.ASSETS.fetch(request);
   },
 };

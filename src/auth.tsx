@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { apiFetch } from './lib/api';
+import { apiFetch } from "./lib/api";
 import { authClient } from "./lib/auth-client";
 
 const AuthContext = createContext<any>({});
@@ -14,62 +14,38 @@ export function AuthProvider({ children }: any) {
   useEffect(() => {
     const init = async () => {
       try {
-        const session = await authClient.getSession();
+        const { data } = await authClient.getSession();
+        setUser(data?.user ?? null);
 
-        const currentUser = session?.data?.user;
-
-        setUser(currentUser || null);
-
-        if (!currentUser) {
+        if (!data?.user) {
           setProfile(null);
           setLoading(false);
           return;
         }
 
-        const email = (currentUser.email || "")
-          .trim()
-          .toLowerCase();
+        const email = data.user.email.toLowerCase();
+        
+        // Auto-sync the user to Neon (requires Step 6)
+        await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
 
         const users = await apiFetch("/users");
+        const existingUser = users.find((u: any) => (u.email || "").toLowerCase() === email);
 
-        const existingUser = users.find(
-          (u: any) =>
-            (u.email || "").toLowerCase() === email
-        );
-
-        setProfile(
-          existingUser || {
-            email: currentUser.email,
-            role: "staff",
-            department: "Ground Operations",
-          }
-        );
-
-        setLoading(false);
+        setProfile(existingUser || null);
       } catch (err) {
         console.error(err);
+      } finally {
         setLoading(false);
       }
     };
-
     init();
   }, []);
 
   const login = async (email: string, password: string) => {
-
-    const result = await authClient.signIn.email({
-      email,
-      password,
-    });
-
-
+    const result = await authClient.signIn.email({ email, password });
     if (result.error) {
-      console.error("BETTER AUTH ERROR:", result.error);
-      throw new Error(
-        JSON.stringify(result.error)
-      );
+      throw new Error(result.error.message || "Login failed");
     }
-
     return result;
   };
 
