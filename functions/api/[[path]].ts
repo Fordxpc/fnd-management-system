@@ -9,7 +9,7 @@ import {
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
   passwordResetRequests
 } from "../../src/db/schema.js";
-import { eq, and, inArray, sql, asc, or } from "drizzle-orm";
+import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -683,8 +683,19 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
     if (pathname === "/api/ramp/reports" && method === "GET") {
-      const results = await db.select().from(rampInspections).orderBy(asc(rampInspections.date));
-      return json(results.map((row: any) => ({ ...JSON.parse(row.payload || "{}"), id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg, createdAt: row.createdAt, updatedAt: row.updatedAt })));
+      // 🚨 Changed asc to desc to show latest first
+      const results = await db.select().from(rampInspections)
+        .orderBy(desc(rampInspections.date), desc(rampInspections.createdAt));
+        
+      return json(results.map((row: any) => ({
+        ...JSON.parse(row.payload || "{}"),
+        id: row.id,
+        date: row.date,
+        fltNo: row.fltNo,
+        acReg: row.acReg,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      })));
     }
     if (pathname === "/api/ramp/reports" && method === "POST") {
       const currentUser = await requireAuth(request, env);
