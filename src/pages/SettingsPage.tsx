@@ -16,6 +16,7 @@ function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed' | 'console'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
+  // 🔐 RBAC Logic
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSmt === true;
@@ -27,7 +28,7 @@ function SettingsPage() {
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
-  const [resetRequests, setResetRequests] = useState<any[]>([]); // <-- NEW
+  const [resetRequests, setResetRequests] = useState<any[]>([]);
 
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
@@ -155,11 +156,6 @@ function SettingsPage() {
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
 
   const smtStaff = staffList.filter(s => s.isSmt);
-  const nonSecurityStaff = staffList.filter(s => !s.isSmt && s.department !== 'Security');
-  const assignableSmtForRampsheet = smtStaff.filter(s => s.department !== 'Ground Operations');
-  const assignableSmtForOpsBoard = smtStaff.filter(s => s.department !== 'Ground Operations');
-  const assignableSmtForIncharge = smtStaff;
-  const assignableBirdCountStaff = [...smtStaff, ...nonSecurityStaff].filter(s => !(s.isSmt && s.department === 'Ground Operations')).sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -191,7 +187,6 @@ function SettingsPage() {
         <div className="dash-card border-l-4 border-blue-500">
           <h3>⚙️ System Rules & Access Control</h3>
           
-          {/* PASSWORD RESET REQUESTS 🚨 NEW */}
           {resetRequests.length > 0 && (
             <div style={{ background: '#fff', border: '1px solid #fca5a5', padding: '20px', borderRadius: '8px', marginBottom: '24px', marginTop: '16px' }}>
               <h4 style={{ margin: '0 0 12px', color: '#dc2626' }}>🚨 Pending Password Resets</h4>
@@ -224,7 +219,6 @@ function SettingsPage() {
             </div>
           )}
 
-          {/* Overtime Rules */}
           <form onSubmit={saveRules} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px', marginTop: '16px' }}>
             <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>Overtime Thresholds</h4>
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
@@ -240,7 +234,6 @@ function SettingsPage() {
             <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
           </form>
 
-          {/* Master User List */}
           {isDev && (
             <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
@@ -249,7 +242,7 @@ function SettingsPage() {
                 </div>
                 <input type="text" placeholder="🔍 Search name or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '250px', fontSize: '13px', color: '#1e293b' }} />
               </div>
-              <div style={{ maxHeight: '500px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+              <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
                 <table className="mini-table" style={{ margin: 0, width: '100%' }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
                     <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
@@ -282,11 +275,12 @@ function SettingsPage() {
         <div className="dash-card border-l-4 border-purple-500">
           <h3>🔐 Access Control</h3>
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
-            Manage department incharges, temporary cross-department access, RWY light inspectors, and granular feature permissions.
+            Manage department incharges, temporary cross-department access, and granular feature permissions.
           </p>
 
+          {/* ─── TEMPORARY CROSS-DEPARTMENT ACCESS ─── */}
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🔑 Temporary Cross-Department Access (Date-Based)</h4>
+            <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🔑 Temporary Cross-Department Access</h4>
             <form onSubmit={handleAddTempAccess} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
               <div>
                 <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Staff</label>
@@ -333,6 +327,7 @@ function SettingsPage() {
             ) : <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No temporary access grants.</p>}
           </div>
 
+          {/* ─── RWY LIGHTS INSPECTORS ─── */}
           <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
             <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🚨 RWY Lights Inspectors</h4>
             <form onSubmit={handleAddInspector} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
@@ -365,54 +360,84 @@ function SettingsPage() {
             ) : <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No inspectors assigned.</p>}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>✈️ Rampsheet Edit Access</h4>
-              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {assignableSmtForRampsheet.map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={s.rampsheetEditAccess === true} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                    {s.name}
-                  </label>
-                ))}
-              </div>
-            </div>
+          {/* ─── GRANULAR PERMISSIONS MATRIX ─── */}
+          <div style={{ marginTop: '30px' }}>
+            <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>Granular Permissions</h3>
 
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🦅 Birds Count Edit Access</h4>
-              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {assignableBirdCountStaff.map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={s.birdCountEditAccess === true} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                    {s.name} {s.isSmt && '⭐'}
-                  </label>
-                ))}
+            {/* 1. SMT Members Section */}
+            {smtStaff.length > 0 && (
+              <div style={{ marginBottom: '24px', background: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #fde68a' }}>
+                <h4 style={{ margin: '0 0 12px', color: '#b45309', fontSize: '15px' }}>⭐ SMT Members</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="mini-table" style={{ fontSize: '12px', whiteSpace: 'nowrap', margin: 0, background: 'white' }}>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Designation</th>
+                        <th style={{ textAlign: 'center' }}>Rampsheet</th>
+                        <th style={{ textAlign: 'center' }}>RWY Lights</th>
+                        <th style={{ textAlign: 'center' }}>Bird Count</th>
+                        <th style={{ textAlign: 'center' }}>Ops Board</th>
+                        <th style={{ textAlign: 'center' }}>Incharge</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {smtStaff.map(s => (
+                        <tr key={s.id}>
+                          <td><strong>{s.name}</strong></td>
+                          <td>{s.position || '—'}</td>
+                          <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.rampsheetEditAccess === true} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                          <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.rwyLightEditAccess === true} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                          <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.birdCountEditAccess === true} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                          <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.opsBoardAccess === true} onChange={() => togglePermission(s.id, 'opsBoardAccess', s.opsBoardAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                          <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
 
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>📋 Ops Board Access</h4>
-              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {assignableSmtForOpsBoard.map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={s.opsBoardAccess === true} onChange={() => togglePermission(s.id, 'opsBoardAccess', s.opsBoardAccess === true)} style={{ width: '16px', height: '16px' }} />
-                    {s.name}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>⭐ Assign SMT Incharge</h4>
-              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {assignableSmtForIncharge.map(s => (
-                  <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} />
-                    {s.name} <span style={{ color: '#64748b', fontSize: '11px' }}>({s.department})</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            {/* 2. Departmental Sections */}
+            {DEPARTMENTS.map(dept => {
+              const deptStaff = staffList.filter(s => s.department === dept && !s.isSmt);
+              if (deptStaff.length === 0) return null;
+              
+              return (
+                <div key={dept} style={{ marginBottom: '24px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '15px' }}>{dept}</h4>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="mini-table" style={{ fontSize: '12px', whiteSpace: 'nowrap', margin: 0, background: 'white' }}>
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Designation</th>
+                          <th style={{ textAlign: 'center' }}>Rampsheet</th>
+                          <th style={{ textAlign: 'center' }}>RWY Lights</th>
+                          <th style={{ textAlign: 'center' }}>Bird Count</th>
+                          <th style={{ textAlign: 'center' }}>Ops Board</th>
+                          <th style={{ textAlign: 'center' }}>Incharge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deptStaff.map(s => (
+                          <tr key={s.id}>
+                            <td><strong>{s.name}</strong></td>
+                            <td>{s.position || '—'}</td>
+                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.rampsheetEditAccess === true} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.rwyLightEditAccess === true} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.birdCountEditAccess === true} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.opsBoardAccess === true} onChange={() => togglePermission(s.id, 'opsBoardAccess', s.opsBoardAccess === true)} style={{ width: '16px', height: '16px' }} /></td>
+                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -422,9 +447,9 @@ function SettingsPage() {
           <h3>📋 Access Details Matrix</h3>
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Comprehensive overview of all staff permissions.</p>
           
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', maxHeight: '65vh' }}>
             <table className="mini-table" style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
                 <tr>
                   <th>Name</th>
                   <th>Dept</th>
