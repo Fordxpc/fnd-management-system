@@ -8,16 +8,21 @@ export default {
     // 1. Route Better Auth requests
     if (url.pathname.startsWith("/api/auth/")) {
       try {
-        // Moved inside try/catch so we can catch initialization errors
         const auth = getAuth(env); 
         return await auth.handler(request);
       } catch (err: any) {
-        console.error("BETTER AUTH CRASH:", err.cause || err); 
+        let causeStr = "Unknown";
+        try { 
+          causeStr = err.cause ? JSON.stringify(err.cause, Object.getOwnPropertyNames(err.cause)) : String(err); 
+        } catch (e) { 
+          causeStr = "Could not stringify cause"; 
+        }
+        
         return new Response(
           JSON.stringify({ 
             message: "Better Auth crashed", 
-            error: err.message, 
-            cause: err.cause?.message || String(err.cause)
+            error: err.message || "No message", 
+            cause: causeStr
           }), 
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
