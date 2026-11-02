@@ -216,3 +216,14 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
 	status: text().default('pending'),
 	requestedAt: timestamp("requested_at", { mode: 'string' }).defaultNow(),
 });
+
+export const rwyLights = pgTable("rwy_lights", {
+	id: text().primaryKey().notNull(),
+	date: text(),
+	time: text(),
+	weather: text(),
+	inspectorName: text("inspector_name"),
+	data: text(),
+	remarks: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+});
