@@ -1,9 +1,5 @@
 import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreignKey, serial, doublePrecision } from "drizzle-orm/pg-core"
 
-// ==========================================
-// BETTER AUTH TABLES
-// ==========================================
-
 export const user = pgTable("user", {
 	id: text().primaryKey().notNull(),
 	name: text().notNull(),
@@ -13,6 +9,9 @@ export const user = pgTable("user", {
 	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
 	role: text(),
+	banned: boolean("banned").default(false),
+	banReason: text("ban_reason"),
+	banExpires: timestamp("ban_expires", { mode: 'date' }),
 	department: text(),
 }, (table) => [
 	unique("user_email_unique").on(table.email),
