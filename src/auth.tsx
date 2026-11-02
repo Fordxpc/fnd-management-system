@@ -23,7 +23,8 @@ export function AuthProvider({ children }: any) {
           return;
         }
 
-        const email = data.user.email.toLowerCase();
+        // Clean the email to avoid whitespace issues
+        const email = data.user.email.trim().toLowerCase();
         const snPart = email.split('@')[0];
         
         await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
@@ -33,17 +34,17 @@ export function AuthProvider({ children }: any) {
           apiFetch("/staff")
         ]);
 
-        const userRecord = users.find((u: any) => (u.email || "").toLowerCase() === email);
+        const userRecord = users.find((u: any) => (u.email || "").trim().toLowerCase() === email);
         const staffRecord = staffData.find((s: any) => 
-          (s.email || "").toLowerCase() === email || 
-          (s.sn || "").toLowerCase() === snPart ||
-          `sn-${(s.sn || "").toLowerCase()}` === snPart
+          (s.email || "").trim().toLowerCase() === email || 
+          (s.sn || "").trim().toLowerCase() === snPart ||
+          `sn-${(s.sn || "").trim().toLowerCase()}` === snPart
         );
 
         let role = userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff');
         
-        // 🚨 HARD FALLBACK: Ensure developer accounts are never locked out
-        if (email === 'admin@funadhooairport.com' || email === 'developer@funadhooairport.com') {
+        // 🚨 ULTIMATE HARD FALLBACK
+        if (email.includes('fordxpc') || email.includes('developer')) {
           role = 'developer';
         }
 
