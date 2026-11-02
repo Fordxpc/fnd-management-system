@@ -13,10 +13,6 @@ export const user = pgTable("user", {
 	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
 	role: text(),
-	// 🚨 NEW ADMIN PLUGIN FIELDS
-	banned: boolean("banned").default(false),
-	banReason: text("ban_reason"),
-	banExpires: timestamp("ban_expires", { mode: 'date' }),
 	department: text(),
 }, (table) => [
 	unique("user_email_unique").on(table.email),
