@@ -33,6 +33,20 @@ export const onRequest = async (context: any) => {
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+        // 🚨 TEMPORARY DIAGNOSTIC ROUTE
+    if (pathname === "/api/test-db" && method === "GET") {
+      try {
+        const results = await db.select().from(user).limit(1);
+        return json({ success: true, data: results });
+      } catch (err: any) {
+        return json({ 
+          success: false, 
+          message: err.message, 
+          cause: err.cause?.message || String(err.cause),
+          stack: err.stack 
+        }, 500);
+      }
+    }
     // ==========================================
     // PASSWORD RESET REQUESTS (NEW)
     // ==========================================
