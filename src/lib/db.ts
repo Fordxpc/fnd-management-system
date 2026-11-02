@@ -5,10 +5,16 @@ import * as schema from "../db/schema";
 declare const process: any;
 
 export function getDb(env: any) {
-  const sql = neon(env?.DATABASE_URL || process.env.DATABASE_URL);
+  const dbUrl = env?.DATABASE_URL || process.env.DATABASE_URL;
+  
+  if (!dbUrl) {
+    console.error("DATABASE_URL IS MISSING IN DB.TS!");
+  }
+
+  const sql = neon(dbUrl || "postgresql://placeholder");
   return drizzle(sql, { schema });
 }
 
-// Fallback for local scripts that don't have env
+// Keep this for local scripts if needed
 const defaultSql = neon(process.env.DATABASE_URL || "postgresql://placeholder");
 export const db = drizzle(defaultSql, { schema });

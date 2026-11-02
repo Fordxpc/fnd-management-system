@@ -35,18 +35,15 @@ export const onRequest = async (context: any) => {
   try {
         // 🚨 TEMPORARY DIAGNOSTIC ROUTE
     if (pathname === "/api/test-db" && method === "GET") {
-      try {
-        const results = await db.select().from(user).limit(1);
-        return json({ success: true, data: results });
-      } catch (err: any) {
-        return json({ 
-          success: false, 
-          message: err.message, 
-          cause: err.cause?.message || String(err.cause),
-          stack: err.stack 
-        }, 500);
-      }
+      const dbUrl = env?.DATABASE_URL;
+      return json({
+        secretExists: !!dbUrl,
+        secretLength: dbUrl ? dbUrl.length : 0,
+        first10Chars: dbUrl ? dbUrl.substring(0, 10) : "NONE",
+        envKeys: Object.keys(env) // This shows all available variables to the worker
+      });
     }
+
     // ==========================================
     // PASSWORD RESET REQUESTS (NEW)
     // ==========================================
