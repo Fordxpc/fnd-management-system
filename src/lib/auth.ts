@@ -19,7 +19,7 @@ export function getAuth(env: any) {
     trustedOrigins: [APP_URL],
     database: drizzleAdapter(db, { provider: "pg", schema }),
     emailAndPassword: { enabled: true },
-    plugins: [admin()], // <-- ADD THIS PLUGIN
+    plugins: [admin()], // <-- TEMPORARILY DISABLED
     user: {
       additionalFields: {
         role: { type: "string", required: false },
