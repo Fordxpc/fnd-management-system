@@ -3,28 +3,11 @@ import { requireManager, requireSMT } from "../middleware/authorization.js";
 import { getAuth } from "../../src/lib/auth.js";
 import { getDb } from "../../src/lib/db.js";
 import {
-  users,
-  staff,
-  holidays,
-  flights,
-  leaveRequests,
-  overtimeEntries,
-  rosterEntries,
-  birdCounts,
-  rampInspections,
-  tempAccess,
-  settings,
-  userPresets,
-  timesheets,
-  opsGroundHistory,
-  opsRunwayHistory,
-  fodCollections,
-  lightsInspectors,
-  rwyLights,
-  savedReports,
-  rampLiveDraft
+  users, staff, holidays, flights, leaveRequests, overtimeEntries,
+  rosterEntries, birdCounts, rampInspections, tempAccess, settings,
+  userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
+  lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks
 } from "../../src/db/schema.js";
-// 🚨 Added 'or' and 'asc' to imports
 import { eq, and, inArray, sql, asc, or } from "drizzle-orm";
 
 export const onRequest = async (context: any) => {
@@ -60,25 +43,18 @@ export const onRequest = async (context: any) => {
       const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
 
       if (existing.length === 0) {
-        // 🚨 FIX: Look up the staff member to get their real role and department
         const snPart = email.split('@')[0];
         const staffRec = await db.select().from(staff).where(
-          or(
-            eq(staff.email, email),
-            eq(staff.sn, snPart),
-            eq(staff.sn, snPart.replace('sn-', ''))
-          )
+          or(eq(staff.email, email), eq(staff.sn, snPart), eq(staff.sn, snPart.replace('sn-', '')))
         ).limit(1);
 
         let role = "user";
         let dept = "";
 
         if (staffRec.length > 0) {
-          // If they are in the staff table, give them their actual role
           role = staffRec[0].isSmt ? "smt" : "staff";
           dept = staffRec[0].department || "";
         } else {
-          // Otherwise, fallback to presets
           const preset = await db.select().from(userPresets).where(eq(userPresets.email, email)).limit(1);
           if (preset.length > 0) {
             role = preset[0].role || "user";
@@ -87,11 +63,7 @@ export const onRequest = async (context: any) => {
         }
 
         await db.insert(users).values({
-          id: session.user.id,
-          email,
-          role,
-          department: dept,
-          createdAt: new Date().toISOString(),
+          id: session.user.id, email, role, department: dept, createdAt: new Date().toISOString(),
         });
       }
       return json({ success: true });
@@ -101,7 +73,6 @@ export const onRequest = async (context: any) => {
     // STAFF MODULE
     // ==========================================
     if (pathname === "/api/staff" && method === "GET") {
-      // 🚨 FIX: Sort by orderIndex
       const results = await db.select().from(staff).orderBy(asc(staff.orderIndex));
       return json(results);
     }
@@ -109,42 +80,23 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/staff" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
-
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
 
       await db.insert(staff).values({
-        id,
-        sn: body.sn || "",
-        name: body.name,
-        email: body.email,
-        personalEmail: body.personalEmail || "",
-        nid: body.nid || "",
-        joinDate: body.joinDate || "",
-        phone: body.phone || "",
-        gender: body.gender || "",
-        department: body.department,
-        position: body.position || "",
-        isSmt: !!body.isSMT,
-        isIncharge: !!body.isIncharge,
-        balanceVisible: !!body.balanceVisible,
-        tempDeptAccess: !!body.tempDeptAccess,
-        rampsheetEditAccess: !!body.rampsheetEditAccess,
-        rwyLightEditAccess: !!body.rwyLightEditAccess,
-        birdCountEditAccess: !!body.birdCountEditAccess,
-        opsBoardAccess: !!body.opsBoardAccess,
-        tempDeptTarget: body.tempDeptTarget || "",
-        notes: body.notes || "",
-        basicSalary: body.basicSalary || 0,
-        dailyAllowance: body.dailyAllowance || 0,
-        holidayAllowanceRate: body.holidayAllowanceRate || 0,
-        bankAccount: body.bankAccount || "",
-        status: "active",
-        orderIndex: 9999,
-        createdAt,
+        id, sn: body.sn || "", name: body.name, email: body.email,
+        personalEmail: body.personalEmail || "", nid: body.nid || "", joinDate: body.joinDate || "",
+        phone: body.phone || "", gender: body.gender || "", department: body.department,
+        position: body.position || "", isSmt: !!body.isSMT, isIncharge: !!body.isIncharge,
+        balanceVisible: !!body.balanceVisible, tempDeptAccess: !!body.tempDeptAccess,
+        rampsheetEditAccess: !!body.rampsheetEditAccess, rwyLightEditAccess: !!body.rwyLightEditAccess,
+        birdCountEditAccess: !!body.birdCountEditAccess, opsBoardAccess: !!body.opsBoardAccess,
+        tempDeptTarget: body.tempDeptTarget || "", notes: body.notes || "",
+        basicSalary: body.basicSalary || 0, dailyAllowance: body.dailyAllowance || 0,
+        holidayAllowanceRate: body.holidayAllowanceRate || 0, bankAccount: body.bankAccount || "",
+        status: "active", orderIndex: 9999, createdAt,
       });
-
       return json({ success: true, id });
     }
 
@@ -161,39 +113,26 @@ export const onRequest = async (context: any) => {
     if (pathname.startsWith("/api/staff/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
-
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       const updatedAt = new Date().toISOString();
 
-      await db.update(staff).set({
-        sn: body.sn || "",
-        name: body.name,
-        email: body.email,
-        personalEmail: body.personalEmail || "",
-        nid: body.nid || "",
-        joinDate: body.joinDate || "",
-        phone: body.phone || "",
-        gender: body.gender || "",
-        department: body.department,
-        position: body.position || "",
-        isSmt: !!body.isSMT,
-        isIncharge: !!body.isIncharge,
-        balanceVisible: !!body.balanceVisible,
-        tempDeptAccess: !!body.tempDeptAccess,
-        rampsheetEditAccess: !!body.rampsheetEditAccess,
-        rwyLightEditAccess: !!body.rwyLightEditAccess,
-        birdCountEditAccess: !!body.birdCountEditAccess,
-        opsBoardAccess: !!body.opsBoardAccess,
-        tempDeptTarget: body.tempDeptTarget || "",
-        notes: body.notes || "",
-        basicSalary: body.basicSalary || 0,
-        dailyAllowance: body.dailyAllowance || 0,
-        holidayAllowanceRate: body.holidayAllowanceRate || 0,
-        bankAccount: body.bankAccount || "",
-        updatedAt,
-      }).where(eq(staff.id, id!));
+      // Dynamic update to fix Access Control checkboxes
+      const updateData: any = { updatedAt };
+      const allowedFields = [
+        'sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender',
+        'department', 'position', 'isSmt', 'isIncharge', 'balanceVisible', 'tempDeptAccess',
+        'rampsheetEditAccess', 'rwyLightEditAccess', 'birdCountEditAccess', 'opsBoardAccess',
+        'tempDeptTarget', 'notes', 'basicSalary', 'dailyAllowance', 'holidayAllowanceRate', 'bankAccount'
+      ];
+      for (const field of allowedFields) {
+        if (body[field] !== undefined) {
+          const dbField = field === 'isSMT' ? 'isSmt' : field;
+          updateData[dbField] = body[field];
+        }
+      }
 
+      await db.update(staff).set(updateData).where(eq(staff.id, id!));
       return json({ success: true });
     }
 
@@ -206,23 +145,45 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // CHECKLIST MODULE 🚨 NEW
+    // ==========================================
+    if (pathname === "/api/checklist" && method === "GET") {
+      const results = await db.select().from(opsChecks).orderBy(asc(opsChecks.date));
+      return json(results);
+    }
+
+    if (pathname === "/api/checklist" && method === "POST") {
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(opsChecks).values({
+        id, date: body.date, time: body.time, category: body.category,
+        status: body.status, remarks: body.remarks, checkedBy: body.checkedBy,
+        createdAt: new Date().toISOString(),
+      });
+      return json({ success: true, id });
+    }
+
+    if (pathname.startsWith("/api/checklist/") && method === "DELETE") {
+      const id = pathname.split("/").pop();
+      await db.delete(opsChecks).where(eq(opsChecks.id, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
     // HOLIDAYS MODULE
     // ==========================================
     if (pathname === "/api/holidays" && method === "GET") {
       const results = await db.select().from(holidays).orderBy(asc(holidays.date));
       return json(results);
     }
-
     if (pathname === "/api/holidays" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-      await db.insert(holidays).values({ id, date: body.date, name: body.name, createdAt });
+      await db.insert(holidays).values({ id, date: body.date, name: body.name, createdAt: new Date().toISOString() });
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -238,47 +199,24 @@ export const onRequest = async (context: any) => {
       const results = await db.select().from(leaveRequests).orderBy(asc(leaveRequests.startDate));
       return json(results);
     }
-
     if (pathname === "/api/leave-requests" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const finalStatus = body.status || "pending";
-      const requestedAt = new Date().toISOString();
-
-      // 🚨 FIX: Check for duplicate leave requests
       const existingLeave = await db.select().from(leaveRequests).where(
-        and(
-          eq(leaveRequests.staffId, body.staffId),
-          eq(leaveRequests.startDate, body.startDate),
-          eq(leaveRequests.endDate, body.endDate)
-        )
+        and(eq(leaveRequests.staffId, body.staffId), eq(leaveRequests.startDate, body.startDate), eq(leaveRequests.endDate, body.endDate))
       ).limit(1);
 
-      if (existingLeave.length > 0) {
-        return json({ message: "A leave request for these exact dates already exists." }, 400);
-      }
+      if (existingLeave.length > 0) return json({ message: "A leave request for these exact dates already exists." }, 400);
 
       try {
         await db.insert(leaveRequests).values({
-          id,
-          staffId: body.staffId,
-          staffName: body.staffName,
-          staffDepartment: body.staffDepartment,
-          staffSn: body.staffSN || "",
-          staffGender: body.staffGender || "",
-          leaveType: body.leaveType,
-          startDate: body.startDate,
-          endDate: body.endDate,
-          days: body.days,
-          reason: body.reason || "",
-          status: finalStatus,
-          requestedBy: body.requestedBy || "",
-          requestedAt,
+          id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment,
+          staffSn: body.staffSN || "", staffGender: body.staffGender || "", leaveType: body.leaveType,
+          startDate: body.startDate, endDate: body.endDate, days: body.days, reason: body.reason || "",
+          status: body.status || "pending", requestedBy: body.requestedBy || "", requestedAt: new Date().toISOString(),
         });
         return json({ success: true, id });
-      } catch (err: any) {
-        return json({ message: "Failed to create leave request. It might already exist." }, 400);
-      }
+      } catch (err: any) { return json({ message: "Failed to create leave request." }, 400); }
     }
 
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/approve") && method === "PUT") {
@@ -288,14 +226,11 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const reviewedAt = new Date().toISOString();
 
-      const [reqData] = await db.update(leaveRequests).set({
-        status: "approved", reviewedBy: body.reviewedBy, reviewedAt,
-      }).where(eq(leaveRequests.id, id!)).returning();
+      const [reqData] = await db.update(leaveRequests).set({ status: "approved", reviewedBy: body.reviewedBy, reviewedAt }).where(eq(leaveRequests.id, id!)).returning();
 
       if (reqData) {
         const [staffRec] = await db.select().from(staff).where(eq(staff.name, reqData.staffName!)).limit(1);
         const actualStaffId = staffRec ? staffRec.id : reqData.staffId;
-
         if (!actualStaffId) return json({ message: "Staff ID not found" }, 400);
 
         const start = new Date(reqData.startDate + "T00:00:00");
@@ -314,9 +249,7 @@ export const onRequest = async (context: any) => {
         }
 
         if (dateStrings.length > 0) {
-          await db.delete(rosterEntries).where(
-            and(eq(rosterEntries.staffId, actualStaffId), inArray(rosterEntries.date, dateStrings))
-          );
+          await db.delete(rosterEntries).where(and(eq(rosterEntries.staffId, actualStaffId), inArray(rosterEntries.date, dateStrings)));
           await db.insert(rosterEntries).values(entriesToInsert);
         }
       }
@@ -328,12 +261,7 @@ export const onRequest = async (context: any) => {
       requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date().toISOString();
-
-      await db.update(leaveRequests).set({
-        status: "rejected", reviewedBy: body.reviewedBy, reviewedAt, reviewNotes: body.reviewNotes || "",
-      }).where(eq(leaveRequests.id, id!));
-
+      await db.update(leaveRequests).set({ status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString(), reviewNotes: body.reviewNotes || "" }).where(eq(leaveRequests.id, id!));
       return json({ success: true });
     }
 
@@ -348,40 +276,28 @@ export const onRequest = async (context: any) => {
     // ROSTER MODULE
     // ==========================================
     if (pathname === "/api/roster" && method === "GET") {
-      // 🚨 FIX: Sort roster by date and staff name
       const results = await db.select().from(rosterEntries).orderBy(asc(rosterEntries.date), asc(rosterEntries.staffName));
       return json(results);
     }
 
     if (pathname === "/api/roster" && method === "POST") {
       const body: any = await request.json();
+      const existing = await db.select().from(rosterEntries).where(and(eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date))).limit(1);
 
-      const existing = await db.select().from(rosterEntries).where(
-        and(eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date))
-      ).limit(1);
-
-      if (existing.length > 0 && existing[0].leaveRequestId) {
-        return json({ message: "Cannot overwrite approved leave." }, 400);
-      }
+      if (existing.length > 0 && existing[0].leaveRequestId) return json({ message: "Cannot overwrite approved leave." }, 400);
 
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
       const createdAt = new Date().toISOString();
 
-      if (existing.length > 0) {
-        await db.delete(rosterEntries).where(eq(rosterEntries.id, id));
-      }
+      if (existing.length > 0) await db.delete(rosterEntries).where(eq(rosterEntries.id, id));
 
       if (body.status !== "clear") {
         try {
           await db.insert(rosterEntries).values({
-            id, staffId: body.staffId, staffName: body.staffName,
-            staffDepartment: body.staffDepartment, date: body.date,
-            shiftTime: body.shiftTime || "", status: body.status, createdAt,
+            id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment,
+            date: body.date, shiftTime: body.shiftTime || "", status: body.status, createdAt,
           });
-        } catch (err: any) {
-          // 🚨 FIX: Catch duplicates gracefully
-          return json({ message: "This staff member already has a duty on this day." }, 400);
-        }
+        } catch (err: any) { return json({ message: "This staff member already has a duty on this day." }, 400); }
       }
       return json({ success: true, id });
     }
@@ -390,16 +306,11 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const values = body.entries.map((entry: any) => ({
         id: crypto.randomUUID(), staffId: entry.staffId, staffName: entry.staffName,
-        staffDepartment: entry.staffDepartment, date: entry.date,
-        shiftTime: entry.shiftTime || "", status: entry.status, createdAt: new Date().toISOString(),
+        staffDepartment: entry.staffDepartment, date: entry.date, shiftTime: entry.shiftTime || "",
+        status: entry.status, createdAt: new Date().toISOString(),
       }));
-
       if (values.length > 0) {
-        try {
-          await db.insert(rosterEntries).values(values);
-        } catch (err: any) {
-          return json({ message: "Some roster entries already exist or violate rules." }, 400);
-        }
+        try { await db.insert(rosterEntries).values(values); } catch (err: any) { return json({ message: "Some entries violate rules." }, 400); }
       }
       return json({ success: true });
     }
@@ -411,47 +322,34 @@ export const onRequest = async (context: any) => {
       const results = await db.select().from(flights).orderBy(asc(flights.date), asc(flights.departureTime));
       return json(results);
     }
-
     if (pathname === "/api/flights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-
       await db.insert(flights).values({
-        id, date: body.date, flightNo: body.flightNo, type: body.type,
-        aircraft: body.aircraft, bookedFigure: body.bookedFigure || "",
-        checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
-        departureTime: body.departureTime || "", route: body.route || "",
-        originDepTime: body.originDepTime || "", eta: body.eta || null,
-        ata: body.ata || null, atd: body.atd || null, status: body.status,
-        remarks: body.remarks || "", createdAt,
+        id, date: body.date, flightNo: body.flightNo, type: body.type, aircraft: body.aircraft,
+        bookedFigure: body.bookedFigure || "", checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
+        departureTime: body.departureTime || "", route: body.route || "", originDepTime: body.originDepTime || "",
+        eta: body.eta || null, ata: body.ata || null, atd: body.atd || null, status: body.status,
+        remarks: body.remarks || "", createdAt: new Date().toISOString(),
       });
-
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/flights/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      const updatedAt = new Date().toISOString();
-
       await db.update(flights).set({
-        date: body.date, flightNo: body.flightNo, type: body.type,
-        aircraft: body.aircraft, bookedFigure: body.bookedFigure || "",
-        checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
-        departureTime: body.departureTime || "", route: body.route || "",
-        originDepTime: body.originDepTime || "", eta: body.eta || null,
-        ata: body.ata || null, atd: body.atd || null, status: body.status,
-        remarks: body.remarks || "", updatedAt,
+        date: body.date, flightNo: body.flightNo, type: body.type, aircraft: body.aircraft,
+        bookedFigure: body.bookedFigure || "", checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
+        departureTime: body.departureTime || "", route: body.route || "", originDepTime: body.originDepTime || "",
+        eta: body.eta || null, ata: body.ata || null, atd: body.atd || null, status: body.status,
+        remarks: body.remarks || "", updatedAt: new Date().toISOString(),
       }).where(eq(flights.id, id!));
-
       return json({ success: true });
     }
-
     if (pathname.startsWith("/api/flights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -468,51 +366,35 @@ export const onRequest = async (context: any) => {
       if (rule) rule.deductLeaves = JSON.parse(rule.deductLeaves || "[]");
       return json(rule || { adminHours: 40, regularHours: 48, deductLeaves: [] });
     }
-
     if (pathname === "/api/settings/ot_rules" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
       const deductLeavesStr = JSON.stringify(body.deductLeaves);
-
       await db.insert(settings).values({
         id: "ot_rules", adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr,
-      }).onConflictDoUpdate({
-        target: settings.id,
-        set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr },
-      });
-
+      }).onConflictDoUpdate({ target: settings.id, set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr } });
       return json({ success: true });
     }
 
     // ==========================================
-    // USERS (Neon)
+    // USERS
     // ==========================================
     if (pathname === "/api/users" && method === "GET") {
       try {
         const results = await db.select().from(users).orderBy(asc(users.email));
         return json(results);
-      } catch (error: any) {
-        console.error("USERS ROUTE ERROR:", error);
-        return json({ message: error?.message, cause: error?.cause, stack: error?.stack }, 500);
-      }
+      } catch (error: any) { return json({ message: error?.message, cause: error?.cause }, 500); }
     }
 
     if (pathname === "/api/users/sync" && method === "POST") {
       try {
         const body: any = await request.json();
         await db.insert(users).values({
-          id: body.uid, email: body.email.toLowerCase(), role: body.role || "user",
-          department: body.department || "", createdAt: new Date().toISOString(),
-        }).onConflictDoUpdate({
-          target: users.email,
-          set: { role: body.role || "user", department: body.department || "" },
-        });
+          id: body.uid, email: body.email.toLowerCase(), role: body.role || "user", department: body.department || "", createdAt: new Date().toISOString(),
+        }).onConflictDoUpdate({ target: users.email, set: { role: body.role || "user", department: body.department || "" } });
         return json({ success: true });
-      } catch (error) {
-        console.error("SYNC ERROR:", error);
-        return json({ success: false, error: String(error) }, 500);
-      }
+      } catch (error) { return json({ success: false, error: String(error) }, 500); }
     }
 
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
@@ -520,7 +402,6 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
-
       await db.update(users).set({ role: body.role, department: body.department }).where(eq(users.id, id!));
       return json({ success: true });
     }
@@ -534,25 +415,32 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // CREATE AUTH USER (Neon)
+    // CREATE AUTH USER (FIXED to use Better Auth)
     // ==========================================
     if (url.pathname === "/api/users/create-auth" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
+      
       const body: any = await request.json();
-      const { email, role, department, name, position } = body;
+      const { email, role, department, name, position, password } = body;
 
-      if (!email) return json({ message: "Email is required" }, 400);
-
+      if (!email || !password) return json({ message: "Email and password are required" }, 400);
       const activeUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
-      if (activeUser.length > 0) return json({ message: "This user is already active in the system." }, 400);
+      if (activeUser.length > 0) return json({ message: "This user already exists." }, 400);
+
+      try {
+        // Actually create the Better Auth account
+        await getAuth(env).api.signUpEmail({ body: { email, password, name: name || "New User" } });
+      } catch (err: any) {
+        return json({ message: "Failed to create auth account: " + err.message }, 400);
+      }
 
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
-        id, email, role, department, name: name || "", position: position || "", createdAt: new Date().toISOString(),
+        id, email, role: role || "staff", department: department || "", name: name || "", position: position || "", createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
 
-      return json({ success: true, id, message: "User pre-registered." });
+      return json({ success: true, message: "User created and pre-registered." });
     }
 
     // ==========================================
@@ -562,34 +450,24 @@ export const onRequest = async (context: any) => {
       const results = await db.select().from(userPresets).orderBy(asc(userPresets.email));
       return json(results);
     }
-
     if (pathname === "/api/user-presets" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-
       await db.insert(userPresets).values({
-        id, email: body.email, role: body.role, department: body.department,
-        name: body.name || "", position: body.position || "", createdAt: new Date().toISOString(),
+        id, email: body.email, role: body.role, department: body.department, name: body.name || "", position: body.position || "", createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
-
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/user-presets/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-
-      await db.update(userPresets).set({
-        role: body.role, department: body.department, name: body.name || "", position: body.position || "",
-      }).where(eq(userPresets.id, id!));
-
+      await db.update(userPresets).set({ role: body.role, department: body.department, name: body.name || "", position: body.position || "" }).where(eq(userPresets.id, id!));
       return json({ success: true });
     }
-
     if (pathname.startsWith("/api/user-presets/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -599,7 +477,7 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // SAVE MONTHLY REPORT (Neon)
+    // SAVE MONTHLY REPORT
     // ==========================================
     if (pathname === "/api/reports/save-monthly" && method === "POST") {
       try {
@@ -607,16 +485,11 @@ export const onRequest = async (context: any) => {
         requireManager(currentUser.role);
         const body: any = await request.json();
         const id = crypto.randomUUID();
-        const createdAt = new Date().toISOString();
-
         await db.insert(savedReports).values({
-          id, month: body.month, dateFrom: body.dateFrom, dateTo: body.dateTo,
-          type: body.type, createdBy: body.createdBy || "System", createdAt,
+          id, month: body.month, dateFrom: body.dateFrom, dateTo: body.dateTo, type: body.type, createdBy: body.createdBy || "System", createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
-      } catch (err: any) {
-        return json({ error: err.message, stack: err.stack }, 500);
-      }
+      } catch (err: any) { return json({ error: err.message, stack: err.stack }, 500); }
     }
 
     // ==========================================
@@ -626,68 +499,46 @@ export const onRequest = async (context: any) => {
       const results = await db.select().from(overtimeEntries).orderBy(asc(overtimeEntries.date));
       return json(results);
     }
-
     if (pathname === "/api/overtime" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-
-      // 🚨 FIX: Check for duplicate overtime
       const existingOvertime = await db.select().from(overtimeEntries).where(
-        and(
-          eq(overtimeEntries.staffId, body.staffId),
-          eq(overtimeEntries.date, body.date),
-          eq(overtimeEntries.startTime, body.startTime)
-        )
+        and(eq(overtimeEntries.staffId, body.staffId), eq(overtimeEntries.date, body.date), eq(overtimeEntries.startTime, body.startTime))
       ).limit(1);
 
-      if (existingOvertime.length > 0) {
-        return json({ message: "This staff member already has overtime logged for this exact time." }, 400);
-      }
+      if (existingOvertime.length > 0) return json({ message: "Overtime logged for this exact time already." }, 400);
 
       try {
         await db.insert(overtimeEntries).values({
-          id, staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "",
-          staffDepartment: body.staffDepartment, date: body.date, startTime: body.startTime,
-          endTime: body.endTime, hours: body.hours, notes: body.notes || "",
-          status: "pending", createdBy: body.createdBy || "", createdAt,
+          id, staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "", staffDepartment: body.staffDepartment,
+          date: body.date, startTime: body.startTime, endTime: body.endTime, hours: body.hours, notes: body.notes || "",
+          status: "pending", createdBy: body.createdBy || "", createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
-      } catch (err: any) {
-        return json({ message: "Failed to create overtime. It might already exist." }, 400);
-      }
+      } catch (err: any) { return json({ message: "Failed to create overtime." }, 400); }
     }
-
     if (pathname.startsWith("/api/overtime/") && method === "PUT" && !pathname.endsWith("/approve") && !pathname.endsWith("/reject")) {
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      await db.update(overtimeEntries).set({
-        date: body.date, startTime: body.startTime, endTime: body.endTime,
-        hours: body.hours, notes: body.notes || "",
-      }).where(eq(overtimeEntries.id, id!));
+      await db.update(overtimeEntries).set({ date: body.date, startTime: body.startTime, endTime: body.endTime, hours: body.hours, notes: body.notes || "" }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
-
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/approve") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date().toISOString();
-      await db.update(overtimeEntries).set({ status: "approved", reviewedBy: body.reviewedBy, reviewedAt }).where(eq(overtimeEntries.id, id!));
+      await db.update(overtimeEntries).set({ status: "approved", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
-
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/reject") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      const reviewedAt = new Date().toISOString();
-      await db.update(overtimeEntries).set({ status: "rejected", reviewedBy: body.reviewedBy, reviewedAt }).where(eq(overtimeEntries.id, id!));
+      await db.update(overtimeEntries).set({ status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
-
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
       const id = pathname.split("/").pop();
       await db.delete(overtimeEntries).where(eq(overtimeEntries.id, id!));
@@ -695,73 +546,52 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // OPS RUNWAY (Neon)
+    // OPS RUNWAY
     // ==========================================
     if (pathname === "/api/ops/runway" && method === "GET") {
       const results = await db.select().from(opsRunwayHistory).orderBy(asc(opsRunwayHistory.date));
-      return json(results.map((row: any) => ({
-        ...row,
-        rwy19: typeof row.rwy19 === "string" ? JSON.parse(row.rwy19) : row.rwy19,
-        rwy01: typeof row.rwy01 === "string" ? JSON.parse(row.rwy01) : row.rwy01,
-        lights: typeof row.lights === "string" ? JSON.parse(row.lights) : row.lights,
-      })));
+      return json(results.map((row: any) => ({ ...row, rwy19: typeof row.rwy19 === "string" ? JSON.parse(row.rwy19) : row.rwy19, rwy01: typeof row.rwy01 === "string" ? JSON.parse(row.rwy01) : row.rwy01, lights: typeof row.lights === "string" ? JSON.parse(row.lights) : row.lights })));
     }
-
     if (pathname === "/api/ops/runway" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(opsRunwayHistory).values({
-        id, date: body.date, time: body.time, createdAt: new Date().toISOString(),
-        rwy19: JSON.stringify(body.rwy19), rwy01: JSON.stringify(body.rwy01), lights: JSON.stringify(body.lights),
-      });
+      await db.insert(opsRunwayHistory).values({ id, date: body.date, time: body.time, createdAt: new Date().toISOString(), rwy19: JSON.stringify(body.rwy19), rwy01: JSON.stringify(body.rwy01), lights: JSON.stringify(body.lights) });
       return json({ success: true, id });
     }
 
     // ==========================================
-    // OPS GROUND (Neon)
+    // OPS GROUND
     // ==========================================
     if (pathname === "/api/ops/ground" && method === "GET") {
       const results = await db.select().from(opsGroundHistory).orderBy(asc(opsGroundHistory.date));
-      return json(results.map((row: any) => ({
-        ...row,
-        assignments: typeof row.assignments === "string" ? JSON.parse(row.assignments) : row.assignments,
-      })));
+      return json(results.map((row: any) => ({ ...row, assignments: typeof row.assignments === "string" ? JSON.parse(row.assignments) : row.assignments })));
     }
-
     if (pathname === "/api/ops/ground" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(opsGroundHistory).values({
-        id, date: body.date, time: body.time, createdAt: new Date().toISOString(),
-        assignments: JSON.stringify(body.assignments),
-      });
+      await db.insert(opsGroundHistory).values({ id, date: body.date, time: body.time, createdAt: new Date().toISOString(), assignments: JSON.stringify(body.assignments) });
       return json({ success: true, id });
     }
 
     // ==========================================
-    // FOD (Neon)
+    // FOD
     // ==========================================
     if (pathname === "/api/fod" && method === "GET") {
       const results = await db.select().from(fodCollections).orderBy(asc(fodCollections.date));
       return json(results);
     }
-
     if (pathname === "/api/fod" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(fodCollections).values({
-        id, date: body.date, grams: body.grams, remarks: body.remarks,
-        loggedBy: body.loggedBy || "", createdAt: new Date().toISOString(),
-      });
+      await db.insert(fodCollections).values({ id, date: body.date, grams: body.grams, remarks: body.remarks, loggedBy: body.loggedBy || "", createdAt: new Date().toISOString() });
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/fod/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -771,28 +601,20 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // WILDLIFE (Neon)
+    // WILDLIFE
     // ==========================================
     if (pathname === "/api/wildlife" && method === "GET") {
       const results = await db.select().from(birdCounts).orderBy(asc(birdCounts.date));
-      return json(results.map((row: any) => ({
-        ...row,
-        rows: typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows,
-      })));
+      return json(results.map((row: any) => ({ ...row, rows: typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows })));
     }
-
     if (pathname === "/api/wildlife" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(birdCounts).values({
-        id, date: body.date, refNo: body.refNo, observer: body.observer || "",
-        rows: JSON.stringify(body.rows), createdAt: new Date().toISOString(),
-      });
+      await db.insert(birdCounts).values({ id, date: body.date, refNo: body.refNo, observer: body.observer || "", rows: JSON.stringify(body.rows), createdAt: new Date().toISOString() });
       return json({ success: true, id });
     }
-
     if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -802,79 +624,49 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // RAMP DRAFT (Neon)
+    // RAMP DRAFT & REPORTS
     // ==========================================
     if (pathname === "/api/ramp/draft" && method === "GET") {
       const rows = await db.select().from(rampLiveDraft).limit(1);
       return json(rows.length > 0 ? JSON.parse(rows[0].payload || "{}") : {});
     }
-
     if (pathname === "/api/ramp/draft" && method === "POST") {
       const body: any = await request.json();
       const payloadStr = JSON.stringify(body);
-      await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr })
-        .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr }).onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
       return json({ success: true });
     }
 
-    // ==========================================
-    // RAMP REPORTS (Neon)
-    // ==========================================
     if (pathname === "/api/ramp/reports" && method === "GET") {
       const results = await db.select().from(rampInspections).orderBy(asc(rampInspections.date));
-      return json(results.map((row: any) => ({
-        ...JSON.parse(row.payload || "{}"),
-        id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg,
-        createdAt: row.createdAt, updatedAt: row.updatedAt,
-      })));
+      return json(results.map((row: any) => ({ ...JSON.parse(row.payload || "{}"), id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg, createdAt: row.createdAt, updatedAt: row.updatedAt })));
     }
-
     if (pathname === "/api/ramp/reports" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-
-      await db.insert(rampInspections).values({
-        id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "",
-        payload: JSON.stringify(body), createdAt: new Date().toISOString(),
-      });
+      await db.insert(rampInspections).values({ id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", payload: JSON.stringify(body), createdAt: new Date().toISOString() });
 
       if (body.fltNo && body.date) {
         const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
-        await db.update(flights).set({
-          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
-        }).where(and(
-          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`,
-          eq(flights.date, body.date)
-        ));
+        await db.update(flights).set({ status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
       }
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/ramp/reports/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-
-      await db.update(rampInspections).set({
-        date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "",
-        payload: JSON.stringify(body), updatedAt: new Date().toISOString(),
-      }).where(eq(rampInspections.id, id!));
+      await db.update(rampInspections).set({ date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", payload: JSON.stringify(body), updatedAt: new Date().toISOString() }).where(eq(rampInspections.id, id!));
 
       if (body.fltNo && body.date) {
         const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
-        await db.update(flights).set({
-          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
-        }).where(and(
-          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`,
-          eq(flights.date, body.date)
-        ));
+        await db.update(flights).set({ status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
       }
       return json({ success: true });
     }
-
     if (pathname.startsWith("/api/ramp/reports/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -884,35 +676,24 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // TIMESHEET / ATTENDANCE MODULE
+    // TIMESHEET
     // ==========================================
     if (pathname === "/api/timesheets" && method === "GET") {
       const results = await db.select().from(timesheets).orderBy(asc(timesheets.date));
       return json(results);
     }
-
     if (pathname === "/api/timesheets" && method === "POST") {
       const body: any = await request.json();
-      const existing = await db.select().from(timesheets).where(
-        and(eq(timesheets.staffId, body.staffId), eq(timesheets.date, body.date))
-      ).limit(1);
+      const existing = await db.select().from(timesheets).where(and(eq(timesheets.staffId, body.staffId), eq(timesheets.date, body.date))).limit(1);
 
       if (existing.length > 0) {
-        await db.update(timesheets).set({
-          clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || "",
-        }).where(eq(timesheets.id, existing[0].id));
+        await db.update(timesheets).set({ clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || "" }).where(eq(timesheets.id, existing[0].id));
         return json({ success: true, id: existing[0].id });
       }
-
       const id = crypto.randomUUID();
-      await db.insert(timesheets).values({
-        id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment,
-        date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "",
-        status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString(),
-      });
+      await db.insert(timesheets).values({ id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment, date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "", status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString() });
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/timesheets/") && method === "DELETE") {
       const id = pathname.split("/").pop();
       await db.delete(timesheets).where(eq(timesheets.id, id!));
@@ -920,25 +701,20 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // TEMPORARY ACCESS MODULE
+    // TEMPORARY ACCESS & INSPECTORS & LIGHTS
     // ==========================================
     if (pathname === "/api/temp-access" && method === "GET") {
       const results = await db.select().from(tempAccess);
       return json(results);
     }
-
     if (url.pathname === "/api/temp-access" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-
-      await db.insert(tempAccess).values({
-        id, email: body.email, targetDept: body.targetDept, startDate: body.startDate, endDate: body.endDate,
-      });
+      await db.insert(tempAccess).values({ id, email: body.email, targetDept: body.targetDept, startDate: body.startDate, endDate: body.endDate });
       return json({ success: true, id });
     }
-
     if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -947,28 +723,17 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // LIGHTS INSPECTORS (Neon)
-    // ==========================================
     if (pathname === "/api/lights-inspectors" && method === "GET") {
       const results = await db.select().from(lightsInspectors);
       return json(results);
     }
-
     if (pathname === "/api/lights-inspectors" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
-
-      await db.insert(lightsInspectors).values({
-        staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "",
-      }).onConflictDoUpdate({
-        target: lightsInspectors.staffId,
-        set: { staffName: body.staffName, staffSn: body.staffSN || "" },
-      });
+      await db.insert(lightsInspectors).values({ staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "" }).onConflictDoUpdate({ target: lightsInspectors.staffId, set: { staffName: body.staffName, staffSn: body.staffSN || "" } });
       return json({ success: true });
     }
-
     if (pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
@@ -977,30 +742,18 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
-    // ==========================================
-    // RUNWAY LIGHTS (Neon)
-    // ==========================================
     if (pathname === "/api/lights" && method === "GET") {
       const results = await db.select().from(rwyLights).orderBy(asc(rwyLights.date));
-      return json(results.map((row: any) => ({
-        ...row, data: typeof row.data === "string" ? JSON.parse(row.data) : row.data,
-      })));
+      return json(results.map((row: any) => ({ ...row, data: typeof row.data === "string" ? JSON.parse(row.data) : row.data })));
     }
-
     if (pathname === "/api/lights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-
-      await db.insert(rwyLights).values({
-        id, date: body.date, time: body.time || "", weather: body.weather || "",
-        inspectorName: body.inspectorName, data: JSON.stringify(body.data),
-        remarks: body.remarks || "", createdAt: new Date().toISOString(),
-      });
+      await db.insert(rwyLights).values({ id, date: body.date, time: body.time || "", weather: body.weather || "", inspectorName: body.inspectorName, data: JSON.stringify(body.data), remarks: body.remarks || "", createdAt: new Date().toISOString() });
       return json({ success: true, id });
     }
-
     if (pathname.startsWith("/api/lights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);

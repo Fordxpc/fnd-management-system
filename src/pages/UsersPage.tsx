@@ -162,7 +162,7 @@ function UsersPage() {
       {presets.length > 0 && (
         <div className="collapsible-card" style={{ marginTop: '20px' }}>
           <div className="collapsible-header" style={{ cursor: 'default' }}><span><strong>⏳ Pre-registered Users</strong></span></div>
-          <div className="collapsible-body" style={{ overflowX: 'auto' }}>
+          <div className="collapsible-body" style={{ overflowX: 'auto', maxHeight: '40vh' }}>
             <table>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
               <tbody>
@@ -188,13 +188,14 @@ function UsersPage() {
 
       <div className="collapsible-card" style={{ marginTop: '20px' }}>
         <div className="collapsible-header" style={{ cursor: 'default' }}><span><strong>👥 Active Users</strong></span></div>
-        <div className="collapsible-body" style={{ overflowX: 'auto' }}>
+        {/* 🚨 FIXED TABLE HEIGHT */}
+        <div className="collapsible-body" style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
           {users.length === 0 ? (
             <div className="empty-state"><p>No active users yet.</p></div>
           ) : (
             <div style={{ minWidth: '600px' }}>
-              <table>
-                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
+              <table style={{ margin: 0 }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id}>

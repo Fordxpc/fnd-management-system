@@ -3,6 +3,7 @@ import { useAuth } from './auth';
 import { apiFetch } from './lib/api';
 import Dashboard from './Dashboard';
 import PublicLiveView from './pages/PublicLiveView';
+import ForgotPasswordModal from './pages/ForgotPasswordModal';
 import './App.css';
 import { toast } from 'sonner';
 
@@ -20,6 +21,7 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [department, setDepartment] = useState('');
   const [checking, setChecking] = useState(false);
+  const [showForgotPw, setShowForgotPw] = useState(false);
   const { user, login, logout } = useAuth();
 
   const handleLogin = async (e: any) => {
@@ -33,10 +35,8 @@ function App() {
         return;
       }
 
-      // 1. Log in first (Better Auth creates the cookie)
       await login(email, password);
 
-      // 2. Fetch the TRUE department from the STAFF API
       let staffDept = "";
       try {
         const emailLower = email.trim().toLowerCase();
@@ -49,7 +49,6 @@ function App() {
         }
       } catch (e) { console.warn(e); }
 
-      // 3. Fetch role from USERS API
       const users = await apiFetch('/users');
       const data = users.find(
         (u: any) => (u.email || '').toLowerCase() === email.toLowerCase()
@@ -59,7 +58,6 @@ function App() {
       const userDept = staffDept || data.department || 'Ground Operations';
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
-      // 4. Perform checks
       if (tab === 'management' && !isManagement) {
         await logout();
         toast.error('This is an Employee account. Please use the "EMPLOYEE" tab to sign in.');
@@ -81,7 +79,6 @@ function App() {
         return;
       }
 
-      // 5. If all checks pass, reload the page to let AuthProvider load the new session
       window.location.reload();
 
     } catch (error: any) {
@@ -161,10 +158,12 @@ function App() {
         </form>
 
         <div className="footer-links">
-          <a href="#">Forgot password?</a>
-          <p>No account? <a href="#">Register</a></p>
+          <a href="#" onClick={(e) => { e.preventDefault(); setShowForgotPw(true); }}>Forgot password?</a>
+          <p>No account? <a href="#" onClick={(e) => { e.preventDefault(); toast.error('Please contact the Administrator to create an account.'); }}>Register</a></p>
         </div>
       </div>
+      
+      {showForgotPw && <ForgotPasswordModal onClose={() => setShowForgotPw(false)} />}
     </div>
   );
 }
