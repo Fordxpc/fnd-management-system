@@ -16,7 +16,7 @@ function App() {
   }
 
   const [tab, setTab] = useState<'management' | 'employee'>('management');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('@funadhooairport.com');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [department, setDepartment] = useState('');

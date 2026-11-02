@@ -110,12 +110,8 @@ function SettingsPage() {
   };
 
   const isRoleAutoGranted = (s: any, field: string) => {
-    // Only auto-grant for Ops SMT on specific fields. 
-    // Devs/Managers don't need auto-tick because the backend already gives them access.
     if (s.department === 'Ground Operations' && (s.isSmt || s.role === 'smt')) {
-      if (['opsBoardViewAccess', 'opsBoardEditAccess', 'rampsheetViewAccess', 'rampsheetEditAccess'].includes(field)) {
-        return true;
-      }
+      if (['opsBoardViewAccess', 'opsBoardEditAccess', 'rampsheetViewAccess', 'rampsheetEditAccess'].includes(field)) return true;
     }
     return false;
   };
@@ -159,6 +155,7 @@ function SettingsPage() {
           <div className="dash-card mb-4 border-l-4 border-slate-500" style={{ textAlign: 'center', padding: '30px' }}>
             <h3 style={{ marginBottom: '16px' }}>👤 Account Information</h3>
             <p style={{ margin: '0 0 8px', color: '#475569', fontSize: '16px' }}>Logged in as: <strong style={{ color: '#0f172a', fontSize: '18px' }}>{profile?.name || user?.name || 'User'}</strong></p>
+            <p style={{ margin: '0 0 20px', color: '#475569', fontSize: '14px' }}>Email: <strong>{profile?.email || user?.email}</strong></p>
             <p style={{ margin: '0 0 20px', color: '#475569', fontSize: '14px' }}>Role: <span style={{ textTransform: 'uppercase', fontWeight: 800, color: '#2563eb', background: '#eff6ff', padding: '4px 10px', borderRadius: '12px' }}>{profile?.role || 'Staff'}</span></p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button className="change-pw-btn" style={{ width: 'auto', padding: '10px 20px' }} onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
@@ -401,7 +398,6 @@ function SettingsPage() {
                           <th style={{ textAlign: 'center' }}>RWY Lights (V / E)</th>
                           <th style={{ textAlign: 'center' }}>Bird Count (V / E)</th>
                           <th style={{ textAlign: 'center' }}>Ops Board (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Incharge</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -429,7 +425,6 @@ function SettingsPage() {
                               <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
                               <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'opsBoardEditAccess') || s.opsBoardEditAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardEditAccess')} onChange={() => togglePermission(s.id, 'opsBoardEditAccess', s.opsBoardEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                             </td>
-                            <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} /></td>
                           </tr>
                         ))}
                       </tbody>

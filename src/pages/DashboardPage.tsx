@@ -57,20 +57,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
   return (
     <div className="page-content" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       
-      {/* 1. GREETING BOARD */}
-      <div className="dash-card" style={{ 
-        marginBottom: '24px', 
-        background: 'linear-gradient(135deg, #1e293b, #0f172a)', 
-        color: 'white', 
-        padding: '30px', 
-        borderRadius: '16px', 
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        flexWrap: 'wrap', 
-        gap: '20px' 
-      }}>
+      <div className="dash-card" style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #1e293b, #0f172a)', color: 'white', padding: '30px', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
         <div>
           <h1 style={{ margin: '0 0 16px 0', fontSize: '28px', color: '#f8fafc', fontWeight: 600 }}>
             Welcome back, {profile?.name || 'User'}! 👋
@@ -79,7 +66,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>SN:</strong> {profile?.sn || 'N/A'}</div>
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Designation:</strong> {profile?.designation || profile?.position || 'N/A'}</div>
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Dept:</strong> {profile?.department || 'N/A'}</div>
-            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>{profile?.role || 'Staff'} • {profile?.email}</div>
+            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>{profile?.role || 'Staff'}</div>
           </div>
         </div>
         
@@ -90,16 +77,18 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
         </div>
       </div>
 
-      {/* 2. STATS GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+        
         <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #3b82f6' }}>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>Today's Duty</h3>
           <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.activeRoster}</p>
         </div>
+
         <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>On Leave Today</h3>
           <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.onLeaveToday}</p>
         </div>
+
         <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #ef4444' }}>
           <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>Awaiting Approvals</h3>
           <div style={{ display: 'flex', gap: '16px', alignItems: 'baseline' }}>
@@ -107,9 +96,9 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
             <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.pendingOvertime} <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'normal' }}>OT</span></p>
           </div>
         </div>
+
       </div>
 
-      {/* 3. UPCOMING FLIGHT */}
       <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>✈️ Upcoming Flight</h3>
         {stats.upcomingFlight ? (
@@ -129,7 +118,6 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
         )}
       </div>
 
-      {/* 4. WEATHER */}
       <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>🌤️ Weather</h3>
         <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -141,7 +129,6 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
         </div>
       </div>
 
-      {/* 5. ZONE MAP (Full Width) */}
       <div className="dash-card" style={{ padding: '20px', width: '100%' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>📍 Airside Zone Map</h3>
         <div style={{ background: '#e2e8f0', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', color: '#94a3b8', fontSize: '14px', width: '100%' }}>
