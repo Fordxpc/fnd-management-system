@@ -31,6 +31,7 @@ export const session = pgTable("session", {
 	ipAddress: text("ip_address"),
 	userAgent: text("user_agent"),
 	userId: text("user_id").notNull(),
+	impersonatedBy: text("impersonated_by"),
 }, (table) => [
 	index("session_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
 	foreignKey({ columns: [table.userId], foreignColumns: [user.id], name: "session_user_id_user_id_fk" }).onDelete("cascade"),
