@@ -110,9 +110,12 @@ function SettingsPage() {
   };
 
   const isRoleAutoGranted = (s: any, field: string) => {
-    if (isDev || isManager) return true; 
+    // Only auto-grant for Ops SMT on specific fields. 
+    // Devs/Managers don't need auto-tick because the backend already gives them access.
     if (s.department === 'Ground Operations' && (s.isSmt || s.role === 'smt')) {
-      if (['opsBoardViewAccess', 'opsBoardEditAccess', 'rampsheetViewAccess', 'rampsheetEditAccess'].includes(field)) return true;
+      if (['opsBoardViewAccess', 'opsBoardEditAccess', 'rampsheetViewAccess', 'rampsheetEditAccess'].includes(field)) {
+        return true;
+      }
     }
     return false;
   };
