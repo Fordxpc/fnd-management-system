@@ -566,8 +566,25 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
-      await db.update(users).set({ role: body.role, department: body.department }).where(eq(users.id, id!));
-      return json({ success: true });
+
+      try {
+        // 1. Update your legacy app table
+        await db
+          .update(users)
+          .set({ role: body.role, department: body.department })
+          .where(eq(users.id, id!));
+
+        // 2. Update the Better Auth user table to keep them in sync
+        await db
+          .update(user) 
+          .set({ role: body.role, department: body.department })
+          .where(eq(user.id, id!));
+
+        return json({ success: true });
+      } catch (err: any) {
+        console.error("Failed to update role:", err);
+        return json({ message: "Failed to update role: " + err.message }, 500);
+      }
     }
 
     if (url.pathname.startsWith("/api/users/") && method === "DELETE") {
