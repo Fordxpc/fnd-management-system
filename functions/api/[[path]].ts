@@ -33,17 +33,6 @@ export const onRequest = async (context: any) => {
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-        // 🚨 TEMPORARY DIAGNOSTIC ROUTE
-    if (pathname === "/api/test-db" && method === "GET") {
-      const dbUrl = env?.DATABASE_URL;
-      return json({
-        secretExists: !!dbUrl,
-        secretLength: dbUrl ? dbUrl.length : 0,
-        first10Chars: dbUrl ? dbUrl.substring(0, 10) : "NONE",
-        envKeys: Object.keys(env) // This shows all available variables to the worker
-      });
-    }
-
     // ==========================================
     // PASSWORD RESET REQUESTS (NEW)
     // ==========================================
