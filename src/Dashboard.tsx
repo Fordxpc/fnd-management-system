@@ -24,10 +24,10 @@ function Dashboard(_props: any) {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
-  const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const isAdmin = profile?.role === 'admin';
+  const isDev = (profile?.role || '').toLowerCase() === 'developer';
+  const isManager = ['manager', 'admin'].includes((profile?.role || '').toLowerCase());
+  const isSMT = (profile?.role || '').toLowerCase() === 'smt' || profile?.isSMT === true;
+  const isAdmin = (profile?.role || '').toLowerCase() === 'admin';
   const dept = (profile?.department || '').toLowerCase();
   
   const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && !isAdmin;
@@ -139,7 +139,7 @@ function Dashboard(_props: any) {
         <div className="top-tabs-container">
           <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
           
-          {/* Operations Tab Restored */}
+          {/* Operations Tab */}
           {(canSeeOpsBoard || canSeeRampCheck) && (
             <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>✈️ Operations</button>
           )}

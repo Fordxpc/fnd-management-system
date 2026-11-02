@@ -24,7 +24,7 @@ export function AuthProvider({ children }: any) {
         }
 
         const email = data.user.email.toLowerCase();
-        const snPart = email.split('@')[0]; // e.g. "sn-0729"
+        const snPart = email.split('@')[0];
         
         await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
 
@@ -34,18 +34,23 @@ export function AuthProvider({ children }: any) {
         ]);
 
         const userRecord = users.find((u: any) => (u.email || "").toLowerCase() === email);
+        const staffRecord = staffData.find((s: any) => 
+          (s.email || "").toLowerCase() === email || 
+          (s.sn || "").toLowerCase() === snPart ||
+          `sn-${(s.sn || "").toLowerCase()}` === snPart
+        );
+
+        let role = userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff');
         
-        // Match by email OR by SN
-        const staffRecord = staffData.find((s: any) => {
-          const sEmail = (s.email || "").toLowerCase();
-          const sSn = (s.sn || "").toLowerCase();
-          return sEmail === email || sSn === snPart || sSn === snPart.replace('sn-', '') || `sn-${sSn}` === snPart;
-        });
+        // 🚨 HARD FALLBACK: Ensure developer accounts are never locked out
+        if (email === 'admin@funadhooairport.com' || email === 'developer@funadhooairport.com') {
+          role = 'developer';
+        }
 
         setProfile({
           ...userRecord,
           ...staffRecord,
-          role: userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff'),
+          role: role.toLowerCase(), // Ensure role is always lowercase
           email: email,
           sn: staffRecord?.sn || snPart.replace('sn-', ''),
           designation: staffRecord?.position || '—'

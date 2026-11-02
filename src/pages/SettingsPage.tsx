@@ -16,8 +16,8 @@ function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed' | 'console'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   
-  const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const isDev = (profile?.role || '').toLowerCase() === 'developer';
+  const isManager = ['manager', 'admin'].includes((profile?.role || '').toLowerCase());
   const canManageAccess = isDev || isManager;
   
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
@@ -111,7 +111,7 @@ function SettingsPage() {
 
   const isRoleAutoGranted = (s: any, field: string) => {
     if (isDev || isManager) return true; 
-    if (s.department === 'Ground Operations' && (s.isSMT || s.role === 'smt')) {
+    if (s.department === 'Ground Operations' && (s.isSmt || s.role === 'smt')) {
       if (['opsBoardViewAccess', 'opsBoardEditAccess', 'rampsheetViewAccess', 'rampsheetEditAccess'].includes(field)) return true;
     }
     return false;
@@ -137,7 +137,7 @@ function SettingsPage() {
   });
 
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
-  const smtStaff = staffList.filter(s => s.isSMT);
+  const smtStaff = staffList.filter(s => s.isSmt);
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
