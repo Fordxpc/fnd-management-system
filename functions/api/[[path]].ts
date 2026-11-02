@@ -3,7 +3,7 @@ import { requireManager, requireSMT } from "../middleware/authorization.js";
 import { getAuth } from "../../src/lib/auth.js";
 import { getDb } from "../../src/lib/db.js";
 import {
-  users, staff, holidays, flights, leaveRequests, overtimeEntries,
+  user, session, account, users, staff, holidays, flights, leaveRequests, overtimeEntries,
   rosterEntries, birdCounts, rampInspections, tempAccess, settings,
   userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
@@ -36,30 +36,6 @@ export const onRequest = async (context: any) => {
     // ==========================================
     // PASSWORD RESET REQUESTS (NEW)
     // ==========================================
-    if (pathname === "/api/request-password-reset" && method === "POST") {
-      const body: any = await request.json();
-      if (!body.email) return json({ message: "Email required" }, 400);
-
-      const existingUser = await db.select().from(users).where(eq(users.email, body.email.toLowerCase())).limit(1);
-      if (existingUser.length === 0) {
-         return json({ message: "If an account exists, a request was sent." });
-      }
-
-      const id = crypto.randomUUID();
-      await db.insert(passwordResetRequests).values({
-        id, email: body.email.toLowerCase(), status: "pending", requestedAt: new Date().toISOString(),
-      });
-
-      return json({ success: true, message: "Request sent to Admin." });
-    }
-
-    if (pathname === "/api/password-reset-requests" && method === "GET") {
-      const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
-      const results = await db.select().from(passwordResetRequests).where(eq(passwordResetRequests.status, "pending"));
-      return json(results);
-    }
-
     if (pathname.startsWith("/api/password-reset-requests/") && pathname.endsWith("/approve") && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -68,16 +44,33 @@ export const onRequest = async (context: any) => {
       const [reqData] = await db.select().from(passwordResetRequests).where(eq(passwordResetRequests.id, id)).limit(1);
       if (!reqData) return json({ message: "Request not found" }, 404);
 
-      const targetUser = await db.select().from(users).where(eq(users.email, reqData.email)).limit(1);
+      const targetUser = await db.select().from(user).where(eq(user.email, reqData.email)).limit(1);
       if (targetUser.length === 0) return json({ message: "User not found" }, 404);
 
-      await getAuth(env).api.setUserPassword({
-        body: { userId: targetUser[0].id, newPassword: "Fnd@2026" },
-        headers: request.headers
-      });
+      const userId = targetUser[0].id;
 
-      await db.update(passwordResetRequests).set({ status: "resolved" }).where(eq(passwordResetRequests.id, id));
-      return json({ success: true, message: "Password reset to Fnd@2026" });
+      try {
+        // 1. Delete old auth records
+        await db.delete(session).where(eq(session.userId, userId));
+        await db.delete(account).where(eq(account.userId, userId));
+        await db.delete(user).where(eq(user.id, userId));
+
+        // 2. Re-create the user with the default password
+        await getAuth(env).api.signUpEmail({
+          body: { 
+            email: reqData.email, 
+            password: "Fnd@2026", 
+            name: targetUser[0].name || "Staff Member" 
+          }
+        });
+
+        // 3. Mark request as resolved
+        await db.update(passwordResetRequests).set({ status: "resolved" }).where(eq(passwordResetRequests.id, id));
+        
+        return json({ success: true, message: "Password reset to Fnd@2026" });
+      } catch (err: any) {
+        return json({ message: "Failed to reset password: " + err.message }, 500);
+      }
     }
 
     // ==========================================
