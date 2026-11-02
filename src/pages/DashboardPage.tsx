@@ -79,7 +79,7 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>SN:</strong> {profile?.sn || 'N/A'}</div>
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Designation:</strong> {profile?.designation || profile?.position || 'N/A'}</div>
             <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Dept:</strong> {profile?.department || 'N/A'}</div>
-            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>{profile?.role || 'Staff'}</div>
+            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>{profile?.role || 'Staff'} • {profile?.email}</div>
           </div>
         </div>
         

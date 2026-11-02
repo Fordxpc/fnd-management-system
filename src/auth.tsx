@@ -23,8 +23,7 @@ export function AuthProvider({ children }: any) {
           return;
         }
 
-        // Clean the email to avoid whitespace issues
-        const email = data.user.email.trim().toLowerCase();
+        const email = (data.user.email || "").trim().toLowerCase();
         const snPart = email.split('@')[0];
         
         await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
@@ -37,28 +36,30 @@ export function AuthProvider({ children }: any) {
         const userRecord = users.find((u: any) => (u.email || "").trim().toLowerCase() === email);
         const staffRecord = staffData.find((s: any) => 
           (s.email || "").trim().toLowerCase() === email || 
-          (s.sn || "").trim().toLowerCase() === snPart ||
-          `sn-${(s.sn || "").trim().toLowerCase()}` === snPart
+          (s.sn || "").trim().toLowerCase() === snPart
         );
 
-        let role = userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff');
+        // 🚨 FORCE DEVELOPER ROLE FOR KNOWN ADMIN EMAILS
+        let role = (userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff')).toLowerCase();
         
-        // 🚨 ULTIMATE HARD FALLBACK
-        if (email.includes('fordxpc') || email.includes('developer')) {
+        if (email === 'admin@funadhooairport.com' || email === 'developer@funadhooairport.com' || email.includes('admin') || email.includes('developer')) {
           role = 'developer';
         }
+
+        // 🚨 DEBUG LOG - Check this in the browser Console (F12)
+        console.log("AUTH PROFILE LOADED:", { email, userRecord, staffRecord, finalRole: role });
 
         setProfile({
           ...userRecord,
           ...staffRecord,
-          role: role.toLowerCase(), // Ensure role is always lowercase
+          role: role,
           email: email,
           sn: staffRecord?.sn || snPart.replace('sn-', ''),
           designation: staffRecord?.position || '—'
         });
 
       } catch (err) {
-        console.error(err);
+        console.error("Auth Init Error:", err);
       } finally {
         setLoading(false);
       }
