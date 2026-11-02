@@ -1,5 +1,9 @@
 import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreignKey, serial, doublePrecision } from "drizzle-orm/pg-core"
 
+// ==========================================
+// BETTER AUTH TABLES
+// ==========================================
+
 export const user = pgTable("user", {
 	id: text().primaryKey().notNull(),
 	name: text().notNull(),
@@ -9,6 +13,7 @@ export const user = pgTable("user", {
 	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
 	role: text(),
+	// 🚨 NEW ADMIN PLUGIN FIELDS
 	banned: boolean("banned").default(false),
 	banReason: text("ban_reason"),
 	banExpires: timestamp("ban_expires", { mode: 'date' }),
@@ -198,24 +203,13 @@ export const savedReports = pgTable("saved_reports", {
 	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
-// 🚨 NEW TABLE FOR CHECKLIST
 export const opsChecks = pgTable("ops_checks", {
 	id: text().primaryKey().notNull(), date: text(), time: text(), category: text(),
 	status: text(), remarks: text(), checkedBy: text("checked_by"),
 	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
-export const rwyLights = pgTable("rwy_lights", {
-	id: text().primaryKey().notNull(),
-	date: text(),
-	time: text(),
-	weather: text(),
-	inspectorName: text("inspector_name"),
-	data: text(),
-	remarks: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }),
-});
-
+// 🚨 NEW TABLE FOR PASSWORD RESETS
 export const passwordResetRequests = pgTable("password_reset_requests", {
 	id: text().primaryKey().notNull(),
 	email: text().notNull(),
