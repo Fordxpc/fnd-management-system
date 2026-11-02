@@ -13,8 +13,6 @@ interface RampReportsPageProps {
 function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const [reports, setReports] = useState<any[]>([]);
   const [viewingReport, setViewingReport] = useState<any>(null);
-  
-  // Custom Dialog State
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
@@ -33,12 +31,9 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const handleDelete = (id: string) => setDeleteTarget(id);
 
   const handlePrintModal = () => {
-    // Add BOTH classes to unpack the modal AND apply the compact print sizing
     document.body.classList.add('printing-modal');
     document.body.classList.add('printing-ramp');
-    
     window.print();
-    
     setTimeout(() => {
       document.body.classList.remove('printing-modal');
       document.body.classList.remove('printing-ramp');
@@ -64,15 +59,11 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="reset-pw-btn" onClick={() => setViewingReport(r)}>👁️ View / Print</button>
                     {onEdit && (
-                      <button
-                        className="edit-btn"
-                        onClick={() => {
+                      <button className="edit-btn" onClick={() => {
                           if (window.confirm(`Edit saved report ${r.fltNo || ''}? The current form will be replaced.`)) {
                             onEdit(r);
                           }
-                        }}
-                        style={{ marginLeft: '6px' }}
-                      >
+                        }} style={{ marginLeft: '6px' }}>
                         ✏️ Edit
                       </button>
                     )}

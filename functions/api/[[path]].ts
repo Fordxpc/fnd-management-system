@@ -7,7 +7,7 @@ import {
   rosterEntries, birdCounts, rampInspections, tempAccess, settings,
   userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
-  passwordResetRequests
+  passwordResetRequests, chatGroups, chatGroupMembers, chatMessages
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 
@@ -33,6 +33,87 @@ export const onRequest = async (context: any) => {
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    // ==========================================
+    // CHAT SYSTEM
+    // ==========================================
+    if (pathname === "/api/chat/groups" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      const allGroups = await db.select().from(chatGroups);
+      const myMemberships = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.staffId, currentUser.id));
+      const myGroupIds = myMemberships.map((m: any) => m.groupId);
+
+      const isDevOrManager = ['developer', 'manager', 'admin'].includes(currentUser.role);
+
+      const filteredGroups = allGroups.filter((g: any) => 
+        myGroupIds.includes(g.id) || 
+        (isDevOrManager && g.createdBy === currentUser.email) ||
+        (g.department === currentUser.department) ||
+        g.department === null
+      );
+
+      return json(filteredGroups);
+    }
+
+    if (pathname === "/api/chat/groups" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+
+      await db.insert(chatGroups).values({
+        id, name: body.name, description: body.description || "", department: body.department || null,
+        createdBy: currentUser.email, createdAt: new Date().toISOString(),
+      });
+
+      await db.insert(chatGroupMembers).values({
+        id: crypto.randomUUID(), groupId: id, staffId: currentUser.id, role: 'admin', createdAt: new Date().toISOString()
+      });
+
+      return json({ success: true, id });
+    }
+
+    if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "GET") {
+      const groupId = pathname.split("/")[4];
+      const messages = await db.select().from(chatMessages)
+        .where(eq(chatMessages.groupId, groupId))
+        .orderBy(asc(chatMessages.createdAt));
+      return json(messages);
+    }
+
+    if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      const groupId = pathname.split("/")[4];
+      const body: any = await request.json();
+      
+      await db.insert(chatMessages).values({
+        id: crypto.randomUUID(), groupId, senderId: currentUser.id, senderName: currentUser.name,
+        message: body.message || "", imageUrl: body.imageUrl || null, createdAt: new Date().toISOString(),
+      });
+      return json({ success: true });
+    }
+
+    if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/members") && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      const groupId = pathname.split("/")[4];
+      const body: any = await request.json();
+      
+      const isGroupAdmin = await db.select().from(chatGroupMembers).where(and(
+        eq(chatGroupMembers.groupId, groupId), 
+        eq(chatGroupMembers.staffId, currentUser.id), 
+        eq(chatGroupMembers.role, 'admin')
+      )).limit(1);
+
+      if (isGroupAdmin.length === 0 && !['developer', 'manager', 'admin'].includes(currentUser.role)) {
+        return json({ message: "Unauthorized to add members" }, 403);
+      }
+
+      await db.insert(chatGroupMembers).values({
+        id: crypto.randomUUID(), groupId, staffId: body.staffId, role: 'member', createdAt: new Date().toISOString()
+      }).onConflictDoNothing();
+
+      return json({ success: true });
+    }
+
     // ==========================================
     // PASSWORD RESET REQUESTS
     // ==========================================
@@ -74,12 +155,10 @@ export const onRequest = async (context: any) => {
       const userId = targetUser[0].id;
 
       try {
-        // Delete old auth records (bypassing the need for the admin plugin)
         await db.delete(session).where(eq(session.userId, userId));
         await db.delete(account).where(eq(account.userId, userId));
         await db.delete(user).where(eq(user.id, userId));
 
-        // Re-create the user with the default password
         await getAuth(env).api.signUpEmail({
           body: { email: reqData.email, password: "Fnd@2026", name: targetUser[0].name || "Staff Member" }
         });
@@ -140,17 +219,41 @@ export const onRequest = async (context: any) => {
       const createdAt = new Date().toISOString();
 
       await db.insert(staff).values({
-        id, sn: body.sn || "", name: body.name, email: body.email,
-        personalEmail: body.personalEmail || "", nid: body.nid || "", joinDate: body.joinDate || "",
-        phone: body.phone || "", gender: body.gender || "", department: body.department,
-        position: body.position || "", isSmt: !!body.isSMT, isIncharge: !!body.isIncharge,
-        balanceVisible: !!body.balanceVisible, tempDeptAccess: !!body.tempDeptAccess,
-        rampsheetEditAccess: !!body.rampsheetEditAccess, rwyLightEditAccess: !!body.rwyLightEditAccess,
-        birdCountEditAccess: !!body.birdCountEditAccess, opsBoardAccess: !!body.opsBoardAccess,
-        tempDeptTarget: body.tempDeptTarget || "", notes: body.notes || "",
-        basicSalary: body.basicSalary || 0, dailyAllowance: body.dailyAllowance || 0,
-        holidayAllowanceRate: body.holidayAllowanceRate || 0, bankAccount: body.bankAccount || "",
-        status: "active", orderIndex: 9999, createdAt,
+        id, 
+        sn: body.sn || "", 
+        name: body.name, 
+        email: body.email,
+        personalEmail: body.personalEmail || "", 
+        nid: body.nid || "", 
+        joinDate: body.joinDate || "",
+        phone: body.phone || "", 
+        gender: body.gender || "", 
+        department: body.department,
+        position: body.position || "", 
+        isSmt: !!body.isSMT, 
+        isIncharge: !!body.isIncharge,
+        balanceVisible: !!body.balanceVisible, 
+        tempDeptAccess: !!body.tempDeptAccess,
+        
+        // View/Edit Permissions
+        rampsheetViewAccess: !!body.rampsheetViewAccess,
+        rampsheetEditAccess: !!body.rampsheetEditAccess,
+        rwyLightViewAccess: !!body.rwyLightViewAccess,
+        rwyLightEditAccess: !!body.rwyLightEditAccess,
+        birdCountViewAccess: !!body.birdCountViewAccess,
+        birdCountEditAccess: !!body.birdCountEditAccess,
+        opsBoardViewAccess: !!body.opsBoardViewAccess,
+        opsBoardEditAccess: !!body.opsBoardEditAccess,
+        
+        tempDeptTarget: body.tempDeptTarget || "", 
+        notes: body.notes || "",
+        basicSalary: body.basicSalary || 0, 
+        dailyAllowance: body.dailyAllowance || 0,
+        holidayAllowanceRate: body.holidayAllowanceRate || 0, 
+        bankAccount: body.bankAccount || "",
+        status: "active", 
+        orderIndex: 9999, 
+        createdAt,
       });
       return json({ success: true, id });
     }
@@ -169,7 +272,7 @@ export const onRequest = async (context: any) => {
       const updatedAt = new Date().toISOString();
 
       const updateData: any = { updatedAt };
-      const allowedFields = ['sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender', 'department', 'position', 'isSmt', 'isIncharge', 'balanceVisible', 'tempDeptAccess', 'rampsheetEditAccess', 'rwyLightEditAccess', 'birdCountEditAccess', 'opsBoardAccess', 'tempDeptTarget', 'notes', 'basicSalary', 'dailyAllowance', 'holidayAllowanceRate', 'bankAccount'];
+      const allowedFields = ['sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender', 'department', 'position', 'isSmt', 'isIncharge', 'balanceVisible', 'tempDeptAccess', 'rampsheetViewAccess', 'rampsheetEditAccess', 'rwyLightViewAccess', 'rwyLightEditAccess', 'birdCountViewAccess', 'birdCountEditAccess', 'opsBoardViewAccess', 'opsBoardEditAccess', 'tempDeptTarget', 'notes', 'basicSalary', 'dailyAllowance', 'holidayAllowanceRate', 'bankAccount'];
       
       for (const field of allowedFields) {
         if (body[field] !== undefined) {
@@ -198,6 +301,7 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
     if (pathname === "/api/checklist" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(opsChecks).values({
@@ -207,6 +311,7 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
     if (pathname.startsWith("/api/checklist/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
       const id = pathname.split("/").pop();
       await db.delete(opsChecks).where(eq(opsChecks.id, id!));
       return json({ success: true });
@@ -245,7 +350,11 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/leave-requests" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const existingLeave = await db.select().from(leaveRequests).where(and(eq(leaveRequests.staffId, body.staffId), eq(leaveRequests.startDate, body.startDate), eq(leaveRequests.endDate, body.endDate))).limit(1);
+      const existingLeave = await db.select().from(leaveRequests).where(and(
+        eq(leaveRequests.staffId, body.staffId), 
+        eq(leaveRequests.startDate, body.startDate), 
+        eq(leaveRequests.endDate, body.endDate)
+      )).limit(1);
 
       if (existingLeave.length > 0) return json({ message: "A leave request for these exact dates already exists." }, 400);
 
@@ -267,7 +376,9 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const reviewedAt = new Date().toISOString();
 
-      const [reqData] = await db.update(leaveRequests).set({ status: "approved", reviewedBy: body.reviewedBy, reviewedAt }).where(eq(leaveRequests.id, id!)).returning();
+      const [reqData] = await db.update(leaveRequests).set({ 
+        status: "approved", reviewedBy: body.reviewedBy, reviewedAt 
+      }).where(eq(leaveRequests.id, id!)).returning();
 
       if (reqData) {
         const [staffRec] = await db.select().from(staff).where(eq(staff.name, reqData.staffName!)).limit(1);
@@ -302,11 +413,15 @@ export const onRequest = async (context: any) => {
       requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      await db.update(leaveRequests).set({ status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString(), reviewNotes: body.reviewNotes || "" }).where(eq(leaveRequests.id, id!));
+      await db.update(leaveRequests).set({ 
+        status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString(), 
+        reviewNotes: body.reviewNotes || "" 
+      }).where(eq(leaveRequests.id, id!));
       return json({ success: true });
     }
 
     if (pathname.startsWith("/api/leave-requests/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
       const id = pathname.split("/").pop();
       await db.delete(leaveRequests).where(eq(leaveRequests.id, id!));
       await db.delete(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
@@ -320,9 +435,13 @@ export const onRequest = async (context: any) => {
       const results = await db.select().from(rosterEntries).orderBy(asc(rosterEntries.date), asc(rosterEntries.staffName));
       return json(results);
     }
+
     if (pathname === "/api/roster" && method === "POST") {
       const body: any = await request.json();
-      const existing = await db.select().from(rosterEntries).where(and(eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date))).limit(1);
+      const existing = await db.select().from(rosterEntries).where(and(
+        eq(rosterEntries.staffId, body.staffId), 
+        eq(rosterEntries.date, body.date)
+      )).limit(1);
 
       if (existing.length > 0 && existing[0].leaveRequestId) return json({ message: "Cannot overwrite approved leave." }, 400);
 
@@ -341,6 +460,7 @@ export const onRequest = async (context: any) => {
       }
       return json({ success: true, id });
     }
+
     if (pathname === "/api/roster/bulk" && method === "POST") {
       const body: any = await request.json();
       const values = body.entries.map((entry: any) => ({
@@ -349,7 +469,8 @@ export const onRequest = async (context: any) => {
         status: entry.status, createdAt: new Date().toISOString(),
       }));
       if (values.length > 0) {
-        try { await db.insert(rosterEntries).values(values); } catch (err: any) { return json({ message: "Some entries violate rules." }, 400); }
+        try { await db.insert(rosterEntries).values(values); } 
+        catch (err: any) { return json({ message: "Some entries violate rules." }, 400); }
       }
       return json({ success: true });
     }
@@ -363,7 +484,6 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/flights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(flights).values({
@@ -377,7 +497,6 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/flights/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       await db.update(flights).set({
@@ -391,7 +510,6 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/flights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       await db.delete(flights).where(eq(flights.id, id!));
       return json({ success: true });
@@ -412,7 +530,10 @@ export const onRequest = async (context: any) => {
       const deductLeavesStr = JSON.stringify(body.deductLeaves);
       await db.insert(settings).values({
         id: "ot_rules", adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr,
-      }).onConflictDoUpdate({ target: settings.id, set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr } });
+      }).onConflictDoUpdate({ 
+        target: settings.id, 
+        set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr } 
+      });
       return json({ success: true });
     }
 
@@ -425,15 +546,21 @@ export const onRequest = async (context: any) => {
         return json(results);
       } catch (error: any) { return json({ message: error?.message, cause: error?.cause }, 500); }
     }
+
     if (pathname === "/api/users/sync" && method === "POST") {
       try {
         const body: any = await request.json();
         await db.insert(users).values({
-          id: body.uid, email: body.email.toLowerCase(), role: body.role || "user", department: body.department || "", createdAt: new Date().toISOString(),
-        }).onConflictDoUpdate({ target: users.email, set: { role: body.role || "user", department: body.department || "" } });
+          id: body.uid, email: body.email.toLowerCase(), role: body.role || "user", 
+          department: body.department || "", createdAt: new Date().toISOString(),
+        }).onConflictDoUpdate({ 
+          target: users.email, 
+          set: { role: body.role || "user", department: body.department || "" } 
+        });
         return json({ success: true });
       } catch (error) { return json({ success: false, error: String(error) }, 500); }
     }
+
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -442,6 +569,7 @@ export const onRequest = async (context: any) => {
       await db.update(users).set({ role: body.role, department: body.department }).where(eq(users.id, id!));
       return json({ success: true });
     }
+
     if (url.pathname.startsWith("/api/users/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -469,7 +597,8 @@ export const onRequest = async (context: any) => {
 
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
-        id, email, role: role || "staff", department: department || "", name: name || "", position: position || "", createdAt: new Date().toISOString(),
+        id, email, role: role || "staff", department: department || "", 
+        name: name || "", position: position || "", createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
 
       return json({ success: true, message: "User created and pre-registered." });
@@ -488,7 +617,8 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
-        id, email: body.email, role: body.role, department: body.department, name: body.name || "", position: body.position || "", createdAt: new Date().toISOString(),
+        id, email: body.email, role: body.role, department: body.department, 
+        name: body.name || "", position: body.position || "", createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
       return json({ success: true, id });
     }
@@ -497,7 +627,9 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      await db.update(userPresets).set({ role: body.role, department: body.department, name: body.name || "", position: body.position || "" }).where(eq(userPresets.id, id!));
+      await db.update(userPresets).set({ 
+        role: body.role, department: body.department, name: body.name || "", position: body.position || "" 
+      }).where(eq(userPresets.id, id!));
       return json({ success: true });
     }
     if (pathname.startsWith("/api/user-presets/") && method === "DELETE") {
@@ -518,7 +650,8 @@ export const onRequest = async (context: any) => {
         const body: any = await request.json();
         const id = crypto.randomUUID();
         await db.insert(savedReports).values({
-          id, month: body.month, dateFrom: body.dateFrom, dateTo: body.dateTo, type: body.type, createdBy: body.createdBy || "System", createdAt: new Date().toISOString(),
+          id, month: body.month, dateFrom: body.dateFrom, dateTo: body.dateTo, 
+          type: body.type, createdBy: body.createdBy || "System", createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
       } catch (err: any) { return json({ error: err.message, stack: err.stack }, 500); }
@@ -534,13 +667,18 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/overtime" && method === "POST") {
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      const existingOvertime = await db.select().from(overtimeEntries).where(and(eq(overtimeEntries.staffId, body.staffId), eq(overtimeEntries.date, body.date), eq(overtimeEntries.startTime, body.startTime))).limit(1);
+      const existingOvertime = await db.select().from(overtimeEntries).where(and(
+        eq(overtimeEntries.staffId, body.staffId), 
+        eq(overtimeEntries.date, body.date), 
+        eq(overtimeEntries.startTime, body.startTime)
+      )).limit(1);
       if (existingOvertime.length > 0) return json({ message: "Overtime logged for this exact time already." }, 400);
 
       try {
         await db.insert(overtimeEntries).values({
-          id, staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "", staffDepartment: body.staffDepartment,
-          date: body.date, startTime: body.startTime, endTime: body.endTime, hours: body.hours, notes: body.notes || "",
+          id, staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "", 
+          staffDepartment: body.staffDepartment, date: body.date, startTime: body.startTime, 
+          endTime: body.endTime, hours: body.hours, notes: body.notes || "",
           status: "pending", createdBy: body.createdBy || "", createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
@@ -549,7 +687,10 @@ export const onRequest = async (context: any) => {
     if (pathname.startsWith("/api/overtime/") && method === "PUT" && !pathname.endsWith("/approve") && !pathname.endsWith("/reject")) {
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      await db.update(overtimeEntries).set({ date: body.date, startTime: body.startTime, endTime: body.endTime, hours: body.hours, notes: body.notes || "" }).where(eq(overtimeEntries.id, id!));
+      await db.update(overtimeEntries).set({ 
+        date: body.date, startTime: body.startTime, endTime: body.endTime, 
+        hours: body.hours, notes: body.notes || "" 
+      }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/approve") && method === "PUT") {
@@ -557,7 +698,9 @@ export const onRequest = async (context: any) => {
       requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      await db.update(overtimeEntries).set({ status: "approved", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() }).where(eq(overtimeEntries.id, id!));
+      await db.update(overtimeEntries).set({ 
+        status: "approved", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() 
+      }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/reject") && method === "PUT") {
@@ -565,7 +708,9 @@ export const onRequest = async (context: any) => {
       requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
       const body: any = await request.json();
-      await db.update(overtimeEntries).set({ status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() }).where(eq(overtimeEntries.id, id!));
+      await db.update(overtimeEntries).set({ 
+        status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() 
+      }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
@@ -578,7 +723,7 @@ export const onRequest = async (context: any) => {
     // OPS RUNWAY
     // ==========================================
     if (pathname === "/api/ops/runway" && method === "GET") {
-      const results = await db.select().from(opsRunwayHistory).orderBy(asc(opsRunwayHistory.date));
+      const results = await db.select().from(opsRunwayHistory).orderBy(desc(opsRunwayHistory.date));
       return json(results.map((row: any) => ({
         ...row,
         rwy19: typeof row.rwy19 === "string" ? JSON.parse(row.rwy19) : row.rwy19,
@@ -602,7 +747,7 @@ export const onRequest = async (context: any) => {
     // OPS GROUND
     // ==========================================
     if (pathname === "/api/ops/ground" && method === "GET") {
-      const results = await db.select().from(opsGroundHistory).orderBy(asc(opsGroundHistory.date));
+      const results = await db.select().from(opsGroundHistory).orderBy(desc(opsGroundHistory.date));
       return json(results.map((row: any) => ({
         ...row,
         assignments: typeof row.assignments === "string" ? JSON.parse(row.assignments) : row.assignments,
@@ -624,7 +769,7 @@ export const onRequest = async (context: any) => {
     // FOD
     // ==========================================
     if (pathname === "/api/fod" && method === "GET") {
-      const results = await db.select().from(fodCollections).orderBy(asc(fodCollections.date));
+      const results = await db.select().from(fodCollections).orderBy(desc(fodCollections.date));
       return json(results);
     }
     if (pathname === "/api/fod" && method === "POST") {
@@ -650,15 +795,20 @@ export const onRequest = async (context: any) => {
     // WILDLIFE
     // ==========================================
     if (pathname === "/api/wildlife" && method === "GET") {
-      const results = await db.select().from(birdCounts).orderBy(asc(birdCounts.date));
-      return json(results.map((row: any) => ({ ...row, rows: typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows })));
+      const results = await db.select().from(birdCounts).orderBy(desc(birdCounts.date));
+      return json(results.map((row: any) => ({ 
+        ...row, 
+        rows: typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows 
+      })));
     }
     if (pathname === "/api/wildlife" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(birdCounts).values({ id, date: body.date, refNo: body.refNo, observer: body.observer || "", rows: JSON.stringify(body.rows), createdAt: new Date().toISOString() });
+      await db.insert(birdCounts).values({ 
+        id, date: body.date, refNo: body.refNo, observer: body.observer || "", 
+        rows: JSON.stringify(body.rows), createdAt: new Date().toISOString() 
+      });
       return json({ success: true, id });
     }
     if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
@@ -679,22 +829,17 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/ramp/draft" && method === "POST") {
       const body: any = await request.json();
       const payloadStr = JSON.stringify(body);
-      await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr }).onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr })
+        .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
       return json({ success: true });
     }
     if (pathname === "/api/ramp/reports" && method === "GET") {
-      // 🚨 Changed asc to desc to show latest first
       const results = await db.select().from(rampInspections)
         .orderBy(desc(rampInspections.date), desc(rampInspections.createdAt));
-        
-      return json(results.map((row: any) => ({
-        ...JSON.parse(row.payload || "{}"),
-        id: row.id,
-        date: row.date,
-        fltNo: row.fltNo,
-        acReg: row.acReg,
-        createdAt: row.createdAt,
-        updatedAt: row.updatedAt,
+      return json(results.map((row: any) => ({ 
+        ...JSON.parse(row.payload || "{}"), 
+        id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg, 
+        createdAt: row.createdAt, updatedAt: row.updatedAt 
       })));
     }
     if (pathname === "/api/ramp/reports" && method === "POST") {
@@ -702,11 +847,19 @@ export const onRequest = async (context: any) => {
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(rampInspections).values({ id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", payload: JSON.stringify(body), createdAt: new Date().toISOString() });
+      await db.insert(rampInspections).values({ 
+        id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", 
+        payload: JSON.stringify(body), createdAt: new Date().toISOString() 
+      });
 
       if (body.fltNo && body.date) {
         const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
-        await db.update(flights).set({ status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
+        await db.update(flights).set({ 
+          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null 
+        }).where(and(
+          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, 
+          eq(flights.date, body.date)
+        ));
       }
       return json({ success: true, id });
     }
@@ -715,11 +868,19 @@ export const onRequest = async (context: any) => {
       requireSMT(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      await db.update(rampInspections).set({ date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", payload: JSON.stringify(body), updatedAt: new Date().toISOString() }).where(eq(rampInspections.id, id!));
+      await db.update(rampInspections).set({ 
+        date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", 
+        payload: JSON.stringify(body), updatedAt: new Date().toISOString() 
+      }).where(eq(rampInspections.id, id!));
 
       if (body.fltNo && body.date) {
         const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
-        await db.update(flights).set({ status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
+        await db.update(flights).set({ 
+          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null 
+        }).where(and(
+          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, 
+          eq(flights.date, body.date)
+        ));
       }
       return json({ success: true });
     }
@@ -740,14 +901,23 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/timesheets" && method === "POST") {
       const body: any = await request.json();
-      const existing = await db.select().from(timesheets).where(and(eq(timesheets.staffId, body.staffId), eq(timesheets.date, body.date))).limit(1);
+      const existing = await db.select().from(timesheets).where(and(
+        eq(timesheets.staffId, body.staffId), 
+        eq(timesheets.date, body.date)
+      )).limit(1);
 
       if (existing.length > 0) {
-        await db.update(timesheets).set({ clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || "" }).where(eq(timesheets.id, existing[0].id));
+        await db.update(timesheets).set({ 
+          clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || "" 
+        }).where(eq(timesheets.id, existing[0].id));
         return json({ success: true, id: existing[0].id });
       }
       const id = crypto.randomUUID();
-      await db.insert(timesheets).values({ id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment, date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "", status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString() });
+      await db.insert(timesheets).values({ 
+        id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment, 
+        date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "", 
+        status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString() 
+      });
       return json({ success: true, id });
     }
     if (pathname.startsWith("/api/timesheets/") && method === "DELETE") {
@@ -768,7 +938,10 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(tempAccess).values({ id, email: body.email, targetDept: body.targetDept, startDate: body.startDate, endDate: body.endDate });
+      await db.insert(tempAccess).values({ 
+        id, email: body.email, targetDept: body.targetDept, 
+        startDate: body.startDate, endDate: body.endDate 
+      });
       return json({ success: true, id });
     }
     if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
@@ -790,7 +963,12 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
-      await db.insert(lightsInspectors).values({ staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "" }).onConflictDoUpdate({ target: lightsInspectors.staffId, set: { staffName: body.staffName, staffSn: body.staffSN || "" } });
+      await db.insert(lightsInspectors).values({ 
+        staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "" 
+      }).onConflictDoUpdate({ 
+        target: lightsInspectors.staffId, 
+        set: { staffName: body.staffName, staffSn: body.staffSN || "" } 
+      });
       return json({ success: true });
     }
     if (pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
@@ -805,15 +983,22 @@ export const onRequest = async (context: any) => {
     // RUNWAY LIGHTS
     // ==========================================
     if (pathname === "/api/lights" && method === "GET") {
-      const results = await db.select().from(rwyLights).orderBy(asc(rwyLights.date));
-      return json(results.map((row: any) => ({ ...row, data: typeof row.data === "string" ? JSON.parse(row.data) : row.data })));
+      const results = await db.select().from(rwyLights).orderBy(desc(rwyLights.date));
+      return json(results.map((row: any) => ({ 
+        ...row, 
+        data: typeof row.data === "string" ? JSON.parse(row.data) : row.data 
+      })));
     }
     if (pathname === "/api/lights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireSMT(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(rwyLights).values({ id, date: body.date, time: body.time || "", weather: body.weather || "", inspectorName: body.inspectorName, data: JSON.stringify(body.data), remarks: body.remarks || "", createdAt: new Date().toISOString() });
+      await db.insert(rwyLights).values({ 
+        id, date: body.date, time: body.time || "", weather: body.weather || "", 
+        inspectorName: body.inspectorName, data: JSON.stringify(body.data), 
+        remarks: body.remarks || "", createdAt: new Date().toISOString() 
+      });
       return json({ success: true, id });
     }
     if (pathname.startsWith("/api/lights/") && method === "DELETE") {

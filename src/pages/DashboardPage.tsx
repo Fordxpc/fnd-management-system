@@ -4,32 +4,42 @@ import { apiFetch } from '../lib/api';
 
 export default function DashboardPage({ onNavigate }: { onNavigate: (page: string) => void }) {
   const { profile } = useAuth();
+  const [time, setTime] = useState(new Date());
   
   const [stats, setStats] = useState({
-    totalStaff: 0,
-    pendingLeaves: 0,
-    todayFlights: 0,
-    activeRoster: 0,
+    totalStaff: 0, pendingLeaves: 0, todayFlights: 0, activeRoster: 0,
+    pendingOvertime: 0, onLeaveToday: 0, upcomingFlight: null as any,
   });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     const fetchStats = async () => {
       try {
-        const [staffData, leaveData, flightsData, rosterData] = await Promise.all([
+        const [staffData, leaveData, flightsData, rosterData, otData] = await Promise.all([
           apiFetch('/staff').catch(() => []),
           apiFetch('/leave-requests').catch(() => []),
           apiFetch('/flights').catch(() => []),
           apiFetch('/roster').catch(() => []),
+          apiFetch('/overtime').catch(() => []),
         ]);
 
         const today = new Date().toISOString().split('T')[0];
+        const todayLeaves = leaveData.filter((l: any) => l.status === 'approved' && l.startDate <= today && l.endDate >= today);
+        const upcoming = flightsData.filter((f: any) => f.date >= today).sort((a: any, b: any) => a.date.localeCompare(b.date))[0];
 
         setStats({
           totalStaff: staffData.length || 0,
           pendingLeaves: leaveData.filter((l: any) => l.status === 'pending').length || 0,
           todayFlights: flightsData.filter((f: any) => f.date === today).length || 0,
           activeRoster: rosterData.filter((r: any) => r.date === today).length || 0,
+          pendingOvertime: otData.filter((o: any) => o.status === 'pending').length || 0,
+          onLeaveToday: todayLeaves.length,
+          upcomingFlight: upcoming || null,
         });
       } catch (err) {
         console.error("Failed to load dashboard stats", err);
@@ -37,123 +47,93 @@ export default function DashboardPage({ onNavigate }: { onNavigate: (page: strin
         setLoading(false);
       }
     };
-
     fetchStats();
   }, []);
 
-  const dashboardTiles = [
-    { id: 'staff', label: 'Staff Management', icon: '👥', color: '#3b82f6', desc: 'View and manage all staff records' },
-    { id: 'roster', label: 'Roster & Shifts', icon: '📅', color: '#8b5cf6', desc: 'Manage daily shift assignments' },
-    { id: 'leave', label: 'Leave Requests', icon: '📝', color: '#f59e0b', desc: 'Review and approve leave applications' },
-    { id: 'flights', label: 'Flight Schedule', icon: '✈️', color: '#10b981', desc: 'Track arrivals and departures' },
-    { id: 'overtime', label: 'Overtime', icon: '⏱️', color: '#ef4444', desc: 'Approve staff overtime hours' },
-    { id: 'reports', label: 'Reports', icon: '📊', color: '#6366f1', desc: 'Generate and view operational reports' },
-  ];
+  const dayName = time.toLocaleDateString('en-US', { weekday: 'long' });
+  const dateStr = time.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
     <div className="page-content" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       
-      {/* 🚨 NEW GREETING SECTION */}
-      <div className="dash-card" style={{ 
-        marginBottom: '24px', 
-        background: 'linear-gradient(135deg, #1e293b, #0f172a)', 
-        color: 'white', 
-        padding: '30px', 
-        borderRadius: '16px', 
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' 
-      }}>
-        <h1 style={{ margin: '0 0 16px 0', fontSize: '28px', color: '#f8fafc', fontWeight: 600 }}>
-          Welcome back, {profile?.name || 'User'}! 👋
-        </h1>
+      <div className="dash-card" style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #1e293b, #0f172a)', color: 'white', padding: '30px', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+        <div>
+          <h1 style={{ margin: '0 0 16px 0', fontSize: '28px', color: '#f8fafc', fontWeight: 600 }}>
+            Welcome back, {profile?.name || 'User'}! 👋
+          </h1>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '14px', color: '#cbd5e1' }}>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>SN:</strong> {profile?.sn || 'N/A'}</div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Designation:</strong> {profile?.designation || profile?.position || 'N/A'}</div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Dept:</strong> {profile?.department || 'N/A'}</div>
+            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>{profile?.role || 'Staff'}</div>
+          </div>
+        </div>
         
-        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '14px', color: '#cbd5e1' }}>
-          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <strong style={{ color: '#94a3b8' }}>SN:</strong> 
-            <span>{profile?.sn || 'N/A'}</span>
-          </div>
-          
-          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <strong style={{ color: '#94a3b8' }}>Designation:</strong> 
-            <span>{profile?.designation || profile?.position || 'N/A'}</span>
-          </div>
-          
-          <div style={{ background: 'rgba(255,255,255,0.1)', padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <strong style={{ color: '#94a3b8' }}>Department:</strong> 
-            <span>{profile?.department || 'N/A'}</span>
-          </div>
-          
-          <div style={{ background: '#3b82f6', padding: '8px 16px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            {profile?.role || 'Staff'}
-          </div>
+        <div style={{ textAlign: 'right', background: 'rgba(255,255,255,0.05)', padding: '16px 24px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ fontSize: '16px', fontWeight: 600, color: '#f8fafc', marginBottom: '4px' }}>{dayName}</div>
+          <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '8px' }}>{dateStr}</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#38bdf8', fontFamily: 'monospace' }}>{timeStr}</div>
         </div>
       </div>
 
-      {/* 📊 STATS GRID */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '30px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
         
-        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #3b82f6', cursor: 'pointer' }} onClick={() => onNavigate('staff')}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#64748b' }}>Total Staff</h3>
-          <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.totalStaff}</p>
-        </div>
-
-        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b', cursor: 'pointer' }} onClick={() => onNavigate('leave')}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#64748b' }}>Pending Leaves</h3>
-          <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.pendingLeaves}</p>
-        </div>
-
-        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #10b981', cursor: 'pointer' }} onClick={() => onNavigate('flights')}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#64748b' }}>Today's Flights</h3>
-          <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.todayFlights}</p>
-        </div>
-
-        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #8b5cf6', cursor: 'pointer' }} onClick={() => onNavigate('roster')}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#64748b' }}>Today's Roster</h3>
+        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #3b82f6' }}>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>Today's Duty</h3>
           <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.activeRoster}</p>
         </div>
 
-      </div>
+        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b' }}>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>On Leave Today</h3>
+          <p style={{ margin: 0, fontSize: '28px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.onLeaveToday}</p>
+        </div>
 
-      {/* 🚀 QUICK NAVIGATION TILES */}
-      <h2 style={{ fontSize: '20px', color: '#1e293b', marginBottom: '16px' }}>Quick Actions</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
-        {dashboardTiles.map(tile => (
-          <div 
-            key={tile.id}
-            className="dash-card" 
-            onClick={() => onNavigate(tile.id)}
-            style={{ 
-              padding: '24px', 
-              cursor: 'pointer', 
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              border: '1px solid #e2e8f0',
-              borderRadius: '12px',
-              background: '#ffffff'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-4px)';
-              e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
-          >
-            <div style={{ fontSize: '32px', marginBottom: '12px', background: `${tile.color}20`, padding: '12px', borderRadius: '12px' }}>
-              {tile.icon}
-            </div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1e293b', fontWeight: 600 }}>
-              {tile.label}
-            </h3>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-              {tile.desc}
-            </p>
+        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #ef4444' }}>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>Awaiting Approvals</h3>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'baseline' }}>
+            <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.pendingLeaves} <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'normal' }}>Leaves</span></p>
+            <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#1e293b' }}>{loading ? '...' : stats.pendingOvertime} <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'normal' }}>OT</span></p>
           </div>
-        ))}
+        </div>
+
+        <div className="dash-card" style={{ padding: '20px', borderLeft: '4px solid #10b981' }}>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#64748b', textTransform: 'uppercase' }}>Weather</h3>
+          <p style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b' }}>Clear Skies</p>
+          <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>28°C · Wind 12km/h</p>
+        </div>
+
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', marginBottom: '20px' }}>
+        
+        <div className="dash-card" style={{ padding: '20px' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>✈️ Upcoming Flight</h3>
+          {stats.upcomingFlight ? (
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>{stats.upcomingFlight.flightNo}</span>
+                <span style={{ fontSize: '12px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>{stats.upcomingFlight.status}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '24px', fontSize: '13px', color: '#475569' }}>
+                <div><strong>Date:</strong> {stats.upcomingFlight.date}</div>
+                <div><strong>Route:</strong> {stats.upcomingFlight.route || 'N/A'}</div>
+                <div><strong>Time:</strong> {stats.upcomingFlight.arrivalTime || stats.upcomingFlight.departureTime || 'TBA'}</div>
+              </div>
+            </div>
+          ) : (
+            <p style={{ color: '#64748b', fontSize: '14px' }}>No upcoming flights scheduled.</p>
+          )}
+        </div>
+
+        <div className="dash-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>📍 Airside Zone Map</h3>
+          <div style={{ flex: 1, background: '#e2e8f0', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '150px', color: '#94a3b8', fontSize: '13px' }}>
+            [ Zone Map Placeholder ]
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }

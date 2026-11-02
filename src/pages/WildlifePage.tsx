@@ -6,26 +6,7 @@ import { ConfirmDialog } from '../components/Dialogs';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const BIRD_DB = [
-  { name: 'Kiru Bondana', common: 'Kentish Plover', mass: 44, rshb: 1.5 },
-  { name: 'Alaka', common: 'Grey Plover', mass: 300, rshb: 2.5 },
-  { name: 'Angoti Bondana', common: 'Common Ringed Plover', mass: 64, rshb: 1.5 },
-  { name: 'Beyndu', common: 'Sooty Tern', mass: 180, rshb: 1.5 },
-  { name: 'Bodu Gaadhooni', common: 'Great Crested Tern', mass: 397, rshb: 5 },
-  { name: 'Bodu Raabondhi', common: 'Western Reef Egret', mass: 1000, rshb: 10 },
-  { name: 'Dhandifulhu Dhooni', common: 'White-Tailed Tropicbird', mass: 370, rshb: 2.5 },
-  { name: 'Dondheeni', common: 'White Tern', mass: 60, rshb: 1.5 },
-  { name: 'Fin’dhana', common: 'Common sandpiper', mass: 70, rshb: 1.5 },
-  { name: 'Gohorukey', common: 'Pallas\'s Gull', mass: 1600, rshb: 5 },
-  { name: 'Hoara Lesser', common: 'Frigatebird', mass: 800, rshb: 2.5 },
-  { name: 'Kaalhu', common: 'Crow', mass: 620, rshb: 5 },
-  { name: 'Kanifulhu Dhooni', common: 'Gull-Billed Tern', mass: 221, rshb: 1.5 },
-  { name: 'Kurangi', common: 'Lesser Noddy', mass: 115, rshb: 1.5 },
-  { name: 'Lagnaa', common: 'Great Egret', mass: 1500, rshb: 10 },
-  { name: 'Maa Dhooni', common: 'Red-footed Booby', mass: 950, rshb: 5 },
-  { name: 'Maaranga', common: 'Brown Noddy', mass: 140, rshb: 2.5 },
-  { name: 'Rathafa', common: 'Ruddy turnstone', mass: 190, rshb: 2.5 },
-  { name: 'Vaali', common: 'Bridled Tern', mass: 140, rshb: 2.5 },
-  { name: 'Valla', common: 'Roseate Tern', mass: 112, rshb: 2.5 },
+  { name: 'Kiru Bondana', common: 'Kentish Plover', mass: 44, rshb: 1.5 }, { name: 'Alaka', common: 'Grey Plover', mass: 300, rshb: 2.5 }, { name: 'Angoti Bondana', common: 'Common Ringed Plover', mass: 64, rshb: 1.5 }, { name: 'Beyndu', common: 'Sooty Tern', mass: 180, rshb: 1.5 }, { name: 'Bodu Gaadhooni', common: 'Great Crested Tern', mass: 397, rshb: 5 }, { name: 'Bodu Raabondhi', common: 'Western Reef Egret', mass: 1000, rshb: 10 }, { name: 'Dhandifulhu Dhooni', common: 'White-Tailed Tropicbird', mass: 370, rshb: 2.5 }, { name: 'Dondheeni', common: 'White Tern', mass: 60, rshb: 1.5 }, { name: 'Fin’dhana', common: 'Common sandpiper', mass: 70, rshb: 1.5 }, { name: 'Gohorukey', common: 'Pallas\'s Gull', mass: 1600, rshb: 5 }, { name: 'Hoara Lesser', common: 'Frigatebird', mass: 800, rshb: 2.5 }, { name: 'Kaalhu', common: 'Crow', mass: 620, rshb: 5 }, { name: 'Kanifulhu Dhooni', common: 'Gull-Billed Tern', mass: 221, rshb: 1.5 }, { name: 'Kurangi', common: 'Lesser Noddy', mass: 115, rshb: 1.5 }, { name: 'Lagnaa', common: 'Great Egret', mass: 1500, rshb: 10 }, { name: 'Maa Dhooni', common: 'Red-footed Booby', mass: 950, rshb: 5 }, { name: 'Maaranga', common: 'Brown Noddy', mass: 140, rshb: 2.5 }, { name: 'Rathafa', common: 'Ruddy turnstone', mass: 190, rshb: 2.5 }, { name: 'Vaali', common: 'Bridled Tern', mass: 140, rshb: 2.5 }, { name: 'Valla', common: 'Roseate Tern', mass: 112, rshb: 2.5 },
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const ZONES = [1, 2, 3, 4, 5, 6, 7];
@@ -34,16 +15,17 @@ const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW',
 function WildlifePage() {
   const { profile, user } = useAuth();
 
-  // EDIT — Ops SMT + full-access roles only
+  // 🚨 RBAC LOGIC
   const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
-  const isManager = isFullAccess || isOpsSMT;
+  
+  const canView = isFullAccess || isSMT || profile?.birdCountViewAccess === true;
+  const canEdit = isFullAccess || isOpsSMT || profile?.birdCountEditAccess === true;
 
   const [activeTab, setActiveTab] = useState<'form' | 'reports' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [viewingRecord, setViewingRecord] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -58,168 +40,77 @@ function WildlifePage() {
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('08:30');
   
-  const [rows, setRows] = useState<any[]>(
-    Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] }))
-  );
+  const [rows, setRows] = useState<any[]>(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
 
   const fetchRecords = useCallback(async () => {
-    try {
-      const data = await apiFetch('/wildlife');
-      setRecords(data);
-      setLoading(false);
-    } catch (err: any) {
-      toast.error(err.message);
-      setLoading(false);
-    }
+    try { const data = await apiFetch('/wildlife'); setRecords(data); setLoading(false); } 
+    catch (err: any) { toast.error(err.message); setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchRecords();
-    const interval = setInterval(fetchRecords, 15000);
-    return () => clearInterval(interval);
-  }, [fetchRecords]);
+  useEffect(() => { fetchRecords(); const interval = setInterval(fetchRecords, 15000); return () => clearInterval(interval); }, [fetchRecords]);
 
   const handleRowChange = (index: number, field: string, value: any, zoneIdx?: number) => {
-    setRows(prev => {
-      const updated = [...prev];
-      if (field === 'zone' && zoneIdx !== undefined) {
-        updated[index].zones[zoneIdx] = Number(value) || 0;
-      } else {
-        updated[index][field] = value;
-      }
-      return updated;
-    });
+    setRows(prev => { const updated = [...prev]; if (field === 'zone' && zoneIdx !== undefined) { updated[index].zones[zoneIdx] = Number(value) || 0; } else { updated[index][field] = value; } return updated; });
   };
 
   const calculateRisk = (row: any) => {
     if (!row.bird) return { total: 0, riskIndex: 0, status: '—', rshb: 0, action: 'Not required' };
     const dbBird = BIRD_DB.find(b => b.name === row.bird);
-    const rshb = dbBird?.rshb || 0;
-    const mass = dbBird?.mass || 0;
+    const rshb = dbBird?.rshb || 0; const mass = dbBird?.mass || 0;
     const flocksVal = row.flocks === 'Y' ? 2 : 1;
     const totalBirds = row.zones.reduce((a: number, b: number) => a + b, 0);
     const riskIndex = Math.round(flocksVal * (mass / 1000) * rshb * totalBirds);
-    
-    let status = 'LOW RISK';
-    let action = 'Mitigation Not required';
+    let status = 'LOW RISK'; let action = 'Mitigation Not required';
     if (riskIndex >= 1000) { status = 'ALERT'; action = 'Urgently mitigation required before Operation'; }
     else if (riskIndex > 250) { status = 'HIGH RISK'; action = 'Mitigation required before Operation'; }
     else if (riskIndex > 100) { status = 'MODERATE'; action = 'Advise to disparce bird near Runway Area'; }
-
     return { total: totalBirds, riskIndex, status, rshb, action };
   };
 
   const handleSave = async () => {
+    if (!canEdit) return;
     const validRows = rows.filter(r => r.bird);
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
-
     const observerName = `${profile?.name || user?.email || 'User'} (${profile?.position || 'Staff'})`;
-
     try {
-      const payload = {
-        date, refNo, 
-        wind: `${windDir} ${windSpd}km/h`.trim(), 
-        temp, cloud, rain, startTime, endTime,
-        rows: validRows,
-        observer: observerName
-      };
-
-      if (editingId) {
-        await apiFetch(`/wildlife/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
-        toast.success('Bird count updated successfully!');
-      } else {
-        await apiFetch('/wildlife', { method: 'POST', body: JSON.stringify(payload) });
-        toast.success('Bird count saved successfully!');
-      }
-
-      setActiveTab('reports');
-      setEditingId(null);
-      setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
-      fetchRecords();
+      const payload = { date, refNo, wind: `${windDir} ${windSpd}km/h`.trim(), temp, cloud, rain, startTime, endTime, rows: validRows, observer: observerName };
+      if (editingId) { await apiFetch(`/wildlife/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) }); toast.success('Bird count updated!'); } 
+      else { await apiFetch('/wildlife', { method: 'POST', body: JSON.stringify(payload) }); toast.success('Bird count saved!'); }
+      setActiveTab('reports'); setEditingId(null); setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] }))); fetchRecords();
     } catch (err: any) { toast.error(err.message); }
   };
 
   const handleEdit = (record: any) => {
-    setEditingId(record.id);
-    setDate(record.date);
-    setRefNo(record.refNo);
-    
-    const windParts = (record.wind || '').split(' ');
-    setWindDir(windParts[0] || 'N');
-    setWindSpd(windParts[1]?.replace('km/h', '') || '');
-    
-    setTemp(record.temp);
-    setCloud(record.cloud);
-    setRain(record.rain);
-    setStartTime(record.startTime);
-    setEndTime(record.endTime);
+    if (!canEdit) return;
+    setEditingId(record.id); setDate(record.date); setRefNo(record.refNo);
+    const windParts = (record.wind || '').split(' '); setWindDir(windParts[0] || 'N'); setWindSpd(windParts[1]?.replace('km/h', '') || '');
+    setTemp(record.temp); setCloud(record.cloud); setRain(record.rain); setStartTime(record.startTime); setEndTime(record.endTime);
     setRows(record.rows && record.rows.length > 0 ? record.rows : Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
-    
-    setActiveTab('form');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setActiveTab('form'); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handlePrint = () => {
-    document.body.classList.add('printing-bird-count');
-    window.print();
-    setTimeout(() => document.body.classList.remove('printing-bird-count'), 1000);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await apiFetch(`/wildlife/${deleteTarget}`, { method: 'DELETE' });
-      toast.success('Record deleted.');
-      setDeleteTarget(null);
-      fetchRecords();
-    } catch (err: any) { toast.error(err.message); }
-  };
+  const handlePrint = () => { document.body.classList.add('printing-bird-count'); window.print(); setTimeout(() => document.body.classList.remove('printing-bird-count'), 1000); };
+  const confirmDelete = async () => { if (!deleteTarget) return; try { await apiFetch(`/wildlife/${deleteTarget}`, { method: 'DELETE' }); toast.success('Record deleted.'); setDeleteTarget(null); fetchRecords(); } catch (err: any) { toast.error(err.message); } };
 
   const trendData = useMemo(() => {
-    const dailyData: Record<string, Record<string, number>> = {};
-    const allSpecies = new Set<string>();
-
-    records.forEach(rec => {
-      const d = rec.date;
-      if (!dailyData[d]) dailyData[d] = {};
-      
-      rec.rows?.forEach((r: any) => {
-        if (!r.bird) return;
-        allSpecies.add(r.bird);
-        const total = r.zones.reduce((a: number, b: number) => a + b, 0);
-        dailyData[d][r.bird] = (dailyData[d][r.bird] || 0) + total;
-      });
-    });
-
+    const dailyData: Record<string, Record<string, number>> = {}; const allSpecies = new Set<string>();
+    records.forEach(rec => { const d = rec.date; if (!dailyData[d]) dailyData[d] = {}; rec.rows?.forEach((r: any) => { if (!r.bird) return; allSpecies.add(r.bird); const total = r.zones.reduce((a: number, b: number) => a + b, 0); dailyData[d][r.bird] = (dailyData[d][r.bird] || 0) + total; }); });
     const monthlyTotals: Record<string, number> = {};
-    Object.entries(dailyData).forEach(([dateStr, speciesMap]) => {
-      const month = dateStr.substring(0, 7); 
-      const totalForDay = Object.values(speciesMap).reduce((a, b) => a + b, 0);
-      monthlyTotals[month] = (monthlyTotals[month] || 0) + totalForDay;
-    });
-
+    Object.entries(dailyData).forEach(([dateStr, speciesMap]) => { const month = dateStr.substring(0, 7); const totalForDay = Object.values(speciesMap).reduce((a, b) => a + b, 0); monthlyTotals[month] = (monthlyTotals[month] || 0) + totalForDay; });
     const chart = Object.entries(monthlyTotals).map(([month, total]) => ({ month, total })).sort((a, b) => a.month.localeCompare(b.month));
-
-    const tableRows = Object.entries(dailyData).map(([dateStr, speciesMap]) => ({
-      date: dateStr,
-      ...speciesMap
-    })).sort((a, b) => b.date.localeCompare(a.date));
-
+    const tableRows = Object.entries(dailyData).map(([dateStr, speciesMap]) => ({ date: dateStr, ...speciesMap })).sort((a, b) => b.date.localeCompare(a.date));
     return { chart, tableRows, speciesList: Array.from(allSpecies).sort() };
   }, [records]);
 
+  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
   if (loading) return <div className="page-content"><p>Loading Wildlife Data...</p></div>;
 
   return (
     <div className="page-content">
-      <div className="staff-header no-print">
-        <h2>🦅 Wildlife & Bird Hazard Management</h2>
-      </div>
+      <div className="staff-header no-print"><h2>🦅 Wildlife & Bird Hazard Management</h2></div>
 
       <div className="ops-tabs no-print">
-        <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => { setActiveTab('form'); if(!editingId) { setDate(new Date().toISOString().split('T')[0]); setRefNo(`RACL-FND-WHP-${new Date().getFullYear()}-01`); } }}>
-          {editingId ? '✏️ Editing Record' : '📝 Bird Count Form'}
-        </button>
+        <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => { setActiveTab('form'); if(!editingId) { setDate(new Date().toISOString().split('T')[0]); setRefNo(`RACL-FND-WHP-${new Date().getFullYear()}-01`); } }}>{editingId ? '✏️ Editing Record' : '📝 Bird Count Form'}</button>
         <button className={`ops-tab-btn ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>📊 Reports & Analysis</button>
         <button className={`ops-tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>🗺️ Zone Map</button>
       </div>
@@ -227,70 +118,23 @@ function WildlifePage() {
       {activeTab === 'form' && (
         <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
           <div className="bird-count-page-1">
-            <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
-              <img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} />
-              <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div>
-              <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div>
-            </div>
+            <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}><img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} /><div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div><div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div></div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>
-              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>DATE:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-1 border" /></div>
-              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>REF NO:</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-1 border" /></div>
-              
-              <div>
-                <label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>WIND:</label>
-                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}>
-                  <select value={windDir} onChange={e => setWindDir(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }}>
-                    {WIND_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  <span style={{ color: '#cbd5e1', fontSize: '12px' }}>|</span>
-                  <input type="number" value={windSpd} onChange={e => setWindSpd(e.target.value)} style={{ width: '40px', border: 'none', padding: '0 4px', textAlign: 'center', outline: 'none', fontSize: '12px' }} />
-                  <span style={{ fontSize: '10px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>km/h</span>
-                </div>
-              </div>
-              
-              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>START TIME:</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-1 border" /></div>
-              
-              <div>
-                <label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>TEMPERATURE:</label>
-                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}>
-                  <input type="number" value={temp} onChange={e => setTemp(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} />
-                  <span style={{ fontSize: '12px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>°C</span>
-                </div>
-              </div>
-              
-              <div>
-                <label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>CLOUDY:</label>
-                <div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}>
-                  <input type="number" value={cloud} onChange={e => setCloud(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} />
-                  <span style={{ fontSize: '12px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>%</span>
-                </div>
-              </div>
-              
-              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>RAIN LAST 24 HRS:</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-1 border"><option value="N">N</option><option value="Y">Y</option></select></div>
-              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" /></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>DATE:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full p-1 border" disabled={!canEdit} /></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>REF NO:</label><input value={refNo} onChange={e => setRefNo(e.target.value)} className="w-full p-1 border" disabled={!canEdit} /></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>WIND:</label><div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}><select value={windDir} onChange={e => setWindDir(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} disabled={!canEdit}>{WIND_DIRS.map(d => <option key={d} value={d}>{d}</option>)}</select><span style={{ color: '#cbd5e1', fontSize: '12px' }}>|</span><input type="number" value={windSpd} onChange={e => setWindSpd(e.target.value)} style={{ width: '40px', border: 'none', padding: '0 4px', textAlign: 'center', outline: 'none', fontSize: '12px' }} disabled={!canEdit} /><span style={{ fontSize: '10px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>km/h</span></div></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>START TIME:</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="w-full p-1 border" disabled={!canEdit} /></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>TEMPERATURE:</label><div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}><input type="number" value={temp} onChange={e => setTemp(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} disabled={!canEdit} /><span style={{ fontSize: '12px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>°C</span></div></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>CLOUDY:</label><div style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '4px', overflow: 'hidden', background: '#fff', height: '30px' }}><input type="number" value={cloud} onChange={e => setCloud(e.target.value)} style={{ flex: 1, border: 'none', padding: '0 4px', outline: 'none', fontSize: '12px' }} disabled={!canEdit} /><span style={{ fontSize: '12px', paddingRight: '6px', fontWeight: 'bold', color: '#64748b' }}>%</span></div></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>RAIN LAST 24 HRS:</label><select value={rain} onChange={e => setRain(e.target.value)} className="w-full p-1 border" disabled={!canEdit}><option value="N">N</option><option value="Y">Y</option></select></div>
+              <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>FINISHED @:</label><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="w-full p-1 border" disabled={!canEdit} /></div>
             </div>
 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', textAlign: 'center', fontFamily: 'Arial' }}>
               <thead>
-                <tr>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>BIRD SPECIES</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>FLOCKS (Y/N)</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={7}>Concentration of Birds at Zone</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Hazardous Behaviour</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Bird Type Total @ Zones</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Status</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Action Required</th>
-                </tr>
-                <tr>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={3}></th>
-                  {ZONES.map(z => <th key={z} style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>{z}</th>)}
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>RSHB</th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
-                  <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
-                </tr>
+                <tr><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>BIRD SPECIES</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>FLOCKS (Y/N)</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={7}>Concentration of Birds at Zone</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Hazardous Behaviour</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Bird Type Total @ Zones</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Status</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Action Required</th></tr>
+                <tr><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={3}></th>{ZONES.map(z => <th key={z} style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>{z}</th>)}<th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>RSHB</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th></tr>
               </thead>
               <tbody>
                 {rows.map((row, i) => {
@@ -298,20 +142,9 @@ function WildlifePage() {
                   return (
                     <tr key={i}>
                       <td style={{border:'1px solid #000', padding:'4px'}}>{i + 1}</td>
-                      <td style={{border:'1px solid #000', padding:'4px'}}>
-                        <select value={row.bird} onChange={e => handleRowChange(i, 'bird', e.target.value)} className="w-full p-1 border-0 text-xs text-center">
-                          <option value="">Select...</option>
-                          {BIRD_DB.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                        </select>
-                      </td>
-                      <td style={{border:'1px solid #000', padding:'4px'}}>
-                        <select value={row.flocks} onChange={e => handleRowChange(i, 'flocks', e.target.value)} className="p-1 border-0 text-xs text-center">
-                          <option value="N">N</option><option value="Y">Y</option>
-                        </select>
-                      </td>
-                      {ZONES.map((_, zIdx) => (
-                        <td key={zIdx} style={{border:'1px solid #000', padding:'4px'}}><input type="number" min="0" value={row.zones[zIdx] || ''} onChange={e => handleRowChange(i, 'zone', e.target.value, zIdx)} style={{width:'30px', border:'none', textAlign:'center'}} /></td>
-                      ))}
+                      <td style={{border:'1px solid #000', padding:'4px'}}><select value={row.bird} onChange={e => handleRowChange(i, 'bird', e.target.value)} className="w-full p-1 border-0 text-xs text-center" disabled={!canEdit}><option value="">Select...</option>{BIRD_DB.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}</select></td>
+                      <td style={{border:'1px solid #000', padding:'4px'}}><select value={row.flocks} onChange={e => handleRowChange(i, 'flocks', e.target.value)} className="p-1 border-0 text-xs text-center" disabled={!canEdit}><option value="N">N</option><option value="Y">Y</option></select></td>
+                      {ZONES.map((_, zIdx) => (<td key={zIdx} style={{border:'1px solid #000', padding:'4px'}}><input type="number" min="0" value={row.zones[zIdx] || ''} onChange={e => handleRowChange(i, 'zone', e.target.value, zIdx)} style={{width:'30px', border:'none', textAlign:'center'}} disabled={!canEdit} /></td>))}
                       <td style={{border:'1px solid #000', padding:'4px'}}>{calc.rshb}</td>
                       <td style={{border:'1px solid #000', padding:'4px'}} className="font-bold">{calc.total}</td>
                       <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status}</td>
@@ -326,33 +159,14 @@ function WildlifePage() {
           <div className="bird-count-page-2" style={{ marginTop: '40px', borderTop: '2px dashed #ccc', paddingTop: '20px' }}>
             <h3 style={{ textAlign: 'center', fontFamily: 'Arial', marginBottom: '16px' }}>Bird Watch Report</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '12px', fontFamily: 'Arial', border: '1px solid #000' }}>
-              <div style={{ padding: '10px', borderRight: '1px solid #000' }}>
-                <div style={{ marginBottom: '8px' }}><strong>Report No:</strong> {refNo}</div>
-                <div style={{ marginBottom: '8px' }}><strong>Condition:</strong> LOW / MODERATE / SEVERE / High / ALERT</div>
-                <div><strong>Legend:</strong><br/>
-                  LOW: Normal bird activity, low probability.<br/>
-                  MODERATE: Concentrations represent probable hazard.<br/>
-                  SEVERE: Heavy concentration, immediate hazard.<br/>
-                  ALERT: Weather/time makes influx likely.
-                </div>
-              </div>
-              <div style={{ padding: '10px' }}>
-                <div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {date} <strong>Review date:</strong> {date}</div>
-                <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {profile?.name || 'User'}</div>
-                <div style={{ marginBottom: '8px' }}><strong>Designation:</strong> {profile?.position || 'Operations Officer'}</div>
-                <div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div>
-                <div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div>
-              </div>
+              <div style={{ padding: '10px', borderRight: '1px solid #000' }}><div style={{ marginBottom: '8px' }}><strong>Report No:</strong> {refNo}</div><div style={{ marginBottom: '8px' }}><strong>Condition:</strong> LOW / MODERATE / SEVERE / High / ALERT</div><div><strong>Legend:</strong><br/>LOW: Normal bird activity, low probability.<br/>MODERATE: Concentrations represent probable hazard.<br/>SEVERE: Heavy concentration, immediate hazard.<br/>ALERT: Weather/time makes influx likely.</div></div>
+              <div style={{ padding: '10px' }}><div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {date} <strong>Review date:</strong> {date}</div><div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {profile?.name || 'User'}</div><div style={{ marginBottom: '8px' }}><strong>Designation:</strong> {profile?.position || 'Operations Officer'}</div><div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div><div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div></div>
             </div>
           </div>
 
           <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }} className="no-print">
             <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
-            {isManager && (
-              <button className="add-staff-btn" onClick={handleSave} style={{ background: editingId ? '#2563eb' : '#16a34a' }}>
-                {editingId ? '💾 Save Changes' : '💾 Save Bird Count'}
-              </button>
-            )}
+            {canEdit && (<button className="add-staff-btn" onClick={handleSave} style={{ background: editingId ? '#2563eb' : '#16a34a' }}>{editingId ? '💾 Save Changes' : '💾 Save Bird Count'}</button>)}
           </div>
         </div>
       )}
@@ -363,15 +177,7 @@ function WildlifePage() {
             <h3>📊 Monthly Bird Population Trend</h3>
             <div style={{ width: '100%', height: 300, marginTop: '20px' }}>
               {trendData.chart.length === 0 ? <p style={{ textAlign: 'center', color: '#94a3b8' }}>No data yet.</p> : (
-                <ResponsiveContainer>
-                  <BarChart data={trendData.chart} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="total" name="Total Birds Sighted" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ResponsiveContainer><BarChart data={trendData.chart} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="month" tick={{ fontSize: 12 }} /><YAxis tick={{ fontSize: 12 }} /><Tooltip /><Bar dataKey="total" name="Total Birds Sighted" fill="#10b981" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
               )}
             </div>
           </div>
@@ -379,21 +185,9 @@ function WildlifePage() {
           <div className="dash-card" style={{ gridColumn: 'span 2', overflowX: 'auto', marginBottom: '20px' }}>
             <h3>📅 Daily Trend Analysis (Excel Format)</h3>
             <table className="mini-table mt-4" style={{ fontSize: '12px' }}>
-              <thead>
-                <tr>
-                  <th>DATE</th>
-                  {trendData.speciesList.map((s: string) => <th key={s}>{s}</th>)}
-                </tr>
-              </thead>
+              <thead><tr><th>DATE</th>{trendData.speciesList.map((s: string) => <th key={s}>{s}</th>)}</tr></thead>
               <tbody>
-                {trendData.tableRows.map((r: any) => (
-                  <tr key={r.date}>
-                    <td><strong>{r.date}</strong></td>
-                    {trendData.speciesList.map((s: string) => (
-                      <td key={s} style={{ textAlign: 'center' }}>{(r as any)[s] || 0}</td>
-                    ))}
-                  </tr>
-                ))}
+                {trendData.tableRows.map((r: any) => (<tr key={r.date}><td><strong>{r.date}</strong></td>{trendData.speciesList.map((s: string) => (<td key={s} style={{ textAlign: 'center' }}>{(r as any)[s] || 0}</td>))}</tr>))}
               </tbody>
             </table>
           </div>
@@ -405,18 +199,10 @@ function WildlifePage() {
               <tbody>
                 {records.map((r: any) => (
                   <tr key={r.id}>
-                    <td>{r.date}</td>
-                    <td>{r.refNo}</td>
-                    <td>{r.observer}</td>
-                    <td>{r.rows?.length || 0}</td>
+                    <td>{r.date}</td><td>{r.refNo}</td><td>{r.observer}</td><td>{r.rows?.length || 0}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <button className="quick-btn" onClick={() => setViewingRecord(r)} style={{ background: '#2563eb', color: 'white', padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>👁️ View / Print</button>
-                      {isManager && (
-                        <>
-                          <button className="edit-btn" onClick={() => handleEdit(r)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button>
-                          <button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>
-                        </>
-                      )}
+                      {canEdit && (<><button className="edit-btn" onClick={() => handleEdit(r)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button><button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button></>)}
                     </td>
                   </tr>
                 ))}
@@ -428,83 +214,37 @@ function WildlifePage() {
 
       {activeTab === 'map' && (
         <div className="dash-card" style={{ textAlign: 'center' }}>
-          <h3>🗺️ Airside Zone Map</h3>
-          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>Reference map for Bird Concentration Zones (1-7)</p>
-          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #cbd5e1' }}>
-            <img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', maxWidth: '800px', height: 'auto', objectFit: 'contain' }} />
-          </div>
+          <h3>🗺️ Airside Zone Map</h3><p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>Reference map for Bird Concentration Zones (1-7)</p>
+          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #cbd5e1' }}><img src="/zone-map.png" alt="Zone Map" style={{ width: '100%', maxWidth: '800px', height: 'auto', objectFit: 'contain' }} /></div>
         </div>
       )}
 
       {viewingRecord && (
         <div className="modal-backdrop" onClick={() => setViewingRecord(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0 }}>Bird Count Report: {viewingRecord.date}</h3>
-              <div>
-                <button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrint}>🖨️ Print / Save as PDF</button>
-                <button className="cancel-btn" onClick={() => setViewingRecord(null)}>Close</button>
-              </div>
-            </div>
-            
+            <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><h3 style={{ margin: 0 }}>Bird Count Report: {viewingRecord.date}</h3><div><button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrint}>🖨️ Print / Save as PDF</button><button className="cancel-btn" onClick={() => setViewingRecord(null)}>Close</button></div></div>
             <div className="modal-scrollable-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#fff' }}>
               <div className="bird-count-page-1">
-                <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}>
-                  <img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} />
-                  <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div>
-                  <div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div>
-                </div>
-
+                <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}><img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} /><div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div><div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>DATE:</label><input type="date" value={viewingRecord.date} readOnly className="w-full p-1 border" /></div>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>REF NO:</label><input value={viewingRecord.refNo} readOnly className="w-full p-1 border" /></div>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>WIND:</label><input value={viewingRecord.wind} readOnly className="w-full p-1 border" /></div>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>START TIME:</label><input type="time" value={viewingRecord.startTime} readOnly className="w-full p-1 border" /></div>
-                  
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>TEMPERATURE:</label><input type="number" value={viewingRecord.temp} readOnly className="w-full p-1 border" /></div>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>CLOUDY:</label><input type="number" value={viewingRecord.cloud} readOnly className="w-full p-1 border" /></div>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>RAIN LAST 24 HRS:</label><input value={viewingRecord.rain} readOnly className="w-full p-1 border" /></div>
                   <div><label style={{fontSize:'12px', fontWeight:'bold', color: '#64748b'}}>FINISHED @:</label><input type="time" value={viewingRecord.endTime} readOnly className="w-full p-1 border" /></div>
                 </div>
-
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', textAlign: 'center', fontFamily: 'Arial' }}>
                   <thead>
-                    <tr>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>BIRD SPECIES</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>FLOCKS (Y/N)</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={7}>Concentration of Birds at Zone</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Hazardous Behaviour</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Bird Type Total @ Zones</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Status</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Action Required</th>
-                    </tr>
-                    <tr>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={3}></th>
-                      {ZONES.map(z => <th key={z} style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>{z}</th>)}
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>RSHB</th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
-                      <th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th>
-                    </tr>
+                    <tr><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>No:</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>BIRD SPECIES</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>FLOCKS (Y/N)</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={7}>Concentration of Birds at Zone</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Hazardous Behaviour</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Bird Type Total @ Zones</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Status</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>Action Required</th></tr>
+                    <tr><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}} colSpan={3}></th>{ZONES.map(z => <th key={z} style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>{z}</th>)}<th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}>RSHB</th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th><th style={{border:'1px solid #000', padding:'4px', background:'#f1f5f9'}}></th></tr>
                   </thead>
                   <tbody>
                     {viewingRecord.rows?.map((row: any, i: number) => {
                       const calc = calculateRisk(row);
-                      return (
-                        <tr key={i}>
-                          <td style={{border:'1px solid #000', padding:'4px'}}>{i + 1}</td>
-                          <td style={{border:'1px solid #000', padding:'4px'}}>{row.bird}</td>
-                          <td style={{border:'1px solid #000', padding:'4px'}}>{row.flocks}</td>
-                          {ZONES.map((_, zIdx) => (
-                            <td key={zIdx} style={{border:'1px solid #000', padding:'4px'}}>{row.zones[zIdx] || 0}</td>
-                          ))}
-                          <td style={{border:'1px solid #000', padding:'4px'}}>{calc.rshb}</td>
-                          <td style={{border:'1px solid #000', padding:'4px'}} className="font-bold">{calc.total}</td>
-                          <td style={{border:'1px solid #000', padding:'4px'}}>{calc.status}</td>
-                          <td style={{border:'1px solid #000', padding:'4px'}}>{calc.action}</td>
-                        </tr>
-                      );
+                      return (<tr key={i}><td style={{border:'1px solid #000', padding:'4px'}}>{i + 1}</td><td style={{border:'1px solid #000', padding:'4px'}}>{row.bird}</td><td style={{border:'1px solid #000', padding:'4px'}}>{row.flocks}</td>{ZONES.map((_, zIdx) => (<td key={zIdx} style={{border:'1px solid #000', padding:'4px'}}>{row.zones[zIdx] || 0}</td>))}<td style={{border:'1px solid #000', padding:'4px'}}>{calc.rshb}</td><td style={{border:'1px solid #000', padding:'4px'}} className="font-bold">{calc.total}</td><td style={{border:'1px solid #000', padding:'4px'}}>{calc.status}</td><td style={{border:'1px solid #000', padding:'4px'}}>{calc.action}</td></tr>);
                     })}
                   </tbody>
                 </table>
@@ -513,22 +253,8 @@ function WildlifePage() {
               <div className="bird-count-page-2" style={{ marginTop: '40px', borderTop: '2px dashed #ccc', paddingTop: '20px' }}>
                 <h3 style={{ textAlign: 'center', fontFamily: 'Arial', marginBottom: '16px' }}>Bird Watch Report</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', fontSize: '12px', fontFamily: 'Arial', border: '1px solid #000' }}>
-                  <div style={{ padding: '10px', borderRight: '1px solid #000' }}>
-                    <div style={{ marginBottom: '8px' }}><strong>Report No:</strong> {viewingRecord.refNo}</div>
-                    <div style={{ marginBottom: '8px' }}><strong>Condition:</strong> LOW / MODERATE / SEVERE / High / ALERT</div>
-                    <div><strong>Legend:</strong><br/>
-                      LOW: Normal bird activity, low probability.<br/>
-                      MODERATE: Concentrations represent probable hazard.<br/>
-                      SEVERE: Heavy concentration, immediate hazard.<br/>
-                      ALERT: Weather/time makes influx likely.
-                    </div>
-                  </div>
-                  <div style={{ padding: '10px' }}>
-                    <div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {viewingRecord.date} <strong>Review date:</strong> {viewingRecord.date}</div>
-                    <div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {viewingRecord.observer}</div>
-                    <div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div>
-                    <div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div>
-                  </div>
+                  <div style={{ padding: '10px', borderRight: '1px solid #000' }}><div style={{ marginBottom: '8px' }}><strong>Report No:</strong> {viewingRecord.refNo}</div><div style={{ marginBottom: '8px' }}><strong>Condition:</strong> LOW / MODERATE / SEVERE / High / ALERT</div><div><strong>Legend:</strong><br/>LOW: Normal bird activity, low probability.<br/>MODERATE: Concentrations represent probable hazard.<br/>SEVERE: Heavy concentration, immediate hazard.<br/>ALERT: Weather/time makes influx likely.</div></div>
+                  <div style={{ padding: '10px' }}><div style={{ marginBottom: '8px' }}><strong>Issue date:</strong> {viewingRecord.date} <strong>Review date:</strong> {viewingRecord.date}</div><div style={{ marginBottom: '8px' }}><strong>Observer:</strong> {viewingRecord.observer}</div><div style={{ marginBottom: '8px' }}><strong>Bird/Wildlife management strategies implemented:</strong> Yes / No</div><div><strong>Risk Levels:</strong> LOW (&lt;100) | MODERATE (100-250) | SEVERE (250-1000) | ALERT (&gt;1000)</div></div>
                 </div>
               </div>
             </div>
@@ -536,15 +262,7 @@ function WildlifePage() {
         </div>
       )}
 
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        title="Delete Bird Count?"
-        message="Are you sure you want to delete this bird count record? This action cannot be undone."
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      <ConfirmDialog isOpen={!!deleteTarget} title="Delete Bird Count?" message="Are you sure you want to delete this bird count record? This action cannot be undone." confirmText="Delete" isDanger={true} onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreig
 // ==========================================
 // BETTER AUTH TABLES
 // ==========================================
-
 export const user = pgTable("user", {
 	id: text().primaryKey().notNull(),
 	name: text().notNull(),
@@ -14,9 +13,7 @@ export const user = pgTable("user", {
 	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
 	role: text(),
 	department: text(),
-}, (table) => [
-	unique("user_email_unique").on(table.email),
-]);
+}, (table) => [unique("user_email_unique").on(table.email)]);
 
 export const session = pgTable("session", {
 	id: text().primaryKey().notNull(),
@@ -27,6 +24,7 @@ export const session = pgTable("session", {
 	ipAddress: text("ip_address"),
 	userAgent: text("user_agent"),
 	userId: text("user_id").notNull(),
+	impersonatedBy: text("impersonated_by"),
 }, (table) => [
 	index("session_userId_idx").using("btree", table.userId.asc().nullsLast().op("text_ops")),
 	foreignKey({ columns: [table.userId], foreignColumns: [user.id], name: "session_user_id_user_id_fk" }).onDelete("cascade"),
@@ -59,14 +57,11 @@ export const verification = pgTable("verification", {
 	expiresAt: timestamp("expires_at", { mode: 'date' }).notNull(),
 	createdAt: timestamp("created_at", { mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { mode: 'date' }).defaultNow().notNull(),
-}, (table) => [
-	index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast().op("text_ops")),
-]);
+}, (table) => [index("verification_identifier_idx").using("btree", table.identifier.asc().nullsLast().op("text_ops"))]);
 
 // ==========================================
 // APPLICATION TABLES
 // ==========================================
-
 export const birdCounts = pgTable("bird_counts", {
 	id: text().primaryKey().notNull(), date: text(), refNo: text("ref_no"),
 	observer: text(), rows: text(), createdAt: timestamp("created_at", { mode: 'string' }),
@@ -97,10 +92,16 @@ export const staff = pgTable("staff", {
 	nid: text(), joinDate: text("join_date"), phone: text(), gender: text(),
 	specialOpsAccess: boolean("special_ops_access").default(false),
 	tempDeptAccess: boolean("temp_dept_access").default(false),
+	// 🚨 NEW VIEW/EDIT COLUMNS
+	rampsheetViewAccess: boolean("rampsheet_view_access").default(false),
 	rampsheetEditAccess: boolean("rampsheet_edit_access").default(false),
+	rwyLightViewAccess: boolean("rwy_light_view_access").default(false),
 	rwyLightEditAccess: boolean("rwy_light_edit_access").default(false),
+	birdCountViewAccess: boolean("bird_count_view_access").default(false),
 	birdCountEditAccess: boolean("bird_count_edit_access").default(false),
-	opsBoardAccess: boolean("ops_board_access").default(false),
+	opsBoardViewAccess: boolean("ops_board_view_access").default(false),
+	opsBoardEditAccess: boolean("ops_board_edit_access").default(false),
+	
 	tempDeptTarget: text("temp_dept_target"), notes: text(), bankAccount: text("bank_account"),
 	orderIndex: integer("order_index").default(9999), updatedAt: timestamp("updated_at", { mode: 'string' }),
 }, (table) => [unique("staff_email_unique").on(table.email)]);
@@ -120,15 +121,6 @@ export const timesheets = pgTable("timesheets", {
 	id: text().primaryKey().notNull(), staffId: text("staff_id"), staffName: text("staff_name"),
 	staffDepartment: text("staff_department"), date: text(), clockIn: text("clock_in"),
 	clockOut: text("clock_out"), status: text(), notes: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }),
-});
-
-export const playingWithNeon = pgTable("playing_with_neon", {
-	id: serial().primaryKey().notNull(), name: text().notNull(), value: real(),
-});
-
-export const usersBackup = pgTable("users_backup", {
-	id: text(), email: text(), role: text(), department: text(),
 	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
@@ -205,21 +197,32 @@ export const opsChecks = pgTable("ops_checks", {
 	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
-// 🚨 NEW TABLE FOR PASSWORD RESETS
+export const rwyLights = pgTable("rwy_lights", {
+	id: text().primaryKey().notNull(), date: text(), time: text(), weather: text(),
+	inspectorName: text("inspector_name"), data: text(), remarks: text(),
+	createdAt: timestamp("created_at", { mode: 'string' }),
+});
+
 export const passwordResetRequests = pgTable("password_reset_requests", {
-	id: text().primaryKey().notNull(),
-	email: text().notNull(),
-	status: text().default('pending'),
+	id: text().primaryKey().notNull(), email: text().notNull(), status: text().default('pending'),
 	requestedAt: timestamp("requested_at", { mode: 'string' }).defaultNow(),
 });
 
-export const rwyLights = pgTable("rwy_lights", {
-	id: text().primaryKey().notNull(),
-	date: text(),
-	time: text(),
-	weather: text(),
-	inspectorName: text("inspector_name"),
-	data: text(),
-	remarks: text(),
-	createdAt: timestamp("created_at", { mode: 'string' }),
+// ==========================================
+// CHAT SYSTEM TABLES
+// ==========================================
+export const chatGroups = pgTable("chat_groups", {
+	id: text().primaryKey().notNull(), name: text().notNull(), description: text(),
+	department: text(), createdBy: text("created_by"), createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+});
+
+export const chatGroupMembers = pgTable("chat_group_members", {
+	id: text().primaryKey().notNull(), groupId: text("group_id").notNull().references(() => chatGroups.id, { onDelete: 'cascade' }),
+	staffId: text("staff_id").notNull(), role: text().default('member'), createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+	id: text().primaryKey().notNull(), groupId: text("group_id").notNull().references(() => chatGroups.id, { onDelete: 'cascade' }),
+	senderId: text("sender_id").notNull(), senderName: text("sender_name").notNull(),
+	message: text(), imageUrl: text("image_url"), createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
 });

@@ -30,17 +30,14 @@ const INITIAL_FORM = {
 function RampCheckSheetPage() {
   const { profile, user } = useAuth();
   
-  const role = profile?.role || '';
-  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(role);
-  const isSMT = role === 'smt' || profile?.isSMT === true;
+  // 🚨 RBAC LOGIC
+  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
 
-  // EDIT — Ops SMT + full access roles only
-  const isManager = isFullAccess || isOpsSMT;
+  const canView = isFullAccess || isSMT || profile?.rampsheetViewAccess === true;
+  const canEdit = isFullAccess || isOpsSMT || profile?.rampsheetEditAccess === true;
 
-  // VIEW — anyone SMT or above
-  const isSMTOrAbove = isFullAccess || isSMT;
-  
   // ---- All hooks first (rules of hooks) ----
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
   const [formData, setFormData] = useState<Record<string, string>>(INITIAL_FORM);
@@ -70,11 +67,11 @@ function RampCheckSheetPage() {
         }
       } catch (err) { console.error("Failed to load draft", err); }
     };
-    if (isManager) loadDraft();
-  }, [isManager]);
+    if (canEdit) loadDraft();
+  }, [canEdit]);
 
   // ---- Early return AFTER all hooks ----
-  if (!isSMTOrAbove) {
+  if (!canView) {
     return (
       <div className="page-content">
         <div className="empty-state">
@@ -86,7 +83,7 @@ function RampCheckSheetPage() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    if (!isManager) return;
+    if (!canEdit) return;
     const { id, value } = e.target;
     let finalValue = value;
 
@@ -168,7 +165,7 @@ function RampCheckSheetPage() {
   };
 
   const handleSave = async () => {
-    if (!isManager) return;
+    if (!canEdit) return;
     try {
       const payload = { ...formData } as any;
 
@@ -202,6 +199,7 @@ function RampCheckSheetPage() {
   };
 
   const handleEditReport = (report: any) => {
+    if (!canEdit) return;
     const { id, createdAt: _c, updatedAt: _u, ...rest } = report;
     
     const parsedReport = { ...rest };
@@ -235,11 +233,14 @@ function RampCheckSheetPage() {
     <div className="page-content">
       <div className="staff-header no-print">
         <h2>✈️ Flight Operation</h2>
-        {currentDocId && (
-          <span style={{ fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '6px 12px', borderRadius: '6px', fontWeight: 700 }}>
-            ✏️ Editing existing report — click <strong>Clear Form</strong> to start fresh
-          </span>
-        )}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {currentDocId && (
+            <span style={{ fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '6px 12px', borderRadius: '6px', fontWeight: 700 }}>
+              ✏️ Editing existing report — click <strong>Clear Form</strong> to start fresh
+            </span>
+          )}
+          <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
+        </div>
       </div>
 
       <div className="ops-tabs no-print">
@@ -254,12 +255,11 @@ function RampCheckSheetPage() {
       {activeSubTab === 'form' && (
         <div>
           <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-            {isManager && (
+            {canEdit && (
               <>
                 <button className="quick-btn" style={{ background: '#2563eb', color: 'white' }} onClick={handleSave}>💾 Save Record</button>
                 <button className="quick-btn" style={{ background: '#dcfce7', color: '#166534' }} onClick={handlePrint}>🖨️ Print / PDF</button>
                 <button className="quick-btn" style={{ background: '#fee2e2', color: '#991b1b' }} onClick={handleReset}>🗑️ Clear Form</button>
-                <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
               </>
             )}
           </div>
@@ -268,7 +268,7 @@ function RampCheckSheetPage() {
             <RampForm
               formData={formData}
               handleChange={handleChange}
-              isManager={isManager}
+              isManager={canEdit}
               acTypes={acTypes}
               routeCodes={routeCodes}
               handleAddAcType={handleAddAcType}
@@ -280,7 +280,7 @@ function RampCheckSheetPage() {
       )}
 
       {activeSubTab === 'reports' && (
-        <RampReportsPage onEdit={isManager ? handleEditReport : undefined} />
+        <RampReportsPage onEdit={canEdit ? handleEditReport : undefined} />
       )}
 
       <ConfirmDialog 

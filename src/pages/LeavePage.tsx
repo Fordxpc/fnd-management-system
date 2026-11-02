@@ -74,12 +74,6 @@ function LeavePage() {
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
   const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
   
-  // Approval permission:
-  //   Dev/Manager → always
-  //   Safety → Security dept
-  //   Temp access → target dept
-  //   SMT requester → only Incharge of that dept
-  //   Standard requester → dept SMT or dept approver position
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
     if (isDev || isManager || canApproveAnyDept) return true;
     
@@ -110,10 +104,6 @@ function LeavePage() {
     return canApproveThisDept(r.staffDepartment, r.staffIsSMT);
   };
 
-  // DELETE permission:
-  //   Dev/Manager → always
-  //   Own request → always
-  //   Dept SMT / Incharge / Temp → same scope as approval
   const canDeleteRequest = (r: any): boolean => {
     if (isDev || isManager) return true;
     if (myStaff && r.staffId === myStaff.id) return true;

@@ -6,102 +6,52 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } fro
 import { useAuth } from '../auth';
 import { ConfirmDialog } from '../components/Dialogs';
 
-const DEFAULT_STAFF = [
-  'ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 
-  'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL', 'MOHAMED IBRAHIM', 'ZIMLA AYYOOB', 'AMINATH MOOSA'
-];
-
-const DEFAULT_TASKS = [
-  { id: 'chocks-on', label: 'CHOCKS ON', color: 'linear-gradient(135deg, #ec407a, #ad1457)', text: '#fff' },
-  { id: 'cone-setup', label: 'CONE SET UP', color: 'linear-gradient(135deg, #00c6ff, #0072ff)', text: '#fff' },
-  { id: 'unload-back', label: 'UNLOADING — BACK HOLD', color: 'linear-gradient(135deg, #66bb6a, #2e7d32)', text: '#fff' },
-  { id: 'unload-front', label: 'UNLOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffee58, #fbc02d)', text: '#1a1a1a' },
-  { id: 'unload-hall', label: 'UNLOADING — ARRIVAL HALL', color: 'linear-gradient(135deg, #ab47bc, #6a1b9a)', text: '#fff' },
-  { id: 'load-front', label: 'LOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffa726, #e65100)', text: '#fff' },
-  { id: 'load-back', label: 'LOADING — BACK HOLD', color: 'linear-gradient(135deg, #26c6da, #00838f)', text: '#fff' },
-  { id: 'cone-pickup', label: 'CONE PICK UP', color: 'linear-gradient(135deg, #ffca28, #ff8f00)', text: '#1a1a1a' },
-  { id: 'chocks-off', label: 'CHOCKS OFF', color: 'linear-gradient(135deg, #7e57c2, #4527a0)', text: '#fff' },
-  { id: 'door', label: 'DOOR OPEN / CLOSE', color: 'linear-gradient(135deg, #26a69a, #00695c)', text: '#fff' },
-  { id: 'aircraft-cleaning', label: 'AIRCRAFT CLEANING', color: 'linear-gradient(135deg, #64748b, #475569)', text: '#fff' },
-  { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' },
-  { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' },
-];
-
+const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL', 'MOHAMED IBRAHIM', 'ZIMLA AYYOOB', 'AMINATH MOOSA'];
+const DEFAULT_TASKS = [{ id: 'chocks-on', label: 'CHOCKS ON', color: 'linear-gradient(135deg, #ec407a, #ad1457)', text: '#fff' }, { id: 'cone-setup', label: 'CONE SET UP', color: 'linear-gradient(135deg, #00c6ff, #0072ff)', text: '#fff' }, { id: 'unload-back', label: 'UNLOADING — BACK HOLD', color: 'linear-gradient(135deg, #66bb6a, #2e7d32)', text: '#fff' }, { id: 'unload-front', label: 'UNLOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffee58, #fbc02d)', text: '#1a1a1a' }, { id: 'unload-hall', label: 'UNLOADING — ARRIVAL HALL', color: 'linear-gradient(135deg, #ab47bc, #6a1b9a)', text: '#fff' }, { id: 'load-front', label: 'LOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffa726, #e65100)', text: '#fff' }, { id: 'load-back', label: 'LOADING — BACK HOLD', color: 'linear-gradient(135deg, #26c6da, #00838f)', text: '#fff' }, { id: 'cone-pickup', label: 'CONE PICK UP', color: 'linear-gradient(135deg, #ffca28, #ff8f00)', text: '#1a1a1a' }, { id: 'chocks-off', label: 'CHOCKS OFF', color: 'linear-gradient(135deg, #7e57c2, #4527a0)', text: '#fff' }, { id: 'door', label: 'DOOR OPEN / CLOSE', color: 'linear-gradient(135deg, #26a69a, #00695c)', text: '#fff' }, { id: 'aircraft-cleaning', label: 'AIRCRAFT CLEANING', color: 'linear-gradient(135deg, #64748b, #475569)', text: '#fff' }, { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' }, { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' }];
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
 function OpsBoardPage() {
   const { profile, user } = useAuth();
   
+  // 🚨 RBAC LOGIC
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'owner' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const dept = (profile?.department || '').toLowerCase();
-
   const isOpsSMT = isSMT && dept === 'ground operations';
 
-  // EDIT — Ops SMT + full-access roles only
-  const canEdit = isDev || isManager || isOpsSMT;
-
-  // VIEW — Ops SMT, other SMT, Ground Ops / Maintenance / Safety staff
-  const canView =
-    canEdit ||
-    isSMT ||
-    dept === 'ground operations' ||
-    dept === 'maintenance' ||
-    dept === 'safety';
+  const canView = isDev || isOpsSMT || profile?.opsBoardViewAccess === true;
+  const canEdit = isDev || isOpsSMT || profile?.opsBoardEditAccess === true;
 
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
-  
-  const [staffPool, setStaffPool] = useState<string[]>(() => {
-    const saved = localStorage.getItem('ops_staff_pool');
-    return saved ? JSON.parse(saved) : DEFAULT_STAFF;
-  });
+  const [staffPool, setStaffPool] = useState<string[]>(() => { const saved = localStorage.getItem('ops_staff_pool'); return saved ? JSON.parse(saved) : DEFAULT_STAFF; });
   const [newStaff, setNewStaff] = useState('');
-  
   const [showPreview, setShowPreview] = useState(false);
   const [previewBaseScale, setPreviewBaseScale] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(1);
-
   const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [deleteFodTarget, setDeleteFodTarget] = useState<string | null>(null);
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<string | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool));
-  }, [staffPool]);
+  useEffect(() => { localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool)); }, [staffPool]);
 
   const [rwy19, setRwy19] = useState<string[]>([]);
   const [rwy01, setRwy01] = useState<string[]>([]);
   const [lights, setLights] = useState<string[]>([]);
   const runwayRef = useRef<HTMLDivElement>(null);
 
-  const [tasks, setTasks] = useState<any[]>(() => {
-    const saved = localStorage.getItem('ops_tasks');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      } catch { /* fall through to defaults */ }
-    }
-    return DEFAULT_TASKS;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('ops_tasks', JSON.stringify(tasks));
-  }, [tasks]);
+  const [tasks, setTasks] = useState<any[]>(() => { const saved = localStorage.getItem('ops_tasks'); if (saved) { try { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed; } catch {} } return DEFAULT_TASKS; });
+  useEffect(() => { localStorage.setItem('ops_tasks', JSON.stringify(tasks)); }, [tasks]);
 
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
-
   const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>({});
   const groundRef = useRef<HTMLDivElement>(null);
 
   const [fodList, setFodList] = useState<any[]>([]);
   const [fodForm, setFodForm] = useState({ date: formatDate(new Date()), grams: '', remarks: '' });
   const [fodSubmitting, setFodSubmitting] = useState(false);
-
   const [runwayHistory, setRunwayHistory] = useState<any[]>([]);
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string>('');
@@ -109,105 +59,38 @@ function OpsBoardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const results = await Promise.allSettled([
-        apiFetch('/ops/runway'), apiFetch('/ops/ground'), apiFetch('/fod')
-      ]);
+      const results = await Promise.allSettled([apiFetch('/ops/runway'), apiFetch('/ops/ground'), apiFetch('/fod')]);
       const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
-      
-      setRunwayHistory(getData(0));
-      setGroundHistory(getData(1));
-      setFodList(getData(2));
+      setRunwayHistory(getData(0)); setGroundHistory(getData(1)); setFodList(getData(2));
     } catch (err: any) { console.error(err); }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  useEffect(() => { fetchData(); const interval = setInterval(fetchData, 15000); return () => clearInterval(interval); }, [fetchData]);
 
   useEffect(() => {
     if (!showPreview) return;
-    const handleResize = () => {
-      const screenWidth = window.innerWidth - 40; 
-      const targetWidth = 700;
-      setPreviewBaseScale(screenWidth < targetWidth ? screenWidth / targetWidth : 1);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const handleResize = () => { const screenWidth = window.innerWidth - 40; const targetWidth = 700; setPreviewBaseScale(screenWidth < targetWidth ? screenWidth / targetWidth : 1); };
+    handleResize(); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize);
   }, [showPreview]);
 
   useEffect(() => {
     const saved = localStorage.getItem('ops_board_draft');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setRwy19(parsed.rwy19 || []);
-        setRwy01(parsed.rwy01 || []);
-        setLights(parsed.lights || []);
-        setGroundAssign(parsed.groundAssign || {});
-      } catch (e) { console.error("Failed to load draft", e); }
-    }
+    if (saved) { try { const parsed = JSON.parse(saved); setRwy19(parsed.rwy19 || []); setRwy01(parsed.rwy01 || []); setLights(parsed.lights || []); setGroundAssign(parsed.groundAssign || {}); } catch (e) {} }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign }));
-  }, [rwy19, rwy01, lights, groundAssign]);
+  useEffect(() => { localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign })); }, [rwy19, rwy01, lights, groundAssign]);
 
-  const handleAddTask = () => {
-    setEditingTaskId(null);
-    setTaskForm({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
-    setShowTaskModal(true);
-  };
-
-  const handleEditTask = (task: any) => {
-    const colorMatches = String(task.color || '').match(/#[0-9a-fA-F]{3,6}/g) || [];
-    setTaskForm({
-      label: task.label || '',
-      colorStart: colorMatches[0] || '#26c6da',
-      colorEnd: colorMatches[1] || '#00838f',
-      text: task.text || '#fff',
-    });
-    setEditingTaskId(task.id);
-    setShowTaskModal(true);
-  };
-
-  const handleSaveTask = () => {
-    const label = taskForm.label.trim();
-    if (!label) { toast.error('Task label is required'); return; }
-
-    const payload = {
-      id: editingTaskId || `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      label: label.toUpperCase(),
-      color: `linear-gradient(135deg, ${taskForm.colorStart}, ${taskForm.colorEnd})`,
-      text: taskForm.text,
-    };
-
-    if (editingTaskId) {
-      setTasks(prev => prev.map(t => (t.id === editingTaskId ? payload : t)));
-      toast.success('Task board updated');
-    } else {
-      setTasks(prev => [...prev, payload]);
-      toast.success('Task board added');
-    }
-    setShowTaskModal(false);
-    setEditingTaskId(null);
-  };
-
+  const handleAddTask = () => { setEditingTaskId(null); setTaskForm({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' }); setShowTaskModal(true); };
+  const handleEditTask = (task: any) => { const colorMatches = String(task.color || '').match(/#[0-9a-fA-F]{3,6}/g) || []; setTaskForm({ label: task.label || '', colorStart: colorMatches[0] || '#26c6da', colorEnd: colorMatches[1] || '#00838f', text: task.text || '#fff' }); setEditingTaskId(task.id); setShowTaskModal(true); };
+  const handleSaveTask = () => { const label = taskForm.label.trim(); if (!label) { toast.error('Task label is required'); return; } const payload = { id: editingTaskId || `task-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, label: label.toUpperCase(), color: `linear-gradient(135deg, ${taskForm.colorStart}, ${taskForm.colorEnd})`, text: taskForm.text }; if (editingTaskId) { setTasks(prev => prev.map(t => (t.id === editingTaskId ? payload : t))); toast.success('Task board updated'); } else { setTasks(prev => [...prev, payload]); toast.success('Task board added'); } setShowTaskModal(false); setEditingTaskId(null); };
   const handleDeleteTask = (id: string) => setDeleteTaskTarget(id);
-
-  const handleResetTasks = () => {
-    setTasks(DEFAULT_TASKS);
-    toast.success('Task boards reset to defaults');
-  };
+  const handleResetTasks = () => { setTasks(DEFAULT_TASKS); toast.success('Task boards reset to defaults'); };
 
   const toggleRunway = (zone: '19' | '01' | 'lights', name: string) => {
     if (!canEdit) return;
     if (zone !== '19' && rwy19.includes(name)) { toast.error('Already assigned to RWY 19'); return; }
     if (zone !== '01' && rwy01.includes(name)) { toast.error('Already assigned to RWY 01'); return; }
     if (zone !== 'lights' && lights.includes(name)) { toast.error('Already assigned to Lights'); return; }
-
     if (zone === '19') setRwy19(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
     if (zone === '01') setRwy01(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
     if (zone === 'lights') setLights(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
@@ -215,147 +98,36 @@ function OpsBoardPage() {
 
   const toggleGround = (taskId: string, name: string) => {
     if (!canEdit) return;
-    setGroundAssign(prev => {
-      const current = prev[taskId] || [];
-      const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name];
-      return { ...prev, [taskId]: updated };
-    });
+    setGroundAssign(prev => { const current = prev[taskId] || []; const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name]; return { ...prev, [taskId]: updated }; });
   };
 
-  const handleAddStaff = (e: any) => {
-    e.preventDefault();
-    if (!newStaff.trim()) return;
-    const name = newStaff.trim().toUpperCase();
-    if (staffPool.includes(name)) { toast.error('Staff already in pool'); return; }
-    setStaffPool([...staffPool, name]);
-    setNewStaff('');
-  };
-
+  const handleAddStaff = (e: any) => { e.preventDefault(); if (!newStaff.trim()) return; const name = newStaff.trim().toUpperCase(); if (staffPool.includes(name)) { toast.error('Staff already in pool'); return; } setStaffPool([...staffPool, name]); setNewStaff(''); };
   const handleRemoveStaff = (name: string) => setDeleteStaffTarget(name);
-
   const handleClearBoard = () => setShowClearConfirm(true);
 
-  const saveRunwayData = async () => {
-    try {
-      await apiFetch('/ops/runway', {
-        method: 'POST',
-        body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), rwy19, rwy01, lights })
-      });
-      toast.success('Runway board saved to history!');
-      fetchData();
-    } catch (err: any) { toast.error(err.message); }
-  };
-
-  const saveGroundData = async () => {
-    try {
-      await apiFetch('/ops/ground', {
-        method: 'POST',
-        body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), assignments: groundAssign })
-      });
-      toast.success('Ground board saved to history!');
-      fetchData();
-    } catch (err: any) { toast.error(err.message); }
-  };
-
-  const handleSaveFOD = async (e: any) => {
-    e.preventDefault();
-    if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; }
-    setFodSubmitting(true);
-    try {
-      await apiFetch('/fod', {
-        method: 'POST',
-        body: JSON.stringify({ ...fodForm, grams: Number(fodForm.grams), loggedBy: user?.email || '' })
-      });
-      toast.success('FOD entry recorded!');
-      setFodForm({ date: formatDate(new Date()), grams: '', remarks: '' });
-      fetchData();
-    } catch (err: any) { toast.error(err.message); }
-    setFodSubmitting(false);
-  };
-
+  const saveRunwayData = async () => { try { await apiFetch('/ops/runway', { method: 'POST', body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), rwy19, rwy01, lights }) }); toast.success('Runway board saved to history!'); fetchData(); } catch (err: any) { toast.error(err.message); } };
+  const saveGroundData = async () => { try { await apiFetch('/ops/ground', { method: 'POST', body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), assignments: groundAssign }) }); toast.success('Ground board saved to history!'); fetchData(); } catch (err: any) { toast.error(err.message); } };
+  const handleSaveFOD = async (e: any) => { e.preventDefault(); if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; } setFodSubmitting(true); try { await apiFetch('/fod', { method: 'POST', body: JSON.stringify({ ...fodForm, grams: Number(fodForm.grams), loggedBy: user?.email || '' }) }); toast.success('FOD entry recorded!'); setFodForm({ date: formatDate(new Date()), grams: '', remarks: '' }); fetchData(); } catch (err: any) { toast.error(err.message); } setFodSubmitting(false); };
   const handleDeleteFOD = (id: string) => setDeleteFodTarget(id);
 
   const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current) return;
     toast.info('Generating high-quality image...');
-    
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; wrapper.style.top = '0';
-    wrapper.style.width = '700px'; wrapper.style.background = '#141414'; wrapper.style.padding = '20px';
-
-    const clone = ref.current.cloneNode(true) as HTMLElement;
-    clone.style.width = '100%'; clone.style.background = 'transparent'; clone.style.overflow = 'visible';
-
-    const grids = clone.querySelectorAll('.ops-grid-3');
-    grids.forEach(g => {
-      const el = g as HTMLElement;
-      el.style.display = 'grid'; el.style.gridTemplateColumns = 'repeat(3, 1fr)';
-      el.style.gridAutoFlow = 'row'; el.style.gap = '8px'; el.style.overflow = 'visible'; el.style.width = '100%';
-    });
-
-    clone.querySelectorAll('.ops-card').forEach(c => {
-      const el = c as HTMLElement;
-      el.style.width = '100%'; el.style.minWidth = '0'; el.style.overflow = 'hidden'; (el.style as any).breakInside = 'avoid';
-    });
-
+    const wrapper = document.createElement('div'); wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; wrapper.style.top = '0'; wrapper.style.width = '700px'; wrapper.style.background = '#141414'; wrapper.style.padding = '20px';
+    const clone = ref.current.cloneNode(true) as HTMLElement; clone.style.width = '100%'; clone.style.background = 'transparent'; clone.style.overflow = 'visible';
+    const grids = clone.querySelectorAll('.ops-grid-3'); grids.forEach(g => { const el = g as HTMLElement; el.style.display = 'grid'; el.style.gridTemplateColumns = 'repeat(3, 1fr)'; el.style.gridAutoFlow = 'row'; el.style.gap = '8px'; el.style.overflow = 'visible'; el.style.width = '100%'; });
+    clone.querySelectorAll('.ops-card').forEach(c => { const el = c as HTMLElement; el.style.width = '100%'; el.style.minWidth = '0'; el.style.overflow = 'hidden'; (el.style as any).breakInside = 'avoid'; });
     wrapper.appendChild(clone); document.body.appendChild(wrapper); void wrapper.offsetHeight;
-
-    try {
-      const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: '#141414', width: 700, height: wrapper.scrollHeight, windowWidth: 700, windowHeight: wrapper.scrollHeight });
-      document.body.removeChild(wrapper);
-      const link = document.createElement('a');
-      link.download = `${filename}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.95); link.click();
-      toast.success('Downloaded successfully!');
-    } catch (err: any) {
-      document.body.removeChild(wrapper);
-      toast.error('Export failed: ' + err.message);
-    }
+    try { const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: '#141414', width: 700, height: wrapper.scrollHeight, windowWidth: 700, windowHeight: wrapper.scrollHeight }); document.body.removeChild(wrapper); const link = document.createElement('a'); link.download = `${filename}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.95); link.click(); toast.success('Downloaded successfully!'); } catch (err: any) { document.body.removeChild(wrapper); toast.error('Export failed: ' + err.message); }
   };
 
-  const allHistory = [
-    ...runwayHistory.map(h => ({ ...h, type: 'runway' })),
-    ...groundHistory.map(h => ({ ...h, type: 'ground' }))
-  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
+  const allHistory = [...runwayHistory.map(h => ({ ...h, type: 'runway' })), ...groundHistory.map(h => ({ ...h, type: 'ground' }))].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const staffUtilization: { [name: string]: { runway: number, ground: number } } = {};
-  allHistory.forEach(h => {
-    if (h.type === 'runway') {
-      [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].forEach((n: string) => {
-        if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 };
-        staffUtilization[n].runway++;
-      });
-    } else {
-      Object.values(h.assignments || {}).flat().forEach((n: any) => {
-        if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 };
-        staffUtilization[n].ground++;
-      });
-    }
-  });
-
-  const chartData = Object.entries(staffUtilization).map(([name, data]) => ({
-    name, runway: data.runway, ground: data.ground, total: data.runway + data.ground
-  })).sort((a, b) => b.total - a.total).slice(0, 10);
-
-  const indHistory = selectedStaff ? allHistory.filter(h => {
-    if (h.type === 'runway') return [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].includes(selectedStaff);
-    return Object.values(h.assignments || {}).flat().includes(selectedStaff);
-  }) : [];
-
+  allHistory.forEach(h => { if (h.type === 'runway') { [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].forEach((n: string) => { if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 }; staffUtilization[n].runway++; }); } else { Object.values(h.assignments || {}).flat().forEach((n: any) => { if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 }; staffUtilization[n].ground++; }); } });
+  const chartData = Object.entries(staffUtilization).map(([name, data]) => ({ name, runway: data.runway, ground: data.ground, total: data.runway + data.ground })).sort((a, b) => b.total - a.total).slice(0, 10);
+  const indHistory = selectedStaff ? allHistory.filter(h => { if (h.type === 'runway') return [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].includes(selectedStaff); return Object.values(h.assignments || {}).flat().includes(selectedStaff); }) : [];
   const indTaskCounts: { [task: string]: number } = {};
-  indHistory.forEach(h => {
-    if (h.type === 'runway') {
-      if (h.rwy19.includes(selectedStaff)) indTaskCounts['RWY 19 Inspection'] = (indTaskCounts['RWY 19 Inspection'] || 0) + 1;
-      if (h.rwy01.includes(selectedStaff)) indTaskCounts['RWY 01 Inspection'] = (indTaskCounts['RWY 01 Inspection'] || 0) + 1;
-      if (h.lights.includes(selectedStaff)) indTaskCounts['Light Inspection'] = (indTaskCounts['Light Inspection'] || 0) + 1;
-    } else {
-      Object.entries(h.assignments || {}).forEach(([taskId, names]: any) => {
-        if (names.includes(selectedStaff)) {
-          const label = tasks.find(t => t.id === taskId)?.label || taskId;
-          indTaskCounts[label] = (indTaskCounts[label] || 0) + 1;
-        }
-      });
-    }
-  });
+  indHistory.forEach(h => { if (h.type === 'runway') { if (h.rwy19.includes(selectedStaff)) indTaskCounts['RWY 19 Inspection'] = (indTaskCounts['RWY 19 Inspection'] || 0) + 1; if (h.rwy01.includes(selectedStaff)) indTaskCounts['RWY 01 Inspection'] = (indTaskCounts['RWY 01 Inspection'] || 0) + 1; if (h.lights.includes(selectedStaff)) indTaskCounts['Light Inspection'] = (indTaskCounts['Light Inspection'] || 0) + 1; } else { Object.entries(h.assignments || {}).forEach(([taskId, names]: any) => { if (names.includes(selectedStaff)) { const label = tasks.find(t => t.id === taskId)?.label || taskId; indTaskCounts[label] = (indTaskCounts[label] || 0) + 1; } }); } });
 
   if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2><p>You do not have permission to view the Operations Board.</p></div></div>;
 
@@ -363,14 +135,7 @@ function OpsBoardPage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>📋 Daily Operations Board</h2>
-        {canEdit && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}>
-              <input placeholder="Add Staff Name..." value={newStaff} onChange={e => setNewStaff(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
-              <button type="submit" className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }}>+ Add</button>
-            </form>
-          </div>
-        )}
+        {canEdit && (<div style={{ display: 'flex', gap: '8px' }}><form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}><input placeholder="Add Staff Name..." value={newStaff} onChange={e => setNewStaff(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} /><button type="submit" className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }}>+ Add</button></form></div>)}
       </div>
 
       <div className="ops-tabs">
@@ -470,30 +235,14 @@ function OpsBoardPage() {
                       <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
                       {canEdit && (
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            onClick={() => handleEditTask(t)}
-                            title="Edit task board"
-                            style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            ✏️ Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTask(t.id)}
-                            title="Delete task board"
-                            style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
-                          >
-                            🗑️
-                          </button>
+                          <button onClick={() => handleEditTask(t)} title="Edit task board" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e40af', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>✏️ Edit</button>
+                          <button onClick={() => handleDeleteTask(t.id)} title="Delete task board" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}>🗑️</button>
                         </div>
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                       {staffPool.map(s => (
-                        <label key={s} style={{ 
-                          fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', 
-                          background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', 
-                          padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: canEdit ? 'pointer' : 'default'
-                        }}>
+                        <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: canEdit ? 'pointer' : 'default' }}>
                           <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} disabled={!canEdit} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
                           <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
                         </label>
@@ -501,20 +250,14 @@ function OpsBoardPage() {
                     </div>
                   </div>
                 ))}
-                {tasks.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>
-                    No task boards configured. Click <strong>➕ Add Task Board</strong> to create one.
-                  </div>
-                )}
+                {tasks.length === 0 && (<div style={{ textAlign: 'center', padding: '20px', color: '#94a3b8', fontSize: '13px' }}>No task boards configured. Click <strong>➕ Add Task Board</strong> to create one.</div>)}
               </div>
             </div>
           )}
 
           <div className="ops-board-export-area" style={{ background: '#141414', padding: '20px', borderRadius: '12px', overflowX: 'auto' }}>
             <div className="ops-board-fixed-width" ref={groundRef} style={{ minWidth: '700px' }}>
-              <div style={{ textAlign: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '1px', marginBottom: '16px', textTransform: 'uppercase' }}>
-                FND FLIGHT OPERATIONS — GROUND TASK BOARD
-              </div>
+              <div style={{ textAlign: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '1px', marginBottom: '16px', textTransform: 'uppercase' }}>FND FLIGHT OPERATIONS — GROUND TASK BOARD</div>
               <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 {tasks.map(t => {
                   const assigned = groundAssign[t.id] || [];
@@ -522,13 +265,7 @@ function OpsBoardPage() {
                     <div key={t.id} style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}>
                       <div style={{ background: t.color, color: t.text, padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '10px', letterSpacing: '0.5px' }}>{t.label}</div>
                       <div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none', borderRadius: '0 0 6px 6px' }}>
-                        {assigned.length ? (
-                          assigned.map(n => (
-                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>
-                              {n}
-                            </div>
-                          ))
-                        ) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}
+                        {assigned.length ? (assigned.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>))) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}
                       </div>
                     </div>
                   );
@@ -543,7 +280,6 @@ function OpsBoardPage() {
                   <li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door.</li>
                 </ol>
               </div>
-
               <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
             </div>
           </div>
@@ -579,9 +315,7 @@ function OpsBoardPage() {
               <table className="mini-table">
                 <thead><tr><th>Date</th><th>Grams</th><th>Remarks</th><th>Logged By</th><th></th></tr></thead>
                 <tbody>
-                  {fodList.length === 0 ? (
-                    <tr><td colSpan={5} style={{ textAlign: 'center' }}>No FOD records yet.</td></tr>
-                  ) : fodList.map(f => (
+                  {fodList.length === 0 ? (<tr><td colSpan={5} style={{ textAlign: 'center' }}>No FOD records yet.</td></tr>) : fodList.map(f => (
                     <tr key={f.id}>
                       <td>{f.date}</td>
                       <td style={{ fontWeight: 800, color: '#dc2626' }}>{f.grams}g</td>
@@ -661,17 +395,10 @@ function OpsBoardPage() {
                 const isExpanded = expandedLog === h.id;
                 return (
                   <div key={h.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
-                    <button
-                      onClick={() => setExpandedLog(isExpanded ? null : h.id)}
-                      style={{ width: '100%', padding: '12px 16px', background: '#f8fafc', border: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
-                    >
+                    <button onClick={() => setExpandedLog(isExpanded ? null : h.id)} style={{ width: '100%', padding: '12px 16px', background: '#f8fafc', border: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                       <div>
-                        <span style={{ fontWeight: 700, fontSize: '14px', color: h.type === 'runway' ? '#dc2626' : '#2563eb' }}>
-                          {h.type === 'runway' ? '✈️ Runway Inspection' : '🛬 Ground Task Board'}
-                        </span>
-                        <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '12px' }}>
-                          {h.date} at {h.time}
-                        </span>
+                        <span style={{ fontWeight: 700, fontSize: '14px', color: h.type === 'runway' ? '#dc2626' : '#2563eb' }}>{h.type === 'runway' ? '✈️ Runway Inspection' : '🛬 Ground Task Board'}</span>
+                        <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '12px' }}>{h.date} at {h.time}</span>
                       </div>
                       <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{isExpanded ? 'Hide Details ▲' : 'Show Details ▼'}</span>
                     </button>
@@ -680,29 +407,15 @@ function OpsBoardPage() {
                       <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0', background: 'white', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                         {h.type === 'runway' ? (
                           <>
-                            <div style={{ background: '#fef2f2', padding: '10px', borderRadius: '6px', border: '1px solid #fecaca' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#991b1b' }}>RWY 19</div>
-                              <div style={{ fontSize: '13px', marginTop: '4px' }}>{h.rwy19?.join(', ') || '—'}</div>
-                            </div>
-                            <div style={{ background: '#eff6ff', padding: '10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e40af' }}>RWY 01</div>
-                              <div style={{ fontSize: '13px', marginTop: '4px' }}>{h.rwy01?.join(', ') || '—'}</div>
-                            </div>
-                            <div style={{ background: '#fef3c7', padding: '10px', borderRadius: '6px', border: '1px solid #fde68a', gridColumn: 'span 2' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 700, color: '#92400e' }}>LIGHT INSPECTION</div>
-                              <div style={{ fontSize: '13px', marginTop: '4px' }}>{h.lights?.join(', ') || '—'}</div>
-                            </div>
+                            <div style={{ background: '#fef2f2', padding: '10px', borderRadius: '6px', border: '1px solid #fecaca' }}><div style={{ fontSize: '11px', fontWeight: 700, color: '#991b1b' }}>RWY 19</div><div style={{ fontSize: '13px', marginTop: '4px' }}>{h.rwy19?.join(', ') || '—'}</div></div>
+                            <div style={{ background: '#eff6ff', padding: '10px', borderRadius: '6px', border: '1px solid #bfdbfe' }}><div style={{ fontSize: '11px', fontWeight: 700, color: '#1e40af' }}>RWY 01</div><div style={{ fontSize: '13px', marginTop: '4px' }}>{h.rwy01?.join(', ') || '—'}</div></div>
+                            <div style={{ background: '#fef3c7', padding: '10px', borderRadius: '6px', border: '1px solid #fde68a', gridColumn: 'span 2' }}><div style={{ fontSize: '11px', fontWeight: 700, color: '#92400e' }}>LIGHT INSPECTION</div><div style={{ fontSize: '13px', marginTop: '4px' }}>{h.lights?.join(', ') || '—'}</div></div>
                           </>
                         ) : (
                           Object.entries(h.assignments || {}).map(([taskId, names]: any) => {
                             if (!names || names.length === 0) return null;
                             const label = tasks.find(t => t.id === taskId)?.label || taskId;
-                            return (
-                              <div key={taskId} style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>{label}</div>
-                                <div style={{ fontSize: '13px', marginTop: '4px' }}>{names.join(', ')}</div>
-                              </div>
-                            );
+                            return (<div key={taskId} style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}><div style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>{label}</div><div style={{ fontSize: '13px', marginTop: '4px' }}>{names.join(', ')}</div></div>);
                           })
                         )}
                       </div>
@@ -717,99 +430,41 @@ function OpsBoardPage() {
 
       {showPreview && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, height: '100dvh', background: 'rgba(0,0,0,0.9)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}>
-          
           <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#141414', color: 'white', borderBottom: '1px solid #333', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <h3 style={{ margin: 0 }}>⭐ Export Preview</h3>
-              
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#222', padding: '4px 8px', borderRadius: '6px' }}>
                 <button onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.25))} style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
                 <span style={{ fontSize: '12px', minWidth: '40px', textAlign: 'center' }}>{Math.round(previewZoom * 100)}%</span>
                 <button onClick={() => setPreviewZoom(z => Math.min(3, z + 0.25))} style={{ background: '#333', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
               </div>
             </div>
-
-            <button onClick={() => setShowPreview(false)} style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
-              ✕ Close
-            </button>
+            <button onClick={() => setShowPreview(false)} style={{ background: '#333', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>✕ Close</button>
           </div>
           
           <div style={{ flex: 1, overflow: 'auto', background: '#222', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-            
-            <div style={{ 
-              width: '700px', height: 'max-content',
-              transform: `scale(${previewBaseScale * previewZoom})`, 
-              transformOrigin: 'top center', 
-              transition: 'transform 0.2s ease-out',
-              marginBottom: (previewBaseScale * previewZoom) < 1 ? `-${600 * (1 - (previewBaseScale * previewZoom))}px` : '0'
-            }}>
-              
+            <div style={{ width: '700px', height: 'max-content', transform: `scale(${previewBaseScale * previewZoom})`, transformOrigin: 'top center', transition: 'transform 0.2s ease-out', marginBottom: (previewBaseScale * previewZoom) < 1 ? `-${600 * (1 - (previewBaseScale * previewZoom))}px` : '0' }}>
               <div style={{ width: '700px', background: '#141414', padding: '20px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
                 {activeTab === 'runway' ? (
                   <div>
-                    <div style={{ textAlign: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '1px', marginBottom: '16px', textTransform: 'uppercase' }}>
-                      FND RUNWAY INSPECTION BOARD
-                    </div>
+                    <div style={{ textAlign: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '1px', marginBottom: '16px', textTransform: 'uppercase' }}>FND RUNWAY INSPECTION BOARD</div>
                     <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}>
-                        <div style={{ background: '#e53935', color: '#fff', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>RWY 19</div>
-                        <div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>
-                          {rwy19.length ? rwy19.map(n => (
-                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>
-                          )) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}>
-                        <div style={{ background: '#1e88e5', color: '#fff', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>RWY 01</div>
-                        <div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>
-                          {rwy01.length ? rwy01.map(n => (
-                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>
-                          )) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}>
-                        <div style={{ background: '#fdd835', color: '#111', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px', lineHeight: 1.1 }}>LIGHT INSPECTION</div>
-                        <div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>
-                          {lights.length ? lights.map(n => (
-                            <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>
-                          )) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}
-                        </div>
-                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}><div style={{ background: '#e53935', color: '#fff', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>RWY 19</div><div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>{rwy19.length ? rwy19.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>)) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}</div></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}><div style={{ background: '#1e88e5', color: '#fff', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>RWY 01</div><div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>{rwy01.length ? rwy01.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>)) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}</div></div>
+                      <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}><div style={{ background: '#fdd835', color: '#111', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px', lineHeight: 1.1 }}>LIGHT INSPECTION</div><div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>{lights.length ? lights.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>)) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}</div></div>
                     </div>
                     <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
                   </div>
                 ) : (
                   <div>
-                    <div style={{ textAlign: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '1px', marginBottom: '16px', textTransform: 'uppercase' }}>
-                      FND FLIGHT OPERATIONS — GROUND TASK BOARD
-                    </div>
+                    <div style={{ textAlign: 'center', color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '1px', marginBottom: '16px', textTransform: 'uppercase' }}>FND FLIGHT OPERATIONS — GROUND TASK BOARD</div>
                     <div className="ops-grid-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                       {tasks.map(t => {
                         const assigned = groundAssign[t.id] || [];
-                        return (
-                          <div key={t.id} style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}>
-                            <div style={{ background: t.color, color: t.text, padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '10px' }}>{t.label}</div>
-                            <div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>
-                              {assigned.length ? (
-                                assigned.map(n => (
-                                  <div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>
-                                    {n}
-                                  </div>
-                                ))
-                              ) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}
-                            </div>
-                          </div>
-                        );
+                        return (<div key={t.id} style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}><div style={{ background: t.color, color: t.text, padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '10px' }}>{t.label}</div><div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>{assigned.length ? (assigned.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>))) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}</div></div>);
                       })}
                     </div>
-                    <div style={{ background: '#111', borderLeft: '3px solid #fbc02d', borderRadius: '6px', padding: '12px', marginTop: '16px' }}>
-                      <h4 style={{ color: '#fbc02d', margin: '0 0 8px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES</h4>
-                      <ol style={{ color: '#e2e8f0', fontSize: '10px', paddingLeft: '16px', margin: 0, lineHeight: 1.4 }}>
-                        <li>Aircraft cabin cleaning shall commence only after complete passenger disembarkation.</li>
-                        <li>WCHR passengers shall be transported to the aircraft door during the departure phase.</li>
-                        <li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door.</li>
-                      </ol>
-                    </div>
+                    <div style={{ background: '#111', borderLeft: '3px solid #fbc02d', borderRadius: '6px', padding: '12px', marginTop: '16px' }}><h4 style={{ color: '#fbc02d', margin: '0 0 8px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES</h4><ol style={{ color: '#e2e8f0', fontSize: '10px', paddingLeft: '16px', margin: 0, lineHeight: 1.4 }}><li>Aircraft cabin cleaning shall commence only after complete passenger disembarkation.</li><li>WCHR passengers shall be transported to the aircraft door during the departure phase.</li><li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door.</li></ol></div>
                     <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
                   </div>
                 )}
@@ -818,202 +473,36 @@ function OpsBoardPage() {
           </div>
 
           <div style={{ padding: '16px', background: '#141414', textAlign: 'center', borderTop: '1px solid #333', flexShrink: 0 }}>
-            <button 
-              onClick={() => {
-                exportBoard(activeTab === 'runway' ? runwayRef : groundRef, activeTab === 'runway' ? 'FND_Runway_Board' : 'FND_Ground_Board');
-              }} 
-              className="add-staff-btn" 
-              style={{ background: '#059669', padding: '12px 24px', fontSize: '16px' }}
-            >
-              📸 Download JPG
-            </button>
+            <button onClick={() => { exportBoard(activeTab === 'runway' ? runwayRef : groundRef, activeTab === 'runway' ? 'FND_Runway_Board' : 'FND_Ground_Board'); }} className="add-staff-btn" style={{ background: '#059669', padding: '12px 24px', fontSize: '16px' }}>📸 Download JPG</button>
           </div>
         </div>
       )}
 
       {showTaskModal && (
         <div className="modal-backdrop" onClick={() => setShowTaskModal(false)} style={{ zIndex: 10000 }}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '450px', width: '92%', padding: '24px' }}
-          >
-            <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1e293b', fontSize: '18px' }}>
-              {editingTaskId ? '✏️ Edit Task Board' : '➕ Add Task Board'}
-            </h3>
-
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px', width: '92%', padding: '24px' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#1e293b', fontSize: '18px' }}>{editingTaskId ? '✏️ Edit Task Board' : '➕ Add Task Board'}</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Task Label *</label>
-                <input
-                  type="text"
-                  value={taskForm.label}
-                  onChange={(e) => setTaskForm({ ...taskForm, label: e.target.value })}
-                  placeholder="e.g. LAVATORY SERVICE"
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#1e293b', background: '#fff' }}
-                  autoFocus
-                />
-              </div>
-
+              <div><label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Task Label *</label><input type="text" value={taskForm.label} onChange={(e) => setTaskForm({ ...taskForm, label: e.target.value })} placeholder="e.g. LAVATORY SERVICE" style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#1e293b', background: '#fff' }} autoFocus /></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Gradient Start</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="color"
-                      value={taskForm.colorStart}
-                      onChange={(e) => setTaskForm({ ...taskForm, colorStart: e.target.value })}
-                      style={{ width: '42px', height: '38px', padding: 0, border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', background: '#fff' }}
-                    />
-                    <input
-                      type="text"
-                      value={taskForm.colorStart}
-                      onChange={(e) => setTaskForm({ ...taskForm, colorStart: e.target.value })}
-                      style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', color: '#1e293b', background: '#fff' }}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Gradient End</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="color"
-                      value={taskForm.colorEnd}
-                      onChange={(e) => setTaskForm({ ...taskForm, colorEnd: e.target.value })}
-                      style={{ width: '42px', height: '38px', padding: 0, border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', background: '#fff' }}
-                    />
-                    <input
-                      type="text"
-                      value={taskForm.colorEnd}
-                      onChange={(e) => setTaskForm({ ...taskForm, colorEnd: e.target.value })}
-                      style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', color: '#1e293b', background: '#fff' }}
-                    />
-                  </div>
-                </div>
+                <div><label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Gradient Start</label><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="color" value={taskForm.colorStart} onChange={(e) => setTaskForm({ ...taskForm, colorStart: e.target.value })} style={{ width: '42px', height: '38px', padding: 0, border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', background: '#fff' }} /><input type="text" value={taskForm.colorStart} onChange={(e) => setTaskForm({ ...taskForm, colorStart: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', color: '#1e293b', background: '#fff' }} /></div></div>
+                <div><label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Gradient End</label><div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><input type="color" value={taskForm.colorEnd} onChange={(e) => setTaskForm({ ...taskForm, colorEnd: e.target.value })} style={{ width: '42px', height: '38px', padding: 0, border: '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', background: '#fff' }} /><input type="text" value={taskForm.colorEnd} onChange={(e) => setTaskForm({ ...taskForm, colorEnd: e.target.value })} style={{ flex: 1, padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', color: '#1e293b', background: '#fff' }} /></div></div>
               </div>
-
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Text Color</label>
-                <select
-                  value={taskForm.text}
-                  onChange={(e) => setTaskForm({ ...taskForm, text: e.target.value })}
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#1e293b', background: '#fff', cursor: 'pointer' }}
-                >
-                  <option value="#fff">White (light backgrounds)</option>
-                  <option value="#1a1a1a">Dark (light backgrounds)</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Preview</label>
-                <div
-                  style={{
-                    background: `linear-gradient(135deg, ${taskForm.colorStart}, ${taskForm.colorEnd})`,
-                    color: taskForm.text,
-                    padding: '10px',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    fontSize: '12px',
-                    borderRadius: '6px',
-                    letterSpacing: '0.5px',
-                    minHeight: '38px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {(taskForm.label || 'TASK LABEL PREVIEW').toUpperCase()}
-                </div>
-              </div>
+              <div><label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Text Color</label><select value={taskForm.text} onChange={(e) => setTaskForm({ ...taskForm, text: e.target.value })} style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '13px', color: '#1e293b', background: '#fff', cursor: 'pointer' }}><option value="#fff">White (light backgrounds)</option><option value="#1a1a1a">Dark (light backgrounds)</option></select></div>
+              <div><label style={{ fontSize: '12px', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '4px' }}>Preview</label><div style={{ background: `linear-gradient(135deg, ${taskForm.colorStart}, ${taskForm.colorEnd})`, color: taskForm.text, padding: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', borderRadius: '6px', letterSpacing: '0.5px', minHeight: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{(taskForm.label || 'TASK LABEL PREVIEW').toUpperCase()}</div></div>
             </div>
-
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-              <button
-                onClick={() => setShowTaskModal(false)}
-                style={{ padding: '9px 18px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveTask}
-                style={{ padding: '9px 18px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
-              >
-                {editingTaskId ? 'Save Changes' : 'Add Board'}
-              </button>
+              <button onClick={() => setShowTaskModal(false)} style={{ padding: '9px 18px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleSaveTask} style={{ padding: '9px 18px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>{editingTaskId ? 'Save Changes' : 'Add Board'}</button>
             </div>
           </div>
         </div>
       )}
 
-      <ConfirmDialog 
-        isOpen={!!deleteStaffTarget}
-        title="Remove Staff?"
-        message={`Are you sure you want to permanently remove ${deleteStaffTarget} from the active staff pool?`}
-        confirmText="Remove"
-        isDanger={true}
-        onConfirm={() => {
-          setStaffPool(prev => prev.filter(s => s !== deleteStaffTarget));
-          setDeleteStaffTarget(null);
-          toast.success('Staff removed');
-        }}
-        onCancel={() => setDeleteStaffTarget(null)}
-      />
-
-      <ConfirmDialog 
-        isOpen={showClearConfirm}
-        title="Clear Board?"
-        message="Are you sure you want to clear all selections? This will reset the current board."
-        confirmText="Clear Board"
-        isDanger={true}
-        onConfirm={() => {
-          setRwy19([]);
-          setRwy01([]);
-          setLights([]);
-          setGroundAssign({});
-          localStorage.removeItem('ops_board_draft');
-          setShowClearConfirm(false);
-          toast.success('Board cleared and ready for new assignments.');
-        }}
-        onCancel={() => setShowClearConfirm(false)}
-      />
-
-      <ConfirmDialog 
-        isOpen={!!deleteFodTarget}
-        title="Delete FOD Record?"
-        message="Are you sure you want to permanently delete this FOD record?"
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={async () => {
-          if (!deleteFodTarget) return;
-          try {
-            await apiFetch(`/fod/${deleteFodTarget}`, { method: 'DELETE' });
-            toast.success('FOD record deleted');
-            fetchData();
-          } catch (err: any) { toast.error(err.message); }
-          setDeleteFodTarget(null);
-        }}
-        onCancel={() => setDeleteFodTarget(null)}
-      />
-
-      <ConfirmDialog 
-        isOpen={!!deleteTaskTarget}
-        title="Delete Task Board?"
-        message={`Are you sure you want to delete this task board? Any staff assigned to it will be unassigned.`}
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={() => {
-          if (!deleteTaskTarget) return;
-          setTasks(prev => prev.filter(t => t.id !== deleteTaskTarget));
-          setGroundAssign(prev => {
-            const updated = { ...prev };
-            delete updated[deleteTaskTarget];
-            return updated;
-          });
-          toast.success('Task board deleted');
-          setDeleteTaskTarget(null);
-        }}
-        onCancel={() => setDeleteTaskTarget(null)}
-      />
+      <ConfirmDialog isOpen={!!deleteStaffTarget} title="Remove Staff?" message={`Are you sure you want to permanently remove ${deleteStaffTarget} from the active staff pool?`} confirmText="Remove" isDanger={true} onConfirm={() => { setStaffPool(prev => prev.filter(s => s !== deleteStaffTarget)); setDeleteStaffTarget(null); toast.success('Staff removed'); }} onCancel={() => setDeleteStaffTarget(null)} />
+      <ConfirmDialog isOpen={showClearConfirm} title="Clear Board?" message="Are you sure you want to clear all selections? This will reset the current board." confirmText="Clear Board" isDanger={true} onConfirm={() => { setRwy19([]); setRwy01([]); setLights([]); setGroundAssign({}); localStorage.removeItem('ops_board_draft'); setShowClearConfirm(false); toast.success('Board cleared and ready for new assignments.'); }} onCancel={() => setShowClearConfirm(false)} />
+      <ConfirmDialog isOpen={!!deleteFodTarget} title="Delete FOD Record?" message="Are you sure you want to permanently delete this FOD record?" confirmText="Delete" isDanger={true} onConfirm={async () => { if (!deleteFodTarget) return; try { await apiFetch(`/fod/${deleteFodTarget}`, { method: 'DELETE' }); toast.success('FOD record deleted'); fetchData(); } catch (err: any) { toast.error(err.message); } setDeleteFodTarget(null); }} onCancel={() => setDeleteFodTarget(null)} />
+      <ConfirmDialog isOpen={!!deleteTaskTarget} title="Delete Task Board?" message={`Are you sure you want to delete this task board? Any staff assigned to it will be unassigned.`} confirmText="Delete" isDanger={true} onConfirm={() => { if (!deleteTaskTarget) return; setTasks(prev => prev.filter(t => t.id !== deleteTaskTarget)); setGroundAssign(prev => { const updated = { ...prev }; delete updated[deleteTaskTarget]; return updated; }); toast.success('Task board deleted'); setDeleteTaskTarget(null); }} onCancel={() => setDeleteTaskTarget(null)} />
     </div>
   );
 }

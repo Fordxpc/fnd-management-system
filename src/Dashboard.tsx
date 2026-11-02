@@ -15,40 +15,38 @@ import RampCheckSheetPage from './pages/RampCheckSheetPage';
 import WildlifePage from './pages/WildlifePage';
 import ReportsPage from './pages/ReportsPage';
 import RWYLightsPage from './pages/RWYLightsPage';
+import ConversationsPage from './pages/ConversationsPage';
 
-const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-const USER_ADMIN_ROLES = ['developer', 'manager'];
-
-type Module = 'dashboard' | 'operations' | 'roster' | 'reports' | 'system';
+type Module = 'dashboard' | 'operations' | 'roster' | 'reports' | 'system' | 'chat';
 
 function Dashboard(_props: any) {
-  const { profile, lightsInspectors } = useAuth();
+  const { profile, lightsInspectors, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const isAdmin = profile?.role === 'admin';
-  const dept = profile?.department || '';
+  const dept = (profile?.department || '').toLowerCase();
   
   const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && !isAdmin;
-  const isOpsOrMaintenanceOrSafety = dept === 'Ground Operations' || dept === 'Maintenance' || dept === 'Safety';
+  const isOpsOrMaintenanceOrSafety = dept === 'ground operations' || dept === 'maintenance' || dept === 'safety';
   const canManageUsers = isDev || isManager || isAdmin;
   
-  const canSeeOpsBoard = isDev || isManager || isAdmin || isSMT || isOpsOrMaintenanceOrSafety;
-  const canSeeRampCheck = isDev || isManager || isAdmin || isSMT;
+  const canSeeOpsBoard = isDev || isSMT || profile?.opsBoardViewAccess === true;
+  const canSeeRampCheck = isDev || isManager || isAdmin || isSMT || profile?.rampsheetViewAccess === true;
   const canSeeStaffList = isDev || isManager || isAdmin || isSMT;
   
   const canSeeReports = !isStaff; 
-  const canSeeWildlife = !isStaff;
+  const canSeeWildlife = isDev || isManager || isAdmin || isSMT || profile?.birdCountViewAccess === true;
   
   const myStaffId = profile?.id; 
   const isLightsInspector = lightsInspectors.some((i: any) => 
     i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
   );
-  const isGroundOpsSMT = isSMT && dept === 'Ground Operations';
-  const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector || isGroundOpsSMT;
+  const isGroundOpsSMT = isSMT && dept === 'ground operations';
+  const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector || isGroundOpsSMT || profile?.rwyLightViewAccess === true;
 
   const navigate = (page: string) => {
     setCurrentPage(page);
@@ -56,7 +54,8 @@ function Dashboard(_props: any) {
     else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
     else if (['reports'].includes(page)) setActiveModule('reports');
-    else if (['holidays', 'users', 'settings', 'migration'].includes(page)) setActiveModule('system');
+    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
+    else if (page === 'conversations') setActiveModule('chat');
   };
 
   const pages: { [key: string]: any } = {
@@ -74,6 +73,7 @@ function Dashboard(_props: any) {
     holidays: <HolidaysPage />,
     users: <UsersPage />,
     settings: <SettingsPage />,
+    conversations: <ConversationsPage />,
   };
 
   return (
@@ -111,13 +111,6 @@ function Dashboard(_props: any) {
           {activeModule === 'system' && (
             <>
               <div className="sidebar-section-title">System & Setting</div>
-              
-              {isDev && (
-                <button className={currentPage === 'migration' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('migration')} style={{ background: '#8b5cf6', color: 'white', marginBottom: '8px' }}>
-                  🚀 Migration Tool
-                </button>
-              )}
-
               <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('holidays')}>🎉 Holidays</button>
               {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('users')}>🔑 User Accounts</button>}
               <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>
@@ -130,7 +123,18 @@ function Dashboard(_props: any) {
               <button className="nav-item active" onClick={() => navigate('dashboard')}>📊 Dashboard</button>
             </>
           )}
+
+          {activeModule === 'chat' && (
+            <>
+              <div className="sidebar-section-title">Chat</div>
+              <button className="nav-item active" onClick={() => navigate('conversations')}>💬 Conversations</button>
+            </>
+          )}
         </nav>
+
+        <div className="sidebar-footer">
+           <button className="logout-btn" onClick={logout}>Log Out</button>
+        </div>
       </aside>
 
       <main className="main-content">
@@ -141,18 +145,11 @@ function Dashboard(_props: any) {
 
         <div className="top-tabs-container">
           <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
-          
-          {canSeeOpsBoard && (
-            <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>✈️ Operations</button>
-          )}
-
-          {canSeeReports && (
-            <button className={`top-tab ${activeModule === 'reports' ? 'active' : ''}`} onClick={() => navigate('reports')}>📈 Reports</button>
-          )}
-
+          {(canSeeOpsBoard || canSeeRampCheck) && <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate(canSeeOpsBoard ? 'opsboard' : 'rampcheck')}>✈️ Operations</button>}
+          {canSeeReports && <button className={`top-tab ${activeModule === 'reports' ? 'active' : ''}`} onClick={() => navigate('reports')}>📈 Reports</button>}
           <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>📅 Roster & HR</button>
-          
           <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>⚙️ System</button>
+          <button className={`top-tab ${activeModule === 'chat' ? 'active' : ''}`} onClick={() => navigate('conversations')}>💬 Conversations</button>
         </div>
 
         <div className="page-wrapper">

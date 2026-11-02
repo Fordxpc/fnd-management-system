@@ -20,7 +20,6 @@ const selectStyle: CSSProperties = {
 function UsersPage() {
   const { profile } = useAuth();
   const role = profile?.role || '';
-  
   const canView = VIEW_ROLES.includes(role) || profile?.isSmt === true;
   const canEdit = EDIT_ROLES.includes(role);
 
@@ -28,12 +27,10 @@ function UsersPage() {
   const [presets, setPresets] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{ id: string, email: string } | null>(null);
   const [deletePresetTarget, setDeletePresetTarget] = useState<{ id: string, email: string } | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
-
   const [showPresetForm, setShowPresetForm] = useState<boolean>(false);
   const [formData, setFormData] = useState({
     name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations'
@@ -48,7 +45,6 @@ function UsersPage() {
         apiFetch('/user-presets').catch(() => []), 
         apiFetch('/staff').catch(() => [])
       ]);
-      
       setUsers(Array.isArray(usersData) ? usersData : []); 
       setPresets(Array.isArray(presetsData) ? presetsData : []); 
       setStaffList(Array.isArray(staffData) ? staffData : []); 
@@ -104,10 +100,7 @@ function UsersPage() {
     const email = formData.email.trim().toLowerCase();
     if (!email || !formData.password) { toast.error('Email and Password are required'); return; }
     if (formData.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
-
-    if (users.some((u) => (u.email || '').toLowerCase() === email)) {
-      toast.error('This user already exists in the active database.'); return;
-    }
+    if (users.some((u) => (u.email || '').toLowerCase() === email)) { toast.error('This user already exists in the active database.'); return; }
 
     setSavingPreset(true);
     try {
@@ -123,9 +116,7 @@ function UsersPage() {
       setFormData({ name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations' });
       setShowPresetForm(false);
       fetchData();
-    } catch (err: any) { 
-      toast.error('Error: ' + err.message); 
-    }
+    } catch (err: any) { toast.error('Error: ' + err.message); }
     setSavingPreset(false);
   };
 
@@ -162,7 +153,7 @@ function UsersPage() {
       {presets.length > 0 && (
         <div className="collapsible-card" style={{ marginTop: '20px' }}>
           <div className="collapsible-header" style={{ cursor: 'default' }}><span><strong>⏳ Pre-registered Users</strong></span></div>
-          <div className="collapsible-body" style={{ overflowX: 'auto', maxHeight: '40vh' }}>
+          <div className="collapsible-body" style={{ overflowX: 'auto' }}>
             <table>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
               <tbody>
@@ -188,7 +179,6 @@ function UsersPage() {
 
       <div className="collapsible-card" style={{ marginTop: '20px' }}>
         <div className="collapsible-header" style={{ cursor: 'default' }}><span><strong>👥 Active Users</strong></span></div>
-        {/* 🚨 FIXED TABLE HEIGHT */}
         <div className="collapsible-body" style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
           {users.length === 0 ? (
             <div className="empty-state"><p>No active users yet.</p></div>
@@ -221,22 +211,22 @@ function UsersPage() {
 
       <ConfirmDialog isOpen={!!resetPwTarget} title="Send Password Reset?" message={`Send a password reset email to ${resetPwTarget}?`} confirmText="Send" isDanger={false} onConfirm={async () => {
           if (!resetPwTarget) return;
-          try { 
-            await (authClient as any).forgetPassword({ email: resetPwTarget, redirectTo: '/reset-password' }); 
-            toast.success(`Reset email sent.`); 
-          } catch (err: any) { toast.error(err.message); }
+          try { await (authClient as any).forgetPassword({ email: resetPwTarget, redirectTo: '/reset-password' }); toast.success(`Reset email sent.`); } 
+          catch (err: any) { toast.error(err.message); }
           setResetPwTarget(null);
         }} onCancel={() => setResetPwTarget(null)} />
 
       <ConfirmDialog isOpen={!!deleteUserTarget} title="Remove User?" message={`Remove ${deleteUserTarget?.email} from the database?`} confirmText="Remove" isDanger={true} onConfirm={async () => {
           if (!deleteUserTarget) return;
-          try { await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' }); toast.success('User removed.'); fetchData(); } catch (err: any) { toast.error(err.message); }
+          try { await apiFetch(`/users/${deleteUserTarget.id}`, { method: 'DELETE' }); toast.success('User removed.'); fetchData(); } 
+          catch (err: any) { toast.error(err.message); }
           setDeleteUserTarget(null);
         }} onCancel={() => setDeleteUserTarget(null)} />
 
       <ConfirmDialog isOpen={!!deletePresetTarget} title="Remove Pre-registration?" message={`Remove pre-registration for ${deletePresetTarget?.email}?`} confirmText="Remove" isDanger={true} onConfirm={async () => {
           if (!deletePresetTarget) return;
-          try { await apiFetch(`/user-presets/${deletePresetTarget.id}`, { method: 'DELETE' }); toast.success('Pre-registration removed.'); fetchData(); } catch (err: any) { toast.error(err.message); }
+          try { await apiFetch(`/user-presets/${deletePresetTarget.id}`, { method: 'DELETE' }); toast.success('Pre-registration removed.'); fetchData(); } 
+          catch (err: any) { toast.error(err.message); }
           setDeletePresetTarget(null);
         }} onCancel={() => setDeletePresetTarget(null)} />
 

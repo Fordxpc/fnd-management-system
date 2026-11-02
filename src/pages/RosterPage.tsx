@@ -152,23 +152,13 @@ function RosterPage() {
   const userDepartment = myStaff?.department || profile?.department;
   const isAdmin = isDev || isManager || isSMT;
 
-  // ROSTER EDIT PERMISSION:
-  //   Dev / Manager / Admin / Owner → full access to all departments
-  //   Safety ↔ Security cross-access
-  //   Only Department Incharge can edit (standard SMT is VIEW-ONLY)
+  // 🚨 ROSTER EDIT PERMISSION
   const canEditDept = (dept: string) => {
     if (isDev || isManager) return true;
-
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (userDepartment || '').trim().toLowerCase();
-
-    // Safety has full access to Security department
     if (currentDept === 'safety' && targetDept === 'security') return true;
-
-    // Only Department Incharge can edit
     if (myStaff?.isIncharge !== true) return false;
-
-    // Incharge can only edit their own department
     return currentDept === targetDept;
   };
 
@@ -455,7 +445,6 @@ function RosterPage() {
   const handlePrint = () => {
     document.body.classList.add('printing-roster');
     window.print();
-    // Wait 1 second before removing the class so the print preview has time to generate
     setTimeout(() => document.body.classList.remove('printing-roster'), 1000);
   };
 

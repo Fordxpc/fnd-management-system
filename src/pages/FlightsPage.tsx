@@ -18,11 +18,14 @@ const formatDisplayDate = (dateStr: string) => {
 function FlightsPage() {
   const { profile } = useAuth();
 
-  // EDIT — Ops SMT + full-access roles only
+  // 🚨 RBAC LOGIC
   const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
-  const isManager = isFullAccess || isOpsSMT;
+  const dept = (profile?.department || '').toLowerCase();
+  const isSafety = isSMT && dept === 'safety';
+
+  // Everyone can see, but only specific roles can edit.
+  const canEdit = isFullAccess || isSMT || isSafety;
 
   const [flights, setFlights] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,7 +212,7 @@ function FlightsPage() {
               {displayStatus(f.status)}
             </span>
           </div>
-          {isManager && (
+          {canEdit && (
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
               <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
               <button className="delete-btn" onClick={() => setDeleteTarget(f)}>Delete</button>
@@ -226,7 +229,7 @@ function FlightsPage() {
     <div className="page-content">
       <div className="staff-header">
         <h2>Flight Operations</h2>
-        {isManager && !showForm && <button className="add-staff-btn" onClick={() => { setShowForm(true); resetForm(); }}>+ Add Flight</button>}
+        {canEdit && !showForm && <button className="add-staff-btn" onClick={() => { setShowForm(true); resetForm(); }}>+ Add Flight</button>}
         {showForm && <button className="export-btn pdf-btn" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</button>}
       </div>
 
@@ -318,7 +321,7 @@ function FlightsPage() {
                     <th>STA / STD</th>
                     <th>ATA / ATD</th>
                     <th>Status</th>
-                    {isManager && <th>Actions</th>}
+                    {canEdit && <th>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -335,7 +338,7 @@ function FlightsPage() {
                           {displayStatus(f.status)}
                         </span>
                       </td>
-                      {isManager && (
+                      {canEdit && (
                         <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="edit-btn" onClick={() => handleEdit(f)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>Edit</button>
                           <button className="delete-btn" onClick={() => setDeleteTarget(f)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>

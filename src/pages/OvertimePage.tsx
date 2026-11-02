@@ -114,8 +114,6 @@ function OvertimePage() {
   
   const canViewAll = isDev || isManager;
   
-  // Approval: Dev/Manager → always; Safety→Security; Temp → target;
-  //           SMT requester → only Incharge of dept; standard → dept SMT
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
     if (canViewAll) return true;
 
@@ -123,18 +121,13 @@ function OvertimePage() {
     const current = (myStaff?.department || '').toLowerCase();
     const isIncharge = myStaff?.isIncharge === true;
 
-    // Safety has full access to Security department
     if (current === 'safety' && target === 'security') return true;
-
-    // Temp access
     if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === target)) return true;
 
-    // SMT requester → only Department Incharge can approve
     if (isSMTRequester) {
       return isIncharge && current === target;
     }
 
-    // Standard requester → Dept SMT can approve within own dept
     if (!isSMT) return false;
     return current === target;
   };

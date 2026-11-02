@@ -4,175 +4,85 @@ import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
 
-const FULL_ACCESS_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
-const CALENDARIFIC_KEY = import.meta.env.VITE_CALENDARIFIC_KEY || 'YOUR_API_KEY_HERE';
-
-const formatDate = (date: Date): string => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-};
-
-const getDayName = (dateStr: string): string => {
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  return days[new Date(dateStr + 'T00:00:00').getDay()];
-};
-
 function HolidaysPage() {
   const { profile } = useAuth();
-  const isAdmin = FULL_ACCESS_ROLES.includes(profile?.role || '');
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const canEdit = isDev || isManager;
 
   const [holidays, setHolidays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState<string>(formatDate(new Date()));
-  const [name, setName] = useState<string>('');
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [showFridays, setShowFridays] = useState<boolean>(false);
-  const [syncing, setSyncing] = useState<boolean>(false);
-
-  // Custom Dialog State
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [date, setDate] = useState('');
+  const [name, setName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   const fetchHolidays = useCallback(async () => {
     try {
       const data = await apiFetch('/holidays');
       setHolidays(data);
       setLoading(false);
-    } catch (err: any) {
-      toast.error(err.message);
-      setLoading(false);
-    }
+    } catch (err: any) { toast.error(err.message); setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchHolidays();
-    const interval = setInterval(fetchHolidays, 15000);
-    return () => clearInterval(interval);
-  }, [fetchHolidays]);
+  useEffect(() => { fetchHolidays(); }, [fetchHolidays]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
-    if (!date || !name) { toast.error('Please enter date and name'); return; }
-    if (holidays.some((h) => h.date === date)) {
-      toast.error('A holiday already exists on that date.');
-      return;
-    }
+    if (!date || !name) { toast.error('Please fill all fields'); return; }
     try {
       await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ date, name }) });
-      setName('');
       toast.success('Holiday added!');
+      setDate(''); setName(''); setShowForm(false);
       fetchHolidays();
-    } catch (err: any) { toast.error('Error: ' + err.message); }
+    } catch (err: any) { toast.error(err.message); }
   };
 
-  const handleDelete = (id: string) => setDeleteTarget(id);
-
-  const handleAutoSync = async () => {
-    if (!CALENDARIFIC_KEY || CALENDARIFIC_KEY === 'YOUR_API_KEY_HERE') {
-      toast.error('API key not found. Please add VITE_CALENDARIFIC_KEY to your .env file.');
-      return;
-    }
-
-    setSyncing(true);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`https://calendarific.com/api/v2/holidays?api_key=${CALENDARIFIC_KEY}&country=MV&year=${year}`);
-      if (!res.ok) throw new Error('Failed to fetch from Calendarific API');
-      const data = await res.json();
-      const apiHolidays = data.response?.holidays || [];
-
-      if (apiHolidays.length === 0) {
-        toast.info(`No holidays found for ${year}.`);
-        setSyncing(false);
-        return;
-      }
-
-      const existingDates = new Set(holidays.map((h: any) => h.date));
-      let addedCount = 0;
-
-      for (const h of apiHolidays) {
-        const holidayDate = h.date.iso;
-        if (!existingDates.has(holidayDate)) {
-          await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ date: holidayDate, name: `🌐 ${h.name}` }) });
-          addedCount++;
-        }
-      }
-
-      toast.success(`Sync complete! Added ${addedCount} new holidays for ${year}.`);
+      await apiFetch(`/holidays/${deleteTarget.id}`, { method: 'DELETE' });
+      toast.success('Holiday deleted');
+      setDeleteTarget(null);
       fetchHolidays();
-    } catch (err: any) {
-      toast.error('Sync failed: ' + err.message);
-    }
-    setSyncing(false);
+    } catch (err: any) { toast.error(err.message); }
   };
 
-  const fridaysOfYear: string[] = [];
-  const start = new Date(year, 0, 1);
-  const end = new Date(year, 11, 31);
-  const cur = new Date(start);
-  while (cur <= end) {
-    if (cur.getDay() === 5) fridaysOfYear.push(formatDate(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-
-  const customHolidaysThisYear = holidays.filter((h) => h.date.startsWith(String(year))).sort((a: any, b: any) => a.date.localeCompare(b.date));
-  const customRows = customHolidaysThisYear.map((h: any) => ({ date: h.date, name: h.name, isFriday: false, id: h.id }));
-  const fridayRows = fridaysOfYear.map((d) => ({ date: d, name: 'Friday', isFriday: true, id: '' }));
-  const displayedRows = showFridays ? [...fridayRows, ...customRows].sort((a, b) => a.date.localeCompare(b.date)) : customRows;
-
-  if (loading) return <div className="page-content"><p>Loading Holidays...</p></div>;
+  if (loading) return <div className="page-content"><p>Loading...</p></div>;
 
   return (
     <div className="page-content">
       <div className="staff-header">
-        <h2>
-          Company Calendar Holidays
-          <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>
-            ({customHolidaysThisYear.length} custom · {fridaysOfYear.length} Fridays)
-          </span>
-        </h2>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {isAdmin && (
-            <button className="export-btn" onClick={handleAutoSync} disabled={syncing} style={{ backgroundColor: '#8b5cf6', color: 'white' }}>
-              {syncing ? '⏳ Syncing...' : `🌐 Auto-Sync Maldives ${year}`}
-            </button>
-          )}
-          <button className={showFridays ? 'export-btn pdf-btn' : 'export-btn jpg-btn'} onClick={() => setShowFridays(!showFridays)}>
-            {showFridays ? '🙈 Hide Fridays' : '📅 Show Fridays'}
+        <h2>Public Holidays</h2>
+        {canEdit && (
+          <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : '+ Add Holiday'}
           </button>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontFamily: 'inherit', fontSize: '14px', color: '#1e293b' }}>
-            {[year - 1, year, year + 1, year + 2, year + 3].map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
+        )}
       </div>
 
-      {isAdmin && (
+      {showForm && canEdit && (
         <form className="staff-form" onSubmit={handleAdd}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '4px', fontWeight: 600, color: '#1e293b' }}>➕ Add Custom Holiday</div>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-          <input placeholder="Holiday name" value={name} onChange={(e) => setName(e.target.value)} required />
-          <button type="submit">Add Holiday</button>
+          <div><label>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
+          <div><label>Holiday Name</label><input placeholder="e.g. National Day" value={name} onChange={(e) => setName(e.target.value)} required /></div>
+          <button type="submit" style={{ gridColumn: 'span 2' }}>Save Holiday</button>
         </form>
       )}
 
       <div className="staff-list">
-        {displayedRows.length === 0 ? (
-          <div className="empty-state"><p>No holidays for {year}.</p></div>
+        {holidays.length === 0 ? (
+          <div className="empty-state"><p>No holidays configured.</p></div>
         ) : (
           <table>
-            <thead><tr><th>Date</th><th>Day</th><th>Name</th><th>Type</th>{isAdmin && <th></th>}</tr></thead>
+            <thead><tr><th>Date</th><th>Name</th>{canEdit && <th>Actions</th>}</tr></thead>
             <tbody>
-              {displayedRows.map((h: any) => (
-                <tr key={h.date + h.name}>
-                  <td>{h.date}</td>
-                  <td>{getDayName(h.date)}</td>
+              {holidays.map(h => (
+                <tr key={h.id}>
+                  <td><strong>{h.date}</strong></td>
                   <td>{h.name}</td>
-                  <td>
-                    {h.isFriday ? <span className="status-badge status-approved">FRIDAY (AUTO)</span> : <span className="status-badge status-pending">CUSTOM</span>}
-                  </td>
-                  {isAdmin && (
+                  {canEdit && (
                     <td>
-                      {!h.isFriday && h.id && <button className="delete-btn" onClick={() => handleDelete(h.id)}>Delete</button>}
+                      <button className="delete-btn" onClick={() => setDeleteTarget(h)}>Delete</button>
                     </td>
                   )}
                 </tr>
@@ -182,21 +92,13 @@ function HolidaysPage() {
         )}
       </div>
 
-      <ConfirmDialog 
+      <ConfirmDialog
         isOpen={!!deleteTarget}
         title="Delete Holiday?"
-        message="Are you sure you want to delete this holiday?"
+        message={`Delete ${deleteTarget?.name} on ${deleteTarget?.date}?`}
         confirmText="Delete"
         isDanger={true}
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          try {
-            await apiFetch(`/holidays/${deleteTarget}`, { method: 'DELETE' });
-            toast.success('Holiday deleted.');
-            fetchHolidays();
-          } catch (err: any) { toast.error(err.message); }
-          setDeleteTarget(null);
-        }}
+        onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
     </div>

@@ -15,6 +15,7 @@ const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW',
 export default function RWYLightsPage() {
   const { profile, lightsInspectors } = useAuth();
   
+  // 🚨 RBAC LOGIC
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
@@ -25,7 +26,8 @@ export default function RWYLightsPage() {
   );
 
   const isGroundOpsSMT = isSMT && profile?.department === 'Ground Operations';
-  const canEdit = isDev || isManager || isSelectedInspector || isGroundOpsSMT;
+  const canView = isDev || isManager || isSMT || isSelectedInspector || isGroundOpsSMT || profile?.rwyLightViewAccess === true;
+  const canEdit = isDev || isManager || isSelectedInspector || isGroundOpsSMT || profile?.rwyLightEditAccess === true;
   
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +114,7 @@ export default function RWYLightsPage() {
     setTimeout(() => document.body.classList.remove('printing-modal'), 1000);
   };
 
+  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
   if (loading) return <div className="page-content"><p>Loading...</p></div>;
 
   return (
@@ -129,10 +132,8 @@ export default function RWYLightsPage() {
           <div><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} required /></div>
           <div><label>Time</label><input type="time" value={time} onChange={e => setTime(e.target.value)} required /></div>
           
-          {/* Decorative Weather Grid */}
           <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
             
-            {/* Visibility */}
             <div>
               <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Visibility</label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
@@ -147,7 +148,6 @@ export default function RWYLightsPage() {
               </div>
             </div>
 
-            {/* Cloud */}
             <div>
               <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Cloud</label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
@@ -164,7 +164,6 @@ export default function RWYLightsPage() {
               </div>
             </div>
 
-            {/* Wind */}
             <div>
               <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Wind</label>
               <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
@@ -228,7 +227,7 @@ export default function RWYLightsPage() {
                   <td>{r.data.end?.rwy01 || 0} / {r.data.end?.rwy19 || 0}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="reset-pw-btn" onClick={() => setViewingRecord(r)}>👁️ View / Print</button>
-                    {(isDev || isManager) && <button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ marginLeft: '6px' }}>Delete</button>}
+                    {canEdit && <button className="delete-btn" onClick={() => setDeleteTarget(r.id)} style={{ marginLeft: '6px' }}>Delete</button>}
                   </td>
                 </tr>
               ))}
@@ -237,7 +236,6 @@ export default function RWYLightsPage() {
         </div>
       </div>
 
-      {/* VIEW / PRINT MODAL */}
       {viewingRecord && (
         <div className="modal-backdrop" onClick={() => setViewingRecord(null)}>
           <div className="modal-content" style={{ maxWidth: '800px', width: '95%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
