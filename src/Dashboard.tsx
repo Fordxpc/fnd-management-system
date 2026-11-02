@@ -20,7 +20,7 @@ import ConversationsPage from './pages/ConversationsPage';
 type Module = 'dashboard' | 'operations' | 'roster' | 'reports' | 'system' | 'chat';
 
 function Dashboard(_props: any) {
-  const { profile, lightsInspectors, logout } = useAuth();
+  const { profile } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
@@ -34,19 +34,16 @@ function Dashboard(_props: any) {
   const isOpsOrMaintenanceOrSafety = dept === 'ground operations' || dept === 'maintenance' || dept === 'safety';
   const canManageUsers = isDev || isManager || isAdmin;
   
-  const canSeeOpsBoard = isDev || isSMT || profile?.opsBoardViewAccess === true;
-  const canSeeRampCheck = isDev || isManager || isAdmin || isSMT || profile?.rampsheetViewAccess === true;
+  const canSeeOpsBoard = isDev || isManager || isAdmin || isSMT || isOpsOrMaintenanceOrSafety;
+  const canSeeRampCheck = isDev || isManager || isAdmin || isSMT;
   const canSeeStaffList = isDev || isManager || isAdmin || isSMT;
   
   const canSeeReports = !isStaff; 
-  const canSeeWildlife = isDev || isManager || isAdmin || isSMT || profile?.birdCountViewAccess === true;
+  const canSeeWildlife = !isStaff;
   
   const myStaffId = profile?.id; 
-  const isLightsInspector = lightsInspectors.some((i: any) => 
-    i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
-  );
   const isGroundOpsSMT = isSMT && dept === 'ground operations';
-  const canSeeLights = isDev || isManager || isAdmin || isSMT || isLightsInspector || isGroundOpsSMT || profile?.rwyLightViewAccess === true;
+  const canSeeLights = isDev || isManager || isAdmin || isSMT || isGroundOpsSMT;
 
   const navigate = (page: string) => {
     setCurrentPage(page);
@@ -131,10 +128,6 @@ function Dashboard(_props: any) {
             </>
           )}
         </nav>
-
-        <div className="sidebar-footer">
-           <button className="logout-btn" onClick={logout}>Log Out</button>
-        </div>
       </aside>
 
       <main className="main-content">
@@ -145,10 +138,20 @@ function Dashboard(_props: any) {
 
         <div className="top-tabs-container">
           <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
-          {(canSeeOpsBoard || canSeeRampCheck) && <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate(canSeeOpsBoard ? 'opsboard' : 'rampcheck')}>✈️ Operations</button>}
-          {canSeeReports && <button className={`top-tab ${activeModule === 'reports' ? 'active' : ''}`} onClick={() => navigate('reports')}>📈 Reports</button>}
+          
+          {/* Operations Tab Restored */}
+          {(canSeeOpsBoard || canSeeRampCheck) && (
+            <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>✈️ Operations</button>
+          )}
+
+          {canSeeReports && (
+            <button className={`top-tab ${activeModule === 'reports' ? 'active' : ''}`} onClick={() => navigate('reports')}>📈 Reports</button>
+          )}
+
           <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>📅 Roster & HR</button>
+          
           <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>⚙️ System</button>
+          
           <button className={`top-tab ${activeModule === 'chat' ? 'active' : ''}`} onClick={() => navigate('conversations')}>💬 Conversations</button>
         </div>
 
