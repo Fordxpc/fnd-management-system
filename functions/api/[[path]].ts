@@ -7,7 +7,7 @@ import {
   rosterEntries, birdCounts, rampInspections, tempAccess, settings,
   userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
-  passwordResetRequests // <-- NEW IMPORT
+  passwordResetRequests
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, or } from "drizzle-orm";
 
@@ -34,8 +34,32 @@ export const onRequest = async (context: any) => {
 
   try {
     // ==========================================
-    // PASSWORD RESET REQUESTS (NEW)
+    // PASSWORD RESET REQUESTS
     // ==========================================
+    if (pathname === "/api/request-password-reset" && method === "POST") {
+      const body: any = await request.json();
+      if (!body.email) return json({ message: "Email required" }, 400);
+
+      const existingUser = await db.select().from(users).where(eq(users.email, body.email.toLowerCase())).limit(1);
+      if (existingUser.length === 0) {
+         return json({ message: "If an account exists, a request was sent." });
+      }
+
+      const id = crypto.randomUUID();
+      await db.insert(passwordResetRequests).values({
+        id, email: body.email.toLowerCase(), status: "pending", requestedAt: new Date().toISOString(),
+      });
+
+      return json({ success: true, message: "Request sent to Admin." });
+    }
+
+    if (pathname === "/api/password-reset-requests" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const results = await db.select().from(passwordResetRequests).where(eq(passwordResetRequests.status, "pending"));
+      return json(results);
+    }
+
     if (pathname.startsWith("/api/password-reset-requests/") && pathname.endsWith("/approve") && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -50,23 +74,17 @@ export const onRequest = async (context: any) => {
       const userId = targetUser[0].id;
 
       try {
-        // 1. Delete old auth records
+        // Delete old auth records (bypassing the need for the admin plugin)
         await db.delete(session).where(eq(session.userId, userId));
         await db.delete(account).where(eq(account.userId, userId));
         await db.delete(user).where(eq(user.id, userId));
 
-        // 2. Re-create the user with the default password
+        // Re-create the user with the default password
         await getAuth(env).api.signUpEmail({
-          body: { 
-            email: reqData.email, 
-            password: "Fnd@2026", 
-            name: targetUser[0].name || "Staff Member" 
-          }
+          body: { email: reqData.email, password: "Fnd@2026", name: targetUser[0].name || "Staff Member" }
         });
 
-        // 3. Mark request as resolved
         await db.update(passwordResetRequests).set({ status: "resolved" }).where(eq(passwordResetRequests.id, id));
-        
         return json({ success: true, message: "Password reset to Fnd@2026" });
       } catch (err: any) {
         return json({ message: "Failed to reset password: " + err.message }, 500);
@@ -302,7 +320,6 @@ export const onRequest = async (context: any) => {
       const results = await db.select().from(rosterEntries).orderBy(asc(rosterEntries.date), asc(rosterEntries.staffName));
       return json(results);
     }
-
     if (pathname === "/api/roster" && method === "POST") {
       const body: any = await request.json();
       const existing = await db.select().from(rosterEntries).where(and(eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date))).limit(1);
@@ -324,7 +341,6 @@ export const onRequest = async (context: any) => {
       }
       return json({ success: true, id });
     }
-
     if (pathname === "/api/roster/bulk" && method === "POST") {
       const body: any = await request.json();
       const values = body.entries.map((entry: any) => ({
@@ -409,7 +425,6 @@ export const onRequest = async (context: any) => {
         return json(results);
       } catch (error: any) { return json({ message: error?.message, cause: error?.cause }, 500); }
     }
-
     if (pathname === "/api/users/sync" && method === "POST") {
       try {
         const body: any = await request.json();
@@ -419,7 +434,6 @@ export const onRequest = async (context: any) => {
         return json({ success: true });
       } catch (error) { return json({ success: false, error: String(error) }, 500); }
     }
-
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -428,7 +442,6 @@ export const onRequest = async (context: any) => {
       await db.update(users).set({ role: body.role, department: body.department }).where(eq(users.id, id!));
       return json({ success: true });
     }
-
     if (url.pathname.startsWith("/api/users/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
@@ -562,13 +575,243 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
-    // OPS RUNWAY & GROUND, FOD, WILDLIFE, RAMP DRAFT, REPORTS, TIMESHEETS, TEMP ACCESS, INSPECTORS, LIGHTS
+    // OPS RUNWAY
     // ==========================================
-    // (These routes remain unchanged, I have omitted them for brevity in this response but you should keep them in your file!)
-    
-    // Note: Make sure you copy your existing routes for:
-    // /api/ops/runway, /api/ops/ground, /api/fod, /api/wildlife, /api/ramp/draft
-    // /api/ramp/reports, /api/timesheets, /api/temp-access, /api/lights-inspectors, /api/lights
+    if (pathname === "/api/ops/runway" && method === "GET") {
+      const results = await db.select().from(opsRunwayHistory).orderBy(asc(opsRunwayHistory.date));
+      return json(results.map((row: any) => ({
+        ...row,
+        rwy19: typeof row.rwy19 === "string" ? JSON.parse(row.rwy19) : row.rwy19,
+        rwy01: typeof row.rwy01 === "string" ? JSON.parse(row.rwy01) : row.rwy01,
+        lights: typeof row.lights === "string" ? JSON.parse(row.lights) : row.lights,
+      })));
+    }
+    if (pathname === "/api/ops/runway" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(opsRunwayHistory).values({
+        id, date: body.date, time: body.time, createdAt: new Date().toISOString(),
+        rwy19: JSON.stringify(body.rwy19), rwy01: JSON.stringify(body.rwy01), lights: JSON.stringify(body.lights),
+      });
+      return json({ success: true, id });
+    }
+
+    // ==========================================
+    // OPS GROUND
+    // ==========================================
+    if (pathname === "/api/ops/ground" && method === "GET") {
+      const results = await db.select().from(opsGroundHistory).orderBy(asc(opsGroundHistory.date));
+      return json(results.map((row: any) => ({
+        ...row,
+        assignments: typeof row.assignments === "string" ? JSON.parse(row.assignments) : row.assignments,
+      })));
+    }
+    if (pathname === "/api/ops/ground" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(opsGroundHistory).values({
+        id, date: body.date, time: body.time, createdAt: new Date().toISOString(),
+        assignments: JSON.stringify(body.assignments),
+      });
+      return json({ success: true, id });
+    }
+
+    // ==========================================
+    // FOD
+    // ==========================================
+    if (pathname === "/api/fod" && method === "GET") {
+      const results = await db.select().from(fodCollections).orderBy(asc(fodCollections.date));
+      return json(results);
+    }
+    if (pathname === "/api/fod" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(fodCollections).values({
+        id, date: body.date, grams: body.grams, remarks: body.remarks,
+        loggedBy: body.loggedBy || "", createdAt: new Date().toISOString(),
+      });
+      return json({ success: true, id });
+    }
+    if (pathname.startsWith("/api/fod/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const id = pathname.split("/").pop();
+      await db.delete(fodCollections).where(eq(fodCollections.id, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
+    // WILDLIFE
+    // ==========================================
+    if (pathname === "/api/wildlife" && method === "GET") {
+      const results = await db.select().from(birdCounts).orderBy(asc(birdCounts.date));
+      return json(results.map((row: any) => ({ ...row, rows: typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows })));
+    }
+    if (pathname === "/api/wildlife" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(birdCounts).values({ id, date: body.date, refNo: body.refNo, observer: body.observer || "", rows: JSON.stringify(body.rows), createdAt: new Date().toISOString() });
+      return json({ success: true, id });
+    }
+    if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const id = url.pathname.split("/").pop();
+      await db.delete(birdCounts).where(eq(birdCounts.id, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
+    // RAMP DRAFT & REPORTS
+    // ==========================================
+    if (pathname === "/api/ramp/draft" && method === "GET") {
+      const rows = await db.select().from(rampLiveDraft).limit(1);
+      return json(rows.length > 0 ? JSON.parse(rows[0].payload || "{}") : {});
+    }
+    if (pathname === "/api/ramp/draft" && method === "POST") {
+      const body: any = await request.json();
+      const payloadStr = JSON.stringify(body);
+      await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr }).onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      return json({ success: true });
+    }
+    if (pathname === "/api/ramp/reports" && method === "GET") {
+      const results = await db.select().from(rampInspections).orderBy(asc(rampInspections.date));
+      return json(results.map((row: any) => ({ ...JSON.parse(row.payload || "{}"), id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg, createdAt: row.createdAt, updatedAt: row.updatedAt })));
+    }
+    if (pathname === "/api/ramp/reports" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(rampInspections).values({ id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", payload: JSON.stringify(body), createdAt: new Date().toISOString() });
+
+      if (body.fltNo && body.date) {
+        const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
+        await db.update(flights).set({ status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
+      }
+      return json({ success: true, id });
+    }
+    if (pathname.startsWith("/api/ramp/reports/") && method === "PUT") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const id = pathname.split("/").pop();
+      const body: any = await request.json();
+      await db.update(rampInspections).set({ date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", payload: JSON.stringify(body), updatedAt: new Date().toISOString() }).where(eq(rampInspections.id, id!));
+
+      if (body.fltNo && body.date) {
+        const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
+        await db.update(flights).set({ status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
+      }
+      return json({ success: true });
+    }
+    if (pathname.startsWith("/api/ramp/reports/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const id = pathname.split("/").pop();
+      await db.delete(rampInspections).where(eq(rampInspections.id, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
+    // TIMESHEET
+    // ==========================================
+    if (pathname === "/api/timesheets" && method === "GET") {
+      const results = await db.select().from(timesheets).orderBy(asc(timesheets.date));
+      return json(results);
+    }
+    if (pathname === "/api/timesheets" && method === "POST") {
+      const body: any = await request.json();
+      const existing = await db.select().from(timesheets).where(and(eq(timesheets.staffId, body.staffId), eq(timesheets.date, body.date))).limit(1);
+
+      if (existing.length > 0) {
+        await db.update(timesheets).set({ clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || "" }).where(eq(timesheets.id, existing[0].id));
+        return json({ success: true, id: existing[0].id });
+      }
+      const id = crypto.randomUUID();
+      await db.insert(timesheets).values({ id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment, date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "", status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString() });
+      return json({ success: true, id });
+    }
+    if (pathname.startsWith("/api/timesheets/") && method === "DELETE") {
+      const id = pathname.split("/").pop();
+      await db.delete(timesheets).where(eq(timesheets.id, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
+    // TEMPORARY ACCESS
+    // ==========================================
+    if (pathname === "/api/temp-access" && method === "GET") {
+      const results = await db.select().from(tempAccess);
+      return json(results);
+    }
+    if (url.pathname === "/api/temp-access" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(tempAccess).values({ id, email: body.email, targetDept: body.targetDept, startDate: body.startDate, endDate: body.endDate });
+      return json({ success: true, id });
+    }
+    if (url.pathname.startsWith("/api/temp-access/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const id = url.pathname.split("/").pop();
+      await db.delete(tempAccess).where(eq(tempAccess.id, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
+    // LIGHTS INSPECTORS
+    // ==========================================
+    if (pathname === "/api/lights-inspectors" && method === "GET") {
+      const results = await db.select().from(lightsInspectors);
+      return json(results);
+    }
+    if (pathname === "/api/lights-inspectors" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      await db.insert(lightsInspectors).values({ staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "" }).onConflictDoUpdate({ target: lightsInspectors.staffId, set: { staffName: body.staffName, staffSn: body.staffSN || "" } });
+      return json({ success: true });
+    }
+    if (pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const id = pathname.split("/").pop();
+      await db.delete(lightsInspectors).where(eq(lightsInspectors.staffId, id!));
+      return json({ success: true });
+    }
+
+    // ==========================================
+    // RUNWAY LIGHTS
+    // ==========================================
+    if (pathname === "/api/lights" && method === "GET") {
+      const results = await db.select().from(rwyLights).orderBy(asc(rwyLights.date));
+      return json(results.map((row: any) => ({ ...row, data: typeof row.data === "string" ? JSON.parse(row.data) : row.data })));
+    }
+    if (pathname === "/api/lights" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const body: any = await request.json();
+      const id = crypto.randomUUID();
+      await db.insert(rwyLights).values({ id, date: body.date, time: body.time || "", weather: body.weather || "", inspectorName: body.inspectorName, data: JSON.stringify(body.data), remarks: body.remarks || "", createdAt: new Date().toISOString() });
+      return json({ success: true, id });
+    }
+    if (pathname.startsWith("/api/lights/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireSMT(currentUser.role);
+      const id = pathname.split("/").pop();
+      await db.delete(rwyLights).where(eq(rwyLights.id, id!));
+      return json({ success: true });
+    }
 
     return json({ message: "Not Found", pathname, method }, 404);
   } catch (err: any) {
