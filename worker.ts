@@ -8,22 +8,19 @@ export default {
     // 1. Route Better Auth requests
     if (url.pathname.startsWith("/api/auth/")) {
       try {
-        const auth = getAuth(env); 
+        const auth = getAuth(env);
         return await auth.handler(request);
       } catch (err: any) {
-        let causeStr = "Unknown";
-        try { 
-          causeStr = err.cause ? JSON.stringify(err.cause, Object.getOwnPropertyNames(err.cause)) : String(err); 
-        } catch (e) { 
-          causeStr = "Could not stringify cause"; 
-        }
-        
+        // 🚨 THIS WILL EXPOSE THE REAL ERROR
+        console.error("BETTER AUTH CRASH DETAILS:", err);
         return new Response(
-          JSON.stringify({ 
-            message: "Better Auth crashed", 
-            error: err.message || "No message", 
-            cause: causeStr
-          }), 
+          JSON.stringify({
+            message: "Better Auth crashed",
+            error: err.message,
+            cause: err.cause?.message || String(err.cause) || "No cause",
+            detail: err.detail || "No detail",
+            hint: err.hint || "No hint"
+          }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
@@ -45,7 +42,7 @@ export default {
       return onRequest(context as any);
     }
 
-    // 3. Serve static files
+    // 3. Serve static React files
     return env.ASSETS.fetch(request);
   },
 };
