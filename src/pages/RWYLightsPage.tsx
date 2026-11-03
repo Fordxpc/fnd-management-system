@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
+import { canViewRWYLights, canEditRWYLights } from '../lib/permissions';
 
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 const getCurrentTime = () => {
@@ -13,23 +14,10 @@ const getCurrentTime = () => {
 const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW', 'VRB'];
 
 export default function RWYLightsPage() {
-  const { profile, lightsInspectors } = useAuth();
-  
-  // 🚨 RBAC LOGIC
-  const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  
-  const myStaffId = profile?.id; 
-  const isSelectedInspector = lightsInspectors.some((i: any) => 
-    i.staffName.toLowerCase() === (profile?.name || '').toLowerCase() || i.staffId === myStaffId
-  );
+  const { profile, user, lightsInspectors } = useAuth();
 
-  const isGroundOpsSMT = isSMT && profile?.department === 'Ground Operations';
-  const canView = isDev || isManager || isSMT || isSelectedInspector || isGroundOpsSMT || profile?.rwyLightViewAccess === true;
-  const canEdit = isDev || isManager || isSelectedInspector || isGroundOpsSMT || profile?.rwyLightEditAccess === true;
-  
   const [records, setRecords] = useState<any[]>([]);
+  const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -63,13 +51,25 @@ export default function RWYLightsPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const recData = await apiFetch('/lights');
+      const [recData, staffData] = await Promise.all([
+        apiFetch('/lights'),
+        apiFetch('/staff').catch(() => []),
+      ]);
       setRecords(recData);
+
+      const myEmail = String(profile?.email || user?.email || '').toLowerCase();
+      const mine = Array.isArray(staffData)
+        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
+        : null;
+      setMyStaff(mine || null);
       setLoading(false);
     } catch (err: any) { toast.error(err.message); setLoading(false); }
-  }, []);
+  }, [profile?.email, user?.email]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const canView = canViewRWYLights(profile, myStaff);
+  const canEdit = canEditRWYLights(profile, myStaff);
 
   const handleLightChange = (category: string, field: string, value: any, subField?: string) => {
     setLights((prev: any) => {
@@ -114,8 +114,8 @@ export default function RWYLightsPage() {
     setTimeout(() => document.body.classList.remove('printing-modal'), 1000);
   };
 
-  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
   if (loading) return <div className="page-content"><p>Loading...</p></div>;
+  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
 
   return (
     <div className="page-content">

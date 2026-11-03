@@ -4,6 +4,7 @@ import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { canViewBirdCounts, canEditBirdCounts } from '../lib/permissions';
 
 const BIRD_DB = [
   { name: 'Kiru Bondana', common: 'Kentish Plover', mass: 44, rshb: 1.5 }, { name: 'Alaka', common: 'Grey Plover', mass: 300, rshb: 2.5 }, { name: 'Angoti Bondana', common: 'Common Ringed Plover', mass: 64, rshb: 1.5 }, { name: 'Beyndu', common: 'Sooty Tern', mass: 180, rshb: 1.5 }, { name: 'Bodu Gaadhooni', common: 'Great Crested Tern', mass: 397, rshb: 5 }, { name: 'Bodu Raabondhi', common: 'Western Reef Egret', mass: 1000, rshb: 10 }, { name: 'Dhandifulhu Dhooni', common: 'White-Tailed Tropicbird', mass: 370, rshb: 2.5 }, { name: 'Dondheeni', common: 'White Tern', mass: 60, rshb: 1.5 }, { name: 'Fin’dhana', common: 'Common sandpiper', mass: 70, rshb: 1.5 }, { name: 'Gohorukey', common: 'Pallas\'s Gull', mass: 1600, rshb: 5 }, { name: 'Hoara Lesser', common: 'Frigatebird', mass: 800, rshb: 2.5 }, { name: 'Kaalhu', common: 'Crow', mass: 620, rshb: 5 }, { name: 'Kanifulhu Dhooni', common: 'Gull-Billed Tern', mass: 221, rshb: 1.5 }, { name: 'Kurangi', common: 'Lesser Noddy', mass: 115, rshb: 1.5 }, { name: 'Lagnaa', common: 'Great Egret', mass: 1500, rshb: 10 }, { name: 'Maa Dhooni', common: 'Red-footed Booby', mass: 950, rshb: 5 }, { name: 'Maaranga', common: 'Brown Noddy', mass: 140, rshb: 2.5 }, { name: 'Rathafa', common: 'Ruddy turnstone', mass: 190, rshb: 2.5 }, { name: 'Vaali', common: 'Bridled Tern', mass: 140, rshb: 2.5 }, { name: 'Valla', common: 'Roseate Tern', mass: 112, rshb: 2.5 },
@@ -15,16 +16,9 @@ const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW',
 function WildlifePage() {
   const { profile, user } = useAuth();
 
-  // 🚨 RBAC LOGIC
-  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
-  
-  const canView = isFullAccess || isSMT || profile?.birdCountViewAccess === true;
-  const canEdit = isFullAccess || isOpsSMT || profile?.birdCountEditAccess === true;
-
   const [activeTab, setActiveTab] = useState<'form' | 'reports' | 'map'>('form');
   const [records, setRecords] = useState<any[]>([]);
+  const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [viewingRecord, setViewingRecord] = useState<any>(null);
@@ -43,11 +37,26 @@ function WildlifePage() {
   const [rows, setRows] = useState<any[]>(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
 
   const fetchRecords = useCallback(async () => {
-    try { const data = await apiFetch('/wildlife'); setRecords(data); setLoading(false); } 
-    catch (err: any) { toast.error(err.message); setLoading(false); }
-  }, []);
+    try {
+      const [data, staffData] = await Promise.all([
+        apiFetch('/wildlife'),
+        apiFetch('/staff').catch(() => []),
+      ]);
+      setRecords(data);
+
+      const myEmail = String(profile?.email || user?.email || '').toLowerCase();
+      const mine = Array.isArray(staffData)
+        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
+        : null;
+      setMyStaff(mine || null);
+      setLoading(false);
+    } catch (err: any) { toast.error(err.message); setLoading(false); }
+  }, [profile?.email, user?.email]);
 
   useEffect(() => { fetchRecords(); const interval = setInterval(fetchRecords, 15000); return () => clearInterval(interval); }, [fetchRecords]);
+
+  const canView = canViewBirdCounts(profile, myStaff);
+  const canEdit = canEditBirdCounts(profile, myStaff);
 
   const handleRowChange = (index: number, field: string, value: any, zoneIdx?: number) => {
     setRows(prev => { const updated = [...prev]; if (field === 'zone' && zoneIdx !== undefined) { updated[index].zones[zoneIdx] = Number(value) || 0; } else { updated[index][field] = value; } return updated; });
@@ -102,8 +111,8 @@ function WildlifePage() {
     return { chart, tableRows, speciesList: Array.from(allSpecies).sort() };
   }, [records]);
 
-  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
   if (loading) return <div className="page-content"><p>Loading Wildlife Data...</p></div>;
+  if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
 
   return (
     <div className="page-content">

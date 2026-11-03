@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
+import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import RampForm from './RampForm';
 import { ConfirmDialog } from '../components/Dialogs';
+import { canViewRamp, canEditRamp } from '../lib/permissions';
 
 const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
 
@@ -11,22 +13,48 @@ interface RampReportsPageProps {
 }
 
 function RampReportsPage({ onEdit }: RampReportsPageProps) {
+  const { profile, user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
+  const [myStaff, setMyStaff] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [viewingReport, setViewingReport] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const fetchReports = useCallback(async () => {
     try {
-      const data = await apiFetch('/ramp/reports');
+      const [data, staffData] = await Promise.all([
+        apiFetch('/ramp/reports'),
+        apiFetch('/staff').catch(() => []),
+      ]);
       setReports(data);
-    } catch (err: any) { toast.error(err.message); }
-  }, []);
+
+      const myEmail = String(profile?.email || user?.email || '').toLowerCase();
+      const mine = Array.isArray(staffData)
+        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
+        : null;
+      setMyStaff(mine || null);
+      setLoading(false);
+    } catch (err: any) { toast.error(err.message); setLoading(false); }
+  }, [profile?.email, user?.email]);
 
   useEffect(() => {
     fetchReports();
     const interval = setInterval(fetchReports, 15000);
     return () => clearInterval(interval);
   }, [fetchReports]);
+
+  const canView = canViewRamp(profile, myStaff);
+  const canEdit = canEditRamp(profile, myStaff);
+
+  if (loading) return <div className="page-content"><p>Loading Ramp Reports...</p></div>;
+
+  if (!canView) {
+    return (
+      <div className="page-content">
+        <div className="empty-state"><p>No access to Ramp Reports.</p></div>
+      </div>
+    );
+  }
 
   const handleDelete = (id: string) => setDeleteTarget(id);
 
@@ -58,7 +86,7 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
                   <td>{r.acReg || '—'}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <button className="reset-pw-btn" onClick={() => setViewingReport(r)}>👁️ View / Print</button>
-                    {onEdit && (
+                    {onEdit && canEdit && (
                       <button className="edit-btn" onClick={() => {
                           if (window.confirm(`Edit saved report ${r.fltNo || ''}? The current form will be replaced.`)) {
                             onEdit(r);
@@ -67,7 +95,9 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
                         ✏️ Edit
                       </button>
                     )}
-                    <button className="delete-btn" onClick={() => handleDelete(r.id)} style={{ marginLeft: '6px' }}>Delete</button>
+                    {canEdit && (
+                      <button className="delete-btn" onClick={() => handleDelete(r.id)} style={{ marginLeft: '6px' }}>Delete</button>
+                    )}
                   </td>
                 </tr>
               ))}

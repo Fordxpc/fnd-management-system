@@ -5,6 +5,7 @@ import html2canvas from 'html2canvas';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../auth';
 import { ConfirmDialog } from '../components/Dialogs';
+import { canViewOpsBoard, canEditOpsBoard } from '../lib/permissions';
 
 const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL', 'MOHAMED IBRAHIM', 'ZIMLA AYYOOB', 'AMINATH MOOSA'];
 const DEFAULT_TASKS = [{ id: 'chocks-on', label: 'CHOCKS ON', color: 'linear-gradient(135deg, #ec407a, #ad1457)', text: '#fff' }, { id: 'cone-setup', label: 'CONE SET UP', color: 'linear-gradient(135deg, #00c6ff, #0072ff)', text: '#fff' }, { id: 'unload-back', label: 'UNLOADING — BACK HOLD', color: 'linear-gradient(135deg, #66bb6a, #2e7d32)', text: '#fff' }, { id: 'unload-front', label: 'UNLOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffee58, #fbc02d)', text: '#1a1a1a' }, { id: 'unload-hall', label: 'UNLOADING — ARRIVAL HALL', color: 'linear-gradient(135deg, #ab47bc, #6a1b9a)', text: '#fff' }, { id: 'load-front', label: 'LOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffa726, #e65100)', text: '#fff' }, { id: 'load-back', label: 'LOADING — BACK HOLD', color: 'linear-gradient(135deg, #26c6da, #00838f)', text: '#fff' }, { id: 'cone-pickup', label: 'CONE PICK UP', color: 'linear-gradient(135deg, #ffca28, #ff8f00)', text: '#1a1a1a' }, { id: 'chocks-off', label: 'CHOCKS OFF', color: 'linear-gradient(135deg, #7e57c2, #4527a0)', text: '#fff' }, { id: 'door', label: 'DOOR OPEN / CLOSE', color: 'linear-gradient(135deg, #26a69a, #00695c)', text: '#fff' }, { id: 'aircraft-cleaning', label: 'AIRCRAFT CLEANING', color: 'linear-gradient(135deg, #64748b, #475569)', text: '#fff' }, { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' }, { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' }];
@@ -12,16 +13,9 @@ const formatDate = (date: Date) => date.toISOString().split('T')[0];
 
 function OpsBoardPage() {
   const { profile, user } = useAuth();
-  
-  // 🚨 RBAC LOGIC
-  const isDev = profile?.role === 'developer';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const dept = (profile?.department || '').toLowerCase();
-  const isOpsSMT = isSMT && dept === 'ground operations';
 
-  const canView = isDev || isOpsSMT || profile?.opsBoardViewAccess === true;
-  const canEdit = isDev || isOpsSMT || profile?.opsBoardEditAccess === true;
-
+  const [dataReady, setDataReady] = useState<boolean>(false);
+  const [myStaff, setMyStaff] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
   const [staffPool, setStaffPool] = useState<string[]>(() => { const saved = localStorage.getItem('ops_staff_pool'); return saved ? JSON.parse(saved) : DEFAULT_STAFF; });
   const [newStaff, setNewStaff] = useState('');
@@ -59,11 +53,24 @@ function OpsBoardPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const results = await Promise.allSettled([apiFetch('/ops/runway'), apiFetch('/ops/ground'), apiFetch('/fod')]);
+      const results = await Promise.allSettled([
+        apiFetch('/ops/runway'),
+        apiFetch('/ops/ground'),
+        apiFetch('/fod'),
+        apiFetch('/staff'),
+      ]);
       const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
       setRunwayHistory(getData(0)); setGroundHistory(getData(1)); setFodList(getData(2));
-    } catch (err: any) { console.error(err); }
-  }, []);
+
+      const staffData = getData(3);
+      const myEmail = String(profile?.email || user?.email || '').toLowerCase();
+      const mine = Array.isArray(staffData)
+        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
+        : null;
+      setMyStaff(mine || null);
+      setDataReady(true);
+    } catch (err: any) { console.error(err); setDataReady(true); }
+  }, [profile?.email, user?.email]);
 
   useEffect(() => { fetchData(); const interval = setInterval(fetchData, 15000); return () => clearInterval(interval); }, [fetchData]);
 
@@ -79,6 +86,9 @@ function OpsBoardPage() {
   }, []);
 
   useEffect(() => { localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign })); }, [rwy19, rwy01, lights, groundAssign]);
+
+  const canView = canViewOpsBoard(profile, myStaff);
+  const canEdit = canEditOpsBoard(profile, myStaff);
 
   const handleAddTask = () => { setEditingTaskId(null); setTaskForm({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' }); setShowTaskModal(true); };
   const handleEditTask = (task: any) => { const colorMatches = String(task.color || '').match(/#[0-9a-fA-F]{3,6}/g) || []; setTaskForm({ label: task.label || '', colorStart: colorMatches[0] || '#26c6da', colorEnd: colorMatches[1] || '#00838f', text: task.text || '#fff' }); setEditingTaskId(task.id); setShowTaskModal(true); };
@@ -129,6 +139,7 @@ function OpsBoardPage() {
   const indTaskCounts: { [task: string]: number } = {};
   indHistory.forEach(h => { if (h.type === 'runway') { if (h.rwy19.includes(selectedStaff)) indTaskCounts['RWY 19 Inspection'] = (indTaskCounts['RWY 19 Inspection'] || 0) + 1; if (h.rwy01.includes(selectedStaff)) indTaskCounts['RWY 01 Inspection'] = (indTaskCounts['RWY 01 Inspection'] || 0) + 1; if (h.lights.includes(selectedStaff)) indTaskCounts['Light Inspection'] = (indTaskCounts['Light Inspection'] || 0) + 1; } else { Object.entries(h.assignments || {}).forEach(([taskId, names]: any) => { if (names.includes(selectedStaff)) { const label = tasks.find(t => t.id === taskId)?.label || taskId; indTaskCounts[label] = (indTaskCounts[label] || 0) + 1; } }); } });
 
+  if (!dataReady) return <div className="page-content"><p>Loading Operations Board...</p></div>;
   if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2><p>You do not have permission to view the Operations Board.</p></div></div>;
 
   return (
