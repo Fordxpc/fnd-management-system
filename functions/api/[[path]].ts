@@ -241,33 +241,147 @@ export const onRequest = async (context: any) => {
     // AUTO-SYNC BETTER AUTH USER → users TABLE
     // ==========================================
     if (pathname === "/api/users/me/sync" && method === "POST") {
-      const session = await getAuth(env).api.getSession({ headers: request.headers });
-      if (!session?.user) return json({ message: "Unauthorized" }, 401);
 
-      const email = session.user.email.toLowerCase();
-      const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      const session =
+        await getAuth(env).api.getSession({
+          headers: request.headers
+        });
 
-      if (existing.length === 0) {
-        const snPart = email.split('@')[0];
-        const staffRec = await db.select().from(staff).where(
-          or(eq(staff.email, email), eq(staff.sn, snPart), eq(staff.sn, snPart.replace('sn-', '')))
-        ).limit(1);
+      if (!session?.user) {
+        return json(
+          { message: "Unauthorized" },
+          401
+        );
+      }
 
-        let role = "user"; let dept = "";
+      const email =
+        session.user.email.toLowerCase();
 
-        if (staffRec.length > 0) {
-          role = staffRec[0].isSmt ? "smt" : "staff";
-          dept = staffRec[0].department || "";
+      const existing =
+        await db
+          .select()
+          .from(users)
+          .where(
+            eq(
+              users.email,
+              email
+            )
+          )
+          .limit(1);
+
+      const snPart =
+        email.split("@")[0];
+
+      const staffRec =
+        await db
+          .select()
+          .from(staff)
+          .where(
+            or(
+              eq(staff.email, email),
+              eq(staff.sn, snPart),
+              eq(
+                staff.sn,
+                snPart.replace(
+                  "sn-",
+                  ""
+                )
+              )
+            )
+          )
+          .limit(1);
+
+      let role = "user";
+      let dept = "";
+
+      if (staffRec.length > 0) {
+
+        if (
+          staffRec[0].isIncharge
+        ) {
+
+          role = "smt";
+
+        } else if (
+          staffRec[0].isSmt
+        ) {
+
+          role = "smt";
+
         } else {
-          const preset = await db.select().from(userPresets).where(eq(userPresets.email, email)).limit(1);
-          if (preset.length > 0) { role = preset[0].role || "user"; dept = preset[0].department || ""; }
+
+          role = "staff";
+
         }
 
-        await db.insert(users).values({
-          id: session.user.id, email, role, department: dept, createdAt: new Date().toISOString(),
-        });
+        dept =
+          staffRec[0].department || "";
+
+      } else {
+
+        const preset =
+          await db
+            .select()
+            .from(userPresets)
+            .where(
+              eq(
+                userPresets.email,
+                email
+              )
+            )
+            .limit(1);
+
+        if (preset.length > 0) {
+
+          role =
+            preset[0].role ||
+            "user";
+
+          dept =
+            preset[0].department ||
+            "";
+
+        }
+
       }
-      return json({ success: true });
+
+      if (existing.length === 0) {
+
+        await db
+          .insert(users)
+          .values({
+            id: session.user.id,
+            email,
+            role,
+            department: dept,
+            createdAt:
+              new Date().toISOString(),
+          });
+
+      } else {
+
+        await db
+          .update(users)
+          .set({
+            role,
+            department: dept,
+          })
+          .where(
+            eq(
+              users.email,
+              email
+            )
+          );
+
+      }
+
+      return json({
+        success: true,
+        role,
+        department: dept,
+        matchedStaff:
+          staffRec.length > 0
+      });
     }
 
     // ==========================================
