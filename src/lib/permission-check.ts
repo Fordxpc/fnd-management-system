@@ -26,6 +26,27 @@ export function hasFullAccess(user: CurrentUser): boolean {
 }
 
 /**
+ * Centralized helper — Developer
+ */
+export function isDeveloper(currentUser: CurrentUser): boolean {
+  return (currentUser?.role || "").toLowerCase() === "developer";
+}
+
+/**
+ * Centralized helper — Admin or Manager
+ */
+export function isAdminOrManager(currentUser: CurrentUser): boolean {
+  return ["admin", "manager"].includes((currentUser?.role || "").toLowerCase());
+}
+
+/**
+ * Centralized helper — SMT profile (staff row)
+ */
+function isSMTProfile(profile: any): boolean {
+  return !!(profile && (profile.isSmt === true || profile.isIncharge === true));
+}
+
+/**
  * Load staff profile connected to current user
  */
 export async function getStaffProfile(
@@ -82,6 +103,45 @@ export async function requirePermission(
   return true;
 }
 
+/**
+ * Shared module access checker.
+ *
+ * Rules:
+ *   - Full access roles (developer / admin / manager / owner) → allowed
+ *   - Explicit permission field === true                        → allowed
+ *   - specialOpsAccess === true                                → allowed
+ *   - SMT (isSmt / isIncharge) and allowSMT === true           → allowed
+ *     (SMT is auto-granted on VIEW actions only; EDIT actions
+ *      require an explicit permission field)
+ */
+async function checkModuleAccess(
+  env: any,
+  currentUser: CurrentUser,
+  permissionField: string,
+  allowSMT: boolean
+) {
+  if (hasFullAccess(currentUser)) return true;
+
+  const profile = await getStaffProfile(
+    env,
+    currentUser.email
+  );
+
+  if (!profile) {
+    const err: any = new Error("No staff profile found");
+    err.status = 403;
+    throw err;
+  }
+
+  if ((profile as any)[permissionField] === true) return true;
+  if ((profile as any).specialOpsAccess === true) return true;
+  if (allowSMT && isSMTProfile(profile)) return true;
+
+  const err: any = new Error("Access denied");
+  err.status = 403;
+  throw err;
+}
+
 /* ===================================================
    RAMP SHEET
 =================================================== */
@@ -116,10 +176,12 @@ export async function requireRWYView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
+  // View → SMT allowed, explicit view access, special ops
+  return checkModuleAccess(
     env,
     currentUser,
-    "rwyLightViewAccess"
+    "rwyLightViewAccess",
+    true
   );
 }
 
@@ -127,10 +189,12 @@ export async function requireRWYEdit(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
+  // Edit → SMT NOT auto-allowed, needs explicit edit access or special ops
+  return checkModuleAccess(
     env,
     currentUser,
-    "rwyLightEditAccess"
+    "rwyLightEditAccess",
+    false
   );
 }
 
@@ -142,10 +206,12 @@ export async function requireBirdView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
+  // View → SMT allowed, explicit view access, special ops
+  return checkModuleAccess(
     env,
     currentUser,
-    "birdCountViewAccess"
+    "birdCountViewAccess",
+    true
   );
 }
 
@@ -153,10 +219,12 @@ export async function requireBirdEdit(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
+  // Edit → SMT NOT auto-allowed, needs explicit edit access or special ops
+  return checkModuleAccess(
     env,
     currentUser,
-    "birdCountEditAccess"
+    "birdCountEditAccess",
+    false
   );
 }
 
@@ -168,10 +236,12 @@ export async function requireOpsBoardView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
+  // View → SMT allowed, explicit view access, special ops
+  return checkModuleAccess(
     env,
     currentUser,
-    "opsBoardViewAccess"
+    "opsBoardViewAccess",
+    true
   );
 }
 
@@ -179,10 +249,12 @@ export async function requireOpsBoardEdit(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
+  // Edit → SMT NOT auto-allowed, needs explicit edit access or special ops
+  return checkModuleAccess(
     env,
     currentUser,
-    "opsBoardEditAccess"
+    "opsBoardEditAccess",
+    false
   );
 }
 
@@ -389,4 +461,119 @@ export function requireSMTApproval(
   err.status = 403;
 
   throw err;
+}
+
+/**
+ * Shared approval check:
+ *   - Developer / Admin / Manager / Owner → all departments
+ *   - SMT / Incharge (staff row isSmt / isIncharge) → own department only
+ *   - Anyone else                                → denied
+ */
+async function requireDepartmentApproval(
+  env: any,
+  approverEmail: string,
+  targetEmail: string
+) {
+  const db = getDb(env);
+
+  // 1) Approver role from users table
+  const approverUserRows = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, approverEmail.toLowerCase()))
+    .limit(1);
+  const approverUser = approverUserRows[0];
+  const role = (approverUser?.role || "").toLowerCase();
+
+  if (["developer", "admin", "manager", "owner"].includes(role)) {
+    return true;
+  }
+
+  // 2) Approver staff row
+  const approverStaffRows = await db
+    .select()
+    .from(staff)
+    .where(eq(staff.email, approverEmail.toLowerCase()))
+    .limit(1);
+  const approverStaff = approverStaffRows[0];
+
+  const isSMTRole = role === "smt";
+  const isSMTFlag = isSMTProfile(approverStaff);
+
+  if (!isSMTRole && !isSMTFlag) {
+    const err: any = new Error(
+      "Approval permission required"
+    );
+    err.status = 403;
+    throw err;
+  }
+
+  if (!approverStaff) {
+    const err: any = new Error(
+      "Approver staff profile not found"
+    );
+    err.status = 403;
+    throw err;
+  }
+
+  // 3) Target staff row
+  const targetStaffRows = await db
+    .select()
+    .from(staff)
+    .where(eq(staff.email, targetEmail.toLowerCase()))
+    .limit(1);
+  const targetStaff = targetStaffRows[0];
+
+  if (!targetStaff) {
+    const err: any = new Error(
+      "Target staff profile not found"
+    );
+    err.status = 403;
+    throw err;
+  }
+
+  // 4) SMT → ONLY own department
+  if (
+    approverStaff.department &&
+    targetStaff.department &&
+    approverStaff.department === targetStaff.department
+  ) {
+    return true;
+  }
+
+  const err: any = new Error(
+    "SMT can only approve requests within their own department"
+  );
+  err.status = 403;
+  throw err;
+}
+
+/**
+ * Leave approval — enforces own-department rule for SMT.
+ */
+export async function requireLeaveApproval(
+  env: any,
+  approverEmail: string,
+  targetEmail: string
+) {
+  return requireDepartmentApproval(
+    env,
+    approverEmail,
+    targetEmail
+  );
+}
+
+/**
+ * Overtime approval — enforces own-department rule for SMT.
+ */
+export async function requireOTApproval(
+  env: any,
+  approverEmail: string,
+  targetEmail: string
+) {
+  return requireDepartmentApproval(
+    env,
+    approverEmail,
+    targetEmail
+  );
 }

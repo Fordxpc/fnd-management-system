@@ -19,12 +19,10 @@ import {
   requireOpsBoardEdit,
   requireRosterEdit,
   requireLeaveEdit,
-  requireOvertimeEdit
-} from "../../src/lib/permission-check.js";
-import {
+  requireOvertimeEdit,
   requireLeaveApproval,
   requireOTApproval
-} from "../../src/lib/approval-check.js";
+} from "../../src/lib/permission-check.js";
 
 const isManagerRole = (role: string | undefined | null) =>
   ['developer', 'manager', 'admin'].includes(role || '');
@@ -242,12 +240,12 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/users/me/sync" && method === "POST") {
 
-      const session =
+      const sessionData =
         await getAuth(env).api.getSession({
           headers: request.headers
         });
 
-      if (!session?.user) {
+      if (!sessionData?.user) {
         return json(
           { message: "Unauthorized" },
           401
@@ -255,7 +253,7 @@ export const onRequest = async (context: any) => {
       }
 
       const email =
-        session.user.email.toLowerCase();
+        sessionData.user.email.toLowerCase();
 
       const existing =
         await db
@@ -294,31 +292,22 @@ export const onRequest = async (context: any) => {
       let role = "user";
       let dept = "";
 
-      if (staffRec.length > 0) {
+      const existingRole = existing[0]?.role;
 
-        if (
-          staffRec[0].isIncharge
-        ) {
-
+      if (
+        existingRole &&
+        ["developer", "admin", "manager"].includes(existingRole)
+      ) {
+        role = existingRole;
+        dept = existing[0]?.department || staffRec[0]?.department || "";
+      } else if (staffRec.length > 0) {
+        if (staffRec[0].isIncharge || staffRec[0].isSmt) {
           role = "smt";
-
-        } else if (
-          staffRec[0].isSmt
-        ) {
-
-          role = "smt";
-
         } else {
-
           role = "staff";
-
         }
-
-        dept =
-          staffRec[0].department || "";
-
+        dept = staffRec[0].department || "";
       } else {
-
         const preset =
           await db
             .select()
@@ -332,17 +321,9 @@ export const onRequest = async (context: any) => {
             .limit(1);
 
         if (preset.length > 0) {
-
-          role =
-            preset[0].role ||
-            "user";
-
-          dept =
-            preset[0].department ||
-            "";
-
+          role = preset[0].role || "user";
+          dept = preset[0].department || "";
         }
-
       }
 
       if (existing.length === 0) {
@@ -350,7 +331,7 @@ export const onRequest = async (context: any) => {
         await db
           .insert(users)
           .values({
-            id: session.user.id,
+            id: sessionData.user.id,
             email,
             role,
             department: dept,
@@ -952,6 +933,30 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
 
       try {
+        // Protect developer accounts
+        const existingRows = await db.select().from(users).where(eq(users.id, id!)).limit(1);
+        const existingUser = existingRows[0];
+
+        if (
+          existingUser.role === "developer" &&
+          currentUser.role !== "developer"
+        ) {
+          return json(
+            { message: "Cannot modify developer account" },
+            403
+          );
+        }
+
+        if (
+          body.role === "developer" &&
+          currentUser.role !== "developer"
+        ) {
+          return json(
+            { message: "Cannot assign developer role" },
+            403
+          );
+        }
+
         // 1. Update your legacy app table
         await db
           .update(users)

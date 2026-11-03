@@ -50,6 +50,14 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
   const dateStr = time.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+  // Time-of-day greeting (fixes ReferenceError: greeting is not defined)
+  const greeting = (() => {
+    const h = time.getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
+    return 'Good evening';
+  })();
+
   const nextFlight = dashboard?.nextFlight;
   const weather = dashboard?.weather;
   const operations = dashboard?.operations || {};
@@ -65,13 +73,21 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
       <div className="dash-card" style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #1e293b, #0f172a)', color: 'white', padding: '30px', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
         <div>
           <h1 style={{ margin: '0 0 16px 0', fontSize: '28px', color: '#f8fafc', fontWeight: 600 }}>
-            Welcome back, {profile?.name || 'User'}! 👋
+            {greeting}, {profile?.name || 'User'}! 👋
           </h1>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '14px', color: '#cbd5e1' }}>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>SN:</strong> {profile?.sn || 'N/A'}</div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Designation:</strong> {profile?.designation || profile?.position || 'N/A'}</div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}><strong style={{ color: '#94a3b8' }}>Dept:</strong> {profile?.department || 'N/A'}</div>
-            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>{profile?.role || 'Staff'}</div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
+              <strong style={{ color: '#94a3b8' }}>Position:</strong> {profile?.position || 'N/A'}
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
+              <strong style={{ color: '#94a3b8' }}>Dept:</strong> {profile?.department || 'N/A'}
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
+              <strong style={{ color: '#94a3b8' }}>SN:</strong> {profile?.sn || 'N/A'}
+            </div>
+            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+              {profile?.role || 'Staff'}
+            </div>
           </div>
         </div>
 

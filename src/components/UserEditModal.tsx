@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { apiFetch } from '../lib/api';
+import { useAuth } from '../auth';
 import { toast } from 'sonner';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
@@ -11,6 +12,10 @@ interface UserEditModalProps {
 }
 
 export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
+  const { profile } = useAuth();
+  const currentRole = (profile?.role || '').toLowerCase();
+  const isDeveloper = currentRole === 'developer';
+
   const [role, setRole] = useState(user.role || 'staff');
   const [dept, setDept] = useState(user.department || 'Ground Operations');
   const [name, setName] = useState(user.name || '');
@@ -20,7 +25,15 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
   const isPreset = user.status === 'Pre-registered';
   const endpoint = isPreset ? `/user-presets/${user.id}` : `/users/${user.id}`;
 
+  // UI-level protection: non-developers cannot edit developer accounts
+  const isTargetDeveloper = (user.role || '').toLowerCase() === 'developer';
+  const blockedByRoleGuard = isTargetDeveloper && !isDeveloper;
+
   const handleSave = async () => {
+    if (blockedByRoleGuard) {
+      toast.error('Cannot modify developer account');
+      return;
+    }
     setSaving(true);
     try {
       // Update Neon via API
@@ -28,7 +41,7 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
         method: 'PUT',
         body: JSON.stringify({ role, department: dept, name, position })
       });
-      
+
       toast.success(isPreset ? 'Pre-registration updated' : 'User account updated');
       onSaved();
       onClose();
@@ -45,29 +58,57 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
           {isPreset ? 'Edit Pre-registration' : 'Edit Active User'}: <br/>
           <span style={{ fontSize: '14px', color: '#64748b' }}>{user.email}</span>
         </h3>
-        
+
+        {blockedByRoleGuard && (
+          <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '12px', marginBottom: '12px', border: '1px solid #fca5a5' }}>
+            ⚠️ Only a Developer can modify a Developer account.
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <div>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Full Name</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} />
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              disabled={blockedByRoleGuard}
+              style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', opacity: blockedByRoleGuard ? 0.6 : 1 }}
+            />
           </div>
           <div>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Designation / Position</label>
-            <input type="text" value={position} onChange={e => setPosition(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} />
+            <input
+              type="text"
+              value={position}
+              onChange={e => setPosition(e.target.value)}
+              disabled={blockedByRoleGuard}
+              style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', opacity: blockedByRoleGuard ? 0.6 : 1 }}
+            />
           </div>
           <div>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Role</label>
-            <select value={role} onChange={e => setRole(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }}>
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              disabled={blockedByRoleGuard}
+              style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', opacity: blockedByRoleGuard ? 0.6 : 1 }}
+            >
               <option value="staff">Staff</option>
               <option value="smt">SMT</option>
               <option value="manager">Manager</option>
               <option value="admin">Admin</option>
-              <option value="developer">Developer</option>
+              {isDeveloper && <option value="developer">Developer</option>}
             </select>
           </div>
           <div>
             <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569' }}>Department</label>
-            <select value={dept} onChange={e => setDept(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }}>
+            <select
+              value={dept}
+              onChange={e => setDept(e.target.value)}
+              disabled={blockedByRoleGuard}
+              style={{ width: '100%', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', opacity: blockedByRoleGuard ? 0.6 : 1 }}
+            >
               {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           </div>
@@ -75,7 +116,19 @@ export function UserEditModal({ user, onClose, onSaved }: UserEditModalProps) {
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
           <button onClick={onClose} style={{ padding: '8px 16px', background: '#f1f5f9', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#475569' }}>Cancel</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: '8px 16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+          <button
+            onClick={handleSave}
+            disabled={saving || blockedByRoleGuard}
+            style={{
+              padding: '8px 16px',
+              background: blockedByRoleGuard ? '#94a3b8' : '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: blockedByRoleGuard ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
