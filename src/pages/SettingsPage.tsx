@@ -15,17 +15,17 @@ function SettingsPage() {
   const { user, profile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed' | 'console'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  
+
   const isDev = (profile?.role || '').toLowerCase() === 'developer';
   const isManager = ['manager', 'admin'].includes((profile?.role || '').toLowerCase());
   const canManageAccess = isDev || isManager;
-  
+
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
   const [savingRules, setSavingRules] = useState(false);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
@@ -343,7 +343,13 @@ function SettingsPage() {
                         <th style={{ textAlign: 'center' }}>Rampsheet (V / E)</th>
                         <th style={{ textAlign: 'center' }}>RWY Lights (V / E)</th>
                         <th style={{ textAlign: 'center' }}>Bird Count (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Ops Board (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Flights (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Roster (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Leave (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Overtime (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Reports (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Staff (V / E)</th>
+                        <th style={{ textAlign: 'center' }}>Settings (V / E)</th>
                         <th style={{ textAlign: 'center' }}>Incharge</th>
                       </tr>
                     </thead>
@@ -372,6 +378,56 @@ function SettingsPage() {
                             <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
                             <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'opsBoardEditAccess') || s.opsBoardEditAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardEditAccess')} onChange={() => togglePermission(s.id, 'opsBoardEditAccess', s.opsBoardEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                           </td>
+
+                          {/* ✅ NEW: Flights (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.flightsViewAccess === true} onChange={() => togglePermission(s.id, 'flightsViewAccess', s.flightsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.flightsEditAccess === true} onChange={() => togglePermission(s.id, 'flightsEditAccess', s.flightsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
+                          {/* ✅ NEW: Roster (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.rosterViewAccess === true} onChange={() => togglePermission(s.id, 'rosterViewAccess', s.rosterViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.rosterEditAccess === true} onChange={() => togglePermission(s.id, 'rosterEditAccess', s.rosterEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
+                          {/* ✅ NEW: Leave (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.leaveViewAccess === true} onChange={() => togglePermission(s.id, 'leaveViewAccess', s.leaveViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.leaveEditAccess === true} onChange={() => togglePermission(s.id, 'leaveEditAccess', s.leaveEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
+                          {/* ✅ NEW: Overtime (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.overtimeViewAccess === true} onChange={() => togglePermission(s.id, 'overtimeViewAccess', s.overtimeViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.overtimeEditAccess === true} onChange={() => togglePermission(s.id, 'overtimeEditAccess', s.overtimeEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
+                          {/* ✅ NEW: Reports (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.reportsViewAccess === true} onChange={() => togglePermission(s.id, 'reportsViewAccess', s.reportsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.reportsEditAccess === true} onChange={() => togglePermission(s.id, 'reportsEditAccess', s.reportsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
+                          {/* ✅ NEW: Staff (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.staffViewAccess === true} onChange={() => togglePermission(s.id, 'staffViewAccess', s.staffViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.staffEditAccess === true} onChange={() => togglePermission(s.id, 'staffEditAccess', s.staffEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
+                          {/* ✅ NEW: Settings (V/E) */}
+                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                            <input type="checkbox" title="View" checked={s.settingsViewAccess === true} onChange={() => togglePermission(s.id, 'settingsViewAccess', s.settingsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                            <input type="checkbox" title="Edit" checked={s.settingsEditAccess === true} onChange={() => togglePermission(s.id, 'settingsEditAccess', s.settingsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                          </td>
+
                           <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} /></td>
                         </tr>
                       ))}
@@ -398,6 +454,13 @@ function SettingsPage() {
                           <th style={{ textAlign: 'center' }}>RWY Lights (V / E)</th>
                           <th style={{ textAlign: 'center' }}>Bird Count (V / E)</th>
                           <th style={{ textAlign: 'center' }}>Ops Board (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Flights (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Roster (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Leave (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Overtime (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Reports (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Staff (V / E)</th>
+                          <th style={{ textAlign: 'center' }}>Settings (V / E)</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -424,6 +487,41 @@ function SettingsPage() {
                               <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'opsBoardViewAccess') || s.opsBoardViewAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardViewAccess')} onChange={() => togglePermission(s.id, 'opsBoardViewAccess', s.opsBoardViewAccess === true)} style={{ width: '16px', height: '16px' }} />
                               <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
                               <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'opsBoardEditAccess') || s.opsBoardEditAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardEditAccess')} onChange={() => togglePermission(s.id, 'opsBoardEditAccess', s.opsBoardEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'flightsViewAccess') || s.flightsViewAccess === true} disabled={isRoleAutoGranted(s, 'flightsViewAccess')} onChange={() => togglePermission(s.id, 'flightsViewAccess', s.flightsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'flightsEditAccess') || s.flightsEditAccess === true} disabled={isRoleAutoGranted(s, 'flightsEditAccess')} onChange={() => togglePermission(s.id, 'flightsEditAccess', s.flightsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'rosterViewAccess') || s.rosterViewAccess === true} disabled={isRoleAutoGranted(s, 'rosterViewAccess')} onChange={() => togglePermission(s.id, 'rosterViewAccess', s.rosterViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'rosterEditAccess') || s.rosterEditAccess === true} disabled={isRoleAutoGranted(s, 'rosterEditAccess')} onChange={() => togglePermission(s.id, 'rosterEditAccess', s.rosterEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'leaveViewAccess') || s.leaveViewAccess === true} disabled={isRoleAutoGranted(s, 'leaveViewAccess')} onChange={() => togglePermission(s.id, 'leaveViewAccess', s.leaveViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'leaveEditAccess') || s.leaveEditAccess === true} disabled={isRoleAutoGranted(s, 'leaveEditAccess')} onChange={() => togglePermission(s.id, 'leaveEditAccess', s.leaveEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'overtimeViewAccess') || s.overtimeViewAccess === true} disabled={isRoleAutoGranted(s, 'overtimeViewAccess')} onChange={() => togglePermission(s.id, 'overtimeViewAccess', s.overtimeViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'overtimeEditAccess') || s.overtimeEditAccess === true} disabled={isRoleAutoGranted(s, 'overtimeEditAccess')} onChange={() => togglePermission(s.id, 'overtimeEditAccess', s.overtimeEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'reportViewAccess') || s.reportViewAccess === true} disabled={isRoleAutoGranted(s, 'reportViewAccess')} onChange={() => togglePermission(s.id, 'reportViewAccess', s.reportViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'reportEditAccess') || s.reportEditAccess === true} disabled={isRoleAutoGranted(s, 'reportEditAccess')} onChange={() => togglePermission(s.id, 'reportEditAccess', s.reportEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'staffViewAccess') || s.staffViewAccess === true} disabled={isRoleAutoGranted(s, 'staffViewAccess')} onChange={() => togglePermission(s.id, 'staffViewAccess', s.staffViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'staffEditAccess') || s.staffEditAccess === true} disabled={isRoleAutoGranted(s, 'staffEditAccess')} onChange={() => togglePermission(s.id, 'staffEditAccess', s.staffEditAccess === true)} style={{ width: '16px', height: '16px' }} />
+                            </td>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'settingsViewAccess') || s.settingsViewAccess === true} disabled={isRoleAutoGranted(s, 'settingsViewAccess')} onChange={() => togglePermission(s.id, 'settingsViewAccess', s.settingsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
+                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
+                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'settingsEditAccess') || s.settingsEditAccess === true} disabled={isRoleAutoGranted(s, 'settingsEditAccess')} onChange={() => togglePermission(s.id, 'settingsEditAccess', s.settingsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
                             </td>
                           </tr>
                         ))}
@@ -453,6 +551,13 @@ function SettingsPage() {
                   <th style={{ textAlign: 'center' }}>RWY (V/E)</th>
                   <th style={{ textAlign: 'center' }}>Bird (V/E)</th>
                   <th style={{ textAlign: 'center' }}>Ops (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Flights (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Roster (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Leave (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Overtime (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Reports (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Staff (V/E)</th>
+                  <th style={{ textAlign: 'center' }}>Settings (V/E)</th>
                   <th>Incharge</th>
                 </tr>
               </thead>
@@ -466,6 +571,13 @@ function SettingsPage() {
                     <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'rwyLightViewAccess') || s.rwyLightViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'rwyLightEditAccess') || s.rwyLightEditAccess) ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'birdCountViewAccess') || s.birdCountViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'birdCountEditAccess') || s.birdCountEditAccess) ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'opsBoardViewAccess') || s.opsBoardViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'opsBoardEditAccess') || s.opsBoardEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'flightsViewAccess') || s.flightsViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'flightsEditAccess') || s.flightsEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'rosterViewAccess') || s.rosterViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'rosterEditAccess') || s.rosterEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'leaveViewAccess') || s.leaveViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'leaveEditAccess') || s.leaveEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'overtimeViewAccess') || s.overtimeViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'overtimeEditAccess') || s.overtimeEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'reportsViewAccess') || s.reportsViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'reportsEditAccess') || s.reportsEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'staffViewAccess') || s.staffViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'staffEditAccess') || s.staffEditAccess) ? '✅' : '❌'}</td>
+                    <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'settingsViewAccess') || s.settingsViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'settingsEditAccess') || s.settingsEditAccess) ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center', color: s.isIncharge ? '#16a34a' : '#cbd5e1' }}>{s.isIncharge ? '✅' : '❌'}</td>
                   </tr>
                 ))}
