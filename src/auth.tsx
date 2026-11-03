@@ -39,10 +39,14 @@ export function AuthProvider({ children }: any) {
           (s.sn || "").trim().toLowerCase() === snPart
         );
 
+        console.log("STAFF RECORD:",
+          staffRecord
+        );
+
         // 🚨 FORCE DEVELOPER ROLE FOR KNOWN ADMIN EMAILS
         let role = (userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff')).toLowerCase();
         
-        if (email === 'admin@funadhooairport.com' || email === 'developer@funadhooairport.com' || email.includes('admin') || email.includes('developer')) {
+        if (email === 'developer@funadhooairport.com' || email.includes('developer')) {
           role = 'developer';
         }
 
@@ -52,10 +56,28 @@ export function AuthProvider({ children }: any) {
         setProfile({
           ...userRecord,
           ...staffRecord,
-          role: role,
-          email: email,
-          sn: staffRecord?.sn || snPart.replace('sn-', ''),
-          designation: staffRecord?.position || '—'
+          role,
+
+          email,
+
+          sn: 
+            staffRecord?.sn ||
+            userRecord?.sn || 
+            snPart.replace('sn-', ''),
+
+          designation:
+            staffRecord?.position ||
+            staffRecord?.designation ||
+            '—',
+
+          department:
+            staffRecord?.department ||
+            staffRecord?.department ||
+            '—',
+          
+          position:
+            staffRecord?.position ||
+            '—'
         });
 
       } catch (err) {
