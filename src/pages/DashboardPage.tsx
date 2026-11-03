@@ -3,6 +3,15 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../auth';
 import { apiFetch } from '../lib/api';
 
+const DEPARTMENTS = [
+  'Ground Operations',
+  'Maintenance',
+  'Security',
+  'Fire & Rescue',
+  'Administration',
+  'Safety',
+];
+
 function Section({ title, loading, children }: { title: string; loading: boolean; children: ReactNode }) {
   return (
     <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
@@ -20,7 +29,11 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
   const { profile } = useAuth();
   const [time, setTime] = useState(new Date());
   const [dashboard, setDashboard] = useState<any>(null);
+  const [passwordResets, setPasswordResets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const role = (profile?.role || '').toLowerCase();
+  const canSeePendingRequests = ['smt', 'manager', 'admin', 'developer'].includes(role);
 
   // Clock
   useEffect(() => {
@@ -28,11 +41,11 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
     return () => clearInterval(timer);
   }, []);
 
-  // Dashboard data + 5-minute refresh (checklist #4)
+  // Dashboard data + 5-minute refresh
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const data = await apiFetch("/dashboard");
+        const data = await apiFetch('/dashboard');
         setDashboard(data);
       } catch (err) {
         console.error(err);
@@ -46,18 +59,39 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
     return () => clearInterval(interval);
   }, []);
 
+  // Pending password reset requests (approvers only)
+  useEffect(() => {
+    if (!canSeePendingRequests) return;
+
+    const fetchResets = async () => {
+      try {
+        const res = await apiFetch('/password-reset-requests').catch(() => []);
+        setPasswordResets(Array.isArray(res) ? res : []);
+      } catch {
+        // Non-fatal: role may not have backend access (e.g. SMT). Just show 0.
+        setPasswordResets([]);
+      }
+    };
+
+    fetchResets();
+    const interval = setInterval(fetchResets, 60000);
+    return () => clearInterval(interval);
+  }, [canSeePendingRequests]);
+
+  // ─── Header / Clock ────────────────────────────────────────
   const dayName = time.toLocaleDateString('en-US', { weekday: 'long' });
   const dateStr = time.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-  // Time-of-day greeting (fixes ReferenceError: greeting is not defined)
-  const greeting = (() => {
-    const h = time.getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 18) return 'Good afternoon';
-    return 'Good evening';
-  })();
+  const hour = time.getHours();
+  const greeting =
+    hour < 12
+      ? 'Good Morning'
+      : hour < 17
+        ? 'Good Afternoon'
+        : 'Good Evening';
 
+  // ─── Dashboard Data ────────────────────────────────────────
   const nextFlight = dashboard?.nextFlight;
   const weather = dashboard?.weather;
   const operations = dashboard?.operations || {};
@@ -66,72 +100,188 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
   const pendingLeave = dashboard?.pendingLeave || [];
   const pendingOT = dashboard?.pendingOT || [];
 
+  // ─── Flight Status (derived) ───────────────────────────────
+  let flightStatus = 'Scheduled';
+  if (nextFlight?.eta) flightStatus = 'Departed Origin';
+  if (nextFlight?.ata) flightStatus = 'Arrived';
+  if (nextFlight?.atd) flightStatus = 'Departed';
+  if (nextFlight?.ata && nextFlight?.atd) flightStatus = 'Completed';
+
+  // ─── Group duty by department ──────────────────────────────
+  const dutyByDept: Record<string, any[]> = {};
+  DEPARTMENTS.forEach(d => { dutyByDept[d] = []; });
+  onDuty.forEach((r: any) => {
+    if (r?.staffDepartment && dutyByDept[r.staffDepartment]) {
+      dutyByDept[r.staffDepartment].push(r);
+    }
+  });
+
   return (
     <div className="page-content" style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
 
-      {/* Header */}
-      <div className="dash-card" style={{ marginBottom: '24px', background: 'linear-gradient(135deg, #1e293b, #0f172a)', color: 'white', padding: '30px', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+      {/* ═════════════ 1. GREETING HEADER ═════════════ */}
+      <div
+        className="dashboard-hero dash-card"
+        style={{
+          marginBottom: '24px',
+          background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+          color: 'white',
+          padding: '30px',
+          borderRadius: '16px',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '20px',
+        }}
+      >
         <div>
           <h1 style={{ margin: '0 0 16px 0', fontSize: '28px', color: '#f8fafc', fontWeight: 600 }}>
             {greeting}, {profile?.name || 'User'}! 👋
           </h1>
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', fontSize: '14px', color: '#cbd5e1' }}>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
-              <strong style={{ color: '#94a3b8' }}>Position:</strong> {profile?.position || 'N/A'}
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
-              <strong style={{ color: '#94a3b8' }}>Dept:</strong> {profile?.department || 'N/A'}
-            </div>
-            <div style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px' }}>
-              <strong style={{ color: '#94a3b8' }}>SN:</strong> {profile?.sn || 'N/A'}
-            </div>
-            <div style={{ background: '#3b82f6', padding: '6px 12px', borderRadius: '8px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-              {profile?.role || 'Staff'}
-            </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '14px', color: '#cbd5e1' }}>
+            <div>{profile?.position || 'N/A'}</div>
+            <div>{profile?.department || 'N/A'}</div>
+            <div>{profile?.sn || 'N/A'}</div>
           </div>
         </div>
 
-        <div style={{ textAlign: 'right', background: 'rgba(255,255,255,0.05)', padding: '16px 24px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <div
+          style={{
+            textAlign: 'right',
+            background: 'rgba(255,255,255,0.05)',
+            padding: '16px 24px',
+            borderRadius: '12px',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
           <div style={{ fontSize: '16px', fontWeight: 600, color: '#f8fafc', marginBottom: '4px' }}>{dayName}</div>
           <div style={{ fontSize: '14px', color: '#cbd5e1', marginBottom: '8px' }}>{dateStr}</div>
           <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#38bdf8', fontFamily: 'monospace' }}>{timeStr}</div>
         </div>
       </div>
 
-      {/* 1. Flight Widget */}
-      <Section title="✈️ Upcoming Flight" loading={loading}>
+      {/* ═════════════ 2. NEXT FLIGHT ═════════════ */}
+      <Section title="✈️ Next Flight" loading={loading}>
         {nextFlight ? (
-          <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <div className="flight-widget">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#2563eb' }}>{nextFlight.flightNo}</span>
-              <span style={{ fontSize: '12px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>{nextFlight.status}</span>
+              <span className="flight-number" style={{ fontSize: '20px', fontWeight: 'bold', color: '#2563eb' }}>
+                {nextFlight?.flightNo}
+              </span>
+              <span
+                className="status-badge"
+                style={{
+                  fontSize: '12px',
+                  background: '#dbeafe',
+                  color: '#1e40af',
+                  padding: '3px 10px',
+                  borderRadius: '4px',
+                  fontWeight: 'bold',
+                }}
+              >
+                {flightStatus}
+              </span>
             </div>
-            <div style={{ display: 'flex', gap: '24px', fontSize: '13px', color: '#475569', flexWrap: 'wrap' }}>
-              <div><strong>Date:</strong> {nextFlight.date}</div>
-              <div><strong>Route:</strong> {nextFlight.route || 'N/A'}</div>
-              <div><strong>Time:</strong> {nextFlight.arrivalTime || nextFlight.departureTime || 'TBA'}</div>
+
+            <div
+              className="flight-route"
+              style={{ fontSize: '14px', color: '#475569', marginBottom: '14px' }}
+            >
+              {nextFlight?.route || '—'}
+            </div>
+
+            <div
+              className="flight-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                gap: '10px',
+              }}
+            >
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Type</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.type || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Check-In</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.checkInTime || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>STA</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.arrivalTime || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>STD</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.departureTime || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>MLE DEP</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.originDepTime || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Adult</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.adultPax || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Infant</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.infantPax || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>ETA</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.eta || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>ATA</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.ata || '--'}</div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>ATD</div>
+                <div style={{ fontSize: '13px', color: '#1e293b', marginTop: '2px' }}>{nextFlight?.atd || '--'}</div>
+              </div>
             </div>
           </div>
-        ) : <Empty text="No upcoming flights scheduled." />}
+        ) : (
+          <Empty text="No upcoming flights scheduled." />
+        )}
       </Section>
 
-      {/* 2. Weather — reads from backend dashboard.weather */}
-      <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>🌦️ Weather</h3>
-        <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#1e293b' }}>
-          Temperature: {weather?.temperature_2m ?? "--"}°C
-        </p>
-        <p style={{ margin: '0 0 4px 0', fontSize: '14px', color: '#1e293b' }}>
-          Wind: {weather?.wind_speed_10m ?? "--"} km/h
-        </p>
-        <p style={{ margin: 0, fontSize: '14px', color: '#1e293b' }}>
-          Direction: {weather?.wind_direction_10m ?? "--"}°
-        </p>
+      {/* ═════════════ 3. WEATHER ═════════════ */}
+      <div className="dash-card weather-widget" style={{ padding: '20px', marginBottom: '20px' }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>🌦 Weather</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+          <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Temperature</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', marginTop: '2px' }}>
+              {weather?.temperature_2m ?? '--'}°C
+            </div>
+          </div>
+          <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Wind</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', marginTop: '2px' }}>
+              {weather?.wind_speed_10m ?? '--'} km/h
+            </div>
+          </div>
+          <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Direction</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', marginTop: '2px' }}>
+              {weather?.wind_direction_10m ?? '--'}°
+            </div>
+          </div>
+          <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>Humidity</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#1e293b', marginTop: '2px' }}>
+              {weather?.relative_humidity_2m ?? '--'}%
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* 3. Operations Board — uses rwyInspectionsToday */}
+      {/* ═════════════ 4. AIRPORT OPERATIONS SUMMARY ═════════════ */}
       <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>🛫 Today's Operational Board</h3>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>🛫 Airport Operations Summary</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
           <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
             <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Bird Count</div>
@@ -152,86 +302,186 @@ export default function DashboardPage({ onNavigate: _onNavigate }: { onNavigate:
         </div>
       </div>
 
-      {/* 4. On Duty Staff */}
-      <Section title={`👥 On Duty Staff (${onDuty.length})`} loading={loading}>
-        {onDuty.length > 0 ? (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {onDuty.map((r: any) => (
-              <li key={r.id} style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px', color: '#1e293b' }}>
-                <div><strong>Name:</strong> {r.staffName}</div>
-                <div><strong>Department:</strong> {r.staffDepartment || '—'}</div>
-                <div><strong>Shift:</strong> {r.shiftTime || '—'}</div>
-              </li>
-            ))}
-          </ul>
-        ) : <Empty text="No staff on duty today." />}
-      </Section>
+      {/* ═════════════ 5. DEPARTMENT DUTY CARDS ═════════════ */}
+      <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>👥 Department Duty</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+          {DEPARTMENTS.map(dept => {
+            const staffInDept = dutyByDept[dept] || [];
+            return (
+              <div
+                key={dept}
+                style={{
+                  background: '#f8fafc',
+                  padding: '14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  minHeight: '110px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#1e293b' }}>{dept}</div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      background: staffInDept.length > 0 ? '#dbeafe' : '#f1f5f9',
+                      color: staffInDept.length > 0 ? '#1e40af' : '#64748b',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    {staffInDept.length}
+                  </span>
+                </div>
+                {staffInDept.length > 0 ? (
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {staffInDept.map((r: any) => (
+                      <li key={r.id} style={{ fontSize: '12px', color: '#475569' }}>
+                        <strong>{r.staffName}</strong>
+                        {r.shiftTime ? <span style={{ color: '#94a3b8' }}> · {r.shiftTime}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>No staff on duty</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-      {/* 5. On Leave Today */}
-      <Section title={`🏖️ On Leave Today (${onLeave.length})`} loading={loading}>
+      {/* ═════════════ 6. PENDING REQUESTS (role-gated) ═════════════ */}
+      {canSeePendingRequests && (
+        <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
+          <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>📝 Pending Requests</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+
+            {/* Pending Leave */}
+            <div style={{ background: '#fef3c7', padding: '14px', borderRadius: '8px', border: '1px solid #fde68a' }}>
+              <div style={{ fontSize: '11px', color: '#92400e', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
+                Pending Leave
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#92400e', lineHeight: 1 }}>
+                {pendingLeave.length}
+              </div>
+              {pendingLeave.length > 0 && (
+                <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  {pendingLeave.slice(0, 5).map((l: any) => (
+                    <li key={l.id} style={{ fontSize: '11px', color: '#78350f' }}>
+                      <strong>{l.staffName}</strong> · {l.leaveType}
+                    </li>
+                  ))}
+                  {pendingLeave.length > 5 && (
+                    <li style={{ fontSize: '11px', color: '#92400e', fontStyle: 'italic' }}>
+                      +{pendingLeave.length - 5} more
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+
+            {/* Pending OT */}
+            <div style={{ background: '#dbeafe', padding: '14px', borderRadius: '8px', border: '1px solid #93c5fd' }}>
+              <div style={{ fontSize: '11px', color: '#1e40af', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
+                Pending Overtime
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1e40af', lineHeight: 1 }}>
+                {pendingOT.length}
+              </div>
+              {pendingOT.length > 0 && (
+                <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  {pendingOT.slice(0, 5).map((o: any) => (
+                    <li key={o.id} style={{ fontSize: '11px', color: '#1e3a8a' }}>
+                      <strong>{o.staffName}</strong> · {o.date}
+                    </li>
+                  ))}
+                  {pendingOT.length > 5 && (
+                    <li style={{ fontSize: '11px', color: '#1e40af', fontStyle: 'italic' }}>
+                      +{pendingOT.length - 5} more
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+
+            {/* Password Resets */}
+            <div style={{ background: '#fee2e2', padding: '14px', borderRadius: '8px', border: '1px solid #fca5a5' }}>
+              <div style={{ fontSize: '11px', color: '#991b1b', textTransform: 'uppercase', fontWeight: 700, marginBottom: '4px' }}>
+                Password Resets
+              </div>
+              <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#991b1b', lineHeight: 1 }}>
+                {passwordResets.length}
+              </div>
+              {passwordResets.length > 0 && (
+                <ul style={{ listStyle: 'none', margin: '10px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  {passwordResets.slice(0, 5).map((r: any) => (
+                    <li key={r.id} style={{ fontSize: '11px', color: '#7f1d1d' }}>
+                      {r.email}
+                    </li>
+                  ))}
+                  {passwordResets.length > 5 && (
+                    <li style={{ fontSize: '11px', color: '#991b1b', fontStyle: 'italic' }}>
+                      +{passwordResets.length - 5} more
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═════════════ 7. TODAY'S LEAVE ═════════════ */}
+      <Section title={`🏖️ Today's Leave (${onLeave.length})`} loading={loading}>
         {onLeave.length > 0 ? (
           <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {onLeave.map((l: any) => (
-              <li key={l.id} style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px', color: '#1e293b' }}>
+              <li
+                key={l.id}
+                style={{
+                  background: '#f8fafc',
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #e2e8f0',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 1fr',
+                  gap: '12px',
+                  fontSize: '13px',
+                  color: '#1e293b',
+                }}
+              >
                 <div><strong>Name:</strong> {l.staffName}</div>
+                <div><strong>Department:</strong> {l.staffDepartment || '—'}</div>
                 <div><strong>Leave Type:</strong> {l.leaveType}</div>
               </li>
             ))}
           </ul>
-        ) : <Empty text="No one on leave today." />}
+        ) : (
+          <Empty text="No one on leave today." />
+        )}
       </Section>
 
-      {/* 6. Pending Leave */}
+      {/* ═════════════ 8. LIVE AIR TRAFFIC ═════════════ */}
       <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1e293b' }}>📝 Pending Leave</h3>
-        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#1e293b', marginBottom: '12px' }}>
-          {dashboard?.pendingLeave?.length ?? 0}
-        </div>
-        {pendingLeave.length > 0 && (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {pendingLeave.map((l: any) => (
-              <li key={l.id} style={{ fontSize: '12px', color: '#475569', padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                <strong>{l.staffName}</strong> · {l.leaveType} · {l.startDate} → {l.endDate}
-              </li>
-            ))}
-          </ul>
-        )}
-        {pendingLeave.length === 0 && (
-          <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>No pending leave requests.</p>
-        )}
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>✈️ Live Air Traffic</h3>
+        <iframe
+          src="https://globe.adsbexchange.com/"
+          title="Live Air Traffic"
+          width="100%"
+          height={600}
+          style={{ border: 0, borderRadius: '12px' }}
+        />
       </div>
 
-      {/* 7. Pending OT */}
-      <div className="dash-card" style={{ padding: '20px', marginBottom: '20px' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1e293b' }}>⏱️ Pending Overtime</h3>
-        <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#1e293b', marginBottom: '12px' }}>
-          {dashboard?.pendingOT?.length ?? 0}
-        </div>
-        {pendingOT.length > 0 && (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            {pendingOT.map((o: any) => (
-              <li key={o.id} style={{ fontSize: '12px', color: '#475569', padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                <strong>{o.staffName}</strong> · {o.date} · {o.startTime}–{o.endTime} ({o.hours}h)
-              </li>
-            ))}
-          </ul>
-        )}
-        {pendingOT.length === 0 && (
-          <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>No pending overtime entries.</p>
-        )}
-      </div>
-
-      {/* 8. Zone Map */}
+      {/* ═════════════ 9. ZONE MAP ═════════════ */}
       <div className="dash-card" style={{ padding: '20px', width: '100%' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', color: '#1e293b' }}>📍 Airside Zone Map</h3>
         <img
           src="/zone-map.png"
           alt="Zone Map"
-          style={{
-            width: '100%',
-            display: 'block',
-            borderRadius: '12px'
-          }}
+          style={{ width: '100%', display: 'block', borderRadius: '12px' }}
         />
       </div>
 
