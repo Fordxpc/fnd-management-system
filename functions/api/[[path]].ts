@@ -9,7 +9,21 @@ import {
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
   passwordResetRequests, chatGroups, chatGroupMembers, chatMessages
 } from "../../src/db/schema.js";
-import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
+import { eq, and, inArray, sql, asc, desc, or, count, gte, lte } from "drizzle-orm";
+import {
+  requireFlightsEdit,
+  requireRampEdit,
+  requireBirdEdit,
+  requireRWYEdit,
+  requireOpsBoardView,
+  requireOpsBoardEdit,
+  requireRosterEdit,
+  requireLeaveEdit,
+  requireOvertimeEdit
+} from "../../src/lib/permission-check.js";
+
+const isManagerRole = (role: string | undefined | null) =>
+  ['developer', 'manager', 'admin'].includes(role || '');
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -74,6 +88,33 @@ export const onRequest = async (context: any) => {
 
     if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "GET") {
       const groupId = pathname.split("/")[4];
+
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+
+      const membership = await db
+        .select()
+        .from(chatGroupMembers)
+        .where(
+          and(
+            eq(chatGroupMembers.groupId, groupId),
+            eq(chatGroupMembers.staffId, currentUser.id)
+          )
+        )
+        .limit(1);
+
+      if (
+        membership.length === 0 &&
+        !["developer","manager","admin"].includes(currentUser.role)
+      ) {
+        return json(
+          { message: "Access denied" },
+          403
+        );
+      }
+
       const messages = await db.select().from(chatMessages)
         .where(eq(chatMessages.groupId, groupId))
         .orderBy(asc(chatMessages.createdAt));
@@ -83,6 +124,28 @@ export const onRequest = async (context: any) => {
     if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "POST") {
       const currentUser = await requireAuth(request, env);
       const groupId = pathname.split("/")[4];
+
+      const membership = await db
+        .select()
+        .from(chatGroupMembers)
+        .where(
+          and(
+            eq(chatGroupMembers.groupId, groupId),
+            eq(chatGroupMembers.staffId, currentUser.id)
+          )
+        )
+        .limit(1);
+
+      if (
+        membership.length === 0 &&
+        !["developer","manager","admin"].includes(currentUser.role)
+      ) {
+        return json(
+          { message: "Access denied" },
+          403
+        );
+      }
+
       const body: any = await request.json();
       
       await db.insert(chatMessages).values({
@@ -244,6 +307,20 @@ export const onRequest = async (context: any) => {
         birdCountEditAccess: !!body.birdCountEditAccess,
         opsBoardViewAccess: !!body.opsBoardViewAccess,
         opsBoardEditAccess: !!body.opsBoardEditAccess,
+        flightsViewAccess: !!body.flightsViewAccess,
+        flightsEditAccess: !!body.flightsEditAccess,
+        rosterViewAccess: !!body.rosterViewAccess,
+        rosterEditAccess: !!body.rosterEditAccess,
+        leaveViewAccess: !!body.leaveViewAccess,
+        leaveEditAccess: !!body.leaveEditAccess,
+        overtimeViewAccess: !!body.overtimeViewAccess,
+        overtimeEditAccess: !!body.overtimeEditAccess,
+        reportsViewAccess: !!body.reportsViewAccess,
+        reportsEditAccess: !!body.reportsEditAccess,
+        staffViewAccess: !!body.staffViewAccess,
+        staffEditAccess: !!body.staffEditAccess,
+        settingsViewAccess: !!body.settingsViewAccess,
+        settingsEditAccess: !!body.settingsEditAccess,
         
         tempDeptTarget: body.tempDeptTarget || "", 
         notes: body.notes || "",
@@ -259,6 +336,14 @@ export const onRequest = async (context: any) => {
     }
 
     if (pathname === "/api/staff/reorder" && method === "PUT") {
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      requireManager(currentUser.role);
+      
       const body: any = await request.json();
       await Promise.all(body.orderedIds.map((id: string, index: number) => db.update(staff).set({ orderIndex: index }).where(eq(staff.id, id))));
       return json({ success: true });
@@ -272,7 +357,22 @@ export const onRequest = async (context: any) => {
       const updatedAt = new Date().toISOString();
 
       const updateData: any = { updatedAt };
-      const allowedFields = ['sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender', 'department', 'position', 'isSmt', 'isIncharge', 'balanceVisible', 'tempDeptAccess', 'rampsheetViewAccess', 'rampsheetEditAccess', 'rwyLightViewAccess', 'rwyLightEditAccess', 'birdCountViewAccess', 'birdCountEditAccess', 'opsBoardViewAccess', 'opsBoardEditAccess', 'tempDeptTarget', 'notes', 'basicSalary', 'dailyAllowance', 'holidayAllowanceRate', 'bankAccount'];
+      const allowedFields = [
+        'sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender',
+        'department', 'position', 'isSmt', 'isIncharge', 'balanceVisible', 'tempDeptAccess',
+        'rampsheetViewAccess', 'rampsheetEditAccess',
+        'rwyLightViewAccess', 'rwyLightEditAccess',
+        'birdCountViewAccess', 'birdCountEditAccess',
+        'opsBoardViewAccess', 'opsBoardEditAccess',
+        'flightsViewAccess', 'flightsEditAccess',
+        'rosterViewAccess', 'rosterEditAccess',
+        'leaveViewAccess', 'leaveEditAccess',
+        'overtimeViewAccess', 'overtimeEditAccess',
+        'reportsViewAccess', 'reportsEditAccess',
+        'staffViewAccess', 'staffEditAccess',
+        'settingsViewAccess', 'settingsEditAccess',
+        'tempDeptTarget', 'notes', 'basicSalary', 'dailyAllowance', 'holidayAllowanceRate', 'bankAccount'
+      ];
       
       for (const field of allowedFields) {
         if (body[field] !== undefined) {
@@ -301,7 +401,17 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
     if (pathname === "/api/checklist" && method === "POST") {
-      const currentUser = await requireAuth(request, env);
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireOpsBoardEdit(
+        env,
+        currentUser
+      );
+      
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(opsChecks).values({
@@ -311,7 +421,17 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
     if (pathname.startsWith("/api/checklist/") && method === "DELETE") {
-      const currentUser = await requireAuth(request, env);
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireOpsBoardEdit(
+        env,
+        currentUser
+      );
+      
       const id = pathname.split("/").pop();
       await db.delete(opsChecks).where(eq(opsChecks.id, id!));
       return json({ success: true });
@@ -421,7 +541,17 @@ export const onRequest = async (context: any) => {
     }
 
     if (pathname.startsWith("/api/leave-requests/") && method === "DELETE") {
-      const currentUser = await requireAuth(request, env);
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireLeaveEdit(
+        env,
+        currentUser
+      );
+      
       const id = pathname.split("/").pop();
       await db.delete(leaveRequests).where(eq(leaveRequests.id, id!));
       await db.delete(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
@@ -437,6 +567,17 @@ export const onRequest = async (context: any) => {
     }
 
     if (pathname === "/api/roster" && method === "POST") {
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireRosterEdit(
+        env,
+        currentUser
+      );
+      
       const body: any = await request.json();
       const existing = await db.select().from(rosterEntries).where(and(
         eq(rosterEntries.staffId, body.staffId), 
@@ -462,6 +603,17 @@ export const onRequest = async (context: any) => {
     }
 
     if (pathname === "/api/roster/bulk" && method === "POST") {
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireRosterEdit(
+        env,
+        currentUser
+      );
+      
       const body: any = await request.json();
       const values = body.entries.map((entry: any) => ({
         id: crypto.randomUUID(), staffId: entry.staffId, staffName: entry.staffName,
@@ -484,6 +636,11 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/flights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
+
+      await requireFlightsEdit(
+        env,
+        currentUser
+      );
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(flights).values({
@@ -497,6 +654,11 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/flights/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
+
+      await requireFlightsEdit(
+        env,
+        currentUser
+      );
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       await db.update(flights).set({
@@ -510,6 +672,11 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/flights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
+
+      await requireFlightsEdit(
+        env,
+        currentUser
+      );
       const id = pathname.split("/").pop();
       await db.delete(flights).where(eq(flights.id, id!));
       return json({ success: true });
@@ -682,6 +849,17 @@ export const onRequest = async (context: any) => {
       return json(results);
     }
     if (pathname === "/api/overtime" && method === "POST") {
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireOvertimeEdit(
+        env,
+        currentUser
+      );
+      
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const existingOvertime = await db.select().from(overtimeEntries).where(and(
@@ -701,7 +879,23 @@ export const onRequest = async (context: any) => {
         return json({ success: true, id });
       } catch (err: any) { return json({ message: "Failed to create overtime." }, 400); }
     }
-    if (pathname.startsWith("/api/overtime/") && method === "PUT" && !pathname.endsWith("/approve") && !pathname.endsWith("/reject")) {
+    if (
+      pathname.startsWith("/api/overtime/") &&
+      method === "PUT" &&
+      !pathname.endsWith("/approve") &&
+      !pathname.endsWith("/reject")
+    ) {
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireOvertimeEdit(
+        env,
+        currentUser
+      );
+      
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       await db.update(overtimeEntries).set({ 
@@ -731,6 +925,17 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
+      
+      const currentUser = await requireAuth(
+        request,
+        env
+      );
+      
+      await requireOvertimeEdit(
+        env,
+        currentUser
+      );
+      
       const id = pathname.split("/").pop();
       await db.delete(overtimeEntries).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
@@ -740,6 +945,8 @@ export const onRequest = async (context: any) => {
     // OPS RUNWAY
     // ==========================================
     if (pathname === "/api/ops/runway" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireOpsBoardView(env, currentUser);
       const results = await db.select().from(opsRunwayHistory).orderBy(desc(opsRunwayHistory.date));
       return json(results.map((row: any) => ({
         ...row,
@@ -750,7 +957,7 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/ops/runway" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireOpsBoardEdit(env, currentUser);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(opsRunwayHistory).values({
@@ -764,6 +971,8 @@ export const onRequest = async (context: any) => {
     // OPS GROUND
     // ==========================================
     if (pathname === "/api/ops/ground" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireOpsBoardView(env, currentUser);
       const results = await db.select().from(opsGroundHistory).orderBy(desc(opsGroundHistory.date));
       return json(results.map((row: any) => ({
         ...row,
@@ -772,7 +981,7 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/ops/ground" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireOpsBoardEdit(env, currentUser);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(opsGroundHistory).values({
@@ -820,6 +1029,7 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/wildlife" && method === "POST") {
       const currentUser = await requireAuth(request, env);
+      await requireBirdEdit(env, currentUser);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(birdCounts).values({ 
@@ -830,7 +1040,7 @@ export const onRequest = async (context: any) => {
     }
     if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireBirdEdit(env, currentUser);
       const id = url.pathname.split("/").pop();
       await db.delete(birdCounts).where(eq(birdCounts.id, id!));
       return json({ success: true });
@@ -861,7 +1071,10 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/ramp/reports" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRampEdit(
+        env,
+        currentUser
+);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(rampInspections).values({ 
@@ -882,7 +1095,10 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/ramp/reports/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRampEdit(
+        env,
+        currentUser
+      );
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       await db.update(rampInspections).set({ 
@@ -903,7 +1119,10 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/ramp/reports/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRampEdit(
+        env,
+        currentUser
+      );
       const id = pathname.split("/").pop();
       await db.delete(rampInspections).where(eq(rampInspections.id, id!));
       return json({ success: true });
@@ -978,7 +1197,7 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/lights-inspectors" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRWYEdit(env, currentUser);
       const body: any = await request.json();
       await db.insert(lightsInspectors).values({ 
         staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "" 
@@ -990,7 +1209,7 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/lights-inspectors/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRWYEdit(env, currentUser);
       const id = pathname.split("/").pop();
       await db.delete(lightsInspectors).where(eq(lightsInspectors.staffId, id!));
       return json({ success: true });
@@ -1008,7 +1227,7 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/lights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRWYEdit(env, currentUser);
       const body: any = await request.json();
       const id = crypto.randomUUID();
       await db.insert(rwyLights).values({ 
@@ -1020,10 +1239,244 @@ export const onRequest = async (context: any) => {
     }
     if (pathname.startsWith("/api/lights/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireRWYEdit(env, currentUser);
       const id = pathname.split("/").pop();
       await db.delete(rwyLights).where(eq(rwyLights.id, id!));
       return json({ success: true });
+    }
+
+    // ==========================================
+    // DASHBOARD
+    // ==========================================
+
+    if (
+      pathname === "/api/dashboard" &&
+      method === "GET"
+    ) {
+
+      const currentUser =
+        await requireAuth(
+          request,
+          env
+        );
+
+      const today =
+        new Date()
+          .toISOString()
+          .split("T")[0];
+
+      const staffList =
+        await db
+          .select()
+          .from(staff);
+
+      const leaveList =
+        await db
+          .select()
+          .from(leaveRequests);
+
+      const roster =
+        await db
+          .select()
+          .from(rosterEntries);
+
+      const flightList =
+        await db
+          .select()
+          .from(flights);
+
+      const birdData =
+        await db
+          .select()
+          .from(birdCounts);
+
+      const fodData =
+        await db
+          .select()
+          .from(fodCollections);
+
+      const lightsData =
+        await db
+          .select()
+          .from(rwyLights);
+
+      const rampData =
+        await db
+          .select()
+          .from(rampInspections);
+
+      const myStaff =
+        staffList.find(
+          s =>
+            (
+              s.email || ""
+            ).toLowerCase()
+            ===
+            (
+              currentUser.email || ""
+            ).toLowerCase()
+        );
+
+      const dept =
+        myStaff?.department || "";
+
+      const nextFlight =
+        flightList
+          .filter(
+            (f: any) => f.date >= today
+          )
+          .sort(
+            (a: any, b: any) =>
+              (a.date || "").localeCompare(
+                b.date || ""
+              )
+          )[0] || null;
+
+      const onDutyToday =
+        roster.filter(r => {
+
+          if (
+            r.date !== today
+          ) {
+            return false;
+          }
+
+          if (
+            isManagerRole(
+              currentUser.role
+            )
+          ) {
+            return true;
+          }
+
+          return (
+            r.staffDepartment === dept
+          );
+        });
+
+      const onLeaveToday =
+        leaveList.filter(l => {
+
+          const active =
+            l.status === "approved" &&
+            (l.startDate || "") <= today &&
+            (l.endDate || "") >= today;
+
+          if (
+            !active
+          ) {
+            return false;
+          }
+
+          if (
+            isManagerRole(
+              currentUser.role
+            )
+          ) {
+            return true;
+          }
+
+          return (
+            l.staffDepartment === dept
+          );
+        });
+
+      let pendingLeave: any[] = [];
+      let pendingOT: any[] = [];
+
+      if (
+        myStaff?.isIncharge === true ||
+        myStaff?.isSmt === true ||
+        isManagerRole(
+          currentUser.role
+        )
+      ) {
+
+        pendingLeave =
+          leaveList.filter(
+            l =>
+              l.status === "pending" &&
+              (
+                isManagerRole(
+                  currentUser.role
+                ) ||
+                l.staffDepartment === dept
+              )
+          );
+
+        pendingOT =
+          (
+            await db
+              .select()
+              .from(overtimeEntries)
+          ).filter(
+            o =>
+              o.status === "pending" &&
+              (
+                isManagerRole(
+                  currentUser.role
+                ) ||
+                o.staffDepartment === dept
+              )
+          );
+      }
+      else {
+
+        pendingLeave =
+          leaveList.filter(
+            l =>
+              l.requestedBy ===
+                currentUser.email &&
+              l.status === "pending"
+          );
+
+        pendingOT =
+          (
+            await db
+              .select()
+              .from(overtimeEntries)
+          ).filter(
+            o =>
+              o.createdBy ===
+                currentUser.email &&
+              o.status === "pending"
+          );
+      }
+
+      return json({
+
+        nextFlight,
+
+        operations: {
+          birdCountToday:
+            birdData.filter(
+              b => b.date === today
+            ).length,
+
+          fodToday:
+            fodData.filter(
+              f => f.date === today
+            ).length,
+
+          rampReportsToday:
+            rampData.filter(
+              r => r.date === today
+            ).length,
+
+          rwyInspectionsToday:
+            lightsData.filter(
+              l => l.date === today
+            ).length
+        },
+
+        onDutyToday,
+
+        onLeaveToday,
+
+        pendingLeave,
+
+        pendingOT
+      });
     }
 
     return json({ message: "Not Found", pathname, method }, 404);

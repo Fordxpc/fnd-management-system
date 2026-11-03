@@ -50,6 +50,13 @@
       "when": 1793352509614,
       "tag": "0006_friendly_colleen_wing",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793640864424,
+      "tag": "0007_foamy_lilith",
+      "breakpoints": true
     }
   ]
 }

@@ -92,15 +92,50 @@ export const staff = pgTable("staff", {
 	nid: text(), joinDate: text("join_date"), phone: text(), gender: text(),
 	specialOpsAccess: boolean("special_ops_access").default(false),
 	tempDeptAccess: boolean("temp_dept_access").default(false),
-	// 🚨 NEW VIEW/EDIT COLUMNS
+
+	// Ramp Sheet
 	rampsheetViewAccess: boolean("rampsheet_view_access").default(false),
 	rampsheetEditAccess: boolean("rampsheet_edit_access").default(false),
+
+	// RWY Lights
 	rwyLightViewAccess: boolean("rwy_light_view_access").default(false),
 	rwyLightEditAccess: boolean("rwy_light_edit_access").default(false),
+
+	// Bird Count
 	birdCountViewAccess: boolean("bird_count_view_access").default(false),
 	birdCountEditAccess: boolean("bird_count_edit_access").default(false),
+
+	// Ops Board
 	opsBoardViewAccess: boolean("ops_board_view_access").default(false),
 	opsBoardEditAccess: boolean("ops_board_edit_access").default(false),
+
+	// Flights
+	flightsViewAccess: boolean("flights_view_access").default(false),
+	flightsEditAccess: boolean("flights_edit_access").default(false),
+
+	// Roster
+	rosterViewAccess: boolean("roster_view_access").default(false),
+	rosterEditAccess: boolean("roster_edit_access").default(false),
+
+	// Leave
+	leaveViewAccess: boolean("leave_view_access").default(false),
+	leaveEditAccess: boolean("leave_edit_access").default(false),
+
+	// Overtime
+	overtimeViewAccess: boolean("overtime_view_access").default(false),
+	overtimeEditAccess: boolean("overtime_edit_access").default(false),
+
+	// Reports
+	reportsViewAccess: boolean("reports_view_access").default(false),
+	reportsEditAccess: boolean("reports_edit_access").default(false),
+
+	// Staff
+	staffViewAccess: boolean("staff_view_access").default(false),
+	staffEditAccess: boolean("staff_edit_access").default(false),
+
+	// Settings
+	settingsViewAccess: boolean("settings_view_access").default(false),
+	settingsEditAccess: boolean("settings_edit_access").default(false),
 	
 	tempDeptTarget: text("temp_dept_target"), notes: text(), bankAccount: text("bank_account"),
 	orderIndex: integer("order_index").default(9999), updatedAt: timestamp("updated_at", { mode: 'string' }),
