@@ -113,6 +113,12 @@ function OvertimePage() {
   const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true;
   
   const canViewAll = isDev || isManager;
+
+  // NEW: Simple hierarchy approval gate
+  const canApprove =
+    myStaff?.isSmt === true ||
+    myStaff?.isIncharge === true ||
+    ["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase());
   
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
     if (canViewAll) return true;
@@ -142,21 +148,30 @@ function OvertimePage() {
     return n.includes('manager') || p.includes('manager') || p.includes('assistant manager');
   };
 
+  // Build filtered list with hierarchy
   let filtered = entries.filter((e) => (e.date || '').startsWith(monthFilter));
-  
-  if (canViewAll || isSMT) {
-    if (viewMode === 'individual' && myStaff) {
-      filtered = filtered.filter((e) => e.staffId === myStaff.id);
-    } else {
-      filtered = filtered.filter((e) => e.staffId !== myStaff?.id); 
-      if (filterStaff !== 'all') {
-        filtered = filtered.filter((e) => e.staffId === filterStaff);
-      } else {
+
+  if (viewMode === 'individual' && myStaff) {
+    // Individual mode: always shows own entries
+    filtered = filtered.filter((e) => e.staffId === myStaff.id);
+  } else if (canViewAll || canApprove) {
+    // Department mode
+    filtered = filtered.filter((e) => e.staffId !== myStaff?.id);
+
+    const isManagerLevel = ["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase());
+    if (!isManagerLevel) {
+      if (myStaff?.isIncharge) {
+        filtered = filtered.filter((e) => e.staffDepartment === myStaff.department);
+      } else if (myStaff?.isSmt) {
         filtered = filtered.filter((e) => {
           const entryStaff = staff.find(s => s.id === e.staffId);
-          return canApproveThisDept(e.staffDepartment, entryStaff?.isSMT === true);
+          return e.staffDepartment === myStaff.department && entryStaff?.isSMT !== true;
         });
       }
+    }
+
+    if (filterStaff !== 'all') {
+      filtered = filtered.filter((e) => e.staffId === filterStaff);
     }
   } else {
     filtered = filtered.filter((e) => myStaff && e.staffId === myStaff.id);
@@ -268,14 +283,14 @@ function OvertimePage() {
         </div>
       </div>
 
-      {(canViewAll || isSMT || tempAccess.length > 0) && (
+      {(canViewAll || canApprove || tempAccess.length > 0) && (
         <div className="leave-tabs" style={{ marginBottom: '16px' }}>
           <button className={viewMode === 'individual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('individual')}>👤 My Individual OT</button>
           <button className={viewMode === 'department' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('department')}>🏢 Department OT</button>
         </div>
       )}
 
-      {viewMode === 'department' && (canViewAll || isSMT) && (
+      {viewMode === 'department' && (canViewAll || canApprove) && (
         <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
           {canViewAll && (
             <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={selectStyle}>
@@ -397,7 +412,7 @@ function OvertimePage() {
                             )}
                           </td>
                           <td style={{ whiteSpace: 'nowrap' }}>
-                            {tab === 'pending' && canManage && (
+                            {tab === 'pending' && canApprove && e.staffId !== myStaff?.id && (
                               <>
                                 <button className="approve-btn" onClick={() => setApproveTarget(e.id)}>✓</button>
                                 <button className="reject-btn" onClick={() => setRejectTarget(e.id)}>✕</button>

@@ -54,6 +54,12 @@ function LeavePage() {
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+  // NEW: Simple hierarchy approval gate
+  const canApprove =
+    myStaff?.isSmt === true ||
+    myStaff?.isIncharge === true ||
+    ["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase());
+
   const fetchData = useCallback(async () => {
     try {
       const results = await Promise.allSettled([apiFetch('/staff'), apiFetch('/leave-requests'), apiFetch('/holidays')]);
@@ -111,7 +117,19 @@ function LeavePage() {
     return false;
   };
 
-  const visibleRequests = requests.filter((r: any) => {
+  // NEW: Hierarchy-based pre-filter
+  let displayRequests = requests;
+  if (!["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase())) {
+    if (myStaff?.isIncharge) {
+      displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department);
+    } else if (myStaff?.isSmt) {
+      displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department && r.isSMT !== true);
+    } else {
+      displayRequests = requests.filter((r: any) => r.staffId === myStaff?.id);
+    }
+  }
+
+  const visibleRequests = displayRequests.filter((r: any) => {
       if (isStaff) return myStaff && r.staffId === myStaff.id;
       if (filterDept !== 'all' && r.staffDepartment !== filterDept) return false;
       return true;
@@ -266,7 +284,6 @@ function LeavePage() {
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleRequests.map((r: any) => {
-                const canApprove = canApproveRequest(r) && r.status?.toLowerCase() === 'pending';
                 const approverName = r.reviewedBy ? (staffList.find(s => (s.email || '').toLowerCase() === r.reviewedBy.toLowerCase())?.name || r.reviewedBy) : null;
                 return (
                   <tr key={r.id}>
@@ -278,7 +295,12 @@ function LeavePage() {
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
                     <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span>{approverName && (<div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px', textAlign: 'center' }}>By: {approverName}</div>)}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {canApprove && (<><button className="approve-btn" onClick={() => setApproveTarget(r)}>✓</button><button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button></>)}
+                      {canApprove && r.status?.toLowerCase() === 'pending' && r.staffId !== myStaff?.id && (
+                        <>
+                          <button className="approve-btn" onClick={() => setApproveTarget(r)}>✓</button>
+                          <button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button>
+                        </>
+                      )}
                       {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => setDeleteTarget(r)}>🗑</button>}
                     </td>
                   </tr>
