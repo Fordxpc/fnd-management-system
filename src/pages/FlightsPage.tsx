@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
+import { canEditFlights, canViewFlights } from '../lib/permissions';
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
@@ -16,18 +17,10 @@ const formatDisplayDate = (dateStr: string) => {
 };
 
 function FlightsPage() {
-  const { profile } = useAuth();
-
-  // 🚨 RBAC LOGIC
-  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const dept = (profile?.department || '').toLowerCase();
-  const isSafety = isSMT && dept === 'safety';
-
-  // Everyone can see, but only specific roles can edit.
-  const canEdit = isFullAccess || isSMT || isSafety;
+  const { profile, user } = useAuth();
 
   const [flights, setFlights] = useState<any[]>([]);
+  const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(formatDate(new Date()));
   const [showForm, setShowForm] = useState(false);
@@ -50,14 +43,24 @@ function FlightsPage() {
 
   const fetchFlights = useCallback(async () => {
     try {
-      const data = await apiFetch('/flights');
-      setFlights(data);
+      const [flightsData, staffData] = await Promise.all([
+        apiFetch('/flights'),
+        apiFetch('/staff').catch(() => []),
+      ]);
+      setFlights(flightsData);
+
+      const myEmail = ((profile?.email || user?.email || '') as string).toLowerCase();
+      const mine = Array.isArray(staffData)
+        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
+        : null;
+      setMyStaff(mine || null);
+
       setLoading(false);
     } catch (err: any) {
       toast.error(err.message);
       setLoading(false);
     }
-  }, []);
+  }, [profile?.email, user?.email]);
 
   useEffect(() => {
     fetchFlights();
@@ -165,6 +168,20 @@ function FlightsPage() {
   const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(displayStatus(f.status)));
   const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(displayStatus(f.status))).reverse();
 
+  if (loading) return <div className="page-content"><p>Loading Flights...</p></div>;
+
+  // Permission gate — sourced from shared helpers
+  const canView = canViewFlights(profile, myStaff);
+  const canEdit = canEditFlights(profile, myStaff);
+
+  if (!canView) {
+    return (
+      <div className="page-content">
+        <div className="empty-state"><p>No access to Flight Operations.</p></div>
+      </div>
+    );
+  }
+
   const FlightCard = ({ f }: { f: any }) => (
     <div className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0', marginBottom: '16px' }}>
       <div style={{ background: f.type === 'Air Ambulance' ? '#fef2f2' : f.type === 'Additional' ? '#fef3c7' : '#eff6ff', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
@@ -222,8 +239,6 @@ function FlightsPage() {
       </div>
     </div>
   );
-
-  if (loading) return <div className="page-content"><p>Loading Flights...</p></div>;
 
   return (
     <div className="page-content">
