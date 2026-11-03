@@ -11,56 +11,114 @@ export async function getStaffByEmail(
   const rows = await db
     .select()
     .from(staff)
-    .where(eq(staff.email, email.toLowerCase()))
+    .where(
+      eq(
+        staff.email,
+        email.toLowerCase()
+      )
+    )
     .limit(1);
 
   return rows[0] || null;
 }
 
-export function isManagerRole(role?: string) {
+export function isManagerRole(
+  role?: string
+) {
   return [
     "developer",
     "manager",
     "admin",
     "owner"
-  ].includes((role || "").toLowerCase());
+  ].includes(
+    (role || "").toLowerCase()
+  );
 }
+
+export function isIncharge(
+  user: any
+) {
+  return user?.isIncharge === true;
+}
+
+export function isSMT(
+  user: any
+) {
+  return user?.isSmt === true;
+}
+
+/*
+Manager
+  -> everyone
+
+Incharge
+  -> SMT + Staff
+     own department
+
+SMT
+  -> Staff only
+     own department
+
+Staff
+  -> nobody
+*/
 
 export function canApproveLeave(
   approver: any,
   target: any
-): boolean {
-
-  if (!approver || !target) {
-    return false;
-  }
-
-  if (isManagerRole(approver.role)) {
-    return true;
-  }
+) {
 
   if (
-    approver.department !== target.department
+    !approver ||
+    !target
   ) {
     return false;
   }
 
-  if (approver.isIncharge === true) {
+  if (
+    isManagerRole(
+      approver.role
+    )
+  ) {
     return true;
   }
 
   if (
-    approver.isSmt === true &&
-    target.isSmt !== true &&
-    target.isIncharge !== true
+    approver.department !==
+    target.department
   ) {
+    return false;
+  }
+
+  if (
+    isIncharge(
+      approver
+    )
+  ) {
+
     return true;
+  }
+
+  if (
+    isSMT(
+      approver
+    )
+  ) {
+
+    if (
+      !isSMT(target) &&
+      !isIncharge(target)
+    ) {
+      return true;
+    }
+
+    return false;
   }
 
   return false;
 }
 
-export function canApproveOvertime(
+export function canApproveOT(
   approver: any,
   target: any
 ) {
@@ -76,15 +134,17 @@ export async function requireLeaveApproval(
   targetEmail: string
 ) {
 
-  const approver = await getStaffByEmail(
-    env,
-    approverEmail
-  );
+  const approver =
+    await getStaffByEmail(
+      env,
+      approverEmail
+    );
 
-  const target = await getStaffByEmail(
-    env,
-    targetEmail
-  );
+  const target =
+    await getStaffByEmail(
+      env,
+      targetEmail
+    );
 
   if (
     !canApproveLeave(
@@ -92,9 +152,11 @@ export async function requireLeaveApproval(
       target
     )
   ) {
-    const err: any = new Error(
-      "Leave approval permission denied"
-    );
+
+    const err: any =
+      new Error(
+        "Leave approval denied"
+      );
 
     err.status = 403;
 
@@ -110,25 +172,29 @@ export async function requireOTApproval(
   targetEmail: string
 ) {
 
-  const approver = await getStaffByEmail(
-    env,
-    approverEmail
-  );
+  const approver =
+    await getStaffByEmail(
+      env,
+      approverEmail
+    );
 
-  const target = await getStaffByEmail(
-    env,
-    targetEmail
-  );
+  const target =
+    await getStaffByEmail(
+      env,
+      targetEmail
+    );
 
   if (
-    !canApproveOvertime(
+    !canApproveOT(
       approver,
       target
     )
   ) {
-    const err: any = new Error(
-      "Overtime approval permission denied"
-    );
+
+    const err: any =
+      new Error(
+        "OT approval denied"
+      );
 
     err.status = 403;
 

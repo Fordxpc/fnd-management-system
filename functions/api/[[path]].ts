@@ -21,6 +21,10 @@ import {
   requireLeaveEdit,
   requireOvertimeEdit
 } from "../../src/lib/permission-check.js";
+import {
+  requireLeaveApproval,
+  requireOTApproval
+} from "../../src/lib/approval-check.js";
 
 const isManagerRole = (role: string | undefined | null) =>
   ['developer', 'manager', 'admin'].includes(role || '');
@@ -491,8 +495,57 @@ export const onRequest = async (context: any) => {
 
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/approve") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
+      const leaveRows = await db
+        .select()
+        .from(leaveRequests)
+        .where(
+          eq(
+            leaveRequests.id,
+            id!
+          )
+        )
+        .limit(1);
+
+      if (
+        leaveRows.length === 0
+      ) {
+        return json(
+          { message: "Request not found" },
+          404
+        );
+      }
+
+      const leaveRow =
+        leaveRows[0] as any;
+
+      const staffRows =
+        await db
+          .select()
+          .from(staff)
+          .where(
+            eq(
+              staff.id,
+              String(
+                leaveRow.staffId
+              )
+            )
+          )
+          .limit(1);
+
+      const targetStaff =
+        staffRows[0] as any;
+
+      if (targetStaff) {
+
+        await requireLeaveApproval(
+          env,
+          currentUser.email,
+          targetStaff.email
+        );
+
+      }
+
       const body: any = await request.json();
       const reviewedAt = new Date().toISOString();
 
@@ -530,8 +583,58 @@ export const onRequest = async (context: any) => {
 
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/reject") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
+
+      const leaveRows = await db
+        .select()
+        .from(leaveRequests)
+        .where(
+          eq(
+            leaveRequests.id,
+            id!
+          )
+        )
+        .limit(1);
+
+      if (
+        leaveRows.length === 0
+      ) {
+        return json(
+          { message: "Request not found" },
+          404
+        );
+      }
+
+      const leaveRow =
+        leaveRows[0] as any;
+
+      const staffRows =
+        await db
+          .select()
+          .from(staff)
+          .where(
+            eq(
+              staff.id,
+              String(
+                leaveRow.staffId
+              )
+            )
+          )
+          .limit(1);
+
+      const targetStaff =
+        staffRows[0] as any;
+
+      if (targetStaff) {
+
+        await requireLeaveApproval(
+          env,
+          currentUser.email,
+          targetStaff.email
+        );
+
+      }
+
       const body: any = await request.json();
       await db.update(leaveRequests).set({ 
         status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString(), 
@@ -906,8 +1009,59 @@ export const onRequest = async (context: any) => {
     }
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/approve") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
+
+      const overtimeRows =
+        await db
+          .select()
+          .from(overtimeEntries)
+          .where(
+            eq(
+              overtimeEntries.id,
+              id!
+            )
+          )
+          .limit(1);
+
+      if (
+        overtimeRows.length === 0
+      ) {
+        return json(
+          { message: "Overtime not found" },
+          404
+        );
+      }
+
+      const overtimeRow =
+        overtimeRows[0] as any;
+
+      const staffRows =
+        await db
+          .select()
+          .from(staff)
+          .where(
+            eq(
+              staff.id,
+              String(
+                overtimeRow.staffId
+              )
+            )
+          )
+          .limit(1);
+
+      const targetStaff =
+        staffRows[0] as any;
+
+      if (targetStaff) {
+
+        await requireOTApproval(
+          env,
+          currentUser.email,
+          targetStaff.email
+        );
+
+      }
+
       const body: any = await request.json();
       await db.update(overtimeEntries).set({ 
         status: "approved", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() 
@@ -916,8 +1070,59 @@ export const onRequest = async (context: any) => {
     }
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/reject") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
       const id = pathname.split("/")[3];
+
+      const overtimeRows =
+        await db
+          .select()
+          .from(overtimeEntries)
+          .where(
+            eq(
+              overtimeEntries.id,
+              id!
+            )
+          )
+          .limit(1);
+
+      if (
+        overtimeRows.length === 0
+      ) {
+        return json(
+          { message: "Overtime not found" },
+          404
+        );
+      }
+
+      const overtimeRow =
+        overtimeRows[0] as any;
+
+      const staffRows =
+        await db
+          .select()
+          .from(staff)
+          .where(
+            eq(
+              staff.id,
+              String(
+                overtimeRow.staffId
+              )
+            )
+          )
+          .limit(1);
+
+      const targetStaff =
+        staffRows[0] as any;
+
+      if (targetStaff) {
+
+        await requireOTApproval(
+          env,
+          currentUser.email,
+          targetStaff.email
+        );
+
+      }
+
       const body: any = await request.json();
       await db.update(overtimeEntries).set({ 
         status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() 
