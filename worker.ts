@@ -11,15 +11,10 @@ export default {
         const auth = getAuth(env);
         return await auth.handler(request);
       } catch (err: any) {
-        // 🚨 THIS WILL EXPOSE THE REAL ERROR
-        console.error("BETTER AUTH CRASH DETAILS:", err);
+        console.error("Better Auth request failed", err);
         return new Response(
           JSON.stringify({
-            message: "Better Auth crashed",
-            error: err.message,
-            cause: err.cause?.message || String(err.cause) || "No cause",
-            detail: err.detail || "No detail",
-            hint: err.hint || "No hint"
+            message: "Authentication service error"
           }),
           { status: 500, headers: { "Content-Type": "application/json" } }
         );
