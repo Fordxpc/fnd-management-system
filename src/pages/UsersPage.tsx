@@ -7,8 +7,8 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
 import { UserEditModal } from '../components/UserEditModal';
 
-const VIEW_ROLES = ['developer', 'manager', 'admin', 'owner', 'smt'];
 const EDIT_ROLES = ['developer', 'manager', 'admin', 'owner'];
+const VIEW_ROLES = EDIT_ROLES;
 const ALL_ROLES = ['developer', 'manager', 'admin', 'smt', 'staff'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
@@ -20,6 +20,7 @@ const selectStyle: CSSProperties = {
 function UsersPage() {
   const { profile } = useAuth();
   const role = profile?.role || '';
+  const assignableRoles = role === 'developer' ? ALL_ROLES : ALL_ROLES.filter(value => value !== 'developer');
   const canView = VIEW_ROLES.includes(role) || profile?.isSmt === true;
   const canEdit = EDIT_ROLES.includes(role);
 
@@ -55,11 +56,7 @@ function UsersPage() {
     }
   }, [canView]);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   if (!canView) return <div className="page-content"><h2>Access Denied</h2><p>You do not have permission to view this page.</p></div>;
 
@@ -99,7 +96,7 @@ function UsersPage() {
     
     const email = formData.email.trim().toLowerCase();
     if (!email || !formData.password) { toast.error('Email and Password are required'); return; }
-    if (formData.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    if (formData.password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
     if (users.some((u) => (u.email || '').toLowerCase() === email)) { toast.error('This user already exists in the active database.'); return; }
 
     setSavingPreset(true);
@@ -141,8 +138,8 @@ function UsersPage() {
           <div><label>Full Name</label><input placeholder="e.g. Mohamed Fuadhu" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required /></div>
           <div><label>Designation</label><input placeholder="e.g. Operations Officer" value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} /></div>
           <div><label>Work Email *</label><input type="email" placeholder="email@funadhooairport.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required /></div>
-          <div><label>Temporary Password *</label><input type="text" placeholder="Min 6 characters" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required /></div>
-          <div><label>Role</label><select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>{ALL_ROLES.map((r) => <option key={r} value={r}>{r.toUpperCase()}</option>)}</select></div>
+          <div><label>Temporary Password *</label><input type="password" minLength={8} autoComplete="new-password" placeholder="Minimum 8 characters" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required /></div>
+          <div><label>Role</label><select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>{assignableRoles.map((r) => <option key={r} value={r}>{r.toUpperCase()}</option>)}</select></div>
           <div><label>Department</label><select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={selectStyle}>{DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
           <button type="submit" disabled={savingPreset} style={{ gridColumn: 'span 2', background: '#2563eb', color: 'white', padding: '12px', fontSize: '14px', marginTop: '10px' }}>
             {savingPreset ? 'Creating User...' : 'Create User Account'}
@@ -191,7 +188,7 @@ function UsersPage() {
                     <tr key={u.id}>
                       <td><strong>{u.name || getStaffName(u.email)}</strong></td>
                       <td>{u.email}</td>
-                      <td><select value={u.role || 'staff'} onChange={(e) => handleChangeRole(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>{ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</select></td>
+                      <td><select value={u.role || 'staff'} onChange={(e) => handleChangeRole(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>{assignableRoles.map((r) => <option key={r} value={r}>{r}</option>)}</select></td>
                       <td><select value={u.department || 'Ground Operations'} onChange={(e) => handleChangeDept(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>{DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}</select></td>
                       {canEdit && (
                         <td style={{ whiteSpace: 'nowrap' }}>

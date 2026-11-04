@@ -38,6 +38,14 @@ const requireRoleAssignment = (currentRole: string, requestedRole: string | unde
     throw err;
   }
 };
+const ACCESS_ROLES = ["developer", "manager", "admin", "owner", "smt", "staff"];
+const ACCESS_DEPARTMENTS = ["Ground Operations", "Maintenance", "Security", "Fire & Rescue", "Administration", "Safety"];
+const validateAccessAssignment = (currentRole: string, requestedRole: string, department: string) => {
+  requireRoleAssignment(currentRole, requestedRole);
+  if (!ACCESS_ROLES.includes(requestedRole) || !ACCESS_DEPARTMENTS.includes(department)) {
+    const err: any = new Error("Invalid role or department"); err.status = 400; throw err;
+  }
+};
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -1003,11 +1011,14 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const id = url.pathname.split("/").pop();
       const body: any = await request.json();
+      validateAccessAssignment(currentUser.role, body.role, body.department);
 
       try {
         // Protect developer accounts
         const existingRows = await db.select().from(users).where(eq(users.id, id!)).limit(1);
         const existingUser = existingRows[0];
+        if (!existingUser) return json({ message: "User not found" }, 404);
+        if (id === currentUser.id && body.role !== existingUser.role) return json({ message: "You cannot change your own role" }, 400);
 
         if (
           existingUser.role === "developer" &&
@@ -1052,6 +1063,7 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = url.pathname.split("/").pop();
+      if (id === currentUser.id) return json({ message: "You cannot remove your own account" }, 400);
       const [existingUser] = await db.select().from(users).where(eq(users.id, id!)).limit(1);
       if (existingUser?.role === "developer" && currentUser.role !== "developer") {
         return json({ message: "Cannot delete developer account" }, 403);
@@ -1067,10 +1079,11 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
-      const { email, role, department, name, position, password } = body;
-      requireRoleAssignment(currentUser.role, role);
+      const { role, department, name, position, password } = body;
+      const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+      validateAccessAssignment(currentUser.role, role, department);
 
-      if (!email || !password) return json({ message: "Email and password are required" }, 400);
+      if (!/^\S+@\S+\.\S+$/.test(email) || typeof password !== "string" || password.length < 8 || password.length > 128) return json({ message: "A valid email and password of 8 to 128 characters are required" }, 400);
       const activeUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
       if (activeUser.length > 0) return json({ message: "This user already exists." }, 400);
 
