@@ -1998,3 +1998,34 @@
 @media (max-width: 1100px) { .flight-schedule-form__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flight-schedule-card__body { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flight-schedule-card__body > section:nth-child(2) { border-right: 0; } .flight-schedule-card__body > section:nth-child(-n+2) { border-bottom: 1px solid #eef2f7; } }
 @media (max-width: 760px) { .flight-schedule-hero { align-items: stretch; flex-direction: column; padding: 24px 20px; } .flight-schedule-hero__actions { width: 100%; } .flight-schedule-hero__actions button { flex: 1; } .flight-schedule-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flight-schedule-toolbar { align-items: stretch; flex-direction: column; } .flight-schedule-search { align-items: stretch; flex-direction: column; } .flight-schedule-search input { width: 100%; min-width: 0; } .flight-schedule-card__body { grid-template-columns: 1fr; } .flight-schedule-card__body > section { border-right: 0; border-bottom: 1px solid #eef2f7; } .flight-schedule-card__body > section:last-child { border-bottom: 0; } .flight-schedule-form__grid { grid-template-columns: 1fr; padding: 18px; } .flight-schedule-form__wide { grid-column: auto; } .flight-schedule-form__actions { padding: 0 18px 18px; } }
 @media (max-width: 480px) { .flight-schedule-summary { grid-template-columns: 1fr 1fr; gap: 9px; } .flight-schedule-summary > div { padding: 15px; } .flight-schedule-summary strong { font-size: 25px; } .flight-schedule-card__header { align-items: flex-start; } .flight-schedule-card__identity { align-items: flex-start; flex-direction: column; } .flight-schedule-times, .flight-schedule-live { grid-template-columns: 1fr 1fr; } }
+
+/* Phase 6: Operations Board navigation and status */
+.operations-board-page { display: flex; flex-direction: column; gap: 22px; }
+.operations-board-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 30px; border-radius: 24px; color: #fff; background: radial-gradient(circle at 88% 15%, rgba(16,185,129,.25), transparent 28%), linear-gradient(135deg, #0f172a 0%, #17395c 58%, #065f46 120%); box-shadow: 0 20px 45px rgba(15,23,42,.16); }
+.operations-board-kicker { display: block; margin-bottom: 8px; color: #6ee7b7; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.operations-board-hero h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
+.operations-board-hero p { max-width: 650px; margin: 10px 0 0; color: #d1fae5; line-height: 1.6; }
+.operations-board-hero__actions { display: flex; align-items: stretch; gap: 10px; }
+.operations-board-refresh, .operations-board-add-staff button { min-height: 42px; padding: 0 16px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; color: #fff; background: rgba(255,255,255,.1); font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.operations-board-refresh:disabled { cursor: wait; opacity: .65; }
+.operations-board-add-staff { display: flex; overflow: hidden; border: 1px solid rgba(255,255,255,.22); border-radius: 11px; background: #fff; }
+.operations-board-add-staff input { width: 175px; min-height: 42px; padding: 0 13px; border: 0; color: #172033; font: inherit; outline: none; }
+.operations-board-add-staff button { border: 0; border-radius: 0; color: #064e3b; background: #6ee7b7; }
+.operations-board-alert { display: flex; gap: 8px 20px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid #fed7aa; border-radius: 12px; color: #9a3412; background: #fff7ed; }
+.operations-board-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.operations-board-summary > div { position: relative; overflow: hidden; padding: 20px; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+.operations-board-summary > div::after { position: absolute; right: -24px; bottom: -36px; width: 94px; height: 94px; border-radius: 50%; background: #d1fae5; content: ''; }
+.operations-board-summary span, .operations-board-summary small { position: relative; z-index: 1; display: block; color: #64748b; font-size: 11px; font-weight: 700; }
+.operations-board-summary strong { position: relative; z-index: 1; display: block; margin: 5px 0; color: #0f172a; font-size: 30px; line-height: 1; }
+.operations-board-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 7px; border: 1px solid #e2e8f0; border-radius: 18px; background: #eef2f7; }
+.operations-board-tabs button { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; padding: 13px; border: 0; border-radius: 12px; color: #64748b; background: transparent; font: inherit; text-align: left; cursor: pointer; transition: background .18s ease, box-shadow .18s ease, color .18s ease; }
+.operations-board-tabs button > span { grid-row: 1 / span 2; align-self: center; display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 9px; color: #475569; background: #dde5ee; font-size: 10px; font-weight: 900; }
+.operations-board-tabs button > strong { color: #334155; font-size: 13px; }
+.operations-board-tabs button > small { margin-top: 2px; font-size: 9px; }
+.operations-board-tabs button.active { color: #047857; background: #fff; box-shadow: 0 5px 14px rgba(15,23,42,.1); }
+.operations-board-tabs button.active > span { color: #065f46; background: #d1fae5; }
+.operations-board-tabs button.active > strong { color: #064e3b; }
+.operations-board-page > div:not(.operations-board-alert), .operations-board-page > section:not(.operations-board-summary) { min-width: 0; }
+@media (max-width: 1000px) { .operations-board-hero { align-items: stretch; flex-direction: column; } .operations-board-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .operations-board-hero { padding: 24px 20px; } .operations-board-hero__actions { flex-direction: column; } .operations-board-add-staff input { width: 100%; } .operations-board-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .operations-board-tabs { grid-template-columns: 1fr; } .operations-board-summary { gap: 9px; } .operations-board-summary > div { padding: 15px; } .operations-board-summary strong { font-size: 25px; } }

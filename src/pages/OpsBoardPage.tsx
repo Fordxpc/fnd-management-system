@@ -10,14 +10,38 @@ import { canViewOpsBoard, canEditOpsBoard } from '../lib/permissions';
 const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL', 'MOHAMED IBRAHIM', 'ZIMLA AYYOOB', 'AMINATH MOOSA'];
 const DEFAULT_TASKS = [{ id: 'chocks-on', label: 'CHOCKS ON', color: 'linear-gradient(135deg, #ec407a, #ad1457)', text: '#fff' }, { id: 'cone-setup', label: 'CONE SET UP', color: 'linear-gradient(135deg, #00c6ff, #0072ff)', text: '#fff' }, { id: 'unload-back', label: 'UNLOADING — BACK HOLD', color: 'linear-gradient(135deg, #66bb6a, #2e7d32)', text: '#fff' }, { id: 'unload-front', label: 'UNLOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffee58, #fbc02d)', text: '#1a1a1a' }, { id: 'unload-hall', label: 'UNLOADING — ARRIVAL HALL', color: 'linear-gradient(135deg, #ab47bc, #6a1b9a)', text: '#fff' }, { id: 'load-front', label: 'LOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffa726, #e65100)', text: '#fff' }, { id: 'load-back', label: 'LOADING — BACK HOLD', color: 'linear-gradient(135deg, #26c6da, #00838f)', text: '#fff' }, { id: 'cone-pickup', label: 'CONE PICK UP', color: 'linear-gradient(135deg, #ffca28, #ff8f00)', text: '#1a1a1a' }, { id: 'chocks-off', label: 'CHOCKS OFF', color: 'linear-gradient(135deg, #7e57c2, #4527a0)', text: '#fff' }, { id: 'door', label: 'DOOR OPEN / CLOSE', color: 'linear-gradient(135deg, #26a69a, #00695c)', text: '#fff' }, { id: 'aircraft-cleaning', label: 'AIRCRAFT CLEANING', color: 'linear-gradient(135deg, #64748b, #475569)', text: '#fff' }, { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' }, { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' }];
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
+const INITIAL_DATE = formatDate(new Date());
+const BOARD_TIMESTAMP = new Date().toLocaleString();
+
+const readStoredArray = <T,>(key: string, fallback: T[]): T[] => {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return fallback;
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const readStoredDraft = () => {
+  try {
+    const parsed = JSON.parse(localStorage.getItem('ops_board_draft') || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
 
 function OpsBoardPage() {
   const { profile, user } = useAuth();
 
   const [dataReady, setDataReady] = useState<boolean>(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [myStaff, setMyStaff] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
-  const [staffPool, setStaffPool] = useState<string[]>(() => { const saved = localStorage.getItem('ops_staff_pool'); return saved ? JSON.parse(saved) : DEFAULT_STAFF; });
+  const [staffPool, setStaffPool] = useState<string[]>(() => readStoredArray('ops_staff_pool', DEFAULT_STAFF));
   const [newStaff, setNewStaff] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [previewBaseScale, setPreviewBaseScale] = useState(1);
@@ -29,29 +53,30 @@ function OpsBoardPage() {
 
   useEffect(() => { localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool)); }, [staffPool]);
 
-  const [rwy19, setRwy19] = useState<string[]>([]);
-  const [rwy01, setRwy01] = useState<string[]>([]);
-  const [lights, setLights] = useState<string[]>([]);
+  const [rwy19, setRwy19] = useState<string[]>(() => readStoredDraft().rwy19 || []);
+  const [rwy01, setRwy01] = useState<string[]>(() => readStoredDraft().rwy01 || []);
+  const [lights, setLights] = useState<string[]>(() => readStoredDraft().lights || []);
   const runwayRef = useRef<HTMLDivElement>(null);
 
-  const [tasks, setTasks] = useState<any[]>(() => { const saved = localStorage.getItem('ops_tasks'); if (saved) { try { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed; } catch {} } return DEFAULT_TASKS; });
+  const [tasks, setTasks] = useState<any[]>(() => readStoredArray('ops_tasks', DEFAULT_TASKS));
   useEffect(() => { localStorage.setItem('ops_tasks', JSON.stringify(tasks)); }, [tasks]);
 
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [taskForm, setTaskForm] = useState({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' });
-  const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>({});
+  const [groundAssign, setGroundAssign] = useState<{ [key: string]: string[] }>(() => readStoredDraft().groundAssign || {});
   const groundRef = useRef<HTMLDivElement>(null);
 
   const [fodList, setFodList] = useState<any[]>([]);
-  const [fodForm, setFodForm] = useState({ date: formatDate(new Date()), grams: '', remarks: '' });
+  const [fodForm, setFodForm] = useState({ date: INITIAL_DATE, grams: '', remarks: '' });
   const [fodSubmitting, setFodSubmitting] = useState(false);
   const [runwayHistory, setRunwayHistory] = useState<any[]>([]);
   const [groundHistory, setGroundHistory] = useState<any[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string>('');
   const [expandedLog, setExpandedLog] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
       const results = await Promise.allSettled([
         apiFetch('/ops/runway'),
@@ -61,6 +86,8 @@ function OpsBoardPage() {
       ]);
       const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
       setRunwayHistory(getData(0)); setGroundHistory(getData(1)); setFodList(getData(2));
+      const failedRequests = results.filter(result => result.status === 'rejected').length;
+      setLoadError(failedRequests ? failedRequests + ' operations data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
 
       const staffData = getData(3);
       const myEmail = String(profile?.email || user?.email || '').toLowerCase();
@@ -69,21 +96,22 @@ function OpsBoardPage() {
         : null;
       setMyStaff(mine || null);
       setDataReady(true);
-    } catch (err: any) { console.error(err); setDataReady(true); }
-  }, [profile?.email, user?.email]);
+    } catch (err: any) {
+      console.error(err);
+      setLoadError(err.message || 'Operations data could not be refreshed.');
+      setDataReady(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [profile, user]);
 
-  useEffect(() => { fetchData(); const interval = setInterval(fetchData, 15000); return () => clearInterval(interval); }, [fetchData]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 15000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
 
   useEffect(() => {
     if (!showPreview) return;
     const handleResize = () => { const screenWidth = window.innerWidth - 40; const targetWidth = 700; setPreviewBaseScale(screenWidth < targetWidth ? screenWidth / targetWidth : 1); };
     handleResize(); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize);
   }, [showPreview]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('ops_board_draft');
-    if (saved) { try { const parsed = JSON.parse(saved); setRwy19(parsed.rwy19 || []); setRwy01(parsed.rwy01 || []); setLights(parsed.lights || []); setGroundAssign(parsed.groundAssign || {}); } catch (e) {} }
-  }, []);
 
   useEffect(() => { localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign })); }, [rwy19, rwy01, lights, groundAssign]);
 
@@ -117,7 +145,7 @@ function OpsBoardPage() {
 
   const saveRunwayData = async () => { try { await apiFetch('/ops/runway', { method: 'POST', body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), rwy19, rwy01, lights }) }); toast.success('Runway board saved to history!'); fetchData(); } catch (err: any) { toast.error(err.message); } };
   const saveGroundData = async () => { try { await apiFetch('/ops/ground', { method: 'POST', body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), assignments: groundAssign }) }); toast.success('Ground board saved to history!'); fetchData(); } catch (err: any) { toast.error(err.message); } };
-  const handleSaveFOD = async (e: any) => { e.preventDefault(); if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; } setFodSubmitting(true); try { await apiFetch('/fod', { method: 'POST', body: JSON.stringify({ ...fodForm, grams: Number(fodForm.grams), loggedBy: user?.email || '' }) }); toast.success('FOD entry recorded!'); setFodForm({ date: formatDate(new Date()), grams: '', remarks: '' }); fetchData(); } catch (err: any) { toast.error(err.message); } setFodSubmitting(false); };
+  const handleSaveFOD = async (e: any) => { e.preventDefault(); if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; } setFodSubmitting(true); try { await apiFetch('/fod', { method: 'POST', body: JSON.stringify({ ...fodForm, grams: Number(fodForm.grams), loggedBy: user?.email || '' }) }); toast.success('FOD entry recorded!'); setFodForm({ date: INITIAL_DATE, grams: '', remarks: '' }); fetchData(); } catch (err: any) { toast.error(err.message); } setFodSubmitting(false); };
   const handleDeleteFOD = (id: string) => setDeleteFodTarget(id);
 
   const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
@@ -143,19 +171,34 @@ function OpsBoardPage() {
   if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2><p>You do not have permission to view the Operations Board.</p></div></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>📋 Daily Operations Board</h2>
-        {canEdit && (<div style={{ display: 'flex', gap: '8px' }}><form onSubmit={handleAddStaff} style={{ display: 'flex', gap: '8px' }}><input placeholder="Add Staff Name..." value={newStaff} onChange={e => setNewStaff(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }} /><button type="submit" className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }}>+ Add</button></form></div>)}
-      </div>
+    <div className="page-content operations-board-page">
+      <header className="operations-board-hero">
+        <div>
+          <span className="operations-board-kicker">Daily airside coordination</span>
+          <h2>Operations Board</h2>
+          <p>Assign inspection teams, coordinate aircraft turnaround duties, and retain a clear operational record.</p>
+        </div>
+        <div className="operations-board-hero__actions">
+          <button type="button" className="operations-board-refresh" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh data'}</button>
+          {canEdit && <form className="operations-board-add-staff" onSubmit={handleAddStaff}><input aria-label="Staff name" placeholder="Add staff to pool" value={newStaff} onChange={e => setNewStaff(e.target.value)} /><button type="submit">Add staff</button></form>}
+        </div>
+      </header>
 
-      <div className="ops-tabs">
-        <button className={`ops-tab-btn ${activeTab === 'runway' ? 'active' : ''}`} onClick={() => setActiveTab('runway')}>✈️ Runway Inspection</button>
-        <button className={`ops-tab-btn ${activeTab === 'ground' ? 'active' : ''}`} onClick={() => setActiveTab('ground')}>🛬 Ground Task Allocation</button>
-        <button className={`ops-tab-btn ${activeTab === 'fod' ? 'active' : ''}`} onClick={() => setActiveTab('fod')}>🪨 FOD Collection</button>
-        <button className={`ops-tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📊 History & Reports</button>
-      </div>
+      {loadError && <div className="operations-board-alert" role="alert"><strong>Some information may be out of date.</strong><span>{loadError}</span></div>}
 
+      <section className="operations-board-summary" aria-label="Operations board summary">
+        <div><span>Staff pool</span><strong>{staffPool.length}</strong><small>available team members</small></div>
+        <div><span>Runway assigned</span><strong>{new Set([...rwy19, ...rwy01, ...lights]).size}</strong><small>current inspection team</small></div>
+        <div><span>Ground duties</span><strong>{Object.values(groundAssign).reduce((total, names) => total + names.length, 0)}</strong><small>active assignments</small></div>
+        <div><span>Saved boards</span><strong>{runwayHistory.length + groundHistory.length}</strong><small>historical records</small></div>
+      </section>
+
+      <nav className="operations-board-tabs" aria-label="Operations board sections">
+        <button type="button" className={activeTab === 'runway' ? 'active' : ''} onClick={() => setActiveTab('runway')}><span>01</span><strong>Runway</strong><small>Inspection allocation</small></button>
+        <button type="button" className={activeTab === 'ground' ? 'active' : ''} onClick={() => setActiveTab('ground')}><span>02</span><strong>Ground duties</strong><small>Turnaround tasks</small></button>
+        <button type="button" className={activeTab === 'fod' ? 'active' : ''} onClick={() => setActiveTab('fod')}><span>03</span><strong>FOD log</strong><small>Collection records</small></button>
+        <button type="button" className={activeTab === 'history' ? 'active' : ''} onClick={() => setActiveTab('history')}><span>04</span><strong>History</strong><small>Reports and activity</small></button>
+      </nav>
       {activeTab === 'runway' && (
         <div>
           {canEdit && (
@@ -210,7 +253,7 @@ function OpsBoardPage() {
                   </div>
                 </div>
               </div>
-              <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
+              <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{BOARD_TIMESTAMP}</div>
             </div>
           </div>
 
@@ -291,7 +334,7 @@ function OpsBoardPage() {
                   <li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door.</li>
                 </ol>
               </div>
-              <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
+              <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{BOARD_TIMESTAMP}</div>
             </div>
           </div>
 
@@ -464,7 +507,7 @@ function OpsBoardPage() {
                       <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}><div style={{ background: '#1e88e5', color: '#fff', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px' }}>RWY 01</div><div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>{rwy01.length ? rwy01.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>)) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}</div></div>
                       <div style={{ display: 'flex', flexDirection: 'column', borderRadius: '6px', overflow: 'hidden' }}><div style={{ background: '#fdd835', color: '#111', padding: '6px', textAlign: 'center', fontWeight: 'bold', fontSize: '11px', lineHeight: 1.1 }}>LIGHT INSPECTION</div><div style={{ background: '#0a0a0a', flex: 1, padding: '4px 0', border: '1px solid #333', borderTop: 'none' }}>{lights.length ? lights.map(n => (<div key={n} style={{ textAlign: 'center', color: '#fff', fontSize: '10px', fontWeight: 700, padding: '4px 2px', borderBottom: '1px solid #111', whiteSpace: 'nowrap' }}>{n}</div>)) : <div style={{ textAlign: 'center', color: '#444', padding: '6px', fontSize: '10px' }}>—</div>}</div></div>
                     </div>
-                    <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
+                    <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{BOARD_TIMESTAMP}</div>
                   </div>
                 ) : (
                   <div>
@@ -476,7 +519,7 @@ function OpsBoardPage() {
                       })}
                     </div>
                     <div style={{ background: '#111', borderLeft: '3px solid #fbc02d', borderRadius: '6px', padding: '12px', marginTop: '16px' }}><h4 style={{ color: '#fbc02d', margin: '0 0 8px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>📋 OPERATIONAL NOTES</h4><ol style={{ color: '#e2e8f0', fontSize: '10px', paddingLeft: '16px', margin: 0, lineHeight: 1.4 }}><li>Aircraft cabin cleaning shall commence only after complete passenger disembarkation.</li><li>WCHR passengers shall be transported to the aircraft door during the departure phase.</li><li>Upon task completion, personnel shall assist passengers in proceeding to the aircraft door.</li></ol></div>
-                    <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{new Date().toLocaleString()}</div>
+                    <div style={{ textAlign: 'center', color: '#777', marginTop: '16px', fontSize: '10px' }}>{BOARD_TIMESTAMP}</div>
                   </div>
                 )}
               </div>
