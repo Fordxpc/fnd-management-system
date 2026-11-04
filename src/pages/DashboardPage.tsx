@@ -54,6 +54,21 @@ function shortFlightDate(value?: string) {
   const date = new Date(`${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
+function weatherDescription(code?: number) {
+  if (code === 0) return 'Clear sky';
+  if ([1, 2, 3].includes(Number(code))) return 'Partly cloudy';
+  if ([45, 48].includes(Number(code))) return 'Fog or mist';
+  if ([51, 53, 55, 56, 57].includes(Number(code))) return 'Drizzle';
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(Number(code))) return 'Rain showers';
+  if ([95, 96, 99].includes(Number(code))) return 'Thunderstorms';
+  return 'Current conditions';
+}
+
+function compassDirection(degrees?: number) {
+  if (typeof degrees !== 'number') return '—';
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return directions[Math.round(degrees / 45) % 8];
+}
 function LoadingBlock() {
   return (
     <div className="overview-loading" aria-label="Loading dashboard">
@@ -71,6 +86,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [weather, setWeather] = useState<any>(null);
+  const [weatherError, setWeatherError] = useState('');
+  const [weatherLoading, setWeatherLoading] = useState(true);
 
   const role = (profile?.role || '').toLowerCase();
   const canManageRequests = ['manager', 'admin', 'developer', 'owner'].includes(role);
@@ -109,6 +127,22 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadWeather = async () => {
+      try {
+        const result = await apiFetch('/weather');
+        if (active) { setWeather(result); setWeatherError(''); }
+      } catch {
+        if (active) setWeatherError('Live weather is temporarily unavailable.');
+      } finally {
+        if (active) setWeatherLoading(false);
+      }
+    };
+    void loadWeather();
+    const timer = window.setInterval(loadWeather, 600000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   useEffect(() => {
     if (!canSeeTeamRequests) return;
 
@@ -284,6 +318,20 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </Panel>
       </div>
 
+      <div className="overview-live-grid">
+        <Panel title="Live weather" eyebrow="VRCF · Funadhoo Airport" className="overview-weather-panel" action={<span className="overview-live-source"><i /> Auto refresh</span>}>
+          {weatherLoading ? <LoadingBlock /> : weather ? <div className="overview-weather-content">
+            <div className="overview-weather-now"><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
+            <div className="overview-weather-metrics"><div><span>Humidity</span><strong>{weather.humidity ?? '—'}%</strong></div><div><span>Visibility</span><strong>{weather.visibility ? `${Math.round(weather.visibility / 100) / 10} km` : '—'}</strong></div><div><span>Cloud</span><strong>{weather.cloudCover ?? '—'}%</strong></div><div><span>Pressure</span><strong>{weather.pressure ? `${Math.round(weather.pressure)} hPa` : '—'}</strong></div><div><span>Rain</span><strong>{weather.rain ?? weather.precipitation ?? 0} mm</strong></div></div>
+            <p>Observed {new Date(weather.observedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })} · Coordinates 06°09′45″N 073°17′15″E</p>
+          </div> : <EmptyState>{weatherError || 'Weather information is not available.'}</EmptyState>}
+        </Panel>
+
+        <Panel title="Live weather radar" eyebrow="Precipitation around FND" className="overview-radar-panel" action={<a className="overview-text-button" href="https://www.windy.com/6.163/73.288?radar,6.163,73.288,8" target="_blank" rel="noreferrer">Open full map</a>}>
+          <div className="overview-radar-frame"><iframe title="Live precipitation radar around Funadhoo Airport" loading="lazy" src="https://embed.windy.com/embed2.html?lat=6.163&lon=73.288&detailLat=6.163&detailLon=73.288&width=650&height=360&zoom=7&level=surface&overlay=radar&product=radar&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1" /></div>
+          <p className="overview-radar-note">Interactive radar is supplied by Windy. If the embedded map is blocked, use “Open full map”.</p>
+        </Panel>
+      </div>
       <div className="overview-secondary-grid">
         <Panel title="Quick access" eyebrow="Common tasks">
           <div className="overview-actions">

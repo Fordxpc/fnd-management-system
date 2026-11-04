@@ -1793,6 +1793,34 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // LIVE WEATHER — FUNADHOO AIRPORT (VRCF)
+    // ==========================================
+    if (pathname === "/api/weather" && method === "GET") {
+      await requireAuth(request, env);
+      const weatherUrl = new URL('https://api.open-meteo.com/v1/forecast');
+      weatherUrl.searchParams.set('latitude', '6.1625');
+      weatherUrl.searchParams.set('longitude', '73.2875');
+      weatherUrl.searchParams.set('current', 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m');
+      weatherUrl.searchParams.set('hourly', 'visibility');
+      weatherUrl.searchParams.set('timezone', 'Indian/Maldives');
+      weatherUrl.searchParams.set('forecast_days', '1');
+      const weatherResponse = await fetch(weatherUrl.toString(), { headers: { 'User-Agent': 'FND-Management-System/1.0' } });
+      if (!weatherResponse.ok) return json({ message: 'Live weather service is temporarily unavailable' }, 502);
+      const weather: any = await weatherResponse.json();
+      const currentHour = String(weather.current?.time || '').slice(0, 13) + ':00';
+      const hourIndex = Array.isArray(weather.hourly?.time) ? weather.hourly.time.indexOf(currentHour) : -1;
+      return json({
+        station: 'VRCF', airport: 'Funadhoo Airport', latitude: 6.1625, longitude: 73.2875,
+        observedAt: weather.current?.time || new Date().toISOString(), units: weather.current_units || {},
+        temperature: weather.current?.temperature_2m, feelsLike: weather.current?.apparent_temperature,
+        humidity: weather.current?.relative_humidity_2m, precipitation: weather.current?.precipitation,
+        rain: weather.current?.rain, weatherCode: weather.current?.weather_code, cloudCover: weather.current?.cloud_cover,
+        pressure: weather.current?.pressure_msl, windSpeed: weather.current?.wind_speed_10m,
+        windDirection: weather.current?.wind_direction_10m, windGusts: weather.current?.wind_gusts_10m,
+        visibility: hourIndex >= 0 ? weather.hourly?.visibility?.[hourIndex] : null
+      });
+    }
+    // ==========================================
     // ANNOUNCEMENTS
     // ==========================================
     if (pathname === "/api/announcements" && method === "GET") {
