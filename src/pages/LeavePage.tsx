@@ -14,6 +14,7 @@ const APPROVER_DESIGNATIONS = ['Airport Manager', 'Assistant Manager', 'Assistan
 const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const selectStyle = { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff' };
+const INITIAL_DATE = new Date().toISOString().split('T')[0];
 
 const formatDate = (date: Date): string => { const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, '0'); const d = String(date.getDate()).padStart(2, '0'); return `${y}-${m}-${d}`; };
 const formatDisplay = (dateStr: string): string => { if (!dateStr) return ''; const parts = dateStr.split('-'); return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr; };
@@ -29,7 +30,7 @@ function LeavePage() {
   const { profile, user, tempAccess } = useAuth();
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
+  const isSMT = profile?.role === 'smt' || profile?.isSMT === true || profile?.isSmt === true;
   const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
 
   const [requests, setRequests] = useState<any[]>([]);
@@ -39,6 +40,9 @@ function LeavePage() {
   const [tab, setTab] = useState<string>('pending');
   const [filterDept, setFilterDept] = useState<string>('all');
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [search, setSearch] = useState('');
   const [showMyBalance, setShowMyBalance] = useState<boolean>(true);
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false); 
   const [balanceTab, setBalanceTab] = useState<'annual' | 'sick' | 'other'>('annual');
@@ -46,35 +50,44 @@ function LeavePage() {
   const [selectedFormDept, setSelectedFormDept] = useState<string>('Ground Operations');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [leaveType, setLeaveType] = useState<string>('ANNUAL LEAVE');
-  const [startDate, setStartDate] = useState<string>(formatDate(new Date()));
-  const [endDate, setEndDate] = useState<string>(formatDate(new Date()));
+  const [startDate, setStartDate] = useState<string>(INITIAL_DATE);
+  const [endDate, setEndDate] = useState<string>(INITIAL_DATE);
   const [reason, setReason] = useState<string>('');
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [approveTarget, setApproveTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
-  // NEW: Simple hierarchy approval gate
-  const canApprove =
-    myStaff?.isSmt === true ||
-    myStaff?.isIncharge === true ||
-    ["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase());
-
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
       const results = await Promise.allSettled([apiFetch('/staff'), apiFetch('/leave-requests'), apiFetch('/holidays')]);
       const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
-      const staffData = getData(0); const rawLeaveData = getData(1); const holidaysData = getData(2);
+      const staffData = getData(0);
+      const rawLeaveData = getData(1);
+      const holidaysData = getData(2);
+      const failedRequests = results.filter((result) => result.status === 'rejected').length;
       const uniqueLeaves = Array.from(new Map(rawLeaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}-${item.leaveType}`, item])).values());
-      setStaffList(staffData); setRequests(uniqueLeaves); setHolidays(holidaysData);
-      const mine = staffData.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+      setStaffList(Array.isArray(staffData) ? staffData : []);
+      setRequests(uniqueLeaves);
+      setHolidays(Array.isArray(holidaysData) ? holidaysData : []);
+      setLoadError(failedRequests ? failedRequests + ' leave data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
+      const mine = (Array.isArray(staffData) ? staffData : []).find((member: any) => (member.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
-      if (mine && !selectedStaffId) { setSelectedStaffId(mine.id); setSelectedFormDept(mine.department || 'Ground Operations'); }
+      if (mine && !selectedStaffId) {
+        setSelectedStaffId(mine.id);
+        setSelectedFormDept(mine.department || 'Ground Operations');
+      }
+    } catch (err: any) {
+      setLoadError(err.message || 'Leave information could not be loaded.');
+      if (!quiet) toast.error(err.message);
+    } finally {
       setLoading(false);
-    } catch (err: any) { toast.error(err.message); setLoading(false); }
+      setRefreshing(false);
+    }
   }, [user, selectedStaffId]);
 
-  useEffect(() => { fetchData(); const interval = setInterval(fetchData, 10000); return () => clearInterval(interval); }, [fetchData]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 10000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
   const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
@@ -85,7 +98,7 @@ function LeavePage() {
     
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (myStaff?.department || '').trim().toLowerCase();
-    const isActuallySMT = isSMT || myStaff?.isSMT === true;
+    const isActuallySMT = isSMT || myStaff?.isSMT === true || myStaff?.isSmt === true;
     const isIncharge = myStaff?.isIncharge === true;
     
     if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === targetDept)) return true;
@@ -123,7 +136,7 @@ function LeavePage() {
     if (myStaff?.isIncharge) {
       displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department);
     } else if (myStaff?.isSmt) {
-      displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department && r.isSMT !== true);
+      displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department && r.staffIsSMT !== true);
     } else {
       displayRequests = requests.filter((r: any) => r.staffId === myStaff?.id);
     }
@@ -138,7 +151,15 @@ function LeavePage() {
       if (isStaff) return r.status?.toLowerCase() === 'approved' || r.status?.toLowerCase() === 'pending';
       if (tab === 'all') return true;
       return (r.status || '').toLowerCase() === tab;
+    })
+    .filter((r: any) => {
+      const query = search.trim().toLowerCase();
+      return !query || [r.staffName, r.staffSN, r.staffDepartment, r.leaveType, r.reason].some((value) => String(value || '').toLowerCase().includes(query));
     });
+
+  const pendingCount = displayRequests.filter((request: any) => request.status?.toLowerCase() === 'pending').length;
+  const approvedCount = displayRequests.filter((request: any) => request.status?.toLowerCase() === 'approved').length;
+  const rejectedCount = displayRequests.filter((request: any) => request.status?.toLowerCase() === 'rejected').length;
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
   const myIsAnnualRenewing = myYearsOfService >= ANNUAL_LEAVE_SERVICE_YEARS;
@@ -149,8 +170,8 @@ function LeavePage() {
   LEAVE_TYPES.forEach((t) => { usedDays[t] = myStaff ? computeUsedDays(myStaff.id, myStaff.joinDate || '', t, requests) : 0; });
   
   const deptBalanceStaff = staffList.filter((s: any) => {
-      if (s.isSMT === true || s.department === 'Administration') return false;
-      return canApproveThisDept(s.department, s.isSMT);
+      if (s.isSMT === true || s.isSmt === true || s.department === 'Administration') return false;
+      return canApproveThisDept(s.department, s.isSMT === true || s.isSmt === true);
     }).sort((a: any, b: any) => (a.sn || '').localeCompare(b.sn || ''));
 
   const handleSubmit = async (e: any) => {
@@ -166,7 +187,7 @@ function LeavePage() {
 
     setSubmitting(true);
     try {
-      await apiFetch('/leave-requests', { method: 'POST', body: JSON.stringify({ staffId: selectedStaffId, staffName: staffMemberToSubmit.name, staffDepartment: staffMemberToSubmit.department, staffSN: staffMemberToSubmit.sn || '', staffGender: staffMemberToSubmit.gender || '', staffIsSMT: staffMemberToSubmit.isSMT === true, leaveType, startDate, endDate, days, reason, requestedBy: user?.email || '' }) });
+      await apiFetch('/leave-requests', { method: 'POST', body: JSON.stringify({ staffId: selectedStaffId, staffName: staffMemberToSubmit.name, staffDepartment: staffMemberToSubmit.department, staffSN: staffMemberToSubmit.sn || '', staffGender: staffMemberToSubmit.gender || '', staffIsSMT: staffMemberToSubmit.isSMT === true || staffMemberToSubmit.isSmt === true, leaveType, startDate, endDate, days, reason, requestedBy: user?.email || '' }) });
       toast.success(`Leave request submitted.`); setShowForm(false); setReason(''); fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); } finally { setSubmitting(false); }
   };
@@ -204,13 +225,41 @@ function LeavePage() {
   if (loading) return <div className="page-content"><p>Loading...</p></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>Leave Management</h2>
-        <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ Request Leave'}</button>
-      </div>
-      <p style={{ margin: '-8px 0 16px', fontSize: '13px', color: '#64748b' }}>Leave is written on the roster only after a supervisor approves the request.</p>
+    <div className="page-content leave-management-page">
+      <header className="leave-management-hero">
+        <div>
+          <span className="leave-management-kicker">Workforce availability</span>
+          <h2>Leave Management</h2>
+          <p>Submit requests, review approvals, and understand leave availability before roster changes are applied.</p>
+        </div>
+        <div className="leave-management-hero__actions">
+          <button type="button" className="leave-management-secondary" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+          <button type="button" className="leave-management-primary" onClick={() => setShowForm(!showForm)}>{showForm ? 'Close request form' : 'Request leave'}</button>
+        </div>
+      </header>
 
+      {loadError && <div className="leave-management-alert" role="alert"><strong>Leave information may be out of date.</strong><span>{loadError}</span></div>}
+
+      <section className="leave-management-summary" aria-label="Leave request summary">
+        <div><span>Pending</span><strong>{pendingCount}</strong><small>awaiting a decision</small></div>
+        <div><span>Approved</span><strong>{approvedCount}</strong><small>confirmed requests</small></div>
+        <div><span>Rejected</span><strong>{rejectedCount}</strong><small>declined requests</small></div>
+        <div><span>Current view</span><strong>{visibleRequests.length}</strong><small>matching records</small></div>
+      </section>
+
+      <div className="leave-management-note">Roster entries are created only after an authorized supervisor approves the request.</div>
+
+      <section className="leave-management-controls">
+        <label><span>Search requests</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Staff, leave type, department…" /></label>
+        {!isStaff && <label><span>Department</span><select value={filterDept} onChange={(event) => setFilterDept(event.target.value)}><option value="all">All departments</option>{FORM_DEPARTMENTS.map((departmentName) => <option key={departmentName} value={departmentName}>{departmentName}</option>)}</select></label>}
+      </section>
+
+      {!isStaff && <nav className="leave-management-tabs" aria-label="Request status filter">
+        <button type="button" className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>Pending <span>{pendingCount}</span></button>
+        <button type="button" className={tab === 'approved' ? 'active' : ''} onClick={() => setTab('approved')}>Approved <span>{approvedCount}</span></button>
+        <button type="button" className={tab === 'rejected' ? 'active' : ''} onClick={() => setTab('rejected')}>Rejected <span>{rejectedCount}</span></button>
+        <button type="button" className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>All <span>{displayRequests.length}</span></button>
+      </nav>}
       {myStaff && canSeeMyBalance && (
         <div className="collapsible-card">
           <button className="collapsible-header" onClick={() => setShowMyBalance(!showMyBalance)}><span><strong>My Leave Balance</strong></span><span className="collapsible-toggle">{showMyBalance ? '▼' : '▶'}</span></button>
@@ -256,7 +305,7 @@ function LeavePage() {
       )}
 
       {showForm && (
-        <form className="staff-form" onSubmit={handleSubmit}>
+        <form className="staff-form leave-management-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
           {!isStaff && (<select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>{FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select>)}
           {!isStaff ? (<select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required style={selectStyle}><option value="">Select Staff Member...</option>{formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}</select>) : (<input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />)}
@@ -269,18 +318,9 @@ function LeavePage() {
         </form>
       )}
 
-      {!isStaff && (
-        <div className="leave-tabs">
-          <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>Pending</button>
-          <button className={tab === 'approved' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('approved')}>Approved</button>
-          <button className={tab === 'rejected' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('rejected')}>Rejected</button>
-          <button className={tab === 'all' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('all')}>All</button>
-        </div>
-      )}
-
-      <div className="staff-list" style={{ marginTop: '16px' }}>
+      <div className="staff-list leave-management-list">
         {visibleRequests.length === 0 ? (<div className="empty-state"><p>No leave requests found.</p></div>) : (
-          <table>
+          <table className="leave-management-table">
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleRequests.map((r: any) => {
@@ -295,13 +335,13 @@ function LeavePage() {
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
                     <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span>{approverName && (<div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px', textAlign: 'center' }}>By: {approverName}</div>)}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      {canApprove && r.status?.toLowerCase() === 'pending' && r.staffId !== myStaff?.id && (
+                      {canApproveRequest(r) && r.status?.toLowerCase() === 'pending' && (
                         <>
-                          <button className="approve-btn" onClick={() => setApproveTarget(r)}>✓</button>
-                          <button className="reject-btn" onClick={() => setRejectTarget(r)}>✕</button>
+                          <button type="button" className="approve-btn" title="Approve request" onClick={() => setApproveTarget(r)}>Approve</button>
+                          <button type="button" className="reject-btn" title="Reject request" onClick={() => setRejectTarget(r)}>Reject</button>
                         </>
                       )}
-                      {canDeleteRequest(r) && <button className="delete-btn" style={{ marginLeft: '6px' }} onClick={() => setDeleteTarget(r)}>🗑</button>}
+                      {canDeleteRequest(r) && <button type="button" className="delete-btn" onClick={() => setDeleteTarget(r)}>Delete</button>}
                     </td>
                   </tr>
                 );

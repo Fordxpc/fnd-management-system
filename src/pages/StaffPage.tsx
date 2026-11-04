@@ -152,7 +152,7 @@ function StaffPage() {
   };
 
   const handleEdit = (s: any) => {
-    setEditingId(s.id); setSn(s.sn || ''); setName(s.name || ''); setEmail(s.email || ''); setPersonalEmail(s.personalEmail || ''); setNid(s.nid || ''); setJoinDate(s.joinDate || ''); setPhone(s.phone || ''); setGender(s.gender || ''); setDepartment(s.department || 'Ground Operations'); setPosition(s.position || ''); setIsSMT(!!s.isSMT); setBalanceVisible(!!s.balanceVisible); setNotes(s.notes || ''); setBasicSalary(s.basicSalary ? String(s.basicSalary) : ''); setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : ''); setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : ''); setBankAccount(s.bankAccount || ''); setCreateUserAccount(false); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' });
+    setEditingId(s.id); setSn(s.sn || ''); setName(s.name || ''); setEmail(s.email || ''); setPersonalEmail(s.personalEmail || ''); setNid(s.nid || ''); setJoinDate(s.joinDate || ''); setPhone(s.phone || ''); setGender(s.gender || ''); setDepartment(s.department || 'Ground Operations'); setPosition(s.position || ''); setIsSMT(s.isSmt === true || s.isSMT === true); setBalanceVisible(!!s.balanceVisible); setNotes(s.notes || ''); setBasicSalary(s.basicSalary ? String(s.basicSalary) : ''); setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : ''); setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : ''); setBankAccount(s.bankAccount || ''); setCreateUserAccount(false); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const confirmDelete = async () => {
@@ -192,14 +192,14 @@ const myDept = myStaff?.department;
   const canAddStaff = isDev || isManager;
 
   const visibleStaff = staff.filter((s) => {
-    const matchesDepartment = selectedDept === 'all' || (selectedDept === 'SMT' ? s.isSMT === true : s.department === selectedDept);
+    const matchesDepartment = selectedDept === 'all' || (selectedDept === 'SMT' ? (s.isSmt === true || s.isSMT === true) : s.department === selectedDept);
     const query = search.trim().toLowerCase();
     const matchesSearch = !query || [s.sn, s.name, s.position, s.department, s.email].some((value) => String(value || '').toLowerCase().includes(query));
     return matchesDepartment && matchesSearch;
   }).sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
 
   const departmentCount = new Set(staff.map((member) => member.department).filter(Boolean)).size;
-  const smtCount = staff.filter((member) => member.isSMT).length;
+  const smtCount = staff.filter((member) => member.isSmt === true || member.isSMT === true).length;
 
   if (loading) return <div className="page-content"><p>Loading data...</p></div>;
 
@@ -286,7 +286,7 @@ const myDept = myStaff?.department;
                       <td>{s.sn || '—'}</td><td><strong>{s.name}</strong></td><td>{s.position || '—'}</td><td style={{ fontSize: '12px' }}>{s.department}</td><td>{s.gender || '—'}</td><td>{s.joinDate || '—'}</td>
                       {showFinancials && (<><td style={{ textAlign: 'right', fontWeight: 600 }}>{s.basicSalary ? `MVR ${Number(s.basicSalary).toLocaleString()}` : '—'}</td><td style={{ textAlign: 'right' }}>{s.dailyAllowance ? `MVR ${Number(s.dailyAllowance).toLocaleString()}` : '—'}</td><td style={{ textAlign: 'right' }}>{s.holidayAllowanceRate ? `MVR ${Number(s.holidayAllowanceRate).toLocaleString()}` : '—'}</td></>)}
                       {canSeeSensitive && (<td style={{ maxWidth: '200px', fontSize: '12px', color: s.notes ? '#1e293b' : '#94a3b8', whiteSpace: 'normal', wordBreak: 'break-word' }}>{s.notes || '—'}</td>)}
-                      <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.isSMT ? '⭐' : '—'}</td>
+                      <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.isSmt === true || s.isSMT === true ? '⭐' : '—'}</td>
                       <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.balanceVisible ? '👁' : '🚫'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
                         {hasEditPermission && (<><button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>Edit</button>{canAddStaff && (<button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>Delete</button>)}</>)}
