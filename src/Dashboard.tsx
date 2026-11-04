@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useAuth } from './auth';
 import './Dashboard.css';
 import StaffPage from './pages/StaffPage';
@@ -17,45 +18,97 @@ import ReportsPage from './pages/ReportsPage';
 import RWYLightsPage from './pages/RWYLightsPage';
 import ConversationsPage from './pages/ConversationsPage';
 
-type Module = 'dashboard' | 'operations' | 'roster' | 'reports' | 'system' | 'chat';
+type Module = 'dashboard' | 'operations' | 'reports' | 'roster' | 'system' | 'chat';
 
-function Dashboard(_props: any) {
-  const { profile } = useAuth();
+type NavigationItem = {
+  id: string;
+  label: string;
+  shortLabel: string;
+};
+
+const MODULE_DEFAULTS: Record<Module, string> = {
+  dashboard: 'dashboard',
+  operations: 'opsboard',
+  reports: 'reports',
+  roster: 'roster',
+  system: 'settings',
+  chat: 'conversations',
+};
+
+const PAGE_TITLES: Record<string, string> = {
+  dashboard: 'Airport overview',
+  opsboard: 'Daily operations board',
+  flights: 'Flight schedule',
+  rampcheck: 'Flight operation',
+  wildlife: 'Wildlife and bird hazard',
+  lights: 'Runway lights',
+  reports: 'Analytics and reports',
+  staff: 'Staff directory',
+  roster: 'Duty roster',
+  leave: 'Leave requests',
+  overtime: 'Overtime sheet',
+  holidays: 'Airport holidays',
+  users: 'User accounts',
+  settings: 'System settings',
+  conversations: 'Conversations',
+};
+
+function Dashboard() {
+  const { profile, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  const isDev = (profile?.role || '').toLowerCase() === 'developer';
-  const isManager = ['manager', 'admin', 'owner'].includes((profile?.role || '').toLowerCase());
-  const isSMT = (profile?.role || '').toLowerCase() === 'smt' || profile?.isSMT === true;
-  const isAdmin = (profile?.role || '').toLowerCase() === 'admin';
-  const dept = (profile?.department || '').toLowerCase();
-  
-  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && !isAdmin;
-  const isOpsOrMaintenanceOrSafety = dept === 'ground operations' || dept === 'maintenance' || dept === 'safety';
-  const canManageUsers = isDev || isManager || isAdmin;
-  
-  const canSeeOpsBoard = isDev || isManager || isAdmin || isSMT || isOpsOrMaintenanceOrSafety;
-  const canSeeRampCheck = isDev || isManager || isAdmin || isSMT;
-  const canSeeStaffList = isDev || isManager || isAdmin || isSMT;
-  
-  const canSeeReports = !isStaff; 
+  const role = (profile?.role || '').toLowerCase();
+  const department = (profile?.department || '').toLowerCase();
+  const isDev = role === 'developer';
+  const isManager = ['manager', 'admin', 'owner'].includes(role);
+  const isSMT = role === 'smt' || profile?.isSMT === true;
+  const isStaff = !isDev && !isManager && !isSMT;
+  const isOperationalDepartment = ['ground operations', 'maintenance', 'safety'].includes(department);
+
+  const canManageUsers = isDev || isManager;
+  const canSeeOpsBoard = isDev || isManager || isSMT || isOperationalDepartment;
+  const canSeeRampCheck = isDev || isManager || isSMT;
+  const canSeeStaffList = isDev || isManager || isSMT;
+  const canSeeReports = !isStaff;
   const canSeeWildlife = !isStaff;
-  
-  const myStaffId = profile?.id; 
-  const isGroundOpsSMT = isSMT && dept === 'ground operations';
-  const canSeeLights = isDev || isManager || isAdmin || isSMT || isGroundOpsSMT;
+  const canSeeLights = isDev || isManager || isSMT;
 
-  const navigate = (page: string) => {
-    setCurrentPage(page);
-    if (page === 'dashboard') setActiveModule('dashboard');
-    else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
-    else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
-    else if (['reports'].includes(page)) setActiveModule('reports');
-    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
-    else if (page === 'conversations') setActiveModule('chat');
+  const moduleItems: Array<{ id: Module; label: string; shortLabel: string }> = [
+    { id: 'dashboard', label: 'Dashboard', shortLabel: 'DB' },
+    { id: 'operations', label: 'Operations', shortLabel: 'OP' },
+    ...(canSeeReports ? [{ id: 'reports' as Module, label: 'Reports', shortLabel: 'RP' }] : []),
+    { id: 'roster', label: 'Roster & HR', shortLabel: 'HR' },
+    { id: 'system', label: 'System', shortLabel: 'SY' },
+    { id: 'chat', label: 'Conversations', shortLabel: 'CH' },
+  ];
+
+  const subNavigation: Record<Module, NavigationItem[]> = {
+    dashboard: [{ id: 'dashboard', label: 'Overview', shortLabel: 'OV' }],
+    operations: [
+      ...(canSeeOpsBoard ? [{ id: 'opsboard', label: 'Daily Ops Board', shortLabel: 'DO' }] : []),
+      { id: 'flights', label: 'Flight Schedule', shortLabel: 'FS' },
+      ...(canSeeRampCheck ? [{ id: 'rampcheck', label: 'Flight Operation', shortLabel: 'FO' }] : []),
+      ...(canSeeWildlife ? [{ id: 'wildlife', label: 'Wildlife', shortLabel: 'WH' }] : []),
+      ...(canSeeLights ? [{ id: 'lights', label: 'RWY Lights', shortLabel: 'RL' }] : []),
+    ],
+    reports: canSeeReports ? [{ id: 'reports', label: 'Analytics & Reports', shortLabel: 'AR' }] : [],
+    roster: [
+      ...(canSeeStaffList ? [{ id: 'staff', label: 'Staff List', shortLabel: 'SL' }] : []),
+      { id: 'roster', label: 'Duty Roster', shortLabel: 'DR' },
+      { id: 'leave', label: 'Leave Requests', shortLabel: 'LR' },
+      { id: 'overtime', label: 'Overtime', shortLabel: 'OT' },
+    ],
+    system: [
+      { id: 'holidays', label: 'Holidays', shortLabel: 'HD' },
+      ...(canManageUsers ? [{ id: 'users', label: 'User Accounts', shortLabel: 'UA' }] : []),
+      { id: 'settings', label: 'Settings', shortLabel: 'ST' },
+    ],
+    chat: [{ id: 'conversations', label: 'Conversations', shortLabel: 'CH' }],
   };
 
-  const pages: { [key: string]: any } = {
+  const pages: Record<string, ReactNode> = {
     dashboard: <DashboardPage onNavigate={navigate} />,
     opsboard: <OpsBoardPage />,
     flights: <FlightsPage />,
@@ -73,90 +126,122 @@ function Dashboard(_props: any) {
     conversations: <ConversationsPage />,
   };
 
+  function navigate(page: string) {
+    setCurrentPage(page);
+    setMobileNavOpen(false);
+
+    if (page === 'dashboard') setActiveModule('dashboard');
+    else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
+    else if (page === 'reports') setActiveModule('reports');
+    else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
+    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
+    else if (page === 'conversations') setActiveModule('chat');
+  }
+
+  function navigateModule(module: Module) {
+    const availablePages = subNavigation[module];
+    const preferredPage = MODULE_DEFAULTS[module];
+    const targetPage = availablePages.some((item) => item.id === preferredPage)
+      ? preferredPage
+      : availablePages[0]?.id;
+
+    setActiveModule(module);
+    if (targetPage) setCurrentPage(targetPage);
+    setMobileNavOpen(false);
+  }
+
+  const displayName = profile?.name || profile?.email?.split('@')[0] || 'Airport user';
+  const displayRole = role ? role.toUpperCase() : 'STAFF';
+  const displayDepartment = profile?.department || 'Funadhoo Airport';
+
   return (
-    <div className="dashboard-layout">
-      <aside className="sidebar">
-        <nav className="sidebar-nav">
-          {activeModule === 'operations' && (
-            <>
-              <div className="sidebar-section-title">Operations</div>
-              {canSeeOpsBoard && <button className={currentPage === 'opsboard' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('opsboard')}>📋 Daily Ops Board</button>}
-              <button className={currentPage === 'flights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('flights')}>✈️ Flight Schedule</button>
-              {canSeeRampCheck && <button className={currentPage === 'rampcheck' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('rampcheck')}>✈️ Flight Operation</button>}
-              {canSeeWildlife && <button className={currentPage === 'wildlife' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('wildlife')}>🦅 Wildlife & Bird Strike</button>}
-              {canSeeLights && <button className={currentPage === 'lights' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('lights')}>🚨 RWY Lights</button>}
-            </>
-          )}
+    <div className="app-shell">
+      <aside className={`app-sidebar ${mobileNavOpen ? 'open' : ''}`} aria-label="Primary navigation">
+        <div className="app-brand">
+          <div className="app-brand-mark" aria-hidden="true">FND</div>
+          <div>
+            <strong>Funadhoo Airport</strong>
+            <span>Management System</span>
+          </div>
+        </div>
 
-          {activeModule === 'reports' && (
-            <>
-              <div className="sidebar-section-title">Reports</div>
-              {canSeeReports && <button className={currentPage === 'reports' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('reports')}>📊 Analytics & Reports</button>}
-            </>
-          )}
-
-          {activeModule === 'roster' && (
-            <>
-              <div className="sidebar-section-title">Roster & HR</div>
-              {canSeeStaffList && <button className={currentPage === 'staff' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('staff')}>👥 Staff List</button>}
-              <button className={currentPage === 'roster' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('roster')}>📅 Duty Roster</button>
-              <button className={currentPage === 'leave' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('leave')}>🌴 Leave Requests</button>
-              <button className={currentPage === 'overtime' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('overtime')}>⏰ Overtime Sheet</button>
-            </>
-          )}
-
-          {activeModule === 'system' && (
-            <>
-              <div className="sidebar-section-title">System & Setting</div>
-              <button className={currentPage === 'holidays' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('holidays')}>🎉 Holidays</button>
-              {canManageUsers && <button className={currentPage === 'users' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('users')}>🔑 User Accounts</button>}
-              <button className={currentPage === 'settings' ? 'nav-item active' : 'nav-item'} onClick={() => navigate('settings')}>⚙️ Settings</button>
-            </>
-          )}
-
-          {activeModule === 'dashboard' && (
-            <>
-              <div className="sidebar-section-title">Overview</div>
-              <button className="nav-item active" onClick={() => navigate('dashboard')}>📊 Dashboard</button>
-            </>
-          )}
-
-          {activeModule === 'chat' && (
-            <>
-              <div className="sidebar-section-title">Chat</div>
-              <button className="nav-item active" onClick={() => navigate('conversations')}>💬 Conversations</button>
-            </>
-          )}
+        <div className="app-sidebar-label">Workspace</div>
+        <nav className="app-module-nav">
+          {moduleItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`app-module-button ${activeModule === item.id ? 'active' : ''}`}
+              onClick={() => navigateModule(item.id)}
+            >
+              <span className="app-nav-icon" aria-hidden="true">{item.shortLabel}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
         </nav>
+
+        <div className="app-sidebar-profile">
+          <div className="app-avatar" aria-hidden="true">
+            {String(displayName).slice(0, 2).toUpperCase()}
+          </div>
+          <div className="app-profile-copy">
+            <strong>{displayName}</strong>
+            <span>{displayRole} · {displayDepartment}</span>
+          </div>
+          <button type="button" className="app-signout-button" onClick={logout}>Sign out</button>
+        </div>
       </aside>
 
-      <main className="main-content">
-        <div className="main-app-header">
-          <h1>Funadhoo Airport</h1>
-          <p>Ops & Roster System</p>
-        </div>
+      {mobileNavOpen && (
+        <button
+          type="button"
+          className="app-nav-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
 
-        <div className="top-tabs-container">
-          <button className={`top-tab ${activeModule === 'dashboard' ? 'active' : ''}`} onClick={() => navigate('dashboard')}>📊 Dashboard</button>
-          
-          {/* Operations Tab */}
-          {(canSeeOpsBoard || canSeeRampCheck) && (
-            <button className={`top-tab ${activeModule === 'operations' ? 'active' : ''}`} onClick={() => navigate('opsboard')}>✈️ Operations</button>
-          )}
+      <main className="app-main">
+        <header className="app-topbar">
+          <button
+            type="button"
+            className="app-menu-button"
+            aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
 
-          {canSeeReports && (
-            <button className={`top-tab ${activeModule === 'reports' ? 'active' : ''}`} onClick={() => navigate('reports')}>📈 Reports</button>
-          )}
+          <div className="app-page-heading">
+            <span>{moduleItems.find((item) => item.id === activeModule)?.label}</span>
+            <h1>{PAGE_TITLES[currentPage] || 'Funadhoo Airport'}</h1>
+          </div>
 
-          <button className={`top-tab ${activeModule === 'roster' ? 'active' : ''}`} onClick={() => navigate('roster')}>📅 Roster & HR</button>
-          
-          <button className={`top-tab ${activeModule === 'system' ? 'active' : ''}`} onClick={() => navigate('settings')}>⚙️ System</button>
-          
-          <button className={`top-tab ${activeModule === 'chat' ? 'active' : ''}`} onClick={() => navigate('conversations')}>💬 Conversations</button>
-        </div>
+          <div className="app-system-status">
+            <span className="app-status-dot" aria-hidden="true" />
+            System online
+          </div>
+        </header>
 
-        <div className="page-wrapper">
-          {pages[currentPage] || <div className="empty-state">Access Denied</div>}
+        <nav className="app-subnav" aria-label="Section navigation">
+          {subNavigation[activeModule].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={currentPage === item.id ? 'active' : ''}
+              onClick={() => navigate(item.id)}
+            >
+              <span aria-hidden="true">{item.shortLabel}</span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="app-page">
+          {pages[currentPage] || <div className="empty-state">Access denied</div>}
         </div>
       </main>
     </div>

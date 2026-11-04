@@ -11,10 +11,7 @@ const MANAGEMENT_ROLES = ['developer', 'manager', 'owner', 'admin', 'smt'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 function App() {
-  if (window.location.pathname === '/live') {
-    return <PublicLiveView />;
-  }
-
+  const isPublicLiveView = window.location.pathname === '/live';
   const [tab, setTab] = useState<'management' | 'employee'>('management');
   const [email, setEmail] = useState('@funadhooairport.com');
   const [password, setPassword] = useState('');
@@ -23,6 +20,10 @@ function App() {
   const [checking, setChecking] = useState(false);
   const [showForgotPw, setShowForgotPw] = useState(false);
   const { user, login, logout } = useAuth();
+
+  if (isPublicLiveView) {
+    return <PublicLiveView />;
+  }
 
   const handleLogin = async (e: any) => {
     e.preventDefault();

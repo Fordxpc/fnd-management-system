@@ -103,3 +103,39 @@ input:read-only, textarea:read-only, input:disabled, select:disabled { backgroun
     visibility: visible !important; 
   }
 }
+/* Phase 3 application-wide layout normalization */
+:root {
+  color-scheme: light;
+  --text: #486581;
+  --text-h: #102a43;
+  --bg: #f4f7f9;
+  --border: #dbe4ea;
+  --accent: #0f766e;
+  font-size: 16px;
+}
+
+html,
+body {
+  min-width: 320px;
+  min-height: 100%;
+  background: #f4f7f9;
+}
+
+body {
+  color: #102a43;
+}
+
+#root {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  text-align: left;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
