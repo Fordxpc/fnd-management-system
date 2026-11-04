@@ -60,20 +60,20 @@ function Dashboard() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const role = (profile?.role || '').toLowerCase();
-  const department = (profile?.department || '').toLowerCase();
   const isDev = role === 'developer';
   const isManager = ['manager', 'admin', 'owner'].includes(role);
   const isSMT = role === 'smt' || profile?.isSMT === true;
-  const isStaff = !isDev && !isManager && !isSMT;
-  const isOperationalDepartment = ['ground operations', 'maintenance', 'safety'].includes(department);
+  const hasFullAccess = isDev || isManager;
+  const hasSpecialOps = profile?.specialOpsAccess === true;
 
-  const canManageUsers = isDev || isManager;
-  const canSeeOpsBoard = isDev || isManager || isSMT || isOperationalDepartment;
-  const canSeeRampCheck = isDev || isManager || isSMT;
-  const canSeeStaffList = isDev || isManager || isSMT;
-  const canSeeReports = !isStaff;
-  const canSeeWildlife = !isStaff;
-  const canSeeLights = isDev || isManager || isSMT;
+  const canManageUsers = hasFullAccess;
+  const canSeeOpsBoard = hasFullAccess || isSMT || hasSpecialOps || profile?.opsBoardViewAccess === true || profile?.opsBoardEditAccess === true;
+  const canSeeFlights = hasFullAccess || isSMT || hasSpecialOps || profile?.flightsViewAccess === true || profile?.flightsEditAccess === true;
+  const canSeeRampCheck = hasFullAccess || isSMT || hasSpecialOps || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
+  const canSeeStaffList = hasFullAccess || isSMT;
+  const canSeeReports = hasFullAccess || isSMT || profile?.reportsViewAccess === true || profile?.reportsEditAccess === true;
+  const canSeeWildlife = hasFullAccess || isSMT || hasSpecialOps || profile?.birdCountViewAccess === true || profile?.birdCountEditAccess === true;
+  const canSeeLights = hasFullAccess || isSMT || hasSpecialOps || profile?.rwyLightViewAccess === true || profile?.rwyLightEditAccess === true;
 
   const moduleItems: Array<{ id: Module; label: string; shortLabel: string }> = [
     { id: 'dashboard', label: 'Dashboard', shortLabel: 'DB' },
@@ -88,7 +88,7 @@ function Dashboard() {
     dashboard: [{ id: 'dashboard', label: 'Overview', shortLabel: 'OV' }],
     operations: [
       ...(canSeeOpsBoard ? [{ id: 'opsboard', label: 'Daily Ops Board', shortLabel: 'DO' }] : []),
-      { id: 'flights', label: 'Flight Schedule', shortLabel: 'FS' },
+      ...(canSeeFlights ? [{ id: 'flights', label: 'Flight Schedule', shortLabel: 'FS' }] : []),
       ...(canSeeRampCheck ? [{ id: 'rampcheck', label: 'Flight Operation', shortLabel: 'FO' }] : []),
       ...(canSeeWildlife ? [{ id: 'wildlife', label: 'Wildlife', shortLabel: 'WH' }] : []),
       ...(canSeeLights ? [{ id: 'lights', label: 'RWY Lights', shortLabel: 'RL' }] : []),

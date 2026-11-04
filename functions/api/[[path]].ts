@@ -1844,38 +1844,33 @@ export const onRequest = async (context: any) => {
       const dept =
         myStaff?.department || "";
 
-      const rawNextFlight =
-        flightList
-          .filter((f: any) => {
-            const status = (f.status || "").toLowerCase();
-            return f.date >= today && !f.atd && !["departed", "cancelled", "completed"].includes(status);
-          })
-          .sort((a: any, b: any) => {
-            const dateCompare = (a.date || "").localeCompare(b.date || "");
-            if (dateCompare !== 0) return dateCompare;
-            return (a.arrivalTime || a.departureTime || "").localeCompare(
-              b.arrivalTime || b.departureTime || ""
-            );
-          })[0] || null;
+      const canViewFlightBoard = isManagerRole(currentUser.role) || currentUser.role === 'smt' || myStaff?.isSmt === true || myStaff?.isIncharge === true || myStaff?.specialOpsAccess === true || myStaff?.flightsViewAccess === true || myStaff?.flightsEditAccess === true;
 
-      let nextFlight: any = rawNextFlight;
-      if (rawNextFlight) {
-        let passengerCounts = { adults: 0, infants: 0 };
-        try {
-          const stored = JSON.parse(rawNextFlight.bookedFigure || "{}");
-          passengerCounts = typeof stored === "object" && stored !== null
-            ? { adults: Number(stored.adults) || 0, infants: Number(stored.infants) || 0 }
-            : { adults: Number(stored) || 0, infants: 0 };
-        } catch {
-          passengerCounts = { adults: Number(rawNextFlight.bookedFigure) || 0, infants: 0 };
-        }
-        nextFlight = {
-          ...rawNextFlight,
-          paxAdults: passengerCounts.adults,
-          paxInfants: passengerCounts.infants
-        };
-      }
+      const upcomingFlights = canViewFlightBoard ? flightList
+        .filter((flight: any) => {
+          const status = String(flight.status || '').toLowerCase();
+          return flight.date >= today && !flight.atd && !['departed', 'cancelled', 'completed'].includes(status);
+        })
+        .sort((a: any, b: any) => {
+          const dateCompare = String(a.date || '').localeCompare(String(b.date || ''));
+          if (dateCompare !== 0) return dateCompare;
+          return String(a.arrivalTime || a.departureTime || '').localeCompare(String(b.arrivalTime || b.departureTime || ''));
+        })
+        .slice(0, 5)
+        .map((flight: any) => {
+          let passengerCounts = { adults: 0, infants: 0 };
+          try {
+            const stored = JSON.parse(flight.bookedFigure || '{}');
+            passengerCounts = typeof stored === 'object' && stored !== null
+              ? { adults: Number(stored.adults) || 0, infants: Number(stored.infants) || 0 }
+              : { adults: Number(stored) || 0, infants: 0 };
+          } catch {
+            passengerCounts = { adults: Number(flight.bookedFigure) || 0, infants: 0 };
+          }
+          return { ...flight, paxAdults: passengerCounts.adults, paxInfants: passengerCounts.infants };
+        }) : [];
 
+      const nextFlight = upcomingFlights[0] || null;
       const onDutyToday =
         roster.filter(r => {
 
@@ -1990,6 +1985,8 @@ export const onRequest = async (context: any) => {
       return json({
 
         nextFlight,
+        upcomingFlights,
+        canViewFlightBoard,
 
         operations: {
           birdCountToday:

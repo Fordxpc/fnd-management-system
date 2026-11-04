@@ -45,6 +45,15 @@ function EmptyState({ children }: { children: ReactNode }) {
   return <div className="overview-empty">{children}</div>;
 }
 
+function flightStatus(flight: any) {
+  return flight?.status || (flight?.atd ? 'Departed' : flight?.ata ? 'Arrived' : flight?.eta ? 'Departed origin' : 'Scheduled');
+}
+
+function shortFlightDate(value?: string) {
+  if (!value) return 'Date TBC';
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
 function LoadingBlock() {
   return (
     <div className="overview-loading" aria-label="Loading dashboard">
@@ -101,7 +110,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }, []);
 
   useEffect(() => {
-    if (!canManageRequests) return;
+    if (!canSeeTeamRequests) return;
 
     let active = true;
 
@@ -121,9 +130,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       active = false;
       clearInterval(interval);
     };
-  }, [canManageRequests]);
+  }, [canSeeTeamRequests]);
 
-  const nextFlight = dashboard?.nextFlight;
+  const upcomingFlights = dashboard?.upcomingFlights || EMPTY_LIST;
+  const canViewFlightBoard = dashboard?.canViewFlightBoard !== false;
   const operations = dashboard?.operations || {};
   const onDuty = dashboard?.onDutyToday || EMPTY_LIST;
   const onLeave = dashboard?.onLeaveToday || EMPTY_LIST;
@@ -154,12 +164,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       }
     : { day: 'Today', date: 'Loading date', time: '--:--:--', greeting: 'Welcome' };
 
-  const flightStatus = nextFlight?.status || (
-    nextFlight?.atd ? 'Departed' :
-    nextFlight?.ata ? 'Arrived' :
-    nextFlight?.eta ? 'Departed origin' :
-    'Scheduled'
-  );
 
   const operationMetrics = [
     { label: 'Bird count records', value: operations.birdCountToday ?? 0, code: 'WH', page: 'wildlife' },
@@ -169,7 +173,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   ];
 
   const quickActions = [
-    { label: 'Flight schedule', description: 'Review arrivals and departures', page: 'flights', code: 'FS' },
+    ...(canViewFlightBoard ? [{ label: 'Flight schedule', description: 'Review arrivals and departures', page: 'flights', code: 'FS' }] : []),
     { label: 'Duty roster', description: 'Check today and upcoming shifts', page: 'roster', code: 'DR' },
     { label: 'Leave requests', description: 'Submit or review staff leave', page: 'leave', code: 'LR' },
     { label: 'Conversations', description: 'Open operational discussions', page: 'conversations', code: 'CH' },
@@ -177,20 +181,21 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
   return (
     <div className="overview-dashboard">
-      <section className="overview-welcome">
-        <div>
-          <span className="overview-kicker">FND operational overview</span>
-          <h1>{clock.greeting}, {profile?.name || 'team member'}</h1>
-          <p>
-            {profile?.position || role || 'Airport staff'}
-            <span aria-hidden="true"> · </span>
-            {profile?.department || 'Funadhoo Airport'}
-          </p>
+      <section className="overview-welcome overview-greeting-board">
+        <div className="overview-greeting-copy">
+          <span className="overview-kicker">Funadhoo Airport · Daily command view</span>
+          <h1>{clock.greeting}, <strong>{profile?.name || 'team member'}</strong></h1>
+          <p>Here is the operational picture for {clock.day.toLowerCase()}.</p>
+          <div className="overview-identity-row">
+            <span>{profile?.position || role || 'Airport staff'}</span>
+            <span>{profile?.department || 'Funadhoo Airport'}</span>
+            <span className="overview-live-label"><i /> Operations live</span>
+          </div>
         </div>
         <div className="overview-clock" aria-label={`${clock.day}, ${clock.date}, ${clock.time}`}>
-          <span>{clock.day}</span>
+          <span>Local time · FND</span>
           <strong>{clock.time}</strong>
-          <small>{clock.date}</small>
+          <small>{clock.day}, {clock.date}</small>
         </div>
       </section>
 
@@ -215,51 +220,34 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       <div className="overview-primary-grid">
         <Panel
-          title="Next scheduled flight"
-          eyebrow="Flight movement"
-          action={<button type="button" className="overview-text-button" onClick={() => onNavigate('flights')}>View schedule</button>}
-          className="overview-flight-panel"
+          title="Flight movement board"
+          eyebrow="Live schedule"
+          action={<button type="button" className="overview-text-button" onClick={() => onNavigate('flights')}>Full schedule</button>}
+          className="overview-flight-panel overview-flight-board"
         >
           {loading ? (
             <LoadingBlock />
-          ) : nextFlight ? (
-            <>
-              <div className="overview-flight-lead">
-                <div>
-                  <strong>{nextFlight.flightNo || 'Flight'}</strong>
-                  <span>{nextFlight.route || 'Route not entered'}</span>
-                </div>
-                <span className="overview-status">{flightStatus}</span>
+          ) : !canViewFlightBoard ? (
+            <EmptyState>Flight movement access is not assigned to this account.</EmptyState>
+          ) : upcomingFlights.length > 0 ? (
+            <div className="overview-flight-board-list">
+              <div className="overview-flight-board-head" aria-hidden="true">
+                <span>Service</span><span>Route</span><span>Schedule</span><span>Live movement</span><span>Status</span>
               </div>
-
-              <div className="overview-flight-timeline">
-                <div>
-                  <small>Origin departure</small>
-                  <strong>{nextFlight.originDepTime || '—'}</strong>
-                </div>
-                <div className="overview-route-line" aria-hidden="true">
-                  <span />
-                  <i />
-                  <span />
-                </div>
-                <div>
-                  <small>FND arrival</small>
-                  <strong>{nextFlight.arrivalTime || nextFlight.eta || '—'}</strong>
-                </div>
-              </div>
-
-              <dl className="overview-flight-details">
-                <div><dt>Aircraft</dt><dd>{nextFlight.aircraft || '—'}</dd></div>
-                <div><dt>Check-in</dt><dd>{nextFlight.checkInTime || '—'}</dd></div>
-                <div><dt>Departure</dt><dd>{nextFlight.departureTime || '—'}</dd></div>
-                <div><dt>Passengers</dt><dd>{nextFlight.paxAdults ?? 0} + {nextFlight.paxInfants ?? 0} infant</dd></div>
-              </dl>
-            </>
+              {upcomingFlights.map((flight: any, index: number) => (
+                <button key={flight.id || `${flight.flightNo}-${flight.date}`} type="button" className={index === 0 ? 'is-next' : ''} onClick={() => onNavigate('flights')}>
+                  <span className="overview-flight-service"><i>{index === 0 ? 'NEXT' : shortFlightDate(flight.date)}</i><strong>{flight.flightNo || 'Flight'}</strong><small>{flight.aircraft || 'Aircraft TBC'}</small></span>
+                  <span className="overview-flight-route"><strong>{flight.route || 'Route TBC'}</strong><small>{shortFlightDate(flight.date)}</small></span>
+                  <span className="overview-flight-times"><small>ARR <strong>{flight.arrivalTime || '—'}</strong></small><small>DEP <strong>{flight.departureTime || '—'}</strong></small></span>
+                  <span className="overview-flight-times overview-flight-live-times"><small>ETA <strong>{flight.eta || '—'}</strong></small><small>ATA <strong>{flight.ata || '—'}</strong></small></span>
+                  <span className={`overview-board-status overview-board-status--${String(flightStatus(flight)).toLowerCase().replace(/[^a-z]+/g, '-')}`}>{flightStatus(flight)}</span>
+                </button>
+              ))}
+            </div>
           ) : (
             <EmptyState>No upcoming flight is scheduled.</EmptyState>
           )}
         </Panel>
-
         <Panel
           title="Staffing today"
           eyebrow="Workforce"
@@ -326,8 +314,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                 <span>Overtime requests</span>
                 <strong>{pendingOT.length}</strong>
               </button>
-              {canManageRequests && (
-                <button type="button" onClick={() => onNavigate('settings')}>
+              {canSeeTeamRequests && (
+                <button type="button" onClick={() => canManageRequests && onNavigate('settings')}>
                   <span>Password resets</span>
                   <strong>{passwordResets.length}</strong>
                 </button>
