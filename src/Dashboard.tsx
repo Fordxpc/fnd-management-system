@@ -69,7 +69,7 @@ function Dashboard() {
   const hasSpecialOps = profile?.specialOpsAccess === true;
 
   const canManageUsers = hasFullAccess;
-  const canSeeOpsBoard = hasFullAccess || isSMT || hasSpecialOps || profile?.opsBoardViewAccess === true || profile?.opsBoardEditAccess === true;
+  const canSeeOpsBoard = hasFullAccess || isSMT || hasSpecialOps || profile?.department === "Safety" || profile?.opsBoardViewAccess === true || profile?.opsBoardEditAccess === true;
   const canSeeFlights = hasFullAccess || isSMT || hasSpecialOps || profile?.flightsViewAccess === true || profile?.flightsEditAccess === true;
   const canSeeRampCheck = hasFullAccess || isSMT || hasSpecialOps || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
   const canSeeStaffList = hasFullAccess || isSMT;

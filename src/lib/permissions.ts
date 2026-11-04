@@ -174,6 +174,7 @@ export function canViewOpsBoard(
     hasFullAccess(profile) ||
     isSMT(profile, staff) ||
     hasSpecialOps(staff) ||
+    staff?.department === "Safety" ||
     staff?.opsBoardViewAccess === true ||
     staff?.opsBoardEditAccess === true
   );
@@ -186,6 +187,7 @@ export function canEditOpsBoard(
   return (
     hasFullAccess(profile) ||
     hasSpecialOps(staff) ||
+    staff?.department === "Safety" ||
     (isSMT(profile, staff) && staff?.department === "Ground Operations") ||
     staff?.opsBoardEditAccess === true
   );

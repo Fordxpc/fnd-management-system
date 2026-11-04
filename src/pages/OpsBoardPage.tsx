@@ -42,16 +42,13 @@ function OpsBoardPage() {
   const [myStaff, setMyStaff] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
   const [staffPool, setStaffPool] = useState<string[]>(() => readStoredArray('ops_staff_pool', DEFAULT_STAFF));
-  const [newStaff, setNewStaff] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [previewBaseScale, setPreviewBaseScale] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(1);
-  const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [deleteFodTarget, setDeleteFodTarget] = useState<string | null>(null);
   const [deleteTaskTarget, setDeleteTaskTarget] = useState<string | null>(null);
 
-  useEffect(() => { localStorage.setItem('ops_staff_pool', JSON.stringify(staffPool)); }, [staffPool]);
 
   const [rwy19, setRwy19] = useState<string[]>(() => readStoredDraft().rwy19 || []);
   const [rwy01, setRwy01] = useState<string[]>(() => readStoredDraft().rwy01 || []);
@@ -90,6 +87,13 @@ function OpsBoardPage() {
       setLoadError(failedRequests ? failedRequests + ' operations data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
 
       const staffData = getData(3);
+      if (Array.isArray(staffData)) {
+        const operationalNames = Array.from(new Set(staffData
+          .filter((member: any) => ['Ground Operations', 'Maintenance'].includes(member.department) && String(member.status || 'active').toLowerCase() !== 'inactive')
+          .map((member: any) => String(member.name || '').trim().toUpperCase())
+          .filter(Boolean))) as string[];
+        if (operationalNames.length > 0) setStaffPool(operationalNames.sort());
+      }
       const myEmail = String(profile?.email || user?.email || '').toLowerCase();
       const mine = Array.isArray(staffData)
         ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
@@ -139,8 +143,6 @@ function OpsBoardPage() {
     setGroundAssign(prev => { const current = prev[taskId] || []; const updated = current.includes(name) ? current.filter(n => n !== name) : [...current, name]; return { ...prev, [taskId]: updated }; });
   };
 
-  const handleAddStaff = (e: any) => { e.preventDefault(); if (!newStaff.trim()) return; const name = newStaff.trim().toUpperCase(); if (staffPool.includes(name)) { toast.error('Staff already in pool'); return; } setStaffPool([...staffPool, name]); setNewStaff(''); };
-  const handleRemoveStaff = (name: string) => setDeleteStaffTarget(name);
   const handleClearBoard = () => setShowClearConfirm(true);
 
   const saveRunwayData = async () => { try { await apiFetch('/ops/runway', { method: 'POST', body: JSON.stringify({ date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString(), rwy19, rwy01, lights }) }); toast.success('Runway board saved to history!'); fetchData(); } catch (err: any) { toast.error(err.message); } };
@@ -180,7 +182,6 @@ function OpsBoardPage() {
         </div>
         <div className="operations-board-hero__actions">
           <button type="button" className="operations-board-refresh" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh data'}</button>
-          {canEdit && <form className="operations-board-add-staff" onSubmit={handleAddStaff}><input aria-label="Staff name" placeholder="Add staff to pool" value={newStaff} onChange={e => setNewStaff(e.target.value)} /><button type="submit">Add staff</button></form>}
         </div>
       </header>
 
@@ -209,7 +210,6 @@ function OpsBoardPage() {
                   <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
-                      <button onClick={() => handleRemoveStaff(s)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '12px' }}>✖</button>
                     </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <label style={{ fontSize: '11px' }}><input type="checkbox" checked={rwy19.includes(s)} onChange={() => toggleRunway('19', s)} disabled={rwy01.includes(s) || lights.includes(s)} /> RWY 19</label>
@@ -552,8 +552,6 @@ function OpsBoardPage() {
           </div>
         </div>
       )}
-
-      <ConfirmDialog isOpen={!!deleteStaffTarget} title="Remove Staff?" message={`Are you sure you want to permanently remove ${deleteStaffTarget} from the active staff pool?`} confirmText="Remove" isDanger={true} onConfirm={() => { setStaffPool(prev => prev.filter(s => s !== deleteStaffTarget)); setDeleteStaffTarget(null); toast.success('Staff removed'); }} onCancel={() => setDeleteStaffTarget(null)} />
       <ConfirmDialog isOpen={showClearConfirm} title="Clear Board?" message="Are you sure you want to clear all selections? This will reset the current board." confirmText="Clear Board" isDanger={true} onConfirm={() => { setRwy19([]); setRwy01([]); setLights([]); setGroundAssign({}); localStorage.removeItem('ops_board_draft'); setShowClearConfirm(false); toast.success('Board cleared and ready for new assignments.'); }} onCancel={() => setShowClearConfirm(false)} />
       <ConfirmDialog isOpen={!!deleteFodTarget} title="Delete FOD Record?" message="Are you sure you want to permanently delete this FOD record?" confirmText="Delete" isDanger={true} onConfirm={async () => { if (!deleteFodTarget) return; try { await apiFetch(`/fod/${deleteFodTarget}`, { method: 'DELETE' }); toast.success('FOD record deleted'); fetchData(); } catch (err: any) { toast.error(err.message); } setDeleteFodTarget(null); }} onCancel={() => setDeleteFodTarget(null)} />
       <ConfirmDialog isOpen={!!deleteTaskTarget} title="Delete Task Board?" message={`Are you sure you want to delete this task board? Any staff assigned to it will be unassigned.`} confirmText="Delete" isDanger={true} onConfirm={() => { if (!deleteTaskTarget) return; setTasks(prev => prev.filter(t => t.id !== deleteTaskTarget)); setGroundAssign(prev => { const updated = { ...prev }; delete updated[deleteTaskTarget]; return updated; }); toast.success('Task board deleted'); setDeleteTaskTarget(null); }} onCancel={() => setDeleteTaskTarget(null)} />

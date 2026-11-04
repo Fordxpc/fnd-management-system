@@ -144,6 +144,7 @@ async function checkModuleAccess(
     if ((profile as any)[editField] === true) return true;
   }
   if ((profile as any).specialOpsAccess === true) return true;
+  if (["opsBoardViewAccess", "opsBoardEditAccess"].includes(permissionField) && String(profile.department || "").toLowerCase() === "safety") return true;
   if (permissionField === "opsBoardEditAccess" && profile.isSmt === true && String(profile.department || "").toLowerCase() === "ground operations") return true;
   if (allowSMT && isSMTProfile(profile)) return true;
 

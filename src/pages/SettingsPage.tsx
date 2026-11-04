@@ -11,7 +11,7 @@ import { UserEditModal } from '../components/UserEditModal';
 
 function SettingsPage() {
   const { user, profile, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed' | 'console'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'rules' | 'incharges' | 'detailed'>('general');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const isDev = (profile?.role || '').toLowerCase() === 'developer';
@@ -100,6 +100,7 @@ function SettingsPage() {
     if (s.specialOpsAccess && ["opsBoardViewAccess", "opsBoardEditAccess", "rampsheetViewAccess", "rampsheetEditAccess", "flightsViewAccess", "flightsEditAccess", "birdCountViewAccess", "birdCountEditAccess", "rwyLightViewAccess", "rwyLightEditAccess"].includes(field)) return true;
     if ((s.isSmt || memberRole === "smt") && ["opsBoardViewAccess", "rampsheetViewAccess", "flightsViewAccess", "birdCountViewAccess", "rwyLightViewAccess", "rosterViewAccess", "leaveViewAccess", "leaveEditAccess", "overtimeViewAccess", "overtimeEditAccess", "reportsViewAccess"].includes(field)) return true;
     if (s.department === "Ground Operations" && (s.isSmt || memberRole === "smt") && field === "opsBoardEditAccess") return true;
+    if (s.department === "Safety" && ["opsBoardViewAccess", "opsBoardEditAccess"].includes(field)) return true;
     return false;
   };
 
@@ -128,15 +129,17 @@ function SettingsPage() {
   const specialOpsStaff = staffList.filter(member => getStaffRole(member) === 'staff' && !smtStaff.some(smt => smt.id === member.id) && ['Ground Operations', 'Maintenance', 'Fire & Rescue'].includes(member.department));
 
   return (
-    <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
-      <div className="staff-header" style={{ justifyContent: 'center', marginBottom: '20px' }}><h2 style={{ fontSize: '24px' }}>⚙️ Settings</h2></div>
+    <div className="page-content settings-workspace">
+      <header className="settings-hero">
+        <div><span>System workspace</span><h2>Settings &amp; access</h2><p>Manage your account, operational rules and role-based access from one clear workspace.</p></div>
+        <div className="settings-hero__identity"><strong>{profile?.name || user?.name || 'User'}</strong><span>{profile?.role || 'Staff'} · {profile?.department || 'FND'}</span></div>
+      </header>
 
-      <div className="ops-tabs" style={{ justifyContent: 'center', marginBottom: '24px', margin: '0 auto 24px auto' }}>
+      <div className="ops-tabs settings-tabs">
         <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General</button>
         {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ Rules & Users</button>}
         {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'incharges' ? 'active' : ''}`} onClick={() => setActiveTab('incharges')}>🔐 Access Control</button>}
         {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'detailed' ? 'active' : ''}`} onClick={() => setActiveTab('detailed')}>📋 Access Details</button>}
-        {isDev && <button className={`ops-tab-btn ${activeTab === 'console' ? 'active' : ''}`} onClick={() => setActiveTab('console')}>💻 Console</button>}
       </div>
 
       {activeTab === 'general' && (
@@ -244,11 +247,11 @@ function SettingsPage() {
           <section className="access-policy-grid">
             <article><strong>Management</strong><p>Developer, Admin and Manager receive automatic operational and management access.</p><span>Developer accounts remain protected.</span></article>
             <article><strong>SMT automatic access</strong><p>All-department visibility, operational views, reports, and own-department Leave/OT approval.</p><span>Ground Operations SMT also edits the Ops Board.</span></article>
-            <article><strong>Special Ops bundle</strong><p>Ops Board, Flights, Flight Operations, Wildlife, RWY Lights and operational notifications.</p><span>Only Ground Ops, Maintenance and Fire & Rescue are eligible.</span></article>
+            <article><strong>Special Ops bundle</strong><p>Ops Board, Flights, Flight Operations, Wildlife, RWY Lights and operational notifications.</p><span>Safety automatically receives Ops Board edit only.</span></article>
           </section>
 
-          <section className="access-control-section">
-            <header><div><h4>SMT and department in-charge</h4><p>Only SMT members can be assigned as department in-charge.</p></div><span>{smtStaff.length} eligible</span></header>
+          <details className="access-control-section" open>
+            <summary><div><h4>SMT and department in-charge</h4><p>Only SMT members can be assigned as department in-charge.</p></div><span>{smtStaff.length} eligible</span></summary>
             <div className="access-member-grid">
               {smtStaff.map(member => {
                 const isGroundOpsSMT = member.department === 'Ground Operations';
@@ -262,21 +265,21 @@ function SettingsPage() {
               })}
               {smtStaff.length === 0 && <p className="access-empty">No SMT members are configured.</p>}
             </div>
-          </section>
+          </details>
 
-          <section className="access-control-section">
-            <header><div><h4>Special Operations exceptions</h4><p>Only eligible operational staff are listed. Security, Administration and Safety are intentionally excluded.</p></div><span>{specialOpsStaff.length} eligible</span></header>
+          <details className="access-control-section">
+            <summary><div><h4>Special Operations exceptions</h4><p>Only Ground Operations, Maintenance and Fire & Rescue staff who may need an exception are listed.</p></div><span>{specialOpsStaff.length} eligible</span></summary>
             <div className="access-special-list">
               {specialOpsStaff.map(member => <article key={member.id}><div><strong>{member.name}</strong><span>{member.position || 'Staff'} · {member.department}</span></div><div className="access-bundle-label">Six operational modules</div><button type="button" className={`access-switch ${member.specialOpsAccess ? 'active' : ''}`} disabled={updatingAccess === `${member.id}:specialOpsAccess`} onClick={() => void togglePermission(member.id, 'specialOpsAccess', member.specialOpsAccess === true)}><span /></button></article>)}
               {specialOpsStaff.length === 0 && <p className="access-empty">No eligible operational staff found.</p>}
             </div>
-          </section>
+          </details>
 
-          <section className="access-control-section compact">
-            <header><div><h4>RWY Lights inspectors</h4><p>Operational assignment list, separate from system access.</p></div></header>
+          <details className="access-control-section compact">
+            <summary><div><h4>RWY Lights inspectors</h4><p>Operational assignment list, separate from system access.</p></div></summary>
             <form className="access-inline-form" onSubmit={handleAddInspector}><select value={inspectorStaffId} onChange={event => setInspectorStaffId(event.target.value)} required><option value="">Select eligible staff…</option>{[...smtStaff, ...specialOpsStaff].filter((member, index, list) => list.findIndex(item => item.id === member.id) === index).map(member => <option key={member.id} value={member.id}>{member.name} · {member.department}</option>)}</select><button type="submit">Add inspector</button></form>
             <div className="access-inspector-list">{inspectorList.map(inspector => <span key={inspector.staffId}><strong>{inspector.staffName}</strong><button type="button" onClick={() => setDeleteInspectorTarget(inspector.staffId)}>Remove</button></span>)}{inspectorList.length === 0 && <p className="access-empty">No inspectors assigned.</p>}</div>
-          </section>
+          </details>
         </div>
       )}
       {activeTab === 'detailed' && canManageAccess && (
@@ -331,19 +334,6 @@ function SettingsPage() {
         </div>
       )}
 
-      {activeTab === 'console' && isDev && (
-        <div className="dash-card border-l-4 border-slate-800" style={{ background: '#0f172a', color: '#e2e8f0', fontFamily: 'monospace' }}>
-          <h3 style={{ color: '#38bdf8' }}>💻 System Console</h3>
-          <div style={{ maxHeight: '400px', overflowY: 'auto', fontSize: '12px' }}>
-            <p><span style={{ color: '#4ade80' }}>[OK]</span> Cloudflare D1 Database Connected</p>
-            <p><span style={{ color: '#4ade80' }}>[OK]</span> Auth Provider loaded</p>
-            <p><span style={{ color: '#facc15' }}>[INFO]</span> Active Staff Records: {activeUsers.length}</p>
-            <p><span style={{ color: '#facc15' }}>[INFO]</span> UID: {user?.id}</p>
-            <p><span style={{ color: '#facc15' }}>[INFO]</span> Current Token Expiry: {user?.metadata?.lastSignInTime || 'N/A'}</p>
-            <p><span style={{ color: '#38bdf8' }}>[LOG]</span> Waiting for developer input...</p>
-          </div>
-        </div>
-      )}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
 
