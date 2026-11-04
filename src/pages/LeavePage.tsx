@@ -58,7 +58,7 @@ function LeavePage() {
   const canApprove =
     myStaff?.isSmt === true ||
     myStaff?.isIncharge === true ||
-    ["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase());
+    ["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase());
 
   const fetchData = useCallback(async () => {
     try {
@@ -119,7 +119,7 @@ function LeavePage() {
 
   // NEW: Hierarchy-based pre-filter
   let displayRequests = requests;
-  if (!["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase())) {
+  if (!["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase())) {
     if (myStaff?.isIncharge) {
       displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department);
     } else if (myStaff?.isSmt) {

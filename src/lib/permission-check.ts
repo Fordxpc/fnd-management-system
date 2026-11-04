@@ -89,10 +89,15 @@ export async function requirePermission(
     throw err;
   }
 
-  const hasPermission =
+  const hasDirectPermission =
     (staffProfile as any)[permissionField] === true;
+  const editField = permissionField.endsWith("ViewAccess")
+    ? permissionField.replace("ViewAccess", "EditAccess")
+    : "";
+  const hasEditPermission =
+    editField !== "" && (staffProfile as any)[editField] === true;
 
-  if (!hasPermission) {
+  if (!hasDirectPermission && !hasEditPermission) {
     const err: any = new Error(
       "Access denied"
     );
@@ -134,6 +139,10 @@ async function checkModuleAccess(
   }
 
   if ((profile as any)[permissionField] === true) return true;
+  if (permissionField.endsWith("ViewAccess")) {
+    const editField = permissionField.replace("ViewAccess", "EditAccess");
+    if ((profile as any)[editField] === true) return true;
+  }
   if ((profile as any).specialOpsAccess === true) return true;
   if (allowSMT && isSMTProfile(profile)) return true;
 

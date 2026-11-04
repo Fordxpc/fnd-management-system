@@ -25,7 +25,7 @@ function Dashboard(_props: any) {
   const [activeModule, setActiveModule] = useState<Module>('dashboard');
 
   const isDev = (profile?.role || '').toLowerCase() === 'developer';
-  const isManager = ['manager', 'admin'].includes((profile?.role || '').toLowerCase());
+  const isManager = ['manager', 'admin', 'owner'].includes((profile?.role || '').toLowerCase());
   const isSMT = (profile?.role || '').toLowerCase() === 'smt' || profile?.isSMT === true;
   const isAdmin = (profile?.role || '').toLowerCase() === 'admin';
   const dept = (profile?.department || '').toLowerCase();
