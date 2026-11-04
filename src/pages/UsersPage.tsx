@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { CSSProperties, FormEvent } from 'react';
+import type { FormEvent } from 'react';
 import { authClient } from '../lib/auth-client';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
@@ -12,16 +12,13 @@ const VIEW_ROLES = EDIT_ROLES;
 const ALL_ROLES = ['developer', 'manager', 'admin', 'smt', 'staff'];
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
-const selectStyle: CSSProperties = {
-  padding: '6px', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '12px',
-  background: '#ffffff', color: '#1e293b', colorScheme: 'light',
-};
+
 
 function UsersPage() {
   const { profile } = useAuth();
-  const role = profile?.role || '';
+  const role = String(profile?.role || '').toLowerCase();
   const assignableRoles = role === 'developer' ? ALL_ROLES : ALL_ROLES.filter(value => value !== 'developer');
-  const canView = VIEW_ROLES.includes(role) || profile?.isSmt === true;
+  const canView = VIEW_ROLES.includes(role);
   const canEdit = EDIT_ROLES.includes(role);
 
   const [users, setUsers] = useState<any[]>([]);
@@ -37,6 +34,7 @@ function UsersPage() {
     name: '', email: '', password: '', position: '', role: 'staff', department: 'Ground Operations'
   });
   const [savingPreset, setSavingPreset] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchData = useCallback(async () => {
     if (!canView) { setLoading(false); return; }
@@ -117,95 +115,80 @@ function UsersPage() {
     setSavingPreset(false);
   };
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleUsers = users
+    .filter(user => role === 'developer' || String(user.role || '').toLowerCase() !== 'developer')
+    .filter(user => !normalizedSearch || [user.name, getStaffName(user.email), user.email, user.role, user.department].some(value => String(value || '').toLowerCase().includes(normalizedSearch)));
+  const visiblePresets = presets
+    .filter(user => role === 'developer' || String(user.role || '').toLowerCase() !== 'developer')
+    .filter(user => !normalizedSearch || [user.name, getStaffName(user.email), user.email, user.role, user.department].some(value => String(value || '').toLowerCase().includes(normalizedSearch)));
   if (loading) return <div className="page-content"><p>Loading Users...</p></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>User Management { !canEdit && <span style={{ fontSize: '14px', color: '#dc2626', fontWeight: 'normal' }}>(View Only)</span> }</h2>
-        {canEdit && (
-          <button className="add-staff-btn" onClick={() => setShowPresetForm(!showPresetForm)}>
-            {showPresetForm ? 'Cancel' : '+ Create New User'}
-          </button>
-        )}
+    <div className="page-content users-workspace">
+      <header className="users-hero">
+        <div><span>Identity & access</span><h2>User Management</h2><p>Create accounts, maintain trusted staff identity, and manage role and department assignments.</p></div>
+        <div className="users-hero-actions">
+          {!canEdit && <span className="users-view-badge">View only</span>}
+          {canEdit && <button type="button" onClick={() => setShowPresetForm(current => !current)}>{showPresetForm ? 'Close form' : 'Create user'}</button>}
+        </div>
+      </header>
+
+      <section className="users-summary" aria-label="User account summary">
+        <article><span>Active accounts</span><strong>{visibleUsers.length}</strong><small>authenticated users</small></article>
+        <article><span>Pre-registered</span><strong>{visiblePresets.length}</strong><small>awaiting activation</small></article>
+        <article><span>Management roles</span><strong>{visibleUsers.filter(user => ['developer', 'admin', 'manager', 'owner'].includes(String(user.role || '').toLowerCase())).length}</strong><small>protected access</small></article>
+      </section>
+
+      <div className="users-toolbar">
+        <div><strong>Account directory</strong><span>Search by name, email, role or department.</span></div>
+        <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search accounts…" aria-label="Search user accounts" />
       </div>
 
       {showPresetForm && canEdit && (
-        <form className="staff-form" onSubmit={handleCreateUser}>
-          <div style={{ gridColumn: 'span 2', marginBottom: '8px', fontWeight: 600, color: '#1e293b', fontSize: '16px' }}>
-            ➕ Create New User (Adds to Auth & Database)
+        <form className="users-create-form" onSubmit={handleCreateUser}>
+          <header><div><span>New access</span><h3>Create user account</h3></div><small>Temporary passwords must contain 6–10 characters.</small></header>
+          <div className="users-create-grid">
+            <label><span>Full name</span><input placeholder="e.g. Mohamed Fuadhu" value={formData.name} onChange={event => setFormData({...formData, name: event.target.value})} required /></label>
+            <label><span>Designation</span><input placeholder="e.g. Operations Officer" value={formData.position} onChange={event => setFormData({...formData, position: event.target.value})} /></label>
+            <label><span>Work email</span><input type="email" placeholder="email@funadhooairport.com" value={formData.email} onChange={event => setFormData({...formData, email: event.target.value})} required /></label>
+            <label><span>Temporary password</span><input type="password" minLength={6} maxLength={10} autoComplete="new-password" placeholder="6–10 characters" value={formData.password} onChange={event => setFormData({...formData, password: event.target.value})} required /></label>
+            <label><span>Role</span><select value={formData.role} onChange={event => setFormData({...formData, role: event.target.value})}>{assignableRoles.map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label>
+            <label><span>Department</span><select value={formData.department} onChange={event => setFormData({...formData, department: event.target.value})}>{DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}</select></label>
           </div>
-          <div><label>Full Name</label><input placeholder="e.g. Mohamed Fuadhu" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required /></div>
-          <div><label>Designation</label><input placeholder="e.g. Operations Officer" value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} /></div>
-          <div><label>Work Email *</label><input type="email" placeholder="email@funadhooairport.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required /></div>
-          <div><label>Temporary Password *</label><input type="password" minLength={6} maxLength={10} autoComplete="new-password" placeholder="6–10 characters" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required /></div>
-          <div><label>Role</label><select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>{assignableRoles.map((r) => <option key={r} value={r}>{r.toUpperCase()}</option>)}</select></div>
-          <div><label>Department</label><select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={selectStyle}>{DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
-          <button type="submit" disabled={savingPreset} style={{ gridColumn: 'span 2', background: '#2563eb', color: 'white', padding: '12px', fontSize: '14px', marginTop: '10px' }}>
-            {savingPreset ? 'Creating User...' : 'Create User Account'}
-          </button>
+          <footer><button type="button" onClick={() => setShowPresetForm(false)}>Cancel</button><button className="primary" type="submit" disabled={savingPreset}>{savingPreset ? 'Creating account…' : 'Create account'}</button></footer>
         </form>
       )}
 
-      {presets.length > 0 && (
-        <div className="collapsible-card" style={{ marginTop: '20px' }}>
-          <div className="collapsible-header" style={{ cursor: 'default' }}><span><strong>⏳ Pre-registered Users</strong></span></div>
-          <div className="collapsible-body" style={{ overflowX: 'auto' }}>
-            <table>
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
-              <tbody>
-                {presets.map((p) => (
-                  <tr key={p.id}>
-                    <td><strong>{p.name || getStaffName(p.email)}</strong></td>
-                    <td>{p.email}</td>
-                    <td><span style={{ textTransform: 'uppercase', fontSize: '11px', fontWeight: 700, background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>{p.role}</span></td>
-                    <td>{p.department}</td>
-                    {canEdit && (
-                      <td style={{ whiteSpace: 'nowrap' }}>
-                        <button className="edit-btn" onClick={() => setEditingUser({ ...p, status: 'Pre-registered' })} style={{ marginRight: '6px', padding: '4px 8px', fontSize: '11px' }}>✏️ Edit</button>
-                        <button className="delete-btn" onClick={() => handleDeletePreset(p.id, p.email)} style={{ padding: '4px 8px', fontSize: '11px' }}>Remove</button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {visiblePresets.length > 0 && (
+        <details className="users-section">
+          <summary><div><span>Pending activation</span><strong>Pre-registered users</strong></div><em>{visiblePresets.length}</em></summary>
+          <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Identity</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead><tbody>
+            {visiblePresets.map(user => <tr key={user.id}>
+              <td data-label="Identity"><div className="users-identity"><i>{String(user.name || getStaffName(user.email) || '?').charAt(0)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span></div></div></td>
+              <td data-label="Role"><span className={`users-role users-role--${String(user.role || 'staff').toLowerCase()}`}>{user.role || 'staff'}</span></td>
+              <td data-label="Department">{user.department || '—'}</td>
+              {canEdit && <td data-label="Actions"><div className="users-row-actions"><button onClick={() => setEditingUser({ ...user, status: 'Pre-registered' })}>Edit</button><button className="danger" onClick={() => handleDeletePreset(user.id, user.email)}>Remove</button></div></td>}
+            </tr>)}
+          </tbody></table></div>
+        </details>
       )}
 
-      <div className="collapsible-card" style={{ marginTop: '20px' }}>
-        <div className="collapsible-header" style={{ cursor: 'default' }}><span><strong>👥 Active Users</strong></span></div>
-        <div className="collapsible-body" style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-          {users.length === 0 ? (
-            <div className="empty-state"><p>No active users yet.</p></div>
-          ) : (
-            <div style={{ minWidth: '600px' }}>
-              <table style={{ margin: 0 }}>
-                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td><strong>{u.name || getStaffName(u.email)}</strong></td>
-                      <td>{u.email}</td>
-                      <td><select value={u.role || 'staff'} onChange={(e) => handleChangeRole(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>{assignableRoles.map((r) => <option key={r} value={r}>{r}</option>)}</select></td>
-                      <td><select value={u.department || 'Ground Operations'} onChange={(e) => handleChangeDept(u.id, e.target.value)} disabled={!canEdit} style={{ ...selectStyle, background: canEdit ? '#ffffff' : '#f1f5f9' }}>{DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}</select></td>
-                      {canEdit && (
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <button className="edit-btn" onClick={() => setEditingUser({ ...u, status: 'Active' })} style={{ marginRight: '6px', padding: '4px 8px', fontSize: '11px' }}>✏️ Edit</button>
-                          <button className="reset-pw-btn" onClick={() => handleSendReset(u.email)} style={{ padding: '4px 8px', fontSize: '11px' }}>📧 Reset PW</button>
-                          <button className="delete-btn" onClick={() => handleDelete(u.id, u.email)} style={{ marginLeft: '6px', padding: '4px 8px', fontSize: '11px' }}>Remove</button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
+      <section className="users-section active">
+        <header><div><span>Authenticated directory</span><strong>Active users</strong></div><em>{visibleUsers.length}</em></header>
+        {visibleUsers.length === 0 ? <div className="users-empty">No matching active users.</div> : <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Identity</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead><tbody>
+          {visibleUsers.map(user => {
+            const protectedDeveloper = String(user.role || '').toLowerCase() === 'developer' && role !== 'developer';
+            const isSelf = String(user.email || '').toLowerCase() === String(profile?.email || '').toLowerCase();
+            return <tr key={user.id}>
+              <td data-label="Identity"><div className="users-identity"><i>{String(user.name || getStaffName(user.email) || '?').charAt(0)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span>{isSelf && <small>Current account</small>}</div></div></td>
+              <td data-label="Role"><select value={user.role || 'staff'} onChange={event => void handleChangeRole(user.id, event.target.value)} disabled={!canEdit || protectedDeveloper || isSelf}>{assignableRoles.map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></td>
+              <td data-label="Department"><select value={user.department || 'Ground Operations'} onChange={event => void handleChangeDept(user.id, event.target.value)} disabled={!canEdit || protectedDeveloper}>{DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}</select></td>
+              {canEdit && <td data-label="Actions">{protectedDeveloper ? <span className="users-protected">Protected</span> : <div className="users-row-actions"><button onClick={() => setEditingUser({ ...user, status: 'Active' })}>Edit</button><button onClick={() => handleSendReset(user.email)}>Reset password</button><button className="danger" disabled={isSelf} onClick={() => handleDelete(user.id, user.email)}>Remove</button></div>}</td>}
+            </tr>;
+          })}
+        </tbody></table></div>}
+      </section>
       <ConfirmDialog isOpen={!!resetPwTarget} title="Send Password Reset?" message={`Send a password reset email to ${resetPwTarget}?`} confirmText="Send" isDanger={false} onConfirm={async () => {
           if (!resetPwTarget) return;
           try { await (authClient as any).forgetPassword({ email: resetPwTarget, redirectTo: '/reset-password' }); toast.success(`Reset email sent.`); } 
