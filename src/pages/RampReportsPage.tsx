@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -7,151 +7,58 @@ import { ConfirmDialog } from '../components/Dialogs';
 import { canViewRamp, canEditRamp } from '../lib/permissions';
 
 const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800', 'DASH-8/300', 'DASH-8/200'];
-
-interface RampReportsPageProps {
-  onEdit?: (report: any) => void;
-}
+const today = new Date().toISOString().slice(0, 10);
+interface RampReportsPageProps { onEdit?: (report: any) => void; }
 
 function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const { profile, user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [viewingReport, setViewingReport] = useState<any>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [editTarget, setEditTarget] = useState<any>(null);
+  const [search, setSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  const fetchReports = useCallback(async () => {
+  const fetchReports = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
-      const [data, staffData] = await Promise.all([
-        apiFetch('/ramp/reports'),
-        apiFetch('/staff').catch(() => []),
-      ]);
-      setReports(data);
-
+      const [data, staffData] = await Promise.all([apiFetch('/ramp/reports'), apiFetch('/staff').catch(() => [])]);
+      setReports(Array.isArray(data) ? data : []);
       const myEmail = String(profile?.email || user?.email || '').toLowerCase();
-      const mine = Array.isArray(staffData)
-        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
-        : null;
-      setMyStaff(mine || null);
-      setLoading(false);
-    } catch (err: any) { toast.error(err.message); setLoading(false); }
+      setMyStaff(Array.isArray(staffData) ? staffData.find((staff: any) => String(staff.email || '').toLowerCase() === myEmail) || null : null);
+    } catch (err: any) { toast.error(err.message || 'Unable to load Ramp reports'); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [profile?.email, user?.email]);
 
-  useEffect(() => {
-    fetchReports();
-    const interval = setInterval(fetchReports, 15000);
-    return () => clearInterval(interval);
-  }, [fetchReports]);
-
+  useEffect(() => { void fetchReports(true); }, [fetchReports]);
   const canView = canViewRamp(profile, myStaff);
   const canEdit = canEditRamp(profile, myStaff);
-
-  if (loading) return <div className="page-content"><p>Loading Ramp Reports...</p></div>;
-
-  if (!canView) {
-    return (
-      <div className="page-content">
-        <div className="empty-state"><p>No access to Ramp Reports.</p></div>
-      </div>
-    );
-  }
-
-  const handleDelete = (id: string) => setDeleteTarget(id);
+  const visibleReports = useMemo(() => reports.filter(report => {
+    const queryMatch = [report.fltNo, report.acReg, report.route, report.acType].some(value => String(value || '').toLowerCase().includes(search.toLowerCase()));
+    return queryMatch && (!dateFrom || report.date >= dateFrom) && (!dateTo || report.date <= dateTo);
+  }), [reports, search, dateFrom, dateTo]);
 
   const handlePrintModal = () => {
-    document.body.classList.add('printing-modal');
-    document.body.classList.add('printing-ramp');
-    window.print();
-    setTimeout(() => {
-      document.body.classList.remove('printing-modal');
-      document.body.classList.remove('printing-ramp');
-    }, 1000);
+    document.body.classList.add('printing-modal', 'printing-ramp'); window.print();
+    window.setTimeout(() => document.body.classList.remove('printing-modal', 'printing-ramp'), 1000);
   };
 
-  return (
-    <div>
-      <div className="dash-card" style={{ marginTop: '16px' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="mini-table">
-            <thead>
-              <tr><th>Date</th><th>Flight No</th><th>A/C Reg</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              {reports.length === 0 ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '20px' }}>No reports saved yet.</td></tr>
-              ) : reports.map(r => (
-                <tr key={r.id}>
-                  <td>{r.date || '—'}</td>
-                  <td><strong>{r.fltNo || '—'}</strong></td>
-                  <td>{r.acReg || '—'}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <button className="reset-pw-btn" onClick={() => setViewingReport(r)}>👁️ View / Print</button>
-                    {onEdit && canEdit && (
-                      <button className="edit-btn" onClick={() => {
-                          if (window.confirm(`Edit saved report ${r.fltNo || ''}? The current form will be replaced.`)) {
-                            onEdit(r);
-                          }
-                        }} style={{ marginLeft: '6px' }}>
-                        ✏️ Edit
-                      </button>
-                    )}
-                    {canEdit && (
-                      <button className="delete-btn" onClick={() => handleDelete(r.id)} style={{ marginLeft: '6px' }}>Delete</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  if (loading) return <div className="ramp-reports-empty">Loading Ramp reports…</div>;
+  if (!canView) return <div className="empty-state"><p>No access to Ramp Reports.</p></div>;
 
-      {viewingReport && (
-        <div className="modal-backdrop" onClick={() => setViewingReport(null)}>
-          <div className="modal-content" id="viewReportModal" style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-              <h3 style={{ margin: 0 }}>Report: {viewingReport.fltNo}</h3>
-              <div>
-                <button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrintModal}>🖨️ Print / Save as PDF</button>
-                <button className="cancel-btn" onClick={() => setViewingReport(null)}>Close</button>
-              </div>
-            </div>
-            <div className="modal-scrollable-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#f8fafc', maxHeight: '85vh' }}>
-              <RampForm
-                formData={viewingReport}
-                handleChange={() => {}}
-                isManager={false}
-                acTypes={Array.from(new Set([...DEFAULT_AC_TYPES, viewingReport.acType].filter(Boolean)))}
-                routeCodes={[]}
-                handleAddAcType={() => {}}
-                handleAddRoute={() => {}}
-                appendRoute={(_code: string) => {}}
-                isViewOnlyMode={true}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+  return <div className="ramp-reports-workspace">
+    <section className="ramp-reports-summary"><div><span>Total reports</span><strong>{reports.length}</strong></div><div><span>Today</span><strong>{reports.filter(report => report.date === today).length}</strong></div><div><span>Departed</span><strong>{reports.filter(report => Boolean(report.atd)).length}</strong></div><div><span>With delay notes</span><strong>{reports.filter(report => String(report.delayTime || '').trim()).length}</strong></div></section>
+    <section className="ramp-reports-controls"><label>Search<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Flight, registration, route or aircraft" /></label><label>From<input type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} /></label><label>To<input type="date" value={dateTo} min={dateFrom} onChange={event => setDateTo(event.target.value)} /></label><button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); }}>Clear</button><button className="refresh" onClick={() => void fetchReports()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button></section>
+    <section className="ramp-reports-register"><header><div><h3>Saved Ramp reports</h3><p>{visibleReports.length} report{visibleReports.length === 1 ? '' : 's'} shown</p></div></header>{visibleReports.length === 0 ? <p className="ramp-reports-empty">No Ramp reports match the selected filters.</p> : <div className="ramp-reports-table"><table><thead><tr><th>Date</th><th>Flight</th><th>Aircraft</th><th>Route</th><th>Operational status</th><th>Actions</th></tr></thead><tbody>{visibleReports.map(report => <tr key={report.id}><td>{report.date || '—'}</td><td><strong>{report.fltNo || '—'}</strong><small>{report.acType || ''}</small></td><td>{report.acReg || '—'}</td><td>{report.route || '—'}</td><td><span className={`ramp-report-status ${report.atd ? 'departed' : report.ata ? 'arrived' : 'scheduled'}`}>{report.atd ? `Departed ${report.atd}` : report.ata ? `Arrived ${report.ata}` : 'Scheduled'}</span></td><td><div className="ramp-report-actions"><button onClick={() => setViewingReport(report)}>View / Print</button>{onEdit && canEdit && <button className="edit" onClick={() => setEditTarget(report)}>Edit</button>}{canEdit && <button className="delete" onClick={() => setDeleteTarget(report)}>Delete</button>}</div></td></tr>)}</tbody></table></div>}</section>
 
-      <ConfirmDialog 
-        isOpen={!!deleteTarget}
-        title="Delete Report?"
-        message="Are you sure you want to permanently delete this report?"
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          try {
-            await apiFetch(`/ramp/reports/${deleteTarget}`, { method: 'DELETE' });
-            toast.success('Report deleted');
-            fetchReports();
-          } catch (err: any) { toast.error(err.message); }
-          setDeleteTarget(null);
-        }}
-        onCancel={() => setDeleteTarget(null)}
-      />
-    </div>
-  );
+    {viewingReport && <div className="modal-backdrop" onClick={() => setViewingReport(null)}><div className="modal-content ramp-report-modal" id="viewReportModal" onClick={event => event.stopPropagation()}><header className="no-print"><div><span>Saved Ramp report</span><h3>{viewingReport.fltNo || 'Flight report'} · {viewingReport.date || 'No date'}</h3></div><div><button className="print" onClick={handlePrintModal}>Print / Save PDF</button><button onClick={() => setViewingReport(null)}>Close</button></div></header><div className="modal-scrollable-body"><RampForm formData={viewingReport} handleChange={() => {}} isManager={false} acTypes={Array.from(new Set([...DEFAULT_AC_TYPES, viewingReport.acType].filter(Boolean)))} routeCodes={[]} handleAddAcType={() => {}} handleAddRoute={() => {}} appendRoute={() => {}} isViewOnlyMode /></div></div></div>}
+
+    <ConfirmDialog isOpen={!!editTarget} title="Load saved report for editing?" message={`The current form will be replaced with ${editTarget?.fltNo || 'this report'}.`} confirmText="Load report" onConfirm={() => { if (editTarget && onEdit) onEdit(editTarget); setEditTarget(null); }} onCancel={() => setEditTarget(null)} />
+    <ConfirmDialog isOpen={!!deleteTarget} title="Delete Ramp report?" message={`${deleteTarget?.fltNo || 'This report'} on ${deleteTarget?.date || 'the recorded date'} will be permanently removed.`} confirmText="Delete" isDanger onConfirm={async () => { if (!deleteTarget) return; try { await apiFetch(`/ramp/reports/${deleteTarget.id}`, { method: 'DELETE' }); toast.success('Report deleted'); setDeleteTarget(null); await fetchReports(true); } catch (err: any) { toast.error(err.message); } }} onCancel={() => setDeleteTarget(null)} />
+  </div>;
 }
-
 export default RampReportsPage;
