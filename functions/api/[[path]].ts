@@ -14,6 +14,7 @@ import {
   requireFlightsEdit,
   requireFlightsView,
   requireRampEdit,
+  requireRampView,
   requireBirdEdit,
   requireBirdView,
   requireRWYEdit,
@@ -572,11 +573,20 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
+      const date = typeof body.date === "string" ? body.date.trim() : "";
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+        return json({ message: "A valid holiday date is required" }, 400);
+      }
+      if (name.length < 2 || name.length > 100) {
+        return json({ message: "Holiday name must be between 2 and 100 characters" }, 400);
+      }
+      const existing = await db.select().from(holidays).where(eq(holidays.date, date)).limit(1);
+      if (existing.length > 0) return json({ message: "A holiday already exists on this date" }, 409);
       const id = crypto.randomUUID();
-      await db.insert(holidays).values({ id, date: body.date, name: body.name, createdAt: new Date().toISOString() });
-      return json({ success: true, id });
-    }
-    if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
+      await db.insert(holidays).values({ id, date, name, createdAt: new Date().toISOString() });
+      return json({ success: true, id }, 201);
+    }    if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
@@ -1514,6 +1524,8 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
     if (pathname === "/api/ramp/reports" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireRampView(env, currentUser);
       const results = await db.select().from(rampInspections)
         .orderBy(desc(rampInspections.date), desc(rampInspections.createdAt));
       return json(results.map((row: any) => ({ 
@@ -1528,7 +1540,14 @@ export const onRequest = async (context: any) => {
         env,
         currentUser
 );
-      const body: any = await request.json();
+      const body: any = await request.json();      body.date = typeof body.date === "string" ? body.date.trim() : "";
+      body.fltNo = typeof body.fltNo === "string" ? body.fltNo.trim().toUpperCase() : "";
+      body.acReg = typeof body.acReg === "string" ? body.acReg.trim().toUpperCase() : "";
+      body.checkedBy = currentUser.email;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date) || body.fltNo.length < 3 || body.fltNo.length > 20 || body.acReg.length < 3 || body.acReg.length > 20) {
+        return json({ message: "Date, flight number and aircraft registration are required" }, 400);
+      }
+      if (JSON.stringify(body).length > 250_000) return json({ message: "Ramp report is too large" }, 413);
       const id = crypto.randomUUID();
       await db.insert(rampInspections).values({ 
         id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", 
@@ -1553,7 +1572,14 @@ export const onRequest = async (context: any) => {
         currentUser
       );
       const id = pathname.split("/").pop();
-      const body: any = await request.json();
+      const body: any = await request.json();      body.date = typeof body.date === "string" ? body.date.trim() : "";
+      body.fltNo = typeof body.fltNo === "string" ? body.fltNo.trim().toUpperCase() : "";
+      body.acReg = typeof body.acReg === "string" ? body.acReg.trim().toUpperCase() : "";
+      body.checkedBy = currentUser.email;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date) || body.fltNo.length < 3 || body.fltNo.length > 20 || body.acReg.length < 3 || body.acReg.length > 20) {
+        return json({ message: "Date, flight number and aircraft registration are required" }, 400);
+      }
+      if (JSON.stringify(body).length > 250_000) return json({ message: "Ramp report is too large" }, 413);
       await db.update(rampInspections).set({ 
         date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", 
         payload: JSON.stringify(body), updatedAt: new Date().toISOString() 

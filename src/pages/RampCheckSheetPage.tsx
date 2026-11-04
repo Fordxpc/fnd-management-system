@@ -32,11 +32,8 @@ function RampCheckSheetPage() {
   
   // 🚨 RBAC LOGIC
   const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
-  const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
-  const isOpsSMT = isSMT && (profile?.department || '').toLowerCase() === 'ground operations';
-
-  const canView = isFullAccess || isSMT || profile?.rampsheetViewAccess === true;
-  const canEdit = isFullAccess || isOpsSMT || profile?.rampsheetEditAccess === true;
+  const canView = isFullAccess || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
+  const canEdit = isFullAccess || profile?.rampsheetEditAccess === true;
 
   // ---- All hooks first (rules of hooks) ----
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
@@ -44,6 +41,8 @@ function RampCheckSheetPage() {
   const [acTypes, setAcTypes] = useState<string[]>([]);
   const [routeCodes, setRouteCodes] = useState<string[]>([]);
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<'saved' | 'saving' | 'error'>('saved');
 
   const typingTimer = useRef<any>(null);
 
@@ -73,7 +72,7 @@ function RampCheckSheetPage() {
   // ---- Early return AFTER all hooks ----
   if (!canView) {
     return (
-      <div className="page-content">
+      <div className="page-content ramp-workspace-page">
         <div className="empty-state">
           <h2>Access Denied</h2>
           <p>You do not have permission to view the Flight Operation sheet.</p>
@@ -123,14 +122,15 @@ function RampCheckSheetPage() {
       return updated;
     });
 
+    setDraftStatus('saving');
     if (typingTimer.current) clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(async () => {
-      try {
-        setFormData(current => {
-          apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify(current) }).catch(err => console.error("Draft save failed", err));
-          return current;
-        });
-      } catch (err) { console.error(err); }
+    typingTimer.current = setTimeout(() => {
+      setFormData(current => {
+        void apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify(current) })
+          .then(() => setDraftStatus('saved'))
+          .catch((err) => { console.error("Draft save failed", err); setDraftStatus('error'); toast.error('Draft autosave failed'); });
+        return current;
+      });
       typingTimer.current = null;
     }, 800);
   };
@@ -165,7 +165,12 @@ function RampCheckSheetPage() {
   };
 
   const handleSave = async () => {
-    if (!canEdit) return;
+    if (!canEdit || saving) return;
+    if (!formData.date || formData.fltNo.length < 3 || formData.acReg.length < 3) {
+      toast.error('Date, flight number and aircraft registration are required');
+      return;
+    }
+    setSaving(true);
     try {
       const payload = { ...formData } as any;
 
@@ -182,7 +187,7 @@ function RampCheckSheetPage() {
       
       await apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
       
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
 
   const handleReset = () => setShowClearConfirm(true);
@@ -193,9 +198,9 @@ function RampCheckSheetPage() {
     setTimeout(() => document.body.classList.remove('printing-ramp'), 1000);
   };
 
-  const copyLiveLink = () => {
-    navigator.clipboard.writeText(window.location.origin + '/live');
-    toast.success('Live View link copied! Share this with external parties.');
+  const copyLiveLink = async () => {
+    try { await navigator.clipboard.writeText(window.location.origin + '/live'); toast.success('Live View link copied'); }
+    catch { toast.error('Unable to copy the live link'); }
   };
 
   const handleEditReport = (report: any) => {
@@ -230,10 +235,11 @@ function RampCheckSheetPage() {
   };
 
   return (
-    <div className="page-content">
-      <div className="staff-header no-print">
+    <div className="page-content ramp-workspace-page">
+      <div className="staff-header no-print ramp-workspace-header">
         <h2>✈️ Flight Operation</h2>
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="ramp-workspace-header__actions">
+          {canEdit && <span className={`ramp-draft-status ${draftStatus}`}>{draftStatus === 'saving' ? 'Saving draft…' : draftStatus === 'error' ? 'Draft not saved' : 'Draft saved'}</span>}
           {currentDocId && (
             <span style={{ fontSize: '12px', background: '#fef3c7', color: '#92400e', padding: '6px 12px', borderRadius: '6px', fontWeight: 700 }}>
               ✏️ Editing existing report — click <strong>Clear Form</strong> to start fresh
@@ -257,7 +263,7 @@ function RampCheckSheetPage() {
           <div className="no-print" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
             {canEdit && (
               <>
-                <button className="quick-btn" style={{ background: '#2563eb', color: 'white' }} onClick={handleSave}>💾 Save Record</button>
+                <button className="quick-btn" disabled={saving} style={{ background: '#2563eb', color: 'white' }} onClick={handleSave}>{saving ? 'Saving…' : '💾 Save Record'}</button>
                 <button className="quick-btn" style={{ background: '#dcfce7', color: '#166534' }} onClick={handlePrint}>🖨️ Print / PDF</button>
                 <button className="quick-btn" style={{ background: '#fee2e2', color: '#991b1b' }} onClick={handleReset}>🗑️ Clear Form</button>
               </>
