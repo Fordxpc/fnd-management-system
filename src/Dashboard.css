@@ -1914,3 +1914,87 @@
     break-inside: avoid !important;
   }
 }
+/* Phase 5: Flight Schedule workspace */
+.flight-schedule-page { display: flex; flex-direction: column; gap: 24px; }
+.flight-schedule-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 30px; border-radius: 24px; color: #fff; background: radial-gradient(circle at 90% 10%, rgba(56,189,248,.28), transparent 30%), linear-gradient(135deg, #0f172a 0%, #123c66 60%, #075985 100%); box-shadow: 0 20px 45px rgba(15,23,42,.16); }
+.flight-schedule-kicker { display: block; margin-bottom: 8px; color: #7dd3fc; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.flight-schedule-hero h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
+.flight-schedule-hero p { max-width: 620px; margin: 10px 0 0; color: #cbd5e1; line-height: 1.6; }
+.flight-schedule-hero__actions, .flight-schedule-form__actions { display: flex; gap: 10px; }
+.flight-primary-button, .flight-secondary-button, .flight-danger-button { min-height: 42px; padding: 0 17px; border: 0; border-radius: 11px; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, opacity .18s ease; }
+.flight-primary-button { color: #082f49; background: #7dd3fc; box-shadow: 0 8px 20px rgba(14,165,233,.25); }
+.flight-secondary-button { color: #334155; background: #fff; border: 1px solid #dbe4ee; }
+.flight-danger-button { min-height: 36px; color: #b91c1c; background: #fff1f2; }
+.flight-primary-button:hover, .flight-secondary-button:hover, .flight-danger-button:hover { transform: translateY(-1px); }
+.flight-primary-button:disabled, .flight-secondary-button:disabled { cursor: wait; opacity: .65; transform: none; }
+.flight-schedule-hero .flight-secondary-button { color: #e0f2fe; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); }
+.flight-schedule-alert { display: flex; gap: 10px 20px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid #fed7aa; border-radius: 12px; color: #9a3412; background: #fff7ed; }
+.flight-schedule-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.flight-schedule-summary > div { position: relative; overflow: hidden; padding: 20px; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+.flight-schedule-summary > div::after { position: absolute; right: -20px; bottom: -34px; width: 90px; height: 90px; border-radius: 50%; background: #e0f2fe; content: ''; }
+.flight-schedule-summary span, .flight-schedule-summary small { position: relative; z-index: 1; display: block; color: #64748b; font-size: 11px; font-weight: 700; }
+.flight-schedule-summary strong { position: relative; z-index: 1; display: block; margin: 5px 0; color: #0f172a; font-size: 30px; line-height: 1; }
+.flight-schedule-form { overflow: hidden; border: 1px solid #cbd5e1; border-radius: 20px; background: #fff; box-shadow: 0 18px 42px rgba(15,23,42,.08); }
+.flight-schedule-form__heading { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; color: #fff; background: #172f4d; }
+.flight-schedule-form__heading span { color: #7dd3fc; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.flight-schedule-form__heading h3 { margin: 3px 0 0; font-size: 21px; }
+.flight-schedule-form__heading button { width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; color: #fff; background: rgba(255,255,255,.08); font-size: 25px; cursor: pointer; }
+.flight-schedule-form__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding: 24px; }
+.flight-schedule-form label { display: flex; flex-direction: column; gap: 7px; color: #475569; font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+.flight-schedule-form input, .flight-schedule-form select, .flight-schedule-form textarea { width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 10px; color: #172033; background: #f8fafc; font: inherit; font-size: 14px; outline: none; }
+.flight-schedule-form input, .flight-schedule-form select { min-height: 43px; padding: 0 12px; }
+.flight-schedule-form textarea { padding: 12px; resize: vertical; }
+.flight-schedule-form input:focus, .flight-schedule-form select:focus, .flight-schedule-form textarea:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,.12); background: #fff; }
+.flight-schedule-form__wide { grid-column: span 2; }
+.flight-schedule-form__actions { justify-content: flex-end; padding: 0 24px 24px; }
+.flight-schedule-workspace { overflow: hidden; border: 1px solid #e2e8f0; border-radius: 22px; background: #f8fafc; box-shadow: 0 16px 38px rgba(15,23,42,.06); }
+.flight-schedule-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; border-bottom: 1px solid #e2e8f0; background: #fff; }
+.flight-schedule-tabs { display: flex; gap: 5px; padding: 4px; border-radius: 12px; background: #eef2f7; }
+.flight-schedule-tabs button { min-height: 38px; padding: 0 14px; border: 0; border-radius: 9px; color: #64748b; background: transparent; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+.flight-schedule-tabs button.is-active { color: #0c4a6e; background: #fff; box-shadow: 0 3px 10px rgba(15,23,42,.09); }
+.flight-schedule-tabs span { display: inline-flex; min-width: 22px; height: 20px; align-items: center; justify-content: center; margin-left: 5px; border-radius: 10px; color: #0369a1; background: #e0f2fe; font-size: 10px; }
+.flight-schedule-search { display: flex; align-items: center; gap: 10px; color: #64748b; font-size: 11px; font-weight: 800; }
+.flight-schedule-search input { min-width: 240px; height: 40px; padding: 0 13px; border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; }
+.flight-schedule-list { display: flex; flex-direction: column; gap: 14px; padding: 18px; }
+.flight-schedule-card { overflow: hidden; border: 1px solid #dbe4ee; border-left: 5px solid #0ea5e9; border-radius: 16px; background: #fff; box-shadow: 0 8px 20px rgba(15,23,42,.05); }
+.flight-schedule-card--additional { border-left-color: #f59e0b; }
+.flight-schedule-card--air-ambulance { border-left-color: #ef4444; }
+.flight-schedule-card--cargo { border-left-color: #8b5cf6; }
+.flight-schedule-card__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 20px; border-bottom: 1px solid #eef2f7; }
+.flight-schedule-card__eyebrow { color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.flight-schedule-card__identity { display: flex; align-items: center; gap: 10px; margin-top: 3px; }
+.flight-schedule-card__identity h3 { margin: 0; color: #0f172a; font-size: 22px; }
+.flight-schedule-card__identity > span { padding: 4px 8px; border-radius: 6px; color: #475569; background: #eef2f7; font-size: 10px; font-weight: 800; }
+.flight-status { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; border-radius: 999px; color: #166534; background: #dcfce7; font-size: 10px; font-weight: 900; white-space: nowrap; }
+.flight-status--delayed { color: #92400e; background: #fef3c7; }
+.flight-status--cancelled { color: #991b1b; background: #fee2e2; }
+.flight-status--departed, .flight-status--completed, .flight-status--landed { color: #475569; background: #e2e8f0; }
+.flight-status--departed-origin { color: #6b21a8; background: #f3e8ff; }
+.flight-schedule-card__body { display: grid; grid-template-columns: 1.15fr 1.4fr 1.4fr 1.2fr; }
+.flight-schedule-card__body > section { min-width: 0; padding: 20px; border-right: 1px solid #eef2f7; }
+.flight-schedule-card__body > section:last-child { border-right: 0; }
+.flight-schedule-route span, .flight-schedule-pax > span, .flight-schedule-times span, .flight-schedule-live span { display: block; margin-bottom: 5px; color: #64748b; font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.flight-schedule-route strong { display: block; overflow-wrap: anywhere; color: #0f172a; font-size: 17px; }
+.flight-schedule-route small { display: block; margin-top: 8px; color: #64748b; font-weight: 700; }
+.flight-schedule-times, .flight-schedule-live { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.flight-schedule-times strong, .flight-schedule-live strong { color: #0f172a; font-size: 14px; }
+.flight-schedule-pax > strong { display: block; color: #0f172a; font-size: 15px; }
+.flight-schedule-pax strong small { color: #64748b; font-size: 10px; }
+.flight-schedule-pax p { margin: 10px 0 0; color: #64748b; font-size: 11px; line-height: 1.45; }
+.flight-schedule-card__actions { display: flex; justify-content: flex-end; gap: 8px; padding: 11px 16px; border-top: 1px solid #eef2f7; background: #fbfdff; }
+.flight-schedule-card__actions button { min-height: 34px; padding: 0 12px; font-size: 11px; }
+.flight-schedule-table-wrap { overflow-x: auto; background: #fff; }
+.flight-schedule-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.flight-schedule-table th { padding: 12px 15px; color: #64748b; background: #f8fafc; font-size: 9px; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+.flight-schedule-table td { padding: 14px 15px; border-top: 1px solid #eef2f7; color: #334155; vertical-align: middle; }
+.flight-schedule-table td strong, .flight-schedule-table td small { display: block; }
+.flight-schedule-table td small { margin-top: 3px; color: #64748b; font-size: 9px; }
+.flight-schedule-table__actions { display: flex; gap: 6px; }
+.flight-schedule-table__actions button { border: 0; color: #0369a1; background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.flight-schedule-table__actions button.is-danger { color: #dc2626; }
+.flight-schedule-empty, .flight-schedule-loading { padding: 60px 24px; color: #64748b; text-align: center; }
+.flight-schedule-empty strong { color: #334155; font-size: 17px; }
+.flight-schedule-empty p { margin: 7px 0 0; }
+@media (max-width: 1100px) { .flight-schedule-form__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flight-schedule-card__body { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flight-schedule-card__body > section:nth-child(2) { border-right: 0; } .flight-schedule-card__body > section:nth-child(-n+2) { border-bottom: 1px solid #eef2f7; } }
+@media (max-width: 760px) { .flight-schedule-hero { align-items: stretch; flex-direction: column; padding: 24px 20px; } .flight-schedule-hero__actions { width: 100%; } .flight-schedule-hero__actions button { flex: 1; } .flight-schedule-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .flight-schedule-toolbar { align-items: stretch; flex-direction: column; } .flight-schedule-search { align-items: stretch; flex-direction: column; } .flight-schedule-search input { width: 100%; min-width: 0; } .flight-schedule-card__body { grid-template-columns: 1fr; } .flight-schedule-card__body > section { border-right: 0; border-bottom: 1px solid #eef2f7; } .flight-schedule-card__body > section:last-child { border-bottom: 0; } .flight-schedule-form__grid { grid-template-columns: 1fr; padding: 18px; } .flight-schedule-form__wide { grid-column: auto; } .flight-schedule-form__actions { padding: 0 18px 18px; } }
+@media (max-width: 480px) { .flight-schedule-summary { grid-template-columns: 1fr 1fr; gap: 9px; } .flight-schedule-summary > div { padding: 15px; } .flight-schedule-summary strong { font-size: 25px; } .flight-schedule-card__header { align-items: flex-start; } .flight-schedule-card__identity { align-items: flex-start; flex-direction: column; } .flight-schedule-times, .flight-schedule-live { grid-template-columns: 1fr 1fr; } }

@@ -1,33 +1,109 @@
-import { useState, useEffect, useCallback } from 'react';
-import { apiFetch } from '../lib/api';
-import { useAuth } from '../auth';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '../auth';
 import { ConfirmDialog } from '../components/Dialogs';
+import { apiFetch } from '../lib/api';
 import { canEditFlights, canViewFlights } from '../lib/permissions';
 
 const AIRCRAFT_OPTIONS = ['DH-8/200', 'DH-8/300', 'ATR-42/600', 'ATR-72/600', 'CUSTOM'];
 const FLIGHT_TYPES = ['Scheduled', 'Additional', 'Air Ambulance', 'Cargo', 'Private'];
+const FLIGHT_STATUSES = ['Scheduled', 'Delayed', 'Departed (Origin)', 'Landed', 'Departed', 'Completed', 'Cancelled'];
+const INITIAL_DATE = new Date().toISOString().split('T')[0];
+const CLOSED_STATUSES = new Set(['departed', 'completed', 'cancelled']);
 
-const formatDate = (date: Date) => date.toISOString().split('T')[0];
-const formatDisplayDate = (dateStr: string) => {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-');
-  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-  return `${d}${months[parseInt(m) - 1]}${y}`;
+type Flight = {
+  id: string;
+  date?: string;
+  flightNo?: string;
+  type?: string;
+  aircraft?: string;
+  paxAdults?: number;
+  paxInfants?: number;
+  checkInTime?: string;
+  arrivalTime?: string;
+  departureTime?: string;
+  originDepTime?: string;
+  eta?: string;
+  ata?: string;
+  atd?: string;
+  route?: string;
+  status?: string;
+  remarks?: string;
 };
+
+const displayStatus = (status?: string) => status === 'On Time' || !status ? 'Scheduled' : status;
+const statusClass = (status?: string) => displayStatus(status).toLowerCase().replace(/[^a-z]+/g, '-').replace(/^-|-$/g, '');
+const formatDisplayDate = (date?: string) => {
+  if (!date) return 'Date not set';
+  const value = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(value.getTime())) return date;
+  return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(value);
+};
+const primaryTime = (flight: Flight) => flight.arrivalTime || flight.departureTime || '23:59';
+const isClosedFlight = (flight: Flight) => Boolean(flight.atd) || (flight.date || '') < INITIAL_DATE || CLOSED_STATUSES.has(displayStatus(flight.status).toLowerCase());
+
+function FlightCard({ flight, canEdit, onEdit, onDelete }: { flight: Flight; canEdit: boolean; onEdit: (flight: Flight) => void; onDelete: (flight: Flight) => void }) {
+  return (
+    <article className={`flight-schedule-card flight-schedule-card--${(flight.type || 'scheduled').toLowerCase().replace(/[^a-z]+/g, '-')}`}>
+      <header className="flight-schedule-card__header">
+        <div>
+          <div className="flight-schedule-card__eyebrow">{flight.type || 'Scheduled'} service</div>
+          <div className="flight-schedule-card__identity">
+            <h3>{flight.flightNo || 'Unnumbered flight'}</h3>
+            <span>{flight.aircraft || 'Aircraft TBC'}</span>
+          </div>
+        </div>
+        <span className={`flight-status flight-status--${statusClass(flight.status)}`}>{displayStatus(flight.status)}</span>
+      </header>
+
+      <div className="flight-schedule-card__body">
+        <section className="flight-schedule-route">
+          <span>Route</span>
+          <strong>{flight.route || 'Route TBC'}</strong>
+          <small>{formatDisplayDate(flight.date)}</small>
+        </section>
+        <section className="flight-schedule-times" aria-label="Scheduled times">
+          <div><span>Check-in</span><strong>{flight.checkInTime || '—'}</strong></div>
+          <div><span>Arrival</span><strong>{flight.arrivalTime || '—'}</strong></div>
+          <div><span>Departure</span><strong>{flight.departureTime || '—'}</strong></div>
+        </section>
+        <section className="flight-schedule-live" aria-label="Live movement times">
+          <div><span>MLE departure</span><strong>{flight.originDepTime || '—'}</strong></div>
+          <div><span>ETA / ATA</span><strong>{flight.eta || '—'} / {flight.ata || '—'}</strong></div>
+          <div><span>ATD</span><strong>{flight.atd || '—'}</strong></div>
+        </section>
+        <section className="flight-schedule-pax">
+          <span>Booked passengers</span>
+          <strong>{flight.paxAdults || 0} <small>adult</small> · {flight.paxInfants || 0} <small>infant</small></strong>
+          {flight.remarks && <p>{flight.remarks}</p>}
+        </section>
+      </div>
+
+      {canEdit && (
+        <footer className="flight-schedule-card__actions">
+          <button type="button" className="flight-secondary-button" onClick={() => onEdit(flight)}>Edit flight</button>
+          <button type="button" className="flight-danger-button" onClick={() => onDelete(flight)}>Delete</button>
+        </footer>
+      )}
+    </article>
+  );
+}
 
 function FlightsPage() {
   const { profile, user } = useAuth();
-
-  const [flights, setFlights] = useState<any[]>([]);
+  const [flights, setFlights] = useState<Flight[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState(formatDate(new Date()));
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Flight | null>(null);
+  const [view, setView] = useState<'active' | 'history'>('active');
+  const [search, setSearch] = useState('');
 
+  const [flightDate, setFlightDate] = useState(INITIAL_DATE);
   const [flightNo, setFlightNo] = useState('Q2-');
   const [type, setType] = useState('Scheduled');
   const [aircraft, setAircraft] = useState('DH-8/300');
@@ -39,344 +115,231 @@ function FlightsPage() {
   const [departure, setDeparture] = useState('');
   const [route, setRoute] = useState('MLE/FND/MLE');
   const [originDep, setOriginDep] = useState('');
+  const [status, setStatus] = useState('Scheduled');
   const [remarks, setRemarks] = useState('');
 
-  const fetchFlights = useCallback(async () => {
+  const fetchFlights = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
       const [flightsData, staffData] = await Promise.all([
         apiFetch('/flights'),
         apiFetch('/staff').catch(() => []),
       ]);
-      setFlights(flightsData);
-
-      const myEmail = ((profile?.email || user?.email || '') as string).toLowerCase();
-      const mine = Array.isArray(staffData)
-        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
-        : null;
-      setMyStaff(mine || null);
-
+      setFlights(Array.isArray(flightsData) ? flightsData : []);
+      const myEmail = String(profile?.email || user?.email || '').toLowerCase();
+      setMyStaff(Array.isArray(staffData) ? staffData.find((member: any) => String(member.email || '').toLowerCase() === myEmail) || null : null);
+      setLoadError('');
+    } catch (error: any) {
+      setLoadError(error.message || 'Flight information could not be loaded.');
+      if (!quiet) toast.error(error.message || 'Flight information could not be loaded.');
+    } finally {
       setLoading(false);
-    } catch (err: any) {
-      toast.error(err.message);
-      setLoading(false);
+      setRefreshing(false);
     }
-  }, [profile?.email, user?.email]);
+  }, [profile, user]);
 
   useEffect(() => {
-    fetchFlights();
-    const interval = setInterval(fetchFlights, 15000);
-    return () => clearInterval(interval);
+    const initialLoad = window.setTimeout(() => void fetchFlights(true), 0);
+    const interval = window.setInterval(() => void fetchFlights(true), 15000);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(interval);
+    };
   }, [fetchFlights]);
 
+  const canView = canViewFlights(profile, myStaff);
+  const canEdit = canEditFlights(profile, myStaff);
+
   const resetForm = () => {
-    setFlightNo('Q2-'); setType('Scheduled'); setAircraft('DH-8/300');
-    setCustomAircraft(''); setPaxAdults(''); setPaxInfants(''); setCheckIn('');
-    setArrival(''); setDeparture(''); setRoute('MLE/FND/MLE');
-    setOriginDep(''); setRemarks('');
     setEditingId(null);
+    setFlightDate(INITIAL_DATE);
+    setFlightNo('Q2-');
+    setType('Scheduled');
+    setAircraft('DH-8/300');
+    setCustomAircraft('');
+    setPaxAdults('');
+    setPaxInfants('');
+    setCheckIn('');
+    setArrival('');
+    setDeparture('');
+    setRoute('MLE/FND/MLE');
+    setOriginDep('');
+    setStatus('Scheduled');
+    setRemarks('');
   };
 
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
-    if (!flightNo || flightNo === 'Q2-') {
-      toast.error('Please enter a valid Flight Number');
-      return;
-    }
-    
-    const finalAircraft = aircraft === 'CUSTOM' ? customAircraft : aircraft;
-    if (!finalAircraft) {
-      toast.error('Please enter the custom aircraft type');
-      return;
-    }
-
-    const existingFlight = flights.find(f => f.id === editingId);
-    const finalStatus = existingFlight ? existingFlight.status : 'Scheduled';
-
-    const payload = {
-      date: dateFilter, flightNo, type, aircraft: finalAircraft,
-      paxAdults: Number(paxAdults) || 0, paxInfants: Number(paxInfants) || 0,
-      checkInTime: checkIn, arrivalTime: arrival, 
-      departureTime: departure, route, originDepTime: originDep, 
-      status: finalStatus, remarks
-    };
-
-    try {
-      if (editingId) {
-        await apiFetch(`/flights/${editingId}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload)
-        });
-        toast.success('Flight updated successfully');
-      } else {
-        await apiFetch('/flights', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
-        toast.success('Flight added successfully');
-      }
-      setShowForm(false);
-      resetForm();
-      fetchFlights();
-    } catch (err: any) { toast.error(err.message); }
+  const openCreate = () => {
+    resetForm();
+    setShowForm(true);
   };
 
-  const handleEdit = (f: any) => {
-    setEditingId(f.id);
-    setFlightNo(f.flightNo || 'Q2-');
-    setType(f.type || 'Scheduled');
-    setDateFilter(f.date || formatDate(new Date()));
-    
-    if (AIRCRAFT_OPTIONS.includes(f.aircraft)) {
-      setAircraft(f.aircraft);
+  const closeForm = () => {
+    setShowForm(false);
+    resetForm();
+  };
+
+  const handleEdit = (flight: Flight) => {
+    setEditingId(flight.id);
+    setFlightDate(flight.date || INITIAL_DATE);
+    setFlightNo(flight.flightNo || 'Q2-');
+    setType(flight.type || 'Scheduled');
+    if (AIRCRAFT_OPTIONS.includes(flight.aircraft || '')) {
+      setAircraft(flight.aircraft || 'DH-8/300');
       setCustomAircraft('');
     } else {
       setAircraft('CUSTOM');
-      setCustomAircraft(f.aircraft || '');
+      setCustomAircraft(flight.aircraft || '');
     }
-    
-    setPaxAdults(f.paxAdults ? String(f.paxAdults) : '');
-    setPaxInfants(f.paxInfants ? String(f.paxInfants) : '');
-    setCheckIn(f.checkInTime || '');
-    setArrival(f.arrivalTime || '');
-    setDeparture(f.departureTime || '');
-    setRoute(f.route || '');
-    setOriginDep(f.originDepTime || '');
-    setRemarks(f.remarks || '');
+    setPaxAdults(flight.paxAdults ? String(flight.paxAdults) : '');
+    setPaxInfants(flight.paxInfants ? String(flight.paxInfants) : '');
+    setCheckIn(flight.checkInTime || '');
+    setArrival(flight.arrivalTime || '');
+    setDeparture(flight.departureTime || '');
+    setRoute(flight.route || '');
+    setOriginDep(flight.originDepTime || '');
+    setStatus(displayStatus(flight.status));
+    setRemarks(flight.remarks || '');
     setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const finalAircraft = aircraft === 'CUSTOM' ? customAircraft.trim() : aircraft;
+    if (!flightNo.trim() || flightNo.trim() === 'Q2-') return toast.error('Enter a valid flight number.');
+    if (!finalAircraft) return toast.error('Enter the aircraft type.');
+
+    setSaving(true);
+    try {
+      const payload = {
+        date: flightDate,
+        flightNo: flightNo.trim().toUpperCase(),
+        type,
+        aircraft: finalAircraft,
+        paxAdults: Number(paxAdults) || 0,
+        paxInfants: Number(paxInfants) || 0,
+        checkInTime: checkIn,
+        arrivalTime: arrival,
+        departureTime: departure,
+        route: route.trim().toUpperCase(),
+        originDepTime: originDep,
+        status,
+        remarks: remarks.trim(),
+      };
+      await apiFetch(editingId ? `/flights/${editingId}` : '/flights', {
+        method: editingId ? 'PUT' : 'POST',
+        body: JSON.stringify(payload),
+      });
+      toast.success(editingId ? 'Flight updated successfully.' : 'Flight added successfully.');
+      closeForm();
+      await fetchFlights(true);
+    } catch (error: any) {
+      toast.error(error.message || 'The flight could not be saved.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
       await apiFetch(`/flights/${deleteTarget.id}`, { method: 'DELETE' });
-      toast.success('Flight deleted');
+      toast.success('Flight deleted.');
       setDeleteTarget(null);
-      fetchFlights();
-    } catch (err: any) { toast.error(err.message); }
+      await fetchFlights(true);
+    } catch (error: any) {
+      toast.error(error.message || 'The flight could not be deleted.');
+    }
   };
 
-  const todayStr = formatDate(new Date());
-  const displayStatus = (s: string) => s === 'On Time' ? 'Scheduled' : s;
+  const { activeFlights, historyFlights } = useMemo(() => {
+    const ordered = [...flights].sort((a, b) => `${a.date || ''} ${primaryTime(a)}`.localeCompare(`${b.date || ''} ${primaryTime(b)}`));
+    return {
+      activeFlights: ordered.filter((flight) => !isClosedFlight(flight)),
+      historyFlights: ordered.filter(isClosedFlight).reverse(),
+    };
+  }, [flights]);
 
-  const sortedFlights = [...flights].sort((a, b) => {
-    const dateCompare = (a.date || '').localeCompare(b.date || '');
-    if (dateCompare !== 0) return dateCompare;
-    return (a.departureTime || '00:00').localeCompare(b.departureTime || '00:00');
+  const displayedFlights = (view === 'active' ? activeFlights : historyFlights).filter((flight) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return [flight.flightNo, flight.route, flight.aircraft, flight.type, flight.status].some((value) => String(value || '').toLowerCase().includes(query));
   });
 
-  const completedStatuses = ['Departed', 'Cancelled'];
-  const upcomingFlights = sortedFlights.filter(f => f.date >= todayStr && !completedStatuses.includes(displayStatus(f.status)));
-  const pastFlights = sortedFlights.filter(f => f.date < todayStr || completedStatuses.includes(displayStatus(f.status))).reverse();
+  const todayCount = activeFlights.filter((flight) => flight.date === INITIAL_DATE).length;
+  const delayedCount = activeFlights.filter((flight) => displayStatus(flight.status) === 'Delayed').length;
 
-  if (loading) return <div className="page-content"><p>Loading Flights...</p></div>;
-
-  // Permission gate — sourced from shared helpers
-  const canView = canViewFlights(profile, myStaff);
-  const canEdit = canEditFlights(profile, myStaff);
-
-  if (!canView) {
-    return (
-      <div className="page-content">
-        <div className="empty-state"><p>No access to Flight Operations.</p></div>
-      </div>
-    );
-  }
-
-  const FlightCard = ({ f }: { f: any }) => (
-    <div className="dash-card" style={{ padding: 0, overflow: 'hidden', border: '2px solid #e2e8f0', marginBottom: '16px' }}>
-      <div style={{ background: f.type === 'Air Ambulance' ? '#fef2f2' : f.type === 'Additional' ? '#fef3c7' : '#eff6ff', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h3 style={{ margin: 0, fontSize: '22px', color: f.type === 'Air Ambulance' ? '#991b1b' : f.type === 'Additional' ? '#92400e' : '#1e40af' }}>{f.flightNo}</h3>
-          <span style={{ background: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700, border: '1px solid #cbd5e1' }}>{f.aircraft}</span>
-          <span style={{ background: f.type === 'Air Ambulance' ? '#dc2626' : f.type === 'Additional' ? '#f59e0b' : '#2563eb', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 700 }}>{f.type}</span>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>DATE</div>
-          <div style={{ fontSize: '16px', fontWeight: 800 }}>{formatDisplayDate(f.date)}</div>
-        </div>
-      </div>
-
-      <div className="flight-card-details" style={{ gridTemplateColumns: '1.5fr 1fr 1fr' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0', paddingRight: '20px' }}>
-          <div style={{ fontSize: '12px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Scheduled</div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>CHECK-IN</div><div style={{ fontSize: '16px', fontWeight: 700 }}>{f.checkInTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL (STA)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#065f46' }}>{f.arrivalTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (STD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#1d4ed8' }}>{f.departureTime || '—'}</div></div>
-        </div>
-
-        <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '10px', borderRight: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '12px', fontWeight: 800, color: '#d97706', textTransform: 'uppercase' }}>Live Status</div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>MLE DEP</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#ca8a04' }}>{f.originDepTime || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ETA</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#8b5cf6' }}>{f.eta || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>ARRIVAL (ATA)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#16a34a' }}>{f.ata || '—'}</div></div>
-          <div><div style={{ fontSize: '10px', color: '#64748b', fontWeight: 700 }}>DEPARTURE (ATD)</div><div style={{ fontSize: '16px', fontWeight: 700, color: '#dc2626' }}>{f.atd || '—'}</div></div>
-        </div>
-
-        <div style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>ROUTE</div>
-            <div style={{ fontSize: '18px', fontWeight: 900, color: '#1e293b', marginBottom: '12px' }}>{f.route}</div>
-            
-            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>PAX (AD/INF)</div>
-            <div style={{ fontSize: '15px', fontWeight: 800, marginBottom: '12px' }}>{f.paxAdults || 0} / {f.paxInfants || 0}</div>
-
-            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 700, marginBottom: '4px' }}>STATUS</div>
-            <span className="status-badge" style={{ 
-              fontSize: '14px', padding: '6px 12px', 
-              background: displayStatus(f.status) === 'Delayed' ? '#fef3c7' : displayStatus(f.status) === 'Cancelled' ? '#fee2e2' : displayStatus(f.status).includes('Departed') || displayStatus(f.status) === 'Landed' ? '#e2e8f0' : displayStatus(f.status) === 'Departed (Origin)' ? '#f3e8ff' : '#dcfce7', 
-              color: displayStatus(f.status) === 'Delayed' ? '#92400e' : displayStatus(f.status) === 'Cancelled' ? '#991b1b' : displayStatus(f.status).includes('Departed') || displayStatus(f.status) === 'Landed' ? '#475569' : displayStatus(f.status) === 'Departed (Origin)' ? '#6b21a8' : '#065f46' 
-            }}>
-              {displayStatus(f.status)}
-            </span>
-          </div>
-          {canEdit && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
-              <button className="edit-btn" onClick={() => handleEdit(f)}>Edit</button>
-              <button className="delete-btn" onClick={() => setDeleteTarget(f)}>Delete</button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  if (loading) return <div className="page-content"><div className="flight-schedule-loading">Loading flight operations…</div></div>;
+  if (!canView) return <div className="page-content"><div className="empty-state"><p>No access to Flight Operations.</p></div></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>Flight Operations</h2>
-        {canEdit && !showForm && <button className="add-staff-btn" onClick={() => { setShowForm(true); resetForm(); }}>+ Add Flight</button>}
-        {showForm && <button className="export-btn pdf-btn" onClick={() => { setShowForm(false); resetForm(); }}>Cancel</button>}
-      </div>
+    <div className="page-content flight-schedule-page">
+      <header className="flight-schedule-hero">
+        <div>
+          <span className="flight-schedule-kicker">Airside operations</span>
+          <h2>Flight Schedule</h2>
+          <p>Plan arrivals and departures, track movement times, and keep passenger figures current.</p>
+        </div>
+        <div className="flight-schedule-hero__actions">
+          <button type="button" className="flight-secondary-button" onClick={() => void fetchFlights()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+          {canEdit && <button type="button" className="flight-primary-button" onClick={showForm ? closeForm : openCreate}>{showForm ? 'Close form' : 'Add flight'}</button>}
+        </div>
+      </header>
+
+      {loadError && <div className="flight-schedule-alert" role="alert"><strong>Flight data may be out of date.</strong><span>{loadError}</span></div>}
+
+      <section className="flight-schedule-summary" aria-label="Flight summary">
+        <div><span>Active schedule</span><strong>{activeFlights.length}</strong><small>upcoming flights</small></div>
+        <div><span>Today</span><strong>{todayCount}</strong><small>movements scheduled</small></div>
+        <div><span>Attention</span><strong>{delayedCount}</strong><small>delayed flights</small></div>
+        <div><span>Completed</span><strong>{historyFlights.length}</strong><small>history records</small></div>
+      </section>
 
       {showForm && (
-        <form className="staff-form" onSubmit={handleSubmit} style={{ marginBottom: '24px' }}>
-          <div style={{ gridColumn: 'span 2', fontWeight: 700, color: '#1e293b', fontSize: '15px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px', marginBottom: '8px' }}>
-            {editingId ? '✏️ Edit Flight Details' : '➕ Add New Flight'}
+        <form className="flight-schedule-form" onSubmit={handleSubmit}>
+          <div className="flight-schedule-form__heading">
+            <div><span>{editingId ? 'Update operation' : 'New operation'}</span><h3>{editingId ? `Edit ${flightNo}` : 'Add a flight'}</h3></div>
+            <button type="button" onClick={closeForm} aria-label="Close flight form">×</button>
           </div>
-
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date *</label><input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} required /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Flight No. *</label><input placeholder="Q2-192" value={flightNo} onChange={e => setFlightNo(e.target.value.toUpperCase())} required /></div>
-          
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Type</label>
-            <select value={type} onChange={e => setType(e.target.value)}>
-              {FLIGHT_TYPES.map(t => <option key={t}>{t}</option>)}
-            </select>
+          <div className="flight-schedule-form__grid">
+            <label>Date *<input type="date" value={flightDate} onChange={(event) => setFlightDate(event.target.value)} required /></label>
+            <label>Flight number *<input value={flightNo} onChange={(event) => setFlightNo(event.target.value.toUpperCase())} placeholder="Q2-192" required /></label>
+            <label>Service type<select value={type} onChange={(event) => setType(event.target.value)}>{FLIGHT_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Aircraft<select value={aircraft} onChange={(event) => setAircraft(event.target.value)}>{AIRCRAFT_OPTIONS.map((item) => <option key={item}>{item}</option>)}</select></label>
+            {aircraft === 'CUSTOM' && <label>Custom aircraft *<input value={customAircraft} onChange={(event) => setCustomAircraft(event.target.value.toUpperCase())} placeholder="B737-800" required /></label>}
+            <label>Route *<input value={route} onChange={(event) => setRoute(event.target.value.toUpperCase())} placeholder="MLE/FND/MLE" required /></label>
+            <label>Status<select value={status} onChange={(event) => setStatus(event.target.value)}>{FLIGHT_STATUSES.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <label>Adult passengers<input type="number" min="0" value={paxAdults} onChange={(event) => setPaxAdults(event.target.value)} placeholder="0" /></label>
+            <label>Infant passengers<input type="number" min="0" value={paxInfants} onChange={(event) => setPaxInfants(event.target.value)} placeholder="0" /></label>
+            <label>Check-in time<input type="time" value={checkIn} onChange={(event) => setCheckIn(event.target.value)} /></label>
+            <label>Scheduled arrival<input type="time" value={arrival} onChange={(event) => setArrival(event.target.value)} /></label>
+            <label>Scheduled departure<input type="time" value={departure} onChange={(event) => setDeparture(event.target.value)} /></label>
+            <label>MLE departure<input type="time" value={originDep} onChange={(event) => setOriginDep(event.target.value)} /></label>
+            <label className="flight-schedule-form__wide">Operational remarks<textarea value={remarks} onChange={(event) => setRemarks(event.target.value)} rows={3} placeholder="Optional notes for the operations team" /></label>
           </div>
-
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Aircraft Type</label>
-            <select value={aircraft} onChange={e => setAircraft(e.target.value)}>
-              {AIRCRAFT_OPTIONS.map(a => <option key={a}>{a}</option>)}
-            </select>
-          </div>
-
-          {aircraft === 'CUSTOM' && <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#dc2626' }}>Custom Aircraft *</label><input placeholder="e.g. B737-800" value={customAircraft} onChange={e => setCustomAircraft(e.target.value)} required /></div>}
-
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Pax Adults</label><input type="number" placeholder="0" value={paxAdults} onChange={e => setPaxAdults(e.target.value)} /></div>
-            <div style={{ flex: 1 }}><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Pax Infants</label><input type="number" placeholder="0" value={paxInfants} onChange={e => setPaxInfants(e.target.value)} /></div>
-          </div>
-
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Check-in Time</label><input type="time" value={checkIn} onChange={e => setCheckIn(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Arrival (STA)</label><input type="time" value={arrival} onChange={e => setArrival(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Scheduled Departure (STD)</label><input type="time" value={departure} onChange={e => setDeparture(e.target.value)} /></div>
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>MLE Dep (Origin)</label><input type="time" value={originDep} onChange={e => setOriginDep(e.target.value)} /></div>
-
-          <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Route</label><input placeholder="MLE/FND/MLE" value={route} onChange={e => setRoute(e.target.value.toUpperCase())} required /></div>
-
-          <button type="submit" style={{ gridColumn: 'span 2', background: editingId ? '#2563eb' : '#16a34a' }}>
-            {editingId ? 'Save Changes' : 'Save Flight'}
-          </button>
+          <div className="flight-schedule-form__actions"><button type="button" className="flight-secondary-button" onClick={closeForm}>Cancel</button><button type="submit" className="flight-primary-button" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save flight'}</button></div>
         </form>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div>
-          <h3 style={{ color: '#2563eb', borderBottom: '2px solid #bfdbfe', paddingBottom: '8px', marginBottom: '16px' }}>🕒 Upcoming & Active Flights</h3>
-          {upcomingFlights.length === 0 ? <div className="empty-state"><p>No upcoming flights.</p></div> : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {upcomingFlights.map((f, index) => {
-                const prevFlight = index > 0 ? upcomingFlights[index - 1] : null;
-                const showDateHeader = !prevFlight || prevFlight.date !== f.date;
-                
-                const fDate = new Date(f.date + 'T00:00:00');
-                const tDate = new Date(todayStr + 'T00:00:00');
-                const diffTime = fDate.getTime() - tDate.getTime();
-                const diffDays = Math.round(diffTime / (1000 * 3600 * 24));
-                
-                let dateLabel = formatDisplayDate(f.date);
-                if (diffDays === 0) dateLabel = 'TODAY';
-                else if (diffDays === 1) dateLabel = 'TOMORROW';
-
-                return (
-                  <div key={f.id}>
-                    {showDateHeader && (
-                      <div style={{ fontSize: '14px', fontWeight: 800, color: '#475569', margin: '16px 0 12px 0', paddingBottom: '4px', borderBottom: '1px dashed #cbd5e1' }}>
-                        📅 {dateLabel} ({formatDisplayDate(f.date)})
-                      </div>
-                    )}
-                    <FlightCard f={f} />
-                  </div>
-                );
-              })}
-            </div>
-          )}
+      <section className="flight-schedule-workspace">
+        <div className="flight-schedule-toolbar">
+          <div className="flight-schedule-tabs" role="tablist" aria-label="Schedule view">
+            <button type="button" role="tab" aria-selected={view === 'active'} className={view === 'active' ? 'is-active' : ''} onClick={() => setView('active')}>Active <span>{activeFlights.length}</span></button>
+            <button type="button" role="tab" aria-selected={view === 'history'} className={view === 'history' ? 'is-active' : ''} onClick={() => setView('history')}>History <span>{historyFlights.length}</span></button>
+          </div>
+          <label className="flight-schedule-search"><span>Search schedule</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Flight, route, aircraft…" /></label>
         </div>
 
-        <div>
-          <h3 style={{ color: '#64748b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px', marginBottom: '16px' }}>✅ Past & Departed Flights</h3>
-          {pastFlights.length === 0 ? <div className="empty-state"><p>No past flights.</p></div> : (
-            <div className="dash-card" style={{ padding: 0, overflowX: 'auto' }}>
-              <table className="mini-table" style={{ margin: 0 }}>
-                <thead style={{ background: '#f8fafc' }}>
-                  <tr>
-                    <th>Date</th>
-                    <th>Flight No</th>
-                    <th>Type</th>
-                    <th>Pax (Ad/Inf)</th>
-                    <th>STA / STD</th>
-                    <th>ATA / ATD</th>
-                    <th>Status</th>
-                    {canEdit && <th>Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pastFlights.map(f => (
-                    <tr key={f.id}>
-                      <td style={{ fontWeight: 600 }}>{formatDisplayDate(f.date)}</td>
-                      <td><strong>{f.flightNo}</strong> <br/><span style={{fontSize:'10px', color:'#64748b'}}>{f.aircraft}</span></td>
-                      <td><span style={{ fontSize: '10px', background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px' }}>{f.type}</span></td>
-                      <td style={{ textAlign: 'center' }}>{f.paxAdults || 0} / {f.paxInfants || 0}</td>
-                      <td style={{ fontSize: '12px', color: '#065f46' }}>{f.arrivalTime || '—'} / {f.departureTime || '—'}</td>
-                      <td style={{ fontSize: '12px', color: '#dc2626' }}>{f.ata || '—'} / {f.atd || '—'}</td>
-                      <td>
-                        <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '4px', background: '#e2e8f0', color: '#475569' }}>
-                          {displayStatus(f.status)}
-                        </span>
-                      </td>
-                      {canEdit && (
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <button className="edit-btn" onClick={() => handleEdit(f)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>Edit</button>
-                          <button className="delete-btn" onClick={() => setDeleteTarget(f)} style={{ padding: '4px 8px', fontSize: '11px' }}>Delete</button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+        {displayedFlights.length === 0 ? (
+          <div className="flight-schedule-empty"><strong>{search ? 'No matching flights' : view === 'active' ? 'No active flights' : 'No flight history'}</strong><p>{search ? 'Try a different flight number, route, or status.' : 'Flight records will appear here when they are available.'}</p></div>
+        ) : view === 'active' ? (
+          <div className="flight-schedule-list">{displayedFlights.map((flight) => <FlightCard key={flight.id} flight={flight} canEdit={canEdit} onEdit={handleEdit} onDelete={setDeleteTarget} />)}</div>
+        ) : (
+          <div className="flight-schedule-table-wrap"><table className="flight-schedule-table"><thead><tr><th>Date</th><th>Flight</th><th>Route</th><th>Passengers</th><th>Scheduled</th><th>Actual</th><th>Status</th>{canEdit && <th>Actions</th>}</tr></thead><tbody>{displayedFlights.map((flight) => <tr key={flight.id}><td>{formatDisplayDate(flight.date)}</td><td><strong>{flight.flightNo || '—'}</strong><small>{flight.aircraft || '—'} · {flight.type || 'Scheduled'}</small></td><td>{flight.route || '—'}</td><td>{flight.paxAdults || 0} / {flight.paxInfants || 0}</td><td>{flight.arrivalTime || '—'} / {flight.departureTime || '—'}</td><td>{flight.ata || '—'} / {flight.atd || '—'}</td><td><span className={`flight-status flight-status--${statusClass(flight.status)}`}>{displayStatus(flight.status)}</span></td>{canEdit && <td><div className="flight-schedule-table__actions"><button type="button" onClick={() => handleEdit(flight)}>Edit</button><button type="button" className="is-danger" onClick={() => setDeleteTarget(flight)}>Delete</button></div></td>}</tr>)}</tbody></table></div>
+        )}
+      </section>
 
-      <ConfirmDialog
-        isOpen={!!deleteTarget}
-        title="Delete Flight?"
-        message={`Are you sure you want to delete flight ${deleteTarget?.flightNo}? This action cannot be undone.`}
-        confirmText="Delete"
-        isDanger={true}
-        onConfirm={confirmDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
+      <ConfirmDialog isOpen={Boolean(deleteTarget)} title="Delete flight?" message={`Delete ${deleteTarget?.flightNo || 'this flight'}? This action cannot be undone.`} confirmText="Delete" isDanger={true} onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   );
 }
