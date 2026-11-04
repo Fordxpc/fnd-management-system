@@ -2191,3 +2191,35 @@
 @media (max-width: 1100px) { .roster-workspace-hero { align-items: stretch; flex-direction: column; } .roster-workspace-hero__actions { justify-content: flex-start; } .roster-workspace-controls { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .roster-workspace-hero { padding: 24px 20px; } .roster-workspace-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .roster-workspace-controls { grid-template-columns: 1fr; } .roster-workspace-period { align-items: stretch; flex-direction: column; } .roster-workspace-period div { order: -1; } .roster-workspace-form { grid-template-columns: 1fr; padding: 18px; } .roster-workspace-form > * { grid-column: auto !important; } }
 @media (max-width: 480px) { .roster-workspace-hero__actions { flex-direction: column; } .roster-workspace-hero__actions button { width: 100%; } .roster-workspace-summary { gap: 9px; } .roster-workspace-summary > div { padding: 15px; } .roster-workspace-summary strong { font-size: 25px; } }
+
+/* Phase 11: Runway Lights Inspection workspace */
+.runway-lights-page { display: flex; flex-direction: column; gap: 22px; }
+.runway-lights-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 30px; border-radius: 24px; color: #fff; background: radial-gradient(circle at 90% 12%, rgba(250,204,21,.28), transparent 30%), linear-gradient(135deg, #0f172a 0%, #1e3a5f 62%, #854d0e 130%); box-shadow: 0 20px 45px rgba(15,23,42,.16); }
+.runway-lights-kicker { display: block; margin-bottom: 8px; color: #fde047; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.runway-lights-hero h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
+.runway-lights-hero p { max-width: 670px; margin: 10px 0 0; color: #fef9c3; line-height: 1.6; }
+.runway-lights-hero__actions { display: flex; gap: 9px; }
+.runway-lights-primary, .runway-lights-secondary { min-height: 42px; padding: 0 17px; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.runway-lights-primary { border-color: #fde047; color: #422006; background: #fde047; }
+.runway-lights-secondary { color: #fef9c3; background: rgba(255,255,255,.09); }
+.runway-lights-secondary:disabled { cursor: wait; opacity: .65; }
+.runway-lights-alert { display: flex; gap: 8px 20px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid #fed7aa; border-radius: 12px; color: #9a3412; background: #fff7ed; }
+.runway-lights-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.runway-lights-summary > div { position: relative; overflow: hidden; padding: 20px; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+.runway-lights-summary > div::after { position: absolute; right: -24px; bottom: -36px; width: 94px; height: 94px; border-radius: 50%; background: #fef9c3; content: ''; }
+.runway-lights-summary span, .runway-lights-summary small { position: relative; z-index: 1; display: block; color: #64748b; font-size: 11px; font-weight: 700; }
+.runway-lights-summary strong { position: relative; z-index: 1; display: block; margin: 5px 0; color: #0f172a; font-size: 30px; line-height: 1; }
+.runway-lights-controls { padding: 18px 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+.runway-lights-controls label { display: flex; max-width: 560px; flex-direction: column; gap: 7px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.runway-lights-controls input { min-height: 43px; padding: 0 13px; border: 1px solid #cbd5e1; border-radius: 10px; color: #172033; font: inherit; font-size: 13px; outline: none; }
+.runway-lights-controls input:focus { border-color: #ca8a04; box-shadow: 0 0 0 3px rgba(202,138,4,.1); }
+.runway-lights-form { margin: 0; padding: 24px; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.07); }
+.runway-lights-form button[type="submit"]:disabled { cursor: wait; opacity: .65; }
+.runway-lights-history { overflow: hidden; padding: 0; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 12px 28px rgba(15,23,42,.05); }
+.runway-lights-table-wrap { overflow-x: auto; }
+.runway-lights-history table { min-width: 880px; margin: 0; }
+.runway-lights-history th { color: #64748b; font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+.runway-lights-history tbody tr:hover { background: #fffbeb; }
+@media (max-width: 1000px) { .runway-lights-hero { align-items: stretch; flex-direction: column; } }
+@media (max-width: 760px) { .runway-lights-hero { padding: 24px 20px; } .runway-lights-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .runway-lights-form { grid-template-columns: 1fr; padding: 18px; } .runway-lights-form > * { grid-column: auto !important; } }
+@media (max-width: 480px) { .runway-lights-hero__actions { flex-direction: column; } .runway-lights-hero__actions button { width: 100%; } .runway-lights-summary { gap: 9px; } .runway-lights-summary > div { padding: 15px; } .runway-lights-summary strong { font-size: 25px; } }
