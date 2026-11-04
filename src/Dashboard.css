@@ -2029,3 +2029,49 @@
 @media (max-width: 1000px) { .operations-board-hero { align-items: stretch; flex-direction: column; } .operations-board-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .operations-board-hero { padding: 24px 20px; } .operations-board-hero__actions { flex-direction: column; } .operations-board-add-staff input { width: 100%; } .operations-board-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .operations-board-tabs { grid-template-columns: 1fr; } .operations-board-summary { gap: 9px; } .operations-board-summary > div { padding: 15px; } .operations-board-summary strong { font-size: 25px; } }
+
+/* Phase 7: Staff Management workspace */
+.staff-management-page { display: flex; flex-direction: column; gap: 22px; }
+.staff-management-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 30px; border-radius: 24px; color: #fff; background: radial-gradient(circle at 90% 15%, rgba(99,102,241,.25), transparent 30%), linear-gradient(135deg, #0f172a 0%, #243b64 62%, #3730a3 120%); box-shadow: 0 20px 45px rgba(15,23,42,.16); }
+.staff-management-kicker { display: block; margin-bottom: 8px; color: #a5b4fc; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.staff-management-hero h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
+.staff-management-hero p { max-width: 650px; margin: 10px 0 0; color: #dbeafe; line-height: 1.6; }
+.staff-management-hero__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
+.staff-management-primary, .staff-management-secondary { min-height: 42px; padding: 0 16px; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.staff-management-primary { border-color: #a5b4fc; color: #1e1b4b; background: #a5b4fc; }
+.staff-management-secondary { color: #e0e7ff; background: rgba(255,255,255,.09); }
+.staff-management-primary:disabled, .staff-management-secondary:disabled { cursor: wait; opacity: .65; }
+.staff-management-alert { display: flex; gap: 8px 20px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid #fed7aa; border-radius: 12px; color: #9a3412; background: #fff7ed; }
+.staff-management-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.staff-management-summary > div { position: relative; overflow: hidden; padding: 20px; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+.staff-management-summary > div::after { position: absolute; right: -24px; bottom: -36px; width: 94px; height: 94px; border-radius: 50%; background: #e0e7ff; content: ''; }
+.staff-management-summary span, .staff-management-summary small { position: relative; z-index: 1; display: block; color: #64748b; font-size: 11px; font-weight: 700; }
+.staff-management-summary strong { position: relative; z-index: 1; display: block; margin: 5px 0; color: #0f172a; font-size: 30px; line-height: 1; }
+.staff-management-controls { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 18px 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+.staff-management-search { display: flex; flex: 1; max-width: 520px; flex-direction: column; gap: 7px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.staff-management-search input { width: 100%; min-height: 43px; box-sizing: border-box; padding: 0 13px; border: 1px solid #cbd5e1; border-radius: 10px; color: #172033; font: inherit; font-size: 13px; text-transform: none; outline: none; }
+.staff-management-search input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+.staff-management-filter-label { text-align: right; }
+.staff-management-filter-label span, .staff-management-filter-label strong { display: block; }
+.staff-management-filter-label span { color: #94a3b8; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.staff-management-filter-label strong { margin-top: 4px; color: #334155; font-size: 13px; }
+.staff-management-tabs { display: flex; gap: 7px; overflow-x: auto; padding: 7px; border: 1px solid #e2e8f0; border-radius: 15px; background: #eef2f7; scrollbar-width: thin; }
+.staff-management-tabs button { display: inline-flex; min-height: 40px; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 13px; border: 0; border-radius: 10px; color: #64748b; background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.staff-management-tabs button span { display: inline-flex; min-width: 22px; height: 20px; align-items: center; justify-content: center; border-radius: 10px; color: #475569; background: #dbe3ed; font-size: 9px; }
+.staff-management-tabs button.active { color: #3730a3; background: #fff; box-shadow: 0 4px 12px rgba(15,23,42,.1); }
+.staff-management-tabs button.active span { color: #3730a3; background: #e0e7ff; }
+.staff-management-tabs button.is-smt { color: #92400e; }
+.staff-management-tabs button.is-smt span { color: #92400e; background: #fef3c7; }
+.staff-management-form { gap: 14px; margin: 0; padding: 24px; border: 1px solid #dbe4ee; border-radius: 18px; box-shadow: 0 14px 34px rgba(15,23,42,.07); }
+.staff-management-form__section { grid-column: span 2; margin-top: 8px; padding: 9px 11px; border-radius: 8px; color: #166534; background: #f0fdf4; font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.staff-management-form__section--finance { color: #166534; background: #dcfce7; }
+.staff-management-form button[type="submit"]:disabled { cursor: wait; opacity: .65; }
+.staff-management-list { overflow: hidden; padding: 0; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 12px 28px rgba(15,23,42,.05); }
+.staff-management-table-wrap { max-height: 66vh; overflow: auto; }
+.staff-management-table { min-width: 950px; margin: 0; }
+.staff-management-table thead { position: sticky; z-index: 2; top: 0; background: #f8fafc; }
+.staff-management-table th { color: #64748b; font-size: 9px; letter-spacing: .07em; text-transform: uppercase; }
+.staff-management-table tbody tr:hover { background: #f8fafc; }
+@media (max-width: 1000px) { .staff-management-hero { align-items: stretch; flex-direction: column; } .staff-management-hero__actions { justify-content: flex-start; } }
+@media (max-width: 760px) { .staff-management-hero { padding: 24px 20px; } .staff-management-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .staff-management-controls { align-items: stretch; flex-direction: column; } .staff-management-search { max-width: none; } .staff-management-filter-label { text-align: left; } .staff-management-form { grid-template-columns: 1fr; padding: 18px; } .staff-management-form > *, .staff-management-form__section { grid-column: auto !important; } }
+@media (max-width: 480px) { .staff-management-hero__actions { flex-direction: column; } .staff-management-hero__actions button { width: 100%; } .staff-management-summary { gap: 9px; } .staff-management-summary > div { padding: 15px; } .staff-management-summary strong { font-size: 25px; } }

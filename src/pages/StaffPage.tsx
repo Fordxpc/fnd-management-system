@@ -57,15 +57,22 @@ const SENSITIVE_INFO_ROLES = ['developer'];
 
 function StaffPage() {
   const { profile, user } = useAuth();
+  const isDev = profile?.role === 'developer';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const canSeeSensitive = SENSITIVE_INFO_ROLES.includes(profile?.role || '');
+  const canViewFinancials = isDev || isManager;
 
   const [staff, setStaff] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState<boolean>(false);
   const [importing, setImporting] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
+  const [search, setSearch] = useState('');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string, sn: string } | null>(null);
 
@@ -88,17 +95,25 @@ function StaffPage() {
   const [bankAccount, setBankAccount] = useState<string>('');
   const [createUserAccount, setCreateUserAccount] = useState<boolean>(true);
 
-  const fetchStaff = useCallback(async () => {
+  const fetchStaff = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
       const data = await apiFetch('/staff');
-      setStaff(data);
-      const mine = data.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+      const records = Array.isArray(data) ? data : [];
+      setStaff(records);
+      const mine = records.find((member: any) => (member.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
+      setLoadError('');
+    } catch (err: any) {
+      setLoadError(err.message || 'Staff records could not be loaded.');
+      if (!quiet) toast.error('Error: ' + err.message);
+    } finally {
       setLoading(false);
-    } catch (err: any) { toast.error('Error: ' + err.message); setLoading(false); }
+      setRefreshing(false);
+    }
   }, [user]);
 
-  useEffect(() => { fetchStaff(); const interval = setInterval(fetchStaff, 10000); return () => clearInterval(interval); }, [fetchStaff]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchStaff(true), 0); const interval = window.setInterval(() => void fetchStaff(true), 10000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchStaff]);
 
   const resetForm = () => {
     setSn(''); setName(''); setEmail(''); setPersonalEmail(''); setNid(''); setJoinDate(''); setPhone(''); setGender(''); setDepartment('Ground Operations'); setPosition('');
@@ -109,9 +124,16 @@ function StaffPage() {
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!name || !email) { toast.error('Name and Email are required'); return; }
-    const payload: any = { sn, name, email, personalEmail, nid, joinDate, phone, gender, department, position, isSMT, balanceVisible, basicSalary: Number(basicSalary) || 0, dailyAllowance: Number(dailyAllowance) || 0, holidayAllowanceRate: Number(holidayAllowanceRate) || 0, bankAccount };
+    const payload: any = { sn, name, email, personalEmail, nid, joinDate, phone, gender, department, position, isSMT: isSmt, balanceVisible };
+    if (canViewFinancials) {
+      payload.basicSalary = Number(basicSalary) || 0;
+      payload.dailyAllowance = Number(dailyAllowance) || 0;
+      payload.holidayAllowanceRate = Number(holidayAllowanceRate) || 0;
+      payload.bankAccount = bankAccount;
+    }
     if (canSeeSensitive) payload.notes = notes;
 
+    setSaving(true);
     try {
       if (editingId) {
         await apiFetch(`/staff/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -121,11 +143,12 @@ function StaffPage() {
         toast.success('Staff added!');
       }
       if (!editingId && createUserAccount) {
-        await apiFetch('/user-presets', { method: 'POST', body: JSON.stringify({ email, role: isSMT ? 'smt' : 'staff', department, createdBy: profile?.email || '' }) });
+        await apiFetch('/user-presets', { method: 'POST', body: JSON.stringify({ email, role: isSmt ? 'smt' : 'staff', department, createdBy: profile?.email || '' }) });
         toast.success('Login account pre-registered!');
       }
       fetchStaff(); resetForm(); setShowForm(false);
     } catch (error: any) { toast.error('Error: ' + error.message); }
+    finally { setSaving(false); }
   };
 
   const handleEdit = (s: any) => {
@@ -154,12 +177,8 @@ function StaffPage() {
     setImporting(false);
   };
 
-  // 🚨 RBAC LOGIC
-  const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
-  const isSMT = profile?.role === 'smt' || profile?.isSmt === true;
-  
-  const myDept = myStaff?.department;
+  // Role-based staff controls
+const myDept = myStaff?.department;
   const isDeptIncharge = myStaff?.isIncharge === true;
   const isSafetyIncharge = isDeptIncharge && myDept === 'Safety';
 
@@ -173,34 +192,56 @@ function StaffPage() {
   const canAddStaff = isDev || isManager;
 
   const visibleStaff = staff.filter((s) => {
-    if (selectedDept === 'all') return true;
-    if (selectedDept === 'SMT') return s.isSMT === true;
-    return s.department === selectedDept;
+    const matchesDepartment = selectedDept === 'all' || (selectedDept === 'SMT' ? s.isSMT === true : s.department === selectedDept);
+    const query = search.trim().toLowerCase();
+    const matchesSearch = !query || [s.sn, s.name, s.position, s.department, s.email].some((value) => String(value || '').toLowerCase().includes(query));
+    return matchesDepartment && matchesSearch;
   }).sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
+
+  const departmentCount = new Set(staff.map((member) => member.department).filter(Boolean)).size;
+  const smtCount = staff.filter((member) => member.isSMT).length;
 
   if (loading) return <div className="page-content"><p>Loading data...</p></div>;
 
   return (
-    <div className="page-content">
+    <div className="page-content staff-management-page">
       <datalist id="designation-options">{DESIGNATIONS.map((d) => (<option key={d} value={d} />))}</datalist>
 
-      <div className="staff-header">
-        <h2>Staff Management <span style={{ fontSize: '13px', marginLeft: '10px', color: '#64748b', fontWeight: 500 }}>({selectedDept === 'all' ? 'All Departments' : selectedDept})</span></h2>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button className={showFinancials ? 'export-btn pdf-btn' : 'export-btn print-btn'} onClick={() => setShowFinancials(!showFinancials)}>{showFinancials ? '🙈 Hide Financials' : '💰 Show Financials'}</button>
-          {staff.length === 0 && canAddStaff && (<button className="export-btn jpg-btn" onClick={handleImportAll} disabled={importing}>{importing ? 'Importing...' : '📥 Import All FND Staff'}</button>)}
-          {canAddStaff && (<button className="add-staff-btn" onClick={() => (showForm ? resetForm() : setShowForm(true))}>{showForm ? 'Cancel' : '+ Add Staff'}</button>)}
+      <header className="staff-management-hero">
+        <div>
+          <span className="staff-management-kicker">People and access</span>
+          <h2>Staff Management</h2>
+          <p>Maintain personnel records, departmental assignments, and account readiness from one workspace.</p>
         </div>
-      </div>
+        <div className="staff-management-hero__actions">
+          <button type="button" className="staff-management-secondary" onClick={() => void fetchStaff()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+          {canViewFinancials && <button type="button" className="staff-management-secondary" onClick={() => setShowFinancials(!showFinancials)}>{showFinancials ? 'Hide financials' : 'Show financials'}</button>}
+          {staff.length === 0 && canAddStaff && <button type="button" className="staff-management-secondary" onClick={handleImportAll} disabled={importing}>{importing ? 'Importing…' : 'Import FND staff'}</button>}
+          {canAddStaff && <button type="button" className="staff-management-primary" onClick={() => { if (showForm) { resetForm(); setShowForm(false); } else { resetForm(); setShowForm(true); } }}>{showForm ? 'Close form' : 'Add staff member'}</button>}
+        </div>
+      </header>
 
-      <div className="dept-tabs">
-        <button className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('all')}>All Departments</button>
-        {DEPARTMENTS.map((d) => (<button key={d} className={selectedDept === d ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept(d)}>{d}</button>))}
-        <button className={selectedDept === 'SMT' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('SMT')} style={{ borderColor: '#f59e0b', color: selectedDept === 'SMT' ? '#fff' : '#92400e', backgroundColor: selectedDept === 'SMT' ? '#f59e0b' : '#fef3c7' }}>⭐ SMT Members</button>
-      </div>
+      {loadError && <div className="staff-management-alert" role="alert"><strong>Staff information may be out of date.</strong><span>{loadError}</span></div>}
 
+      <section className="staff-management-summary" aria-label="Staff summary">
+        <div><span>Total workforce</span><strong>{staff.length}</strong><small>staff records</small></div>
+        <div><span>Departments</span><strong>{departmentCount}</strong><small>active teams</small></div>
+        <div><span>SMT members</span><strong>{smtCount}</strong><small>leadership records</small></div>
+        <div><span>Current view</span><strong>{visibleStaff.length}</strong><small>matching records</small></div>
+      </section>
+
+      <section className="staff-management-controls">
+        <label className="staff-management-search"><span>Search staff</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, SN, designation or email…" /></label>
+        <div className="staff-management-filter-label"><span>Department</span><strong>{selectedDept === 'all' ? 'All departments' : selectedDept}</strong></div>
+      </section>
+
+      <nav className="staff-management-tabs" aria-label="Department filter">
+        <button type="button" className={selectedDept === 'all' ? 'active' : ''} onClick={() => setSelectedDept('all')}>All <span>{staff.length}</span></button>
+        {DEPARTMENTS.map((item) => <button type="button" key={item} className={selectedDept === item ? 'active' : ''} onClick={() => setSelectedDept(item)}>{item} <span>{staff.filter((member) => member.department === item).length}</span></button>)}
+        <button type="button" className={selectedDept === 'SMT' ? 'active is-smt' : 'is-smt'} onClick={() => setSelectedDept('SMT')}>SMT <span>{smtCount}</span></button>
+      </nav>
       {showForm && (
-        <form className="staff-form" onSubmit={handleSubmit}>
+        <form className="staff-form staff-management-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, marginBottom: '4px' }}>{editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}</div>
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb' }}>👤 Personal Information</div>
           <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
@@ -214,26 +255,27 @@ function StaffPage() {
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '8px' }}>💼 Job Information</div>
           <input list="designation-options" placeholder="Designation (type or pick from list)" value={position} onChange={(e) => setPosition(e.target.value)} />
           <select value={department} onChange={(e) => setDepartment(e.target.value)}>{DEPARTMENTS.map((d) => (<option key={d} value={d}>{d}</option>))}</select>
-          <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#16a34a', marginTop: '8px' }}>💰 Salary & Allowances</div>
-          <input type="number" placeholder="Basic Salary (MVR)" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} step="0.01" min="0" />
-          <input type="number" placeholder="Daily Allowance (MVR)" value={dailyAllowance} onChange={(e) => setDailyAllowance(e.target.value)} step="0.01" min="0" />
-          <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
-          <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
-          {canSeeSensitive && (<><div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>📝 Internal Notes (developer only)</div><textarea placeholder="Internal notes..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ gridColumn: 'span 2', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} /></>)}
-          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e' }}><input type="checkbox" checked={isSMT} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px' }} />⭐ Mark as SMT (Senior Management Team) member</label>
+          {canViewFinancials && <>
+            <div className="staff-management-form__section staff-management-form__section--finance">Salary and allowances</div>
+            <input type="number" placeholder="Basic Salary (MVR)" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} step="0.01" min="0" />
+            <input type="number" placeholder="Daily Allowance (MVR)" value={dailyAllowance} onChange={(e) => setDailyAllowance(e.target.value)} step="0.01" min="0" />
+            <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
+            <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
+          </>}`n          {canSeeSensitive && (<><div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>📝 Internal Notes (developer only)</div><textarea placeholder="Internal notes..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ gridColumn: 'span 2', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} /></>)}
+          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e' }}><input type="checkbox" checked={isSmt} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px' }} />⭐ Mark as SMT (Senior Management Team) member</label>
           <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#eff6ff', border: '1px solid #2563eb', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#1e40af' }}><input type="checkbox" checked={balanceVisible} onChange={(e) => setBalanceVisible(e.target.checked)} style={{ width: '18px', height: '18px' }} />👁 Allow this staff member to view their own leave balance</label>
           {!editingId && (<label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#166534' }}><input type="checkbox" checked={createUserAccount} onChange={(e) => setCreateUserAccount(e.target.checked)} style={{ width: '18px', height: '18px' }} />🔑 Create User Login (Pre-register email)</label>)}
-          <button type="submit">{editingId ? '💾 Save Changes' : 'Save Staff Member'}</button>
+          <button type="submit" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save staff member'}</button>
         </form>
       )}
 
-      <div className="staff-list">
+      <div className="staff-list staff-management-list">
         {visibleStaff.length === 0 ? (
           <div className="empty-state"><p>No staff members found for <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.</p></div>
         ) : (
-          <div style={{ overflowX: 'auto', maxHeight: '65vh', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-            <table style={{ margin: 0 }}>
-              <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
+          <div className="staff-management-table-wrap">
+            <table className="staff-management-table">
+              <thead>
                 <tr><th>SN</th><th>Name</th><th>Designation</th><th>Dept</th><th>Gender</th><th>Join Date</th>{showFinancials && (<><th>Basic Salary</th><th>Daily Allow.</th><th>Holiday Allow.</th></>)}{canSeeSensitive && <th>Notes</th>}<th>SMT</th><th>👁</th><th></th></tr>
               </thead>
               <tbody>
