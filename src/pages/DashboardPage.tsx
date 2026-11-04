@@ -167,6 +167,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }, [canSeeTeamRequests]);
 
   const upcomingFlights = dashboard?.upcomingFlights || EMPTY_LIST;
+  const trackedFlight = upcomingFlights[0];
+  const radarFlightId = String(trackedFlight?.flightNo || '').replace(/[^a-zA-Z0-9]/g, '');
   const canViewFlightBoard = dashboard?.canViewFlightBoard !== false;
   const operations = dashboard?.operations || {};
   const onDuty = dashboard?.onDutyToday || EMPTY_LIST;
@@ -218,16 +220,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       <section className="overview-welcome overview-greeting-board">
         <div className="overview-greeting-copy">
           <span className="overview-kicker">Funadhoo Airport · Daily command view</span>
-          <h1>{clock.greeting}, <strong>{profile?.name || 'team member'}</strong></h1>
+          <h1><span>{clock.greeting},</span><strong>{profile?.name || 'team member'}</strong></h1>
           <p>Here is the operational picture for {clock.day.toLowerCase()}.</p>
           <div className="overview-identity-row">
+            {profile?.sn && <span>SN-{String(profile.sn).replace(/^sn-/i, '')}</span>}
             <span>{profile?.position || role || 'Airport staff'}</span>
-            <span>{profile?.department || 'Funadhoo Airport'}</span>
-            <span className="overview-live-label"><i /> Operations live</span>
+            <span>{profile?.department || 'Funadhoo Airport'}{(role === 'smt' || profile?.isSmt) ? ' · SMT' : ''}</span>
           </div>
         </div>
         <div className="overview-clock" aria-label={`${clock.day}, ${clock.date}, ${clock.time}`}>
-          <span>Local time · FND</span>
+          <span className="overview-station-status"><i /> Station · FND</span>
           <strong>{clock.time}</strong>
           <small>{clock.day}, {clock.date}</small>
         </div>
@@ -240,19 +242,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </div>
       )}
 
-      <section className="overview-metrics" aria-label="Today's operational activity">
-        {operationMetrics.map((metric) => (
-          <button key={metric.label} type="button" onClick={() => onNavigate(metric.page)}>
-            <span className="overview-metric-code" aria-hidden="true">{metric.code}</span>
-            <span>
-              <strong>{loading ? '—' : metric.value}</strong>
-              <small>{metric.label}</small>
-            </span>
-          </button>
-        ))}
-      </section>
 
-      <div className="overview-primary-grid">
+
+      <div className="overview-flight-stage">
         <Panel
           title="Flight movement board"
           eyebrow="Live schedule"
@@ -282,6 +274,39 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <EmptyState>No upcoming flight is scheduled.</EmptyState>
           )}
         </Panel>
+
+      </div>
+
+      <div className="overview-live-grid">
+        <Panel title="Live weather" eyebrow="VRCF · Funadhoo Airport" className="overview-weather-panel" action={<span className="overview-live-source"><i /> Auto refresh</span>}>
+          {weatherLoading ? <LoadingBlock /> : weather ? <div className="overview-weather-content">
+            <div className="overview-weather-now"><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
+            <div className="overview-weather-metrics"><div><span>Humidity</span><strong>{weather.humidity ?? '—'}%</strong></div><div><span>Visibility</span><strong>{weather.visibility ? `${Math.round(weather.visibility / 100) / 10} km` : '—'}</strong></div><div><span>Cloud</span><strong>{weather.cloudCover ?? '—'}%</strong></div><div><span>Pressure</span><strong>{weather.pressure ? `${Math.round(weather.pressure)} hPa` : '—'}</strong></div><div><span>Rain</span><strong>{weather.rain ?? weather.precipitation ?? 0} mm</strong></div></div>
+            <p>Observed {new Date(weather.observedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })} · Coordinates 06°09′45″N 073°17′15″E</p>
+          </div> : <EmptyState>{weatherError || 'Weather information is not available.'}</EmptyState>}
+        </Panel>
+
+        <Panel title="Live weather radar" eyebrow="Precipitation around FND" className="overview-radar-panel" action={<a className="overview-text-button" href="https://www.windy.com/6.163/73.288?radar,6.163,73.288,8" target="_blank" rel="noreferrer">Open full map</a>}>
+          <div className="overview-radar-frame"><iframe title="Live precipitation radar around Funadhoo Airport" loading="lazy" src="https://embed.windy.com/embed2.html?lat=6.163&lon=73.288&detailLat=6.163&detailLon=73.288&width=650&height=360&zoom=7&level=surface&overlay=radar&product=radar&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1" /></div>
+          <p className="overview-radar-note">Interactive radar is supplied by Windy. If the embedded map is blocked, use “Open full map”.</p>
+        </Panel>
+      </div>
+      <Panel title="Live flight radar" eyebrow="Next FND movement" className="overview-flight-radar-panel" action={trackedFlight && <a className="overview-text-button" href={`https://www.flightradar24.com/${radarFlightId}`} target="_blank" rel="noreferrer">Open tracker</a>}>
+        {trackedFlight ? <div className="overview-flight-radar-content"><div className="overview-flight-radar-summary"><div><span>Tracking</span><strong>{trackedFlight.flightNo || 'Next flight'}</strong><small>{trackedFlight.route || 'Route TBC'} · {trackedFlight.aircraft || 'Aircraft TBC'}</small></div><span className="overview-board-status">{flightStatus(trackedFlight)}</span></div><div className="overview-flight-radar-frame"><iframe title={`Live tracking for ${trackedFlight.flightNo || 'next flight'}`} loading="lazy" src={`https://www.flightradar24.com/simple_index.php?flight=${radarFlightId}`} /></div><p>If live aircraft data is unavailable in the embedded view, open the full tracker in a new tab.</p></div> : <EmptyState>No upcoming flight is available for live tracking.</EmptyState>}
+      </Panel>
+      <section className="overview-metrics" aria-label="Today's operational activity">
+        {operationMetrics.map((metric) => (
+          <button key={metric.label} type="button" onClick={() => onNavigate(metric.page)}>
+            <span className="overview-metric-code" aria-hidden="true">{metric.code}</span>
+            <span>
+              <strong>{loading ? '—' : metric.value}</strong>
+              <small>{metric.label}</small>
+            </span>
+          </button>
+        ))}
+      </section>
+
+      <div className="overview-workforce-stage">
         <Panel
           title="Staffing today"
           eyebrow="Workforce"
@@ -318,20 +343,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </Panel>
       </div>
 
-      <div className="overview-live-grid">
-        <Panel title="Live weather" eyebrow="VRCF · Funadhoo Airport" className="overview-weather-panel" action={<span className="overview-live-source"><i /> Auto refresh</span>}>
-          {weatherLoading ? <LoadingBlock /> : weather ? <div className="overview-weather-content">
-            <div className="overview-weather-now"><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
-            <div className="overview-weather-metrics"><div><span>Humidity</span><strong>{weather.humidity ?? '—'}%</strong></div><div><span>Visibility</span><strong>{weather.visibility ? `${Math.round(weather.visibility / 100) / 10} km` : '—'}</strong></div><div><span>Cloud</span><strong>{weather.cloudCover ?? '—'}%</strong></div><div><span>Pressure</span><strong>{weather.pressure ? `${Math.round(weather.pressure)} hPa` : '—'}</strong></div><div><span>Rain</span><strong>{weather.rain ?? weather.precipitation ?? 0} mm</strong></div></div>
-            <p>Observed {new Date(weather.observedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })} · Coordinates 06°09′45″N 073°17′15″E</p>
-          </div> : <EmptyState>{weatherError || 'Weather information is not available.'}</EmptyState>}
-        </Panel>
-
-        <Panel title="Live weather radar" eyebrow="Precipitation around FND" className="overview-radar-panel" action={<a className="overview-text-button" href="https://www.windy.com/6.163/73.288?radar,6.163,73.288,8" target="_blank" rel="noreferrer">Open full map</a>}>
-          <div className="overview-radar-frame"><iframe title="Live precipitation radar around Funadhoo Airport" loading="lazy" src="https://embed.windy.com/embed2.html?lat=6.163&lon=73.288&detailLat=6.163&detailLon=73.288&width=650&height=360&zoom=7&level=surface&overlay=radar&product=radar&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1" /></div>
-          <p className="overview-radar-note">Interactive radar is supplied by Windy. If the embedded map is blocked, use “Open full map”.</p>
-        </Panel>
-      </div>
       <div className="overview-secondary-grid">
         <Panel title="Quick access" eyebrow="Common tasks">
           <div className="overview-actions">
