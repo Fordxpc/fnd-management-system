@@ -252,6 +252,13 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
 	requestedAt: timestamp("requested_at", { mode: 'string' }).defaultNow(),
 });
 
+export const announcements = pgTable("announcements", {
+	id: text().primaryKey().notNull(), title: text().notNull(), message: text().notNull(),
+	audience: text().notNull(), priority: text().default('normal'), status: text().default('published'),
+	publishAt: timestamp("publish_at", { mode: 'string' }).defaultNow(), expiresAt: timestamp("expires_at", { mode: 'string' }),
+	createdBy: text("created_by").notNull(), createdByName: text("created_by_name"),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(), updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow(),
+});
 // ==========================================
 // CHAT SYSTEM TABLES
 // ==========================================

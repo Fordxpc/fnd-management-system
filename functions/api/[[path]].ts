@@ -7,7 +7,7 @@ import {
   rosterEntries, birdCounts, safetyOccurrenceReports, rampInspections, tempAccess, settings,
   userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
-  passwordResetRequests, chatGroups, chatGroupMembers, chatMessages
+  passwordResetRequests, announcements, chatGroups, chatGroupMembers, chatMessages
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, desc, or, count, gte, lte } from "drizzle-orm";
 import {
@@ -75,6 +75,26 @@ export const onRequest = async (context: any) => {
       aircraft_info text, created_by text, created_at timestamp DEFAULT now()
     )
   `);
+  const ensureAnnouncementsTable = () => db.execute(sql`
+    CREATE TABLE IF NOT EXISTS announcements (
+      id text PRIMARY KEY NOT NULL, title text NOT NULL, message text NOT NULL,
+      audience text NOT NULL, priority text DEFAULT 'normal', status text DEFAULT 'published',
+      publish_at timestamp DEFAULT now(), expires_at timestamp, created_by text NOT NULL,
+      created_by_name text, created_at timestamp DEFAULT now(), updated_at timestamp DEFAULT now()
+    )
+  `);
+  const announcementAudiences = ['FND Staffs', 'Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Flight Operations', 'SMT & Management', 'Managers & Admins Only'];
+  const canSeeAnnouncement = (announcement: any, currentUser: any, staffProfile: any) => {
+    if (isManagerRole(currentUser.role)) return true;
+    const audience = String(announcement.audience || '');
+    const department = String(staffProfile?.department || currentUser.department || '');
+    const isSmt = currentUser.role === 'smt' || staffProfile?.isSmt === true || staffProfile?.isIncharge === true;
+    if (audience === 'FND Staffs') return true;
+    if (audience === department) return true;
+    if (audience === 'SMT & Management') return isSmt;
+    if (audience === 'Flight Operations') return department === 'Ground Operations' || isSmt || staffProfile?.specialOpsAccess === true;
+    return false;
+  };
   const requireChatGroupAccess = async (groupId: string, currentUser: any) => {
     const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId)).limit(1);
     if (!group) { const err: any = new Error("Channel not found"); err.status = 404; throw err; }
@@ -1769,6 +1789,68 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // ANNOUNCEMENTS
+    // ==========================================
+    if (pathname === "/api/announcements" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await ensureAnnouncementsTable();
+      const [staffProfile] = await db.select().from(staff).where(eq(staff.email, String(currentUser.email || '').toLowerCase())).limit(1);
+      const now = new Date();
+      const results = await db.select().from(announcements).orderBy(desc(announcements.publishAt), desc(announcements.createdAt));
+      return json(results.filter((announcement: any) => {
+        if (isManagerRole(currentUser.role)) return true;
+        if (announcement.status !== 'published') return false;
+        if (announcement.publishAt && new Date(announcement.publishAt) > now) return false;
+        if (announcement.expiresAt && new Date(announcement.expiresAt) < now) return false;
+        return canSeeAnnouncement(announcement, currentUser, staffProfile);
+      }));
+    }
+
+    if (pathname === "/api/announcements" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      await ensureAnnouncementsTable();
+      const body: any = await request.json();
+      const title = String(body.title || '').trim();
+      const message = String(body.message || '').trim();
+      const audience = String(body.audience || '');
+      const priority = ['normal', 'important', 'urgent'].includes(body.priority) ? body.priority : 'normal';
+      const status = ['draft', 'published'].includes(body.status) ? body.status : 'published';
+      if (title.length < 3 || title.length > 120 || message.length < 3 || message.length > 4000) return json({ message: 'Enter a valid title and announcement message' }, 400);
+      if (!announcementAudiences.includes(audience)) return json({ message: 'Invalid announcement audience' }, 400);
+      const [staffProfile] = await db.select().from(staff).where(eq(staff.email, String(currentUser.email || '').toLowerCase())).limit(1);
+      const now = new Date().toISOString();
+      const record = { id: crypto.randomUUID(), title, message, audience, priority, status, publishAt: body.publishAt || now, expiresAt: body.expiresAt || null, createdBy: currentUser.email, createdByName: staffProfile?.name || currentUser.email, createdAt: now, updatedAt: now };
+      await db.insert(announcements).values(record);
+      return json(record, 201);
+    }
+
+    if (pathname.startsWith("/api/announcements/") && method === "PUT") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      await ensureAnnouncementsTable();
+      const id = pathname.split('/').pop()!;
+      const body: any = await request.json();
+      const title = String(body.title || '').trim();
+      const message = String(body.message || '').trim();
+      const audience = String(body.audience || '');
+      if (title.length < 3 || title.length > 120 || message.length < 3 || message.length > 4000) return json({ message: 'Enter a valid title and announcement message' }, 400);
+      if (!announcementAudiences.includes(audience)) return json({ message: 'Invalid announcement audience' }, 400);
+      const priority = ['normal', 'important', 'urgent'].includes(body.priority) ? body.priority : 'normal';
+      const status = ['draft', 'published'].includes(body.status) ? body.status : 'published';
+      await db.update(announcements).set({ title, message, audience, priority, status, publishAt: body.publishAt || new Date().toISOString(), expiresAt: body.expiresAt || null, updatedAt: new Date().toISOString() }).where(eq(announcements.id, id));
+      return json({ success: true });
+    }
+
+    if (pathname.startsWith("/api/announcements/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      await ensureAnnouncementsTable();
+      const id = pathname.split('/').pop()!;
+      await db.delete(announcements).where(eq(announcements.id, id));
+      return json({ success: true });
+    }
     // ==========================================
     // DASHBOARD
     // ==========================================

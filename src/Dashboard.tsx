@@ -17,6 +17,7 @@ import WildlifePage from './pages/WildlifePage';
 import ReportsPage from './pages/ReportsPage';
 import RWYLightsPage from './pages/RWYLightsPage';
 import ConversationsPage from './pages/ConversationsPage';
+import AnnouncementsPage from './pages/AnnouncementsPage';
 
 type Module = 'dashboard' | 'operations' | 'reports' | 'roster' | 'system' | 'chat';
 
@@ -48,6 +49,7 @@ const PAGE_TITLES: Record<string, string> = {
   leave: 'Leave requests',
   overtime: 'Overtime sheet',
   holidays: 'Airport holidays',
+  announcements: 'Announcements',
   users: 'User accounts',
   settings: 'System settings',
   conversations: 'Conversations',
@@ -101,6 +103,7 @@ function Dashboard() {
       { id: 'overtime', label: 'Overtime', shortLabel: 'OT' },
     ],
     system: [
+      { id: 'announcements', label: 'Announcements', shortLabel: 'AN' },
       { id: 'holidays', label: 'Holidays', shortLabel: 'HD' },
       ...(canManageUsers ? [{ id: 'users', label: 'User Accounts', shortLabel: 'UA' }] : []),
       { id: 'settings', label: 'Settings', shortLabel: 'ST' },
@@ -120,6 +123,7 @@ function Dashboard() {
     roster: <RosterPage />,
     leave: <LeavePage />,
     overtime: <OvertimePage />,
+    announcements: <AnnouncementsPage />,
     holidays: <HolidaysPage />,
     users: <UsersPage />,
     settings: <SettingsPage />,
@@ -134,7 +138,7 @@ function Dashboard() {
     else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
     else if (page === 'reports') setActiveModule('reports');
     else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
-    else if (['holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
+    else if (['announcements', 'holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
     else if (page === 'conversations') setActiveModule('chat');
   }
 
