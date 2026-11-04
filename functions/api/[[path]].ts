@@ -548,30 +548,31 @@ export const onRequest = async (context: any) => {
     // CHECKLIST MODULE
     // ==========================================
     if (pathname === "/api/checklist" && method === "GET") {
-      const results = await db.select().from(opsChecks).orderBy(asc(opsChecks.date));
+      const currentUser = await requireAuth(request, env);
+      await requireOpsBoardView(env, currentUser);
+      const results = await db.select().from(opsChecks).orderBy(desc(opsChecks.date), asc(opsChecks.time));
       return json(results);
     }
     if (pathname === "/api/checklist" && method === "POST") {
-      
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-      
-      await requireOpsBoardEdit(
-        env,
-        currentUser
-      );
-      
+      const currentUser = await requireAuth(request, env);
+      await requireOpsBoardEdit(env, currentUser);
       const body: any = await request.json();
+      const allowedCategories = ["Runway Check", "FOD Collection", "RWY Lights Inspection", "Flight Ops Task"];
+      const allowedStatuses = ["Completed - OK", "Completed - Action Needed", "Pending"];
+      if (!body.date || !/^\d{4}-\d{2}-\d{2}$/.test(body.date) || !body.time || !/^\d{2}:\d{2}$/.test(body.time)) {
+        return json({ message: "A valid date and time are required" }, 400);
+      }
+      if (!allowedCategories.includes(body.category) || !allowedStatuses.includes(body.status) || !body.remarks?.trim()) {
+        return json({ message: "Complete all required check fields" }, 400);
+      }
       const id = crypto.randomUUID();
       await db.insert(opsChecks).values({
         id, date: body.date, time: body.time, category: body.category,
-        status: body.status, remarks: body.remarks, checkedBy: body.checkedBy, createdAt: new Date().toISOString(),
+        status: body.status, remarks: body.remarks.trim(), checkedBy: currentUser.email,
+        createdAt: new Date().toISOString(),
       });
-      return json({ success: true, id });
-    }
-    if (pathname.startsWith("/api/checklist/") && method === "DELETE") {
+      return json({ success: true, id }, 201);
+    }    if (pathname.startsWith("/api/checklist/") && method === "DELETE") {
       
       const currentUser = await requireAuth(
         request,
