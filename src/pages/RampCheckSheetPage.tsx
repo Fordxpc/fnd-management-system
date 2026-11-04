@@ -31,9 +31,11 @@ function RampCheckSheetPage() {
   const { profile, user } = useAuth();
   
   // 🚨 RBAC LOGIC
-  const isFullAccess = ['developer', 'manager', 'owner', 'admin'].includes(profile?.role || '');
-  const canView = isFullAccess || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
-  const canEdit = isFullAccess || profile?.rampsheetEditAccess === true;
+  const role = String(profile?.role || "").toLowerCase();
+  const isFullAccess = ["developer", "manager", "owner", "admin"].includes(role);
+  const isSmt = role === "smt" || profile?.isSmt === true || profile?.isSMT === true;
+  const canView = isFullAccess || isSmt || profile?.specialOpsAccess === true || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
+  const canEdit = isFullAccess || profile?.specialOpsAccess === true || profile?.rampsheetEditAccess === true;
 
   // ---- All hooks first (rules of hooks) ----
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');

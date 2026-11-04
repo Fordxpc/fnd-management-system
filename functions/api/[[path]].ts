@@ -224,7 +224,7 @@ export const onRequest = async (context: any) => {
 
     if (pathname === "/api/password-reset-requests" && method === "GET") {
       const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
+      requireSMT(currentUser.role);
       const results = await db.select().from(passwordResetRequests).where(eq(passwordResetRequests.status, "pending"));
       return json(results);
     }
@@ -499,12 +499,20 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
+      const [targetStaff] = await db.select().from(staff).where(eq(staff.id, id!)).limit(1);
+      if (!targetStaff) return json({ message: "Staff member not found" }, 404);
+      const [targetUser] = targetStaff.email ? await db.select().from(users).where(eq(users.email, targetStaff.email.toLowerCase())).limit(1) : [];
+      const targetIsSMT = targetStaff.isSmt === true || targetUser?.role === "smt" || body.isSMT === true;
+      if (body.isIncharge === true && !targetIsSMT) return json({ message: "Only SMT members can be department in-charge" }, 400);
+      if (body.specialOpsAccess === true && !["Ground Operations", "Maintenance", "Fire & Rescue"].includes(targetStaff.department || "")) {
+        return json({ message: "Special Ops Access is limited to eligible operational departments" }, 400);
+      }
       const updatedAt = new Date().toISOString();
 
       const updateData: any = { updatedAt };
       const allowedFields = [
         'sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender',
-        'department', 'position', 'isSMT', 'isIncharge', 'balanceVisible', 'tempDeptAccess',
+        'department', 'position', 'isSMT', 'isIncharge', 'balanceVisible', 'specialOpsAccess', 'tempDeptAccess',
         'rampsheetViewAccess', 'rampsheetEditAccess',
         'rwyLightViewAccess', 'rwyLightEditAccess',
         'birdCountViewAccess', 'birdCountEditAccess',

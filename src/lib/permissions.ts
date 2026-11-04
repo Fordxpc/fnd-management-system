@@ -5,8 +5,10 @@ export interface UserProfile {
 }
 
 export interface StaffRecord {
+  department?: string;
   isSmt?: boolean;
   isIncharge?: boolean;
+  specialOpsAccess?: boolean;
 
   rampsheetViewAccess?: boolean;
   rampsheetEditAccess?: boolean;
@@ -46,6 +48,10 @@ function role(profile?: UserProfile): string {
   return (profile?.role || "").toLowerCase();
 }
 
+function hasSpecialOps(staff?: StaffRecord): boolean {
+  return staff?.specialOpsAccess === true;
+}
+
 /**
  * Full system administrators.
  * Always allowed.
@@ -82,6 +88,8 @@ export function canViewRamp(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    isSMT(profile, staff) ||
+    hasSpecialOps(staff) ||
     staff?.rampsheetViewAccess === true ||
     staff?.rampsheetEditAccess === true
   );
@@ -93,6 +101,7 @@ export function canEditRamp(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    hasSpecialOps(staff) ||
     staff?.rampsheetEditAccess === true
   );
 }
@@ -107,6 +116,8 @@ export function canViewRWYLights(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    isSMT(profile, staff) ||
+    hasSpecialOps(staff) ||
     staff?.rwyLightViewAccess === true ||
     staff?.rwyLightEditAccess === true
   );
@@ -118,6 +129,7 @@ export function canEditRWYLights(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    hasSpecialOps(staff) ||
     staff?.rwyLightEditAccess === true
   );
 }
@@ -132,6 +144,8 @@ export function canViewBirdCounts(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    isSMT(profile, staff) ||
+    hasSpecialOps(staff) ||
     staff?.birdCountViewAccess === true ||
     staff?.birdCountEditAccess === true
   );
@@ -143,6 +157,7 @@ export function canEditBirdCounts(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    hasSpecialOps(staff) ||
     staff?.birdCountEditAccess === true
   );
 }
@@ -157,6 +172,8 @@ export function canViewOpsBoard(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    isSMT(profile, staff) ||
+    hasSpecialOps(staff) ||
     staff?.opsBoardViewAccess === true ||
     staff?.opsBoardEditAccess === true
   );
@@ -168,6 +185,8 @@ export function canEditOpsBoard(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    hasSpecialOps(staff) ||
+    (isSMT(profile, staff) && staff?.department === "Ground Operations") ||
     staff?.opsBoardEditAccess === true
   );
 }
@@ -182,6 +201,8 @@ export function canViewFlights(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    isSMT(profile, staff) ||
+    hasSpecialOps(staff) ||
     staff?.flightsViewAccess === true ||
     staff?.flightsEditAccess === true
   );
@@ -193,6 +214,7 @@ export function canEditFlights(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    hasSpecialOps(staff) ||
     staff?.flightsEditAccess === true
   );
 }
@@ -288,6 +310,7 @@ export function canViewReports(
 ): boolean {
   return (
     hasFullAccess(profile) ||
+    isSMT(profile, staff) ||
     staff?.reportsViewAccess === true ||
     staff?.reportsEditAccess === true
   );

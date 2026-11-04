@@ -8,8 +8,6 @@ import ChangePasswordModal from './ChangePasswordModal';
 import { ConfirmDialog } from '../components/Dialogs';
 import { UserEditModal } from '../components/UserEditModal';
 
-const ALL_LEAVES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'DUTY TRAVEL', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)'];
-const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 
 function SettingsPage() {
   const { user, profile, logout } = useAuth();
@@ -25,30 +23,24 @@ function SettingsPage() {
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [updatingAccess, setUpdatingAccess] = useState('');
 
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [completedReset, setCompletedReset] = useState<{ email: string; temporaryPassword: string } | null>(null);
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
-  const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
   const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
 
-  const [tempAccessList, setTempAccessList] = useState<any[]>([]);
-  const [tempStaffId, setTempStaffId] = useState('');
-  const [tempDept, setTempDept] = useState('Maintenance');
-  const [tempStart, setTempStart] = useState('');
-  const [tempEnd, setTempEnd] = useState('');
 
   const [inspectorStaffId, setInspectorStaffId] = useState('');
   const [inspectorList, setInspectorList] = useState<any[]>([]);
 
   const fetchSettings = useCallback(async () => {
     try {
-      const [rulesData, usersData, tempAccessData, staffData, inspectorsData, requestsData] = await Promise.all([
+      const [rulesData, usersData, staffData, inspectorsData, requestsData] = await Promise.all([
         apiFetch('/settings/ot_rules').catch(() => null), 
         apiFetch('/users').catch(() => []), 
-        apiFetch('/temp-access').catch(() => []), 
         apiFetch('/staff').catch(() => []), 
         apiFetch('/lights-inspectors').catch(() => []),
         canManageAccess ? apiFetch('/password-reset-requests').catch(() => []) : Promise.resolve([])
@@ -56,7 +48,6 @@ function SettingsPage() {
       
       if (rulesData) setOtRules(rulesData);
       setActiveUsers(Array.isArray(usersData) ? usersData : []);
-      setTempAccessList(Array.isArray(tempAccessData) ? tempAccessData : []);
       setStaffList(Array.isArray(staffData) ? staffData : []); 
       setInspectorList(Array.isArray(inspectorsData) ? inspectorsData : []);
       setResetRequests(Array.isArray(requestsData) ? requestsData : []);
@@ -78,20 +69,6 @@ function SettingsPage() {
     setSavingRules(false); 
   };
 
-  const toggleDeductLeave = (l: string) => { 
-    setOtRules(prev => { 
-      const exists = prev.deductLeaves.includes(l); 
-      return { ...prev, deductLeaves: exists ? prev.deductLeaves.filter(x => x !== l) : [...prev.deductLeaves, l] }; 
-    }); 
-  };
-  
-  const handleAddTempAccess = async (e: FormEvent) => { 
-    e.preventDefault(); const staff = staffList.find(s => s.id === tempStaffId); 
-    if (!staff || !tempStart || !tempEnd) { toast.error("Fill all fields"); return; } 
-    try { await apiFetch('/temp-access', { method: 'POST', body: JSON.stringify({ email: staff.email, targetDept: tempDept, startDate: tempStart, endDate: tempEnd }) }); toast.success('Temporary access granted'); setTempStart(''); setTempEnd(''); fetchSettings(); } 
-    catch (err: any) { toast.error(err.message); } 
-  };
-
   const handleAddInspector = async (e: FormEvent) => { 
     e.preventDefault(); const staff = staffList.find(s => s.id === inspectorStaffId); 
     if (!staff) { toast.error("Select a staff member"); return; } 
@@ -100,20 +77,24 @@ function SettingsPage() {
   };
 
   const togglePermission = async (staffId: string, field: string, currentVal: boolean) => {
+    const updateKey = `${staffId}:${field}`;
+    setUpdatingAccess(updateKey);
     try {
       const staffRec = staffList.find(s => s.id === staffId);
       if (!staffRec) return;
-      const updatePayload = { [field]: !currentVal };
-      await apiFetch(`/staff/${staffId}`, { method: 'PUT', body: JSON.stringify(updatePayload) });
+      await apiFetch(`/staff/${staffId}`, { method: 'PUT', body: JSON.stringify({ [field]: !currentVal }) });
       toast.success(`Access updated for ${staffRec.name}`);
-      fetchSettings();
+      await fetchSettings();
     } catch (err: any) { toast.error(err.message); }
+    finally { setUpdatingAccess(''); }
   };
 
   const isRoleAutoGranted = (s: any, field: string) => {
-    if (s.department === 'Ground Operations' && (s.isSmt || s.role === 'smt')) {
-      if (['opsBoardViewAccess', 'opsBoardEditAccess', 'rampsheetViewAccess', 'rampsheetEditAccess'].includes(field)) return true;
-    }
+    const memberRole = getStaffRole(s);
+    if (["developer", "admin", "manager", "owner"].includes(memberRole)) return true;
+    if (s.specialOpsAccess && ["opsBoardViewAccess", "opsBoardEditAccess", "rampsheetViewAccess", "rampsheetEditAccess", "flightsViewAccess", "flightsEditAccess", "birdCountViewAccess", "birdCountEditAccess", "rwyLightViewAccess", "rwyLightEditAccess"].includes(field)) return true;
+    if ((s.isSmt || memberRole === "smt") && ["opsBoardViewAccess", "rampsheetViewAccess", "flightsViewAccess", "birdCountViewAccess", "rwyLightViewAccess", "rosterViewAccess", "leaveViewAccess", "leaveEditAccess", "overtimeViewAccess", "overtimeEditAccess", "reportsViewAccess"].includes(field)) return true;
+    if (s.department === "Ground Operations" && (s.isSmt || memberRole === "smt") && field === "opsBoardEditAccess") return true;
     return false;
   };
 
@@ -137,7 +118,9 @@ function SettingsPage() {
   });
 
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
-  const smtStaff = staffList.filter(s => s.isSmt);
+  const getStaffRole = (member: any) => activeUsers.find(account => String(account.email || '').toLowerCase() === String(member.email || '').toLowerCase())?.role || (member.isSmt ? 'smt' : 'staff');
+  const smtStaff = staffList.filter(member => getStaffRole(member) !== 'developer' && (member.isSmt === true || getStaffRole(member) === 'smt'));
+  const specialOpsStaff = staffList.filter(member => getStaffRole(member) === 'staff' && !smtStaff.some(smt => smt.id === member.id) && ['Ground Operations', 'Maintenance', 'Fire & Rescue'].includes(member.department));
 
   return (
     <div className="page-content" style={{ maxWidth: '1100px', margin: '0 auto' }}>
@@ -147,7 +130,7 @@ function SettingsPage() {
         <button className={`ops-tab-btn ${activeTab === 'general' ? 'active' : ''}`} onClick={() => setActiveTab('general')}>👤 General</button>
         {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'rules' ? 'active' : ''}`} onClick={() => setActiveTab('rules')}>⚙️ Rules & Users</button>}
         {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'incharges' ? 'active' : ''}`} onClick={() => setActiveTab('incharges')}>🔐 Access Control</button>}
-        {isDev && <button className={`ops-tab-btn ${activeTab === 'detailed' ? 'active' : ''}`} onClick={() => setActiveTab('detailed')}>📋 Access Details</button>}
+        {canManageAccess && <button className={`ops-tab-btn ${activeTab === 'detailed' ? 'active' : ''}`} onClick={() => setActiveTab('detailed')}>📋 Access Details</button>}
         {isDev && <button className={`ops-tab-btn ${activeTab === 'console' ? 'active' : ''}`} onClick={() => setActiveTab('console')}>💻 Console</button>}
       </div>
 
@@ -247,300 +230,51 @@ function SettingsPage() {
       )}
 
       {activeTab === 'incharges' && canManageAccess && (
-        <div className="dash-card border-l-4 border-purple-500">
-          <h3>🔐 Access Control</h3>
-          <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
-            Manage department incharges, temporary cross-department access, and granular feature permissions.
-          </p>
+        <div className="access-control-workspace">
+          <header className="access-control-hero">
+            <div><span>Role-based policy</span><h3>Access Control</h3><p>Automatic permissions follow role and department. Only meaningful exceptions can be changed here.</p></div>
+            <div><strong>{smtStaff.length}</strong><span>SMT members</span></div>
+          </header>
 
-          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🔑 Temporary Cross-Department Access</h4>
-            <form onSubmit={handleAddTempAccess} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Staff</label>
-                <select value={tempStaffId} onChange={e => setTempStaffId(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', minWidth: '220px' }}>
-                  <option value="">Select Staff...</option>
-                  {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.department})</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Target Dept</label>
-                <select value={tempDept} onChange={e => setTempDept(e.target.value)} style={{ display: 'block', padding: '8px', color: '#1e293b', border: '1px solid #cbd5e1', borderRadius: '6px' }}>
-                  {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Start</label>
-                <input type="date" value={tempStart} onChange={e => setTempStart(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>End</label>
-                <input type="date" value={tempEnd} onChange={e => setTempEnd(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b' }} />
-              </div>
-              <button type="submit" className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }}>Grant Access</button>
-            </form>
-            {tempAccessList.length > 0 ? (
-              <table className="mini-table">
-                <thead><tr><th>Name</th><th>Email</th><th>Target Dept</th><th>Start</th><th>End</th><th>Actions</th></tr></thead>
-                <tbody>
-                  {tempAccessList.map(t => {
-                    const staffInfo = staffList.find(s => (s.email || '').toLowerCase() === t.email.toLowerCase());
-                    return (
-                      <tr key={t.id}>
-                        <td><strong>{staffInfo?.name || t.email.split('@')[0]}</strong></td>
-                        <td style={{ fontSize: '12px' }}>{t.email}</td>
-                        <td>{t.targetDept}</td>
-                        <td>{t.startDate}</td>
-                        <td>{t.endDate}</td>
-                        <td><button onClick={() => setDeleteTempTarget(t.id)} className="delete-btn">Remove</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No temporary access grants.</p>}
-          </div>
+          <section className="access-policy-grid">
+            <article><strong>Management</strong><p>Developer, Admin and Manager receive automatic operational and management access.</p><span>Developer accounts remain protected.</span></article>
+            <article><strong>SMT automatic access</strong><p>All-department visibility, operational views, reports, and own-department Leave/OT approval.</p><span>Ground Operations SMT also edits the Ops Board.</span></article>
+            <article><strong>Special Ops bundle</strong><p>Ops Board, Flights, Flight Operations, Wildlife, RWY Lights and operational notifications.</p><span>Only Ground Ops, Maintenance and Fire & Rescue are eligible.</span></article>
+          </section>
 
-          <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '14px' }}>🚨 RWY Lights Inspectors</h4>
-            <form onSubmit={handleAddInspector} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '16px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b' }}>Staff</label>
-                <select value={inspectorStaffId} onChange={e => setInspectorStaffId(e.target.value)} required style={{ display: 'block', padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', minWidth: '220px' }}>
-                  <option value="">Select Staff...</option>
-                  {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.department})</option>)}
-                </select>
-              </div>
-              <button type="submit" className="quick-btn" style={{ background: '#dc2626', color: 'white' }}>Add Inspector</button>
-            </form>
-            {inspectorList.length > 0 ? (
-              <table className="mini-table">
-                <thead><tr><th>Staff Name</th><th>Designation</th><th>SN</th><th>Actions</th></tr></thead>
-                <tbody>
-                  {inspectorList.map(i => {
-                    const staffInfo = staffList.find(s => s.id === i.staffId);
-                    return (
-                      <tr key={i.staffId}>
-                        <td><strong>{i.staffName}</strong></td>
-                        <td>{staffInfo?.position || '—'}</td>
-                        <td>{i.staffSN || '—'}</td>
-                        <td><button onClick={() => setDeleteInspectorTarget(i.staffId)} className="delete-btn">Remove</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            ) : <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>No inspectors assigned.</p>}
-          </div>
+          <section className="access-control-section">
+            <header><div><h4>SMT and department in-charge</h4><p>Only SMT members can be assigned as department in-charge.</p></div><span>{smtStaff.length} eligible</span></header>
+            <div className="access-member-grid">
+              {smtStaff.map(member => {
+                const isGroundOpsSMT = member.department === 'Ground Operations';
+                const specialEligible = ['Ground Operations', 'Maintenance', 'Fire & Rescue'].includes(member.department);
+                return <article className="access-member-card" key={member.id}>
+                  <div className="access-member-head"><div className="access-member-avatar">{String(member.name || '?').charAt(0)}</div><div><strong>{member.name}</strong><span>{member.position || 'SMT Member'} · {member.department}</span></div><em>SMT</em></div>
+                  <div className="access-auto-list"><span>All departments</span><span>Operational views</span><span>Reports</span><span>Leave/OT oversight</span>{isGroundOpsSMT && <span>Ops Board edit</span>}</div>
+                  <div className="access-switch-row"><div><strong>Department in-charge</strong><small>Approve and manage own department</small></div><button type="button" className={`access-switch ${member.isIncharge ? 'active' : ''}`} disabled={updatingAccess === `${member.id}:isIncharge`} onClick={() => void togglePermission(member.id, 'isIncharge', member.isIncharge === true)}><span /></button></div>
+                  {specialEligible && <div className="access-switch-row"><div><strong>Special Ops edit bundle</strong><small>Operational edit access beyond automatic views</small></div><button type="button" className={`access-switch ${member.specialOpsAccess ? 'active' : ''}`} disabled={updatingAccess === `${member.id}:specialOpsAccess`} onClick={() => void togglePermission(member.id, 'specialOpsAccess', member.specialOpsAccess === true)}><span /></button></div>}
+                </article>;
+              })}
+              {smtStaff.length === 0 && <p className="access-empty">No SMT members are configured.</p>}
+            </div>
+          </section>
 
-          <div style={{ marginTop: '30px' }}>
-            <h3 style={{ fontSize: '18px', color: '#1e293b', marginBottom: '16px' }}>Granular Permissions</h3>
+          <section className="access-control-section">
+            <header><div><h4>Special Operations exceptions</h4><p>Only eligible operational staff are listed. Security, Administration and Safety are intentionally excluded.</p></div><span>{specialOpsStaff.length} eligible</span></header>
+            <div className="access-special-list">
+              {specialOpsStaff.map(member => <article key={member.id}><div><strong>{member.name}</strong><span>{member.position || 'Staff'} · {member.department}</span></div><div className="access-bundle-label">Six operational modules</div><button type="button" className={`access-switch ${member.specialOpsAccess ? 'active' : ''}`} disabled={updatingAccess === `${member.id}:specialOpsAccess`} onClick={() => void togglePermission(member.id, 'specialOpsAccess', member.specialOpsAccess === true)}><span /></button></article>)}
+              {specialOpsStaff.length === 0 && <p className="access-empty">No eligible operational staff found.</p>}
+            </div>
+          </section>
 
-            {smtStaff.length > 0 && (
-              <div style={{ marginBottom: '24px', background: '#fef3c7', padding: '16px', borderRadius: '8px', border: '1px solid #fde68a' }}>
-                <h4 style={{ margin: '0 0 12px', color: '#b45309', fontSize: '15px' }}>⭐ SMT Members</h4>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="mini-table" style={{ fontSize: '12px', whiteSpace: 'nowrap', margin: 0, background: 'white' }}>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Designation</th>
-                        <th style={{ textAlign: 'center' }}>Rampsheet (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>RWY Lights (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Bird Count (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Flights (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Roster (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Leave (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Overtime (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Reports (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Staff (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Settings (V / E)</th>
-                        <th style={{ textAlign: 'center' }}>Incharge</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {smtStaff.map(s => (
-                        <tr key={s.id}>
-                          <td><strong>{s.name}</strong></td>
-                          <td>{s.position || '—'}</td>
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'rampsheetViewAccess') || s.rampsheetViewAccess === true} disabled={isRoleAutoGranted(s, 'rampsheetViewAccess')} onChange={() => togglePermission(s.id, 'rampsheetViewAccess', s.rampsheetViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'rampsheetEditAccess') || s.rampsheetEditAccess === true} disabled={isRoleAutoGranted(s, 'rampsheetEditAccess')} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'rwyLightViewAccess') || s.rwyLightViewAccess === true} disabled={isRoleAutoGranted(s, 'rwyLightViewAccess')} onChange={() => togglePermission(s.id, 'rwyLightViewAccess', s.rwyLightViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'rwyLightEditAccess') || s.rwyLightEditAccess === true} disabled={isRoleAutoGranted(s, 'rwyLightEditAccess')} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'birdCountViewAccess') || s.birdCountViewAccess === true} disabled={isRoleAutoGranted(s, 'birdCountViewAccess')} onChange={() => togglePermission(s.id, 'birdCountViewAccess', s.birdCountViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'birdCountEditAccess') || s.birdCountEditAccess === true} disabled={isRoleAutoGranted(s, 'birdCountEditAccess')} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'opsBoardViewAccess') || s.opsBoardViewAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardViewAccess')} onChange={() => togglePermission(s.id, 'opsBoardViewAccess', s.opsBoardViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'opsBoardEditAccess') || s.opsBoardEditAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardEditAccess')} onChange={() => togglePermission(s.id, 'opsBoardEditAccess', s.opsBoardEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Flights (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.flightsViewAccess === true} onChange={() => togglePermission(s.id, 'flightsViewAccess', s.flightsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.flightsEditAccess === true} onChange={() => togglePermission(s.id, 'flightsEditAccess', s.flightsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Roster (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.rosterViewAccess === true} onChange={() => togglePermission(s.id, 'rosterViewAccess', s.rosterViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.rosterEditAccess === true} onChange={() => togglePermission(s.id, 'rosterEditAccess', s.rosterEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Leave (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.leaveViewAccess === true} onChange={() => togglePermission(s.id, 'leaveViewAccess', s.leaveViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.leaveEditAccess === true} onChange={() => togglePermission(s.id, 'leaveEditAccess', s.leaveEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Overtime (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.overtimeViewAccess === true} onChange={() => togglePermission(s.id, 'overtimeViewAccess', s.overtimeViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.overtimeEditAccess === true} onChange={() => togglePermission(s.id, 'overtimeEditAccess', s.overtimeEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Reports (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.reportsViewAccess === true} onChange={() => togglePermission(s.id, 'reportsViewAccess', s.reportsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.reportsEditAccess === true} onChange={() => togglePermission(s.id, 'reportsEditAccess', s.reportsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Staff (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.staffViewAccess === true} onChange={() => togglePermission(s.id, 'staffViewAccess', s.staffViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.staffEditAccess === true} onChange={() => togglePermission(s.id, 'staffEditAccess', s.staffEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          {/* ✅ NEW: Settings (V/E) */}
-                          <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" title="View" checked={s.settingsViewAccess === true} onChange={() => togglePermission(s.id, 'settingsViewAccess', s.settingsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                            <input type="checkbox" title="Edit" checked={s.settingsEditAccess === true} onChange={() => togglePermission(s.id, 'settingsEditAccess', s.settingsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                          </td>
-
-                          <td style={{ textAlign: 'center' }}><input type="checkbox" checked={s.isIncharge === true} onChange={() => togglePermission(s.id, 'isIncharge', s.isIncharge === true)} style={{ width: '16px', height: '16px' }} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {DEPARTMENTS.map(dept => {
-              const deptStaff = staffList.filter(s => s.department === dept && !s.isSmt);
-              if (deptStaff.length === 0) return null;
-              
-              return (
-                <div key={dept} style={{ marginBottom: '24px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px', color: '#1e293b', fontSize: '15px' }}>{dept}</h4>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="mini-table" style={{ fontSize: '12px', whiteSpace: 'nowrap', margin: 0, background: 'white' }}>
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>Designation</th>
-                          <th style={{ textAlign: 'center' }}>Rampsheet (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>RWY Lights (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Bird Count (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Ops Board (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Flights (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Roster (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Leave (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Overtime (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Reports (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Staff (V / E)</th>
-                          <th style={{ textAlign: 'center' }}>Settings (V / E)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {deptStaff.map(s => (
-                          <tr key={s.id}>
-                            <td><strong>{s.name}</strong></td>
-                            <td>{s.position || '—'}</td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'rampsheetViewAccess') || s.rampsheetViewAccess === true} disabled={isRoleAutoGranted(s, 'rampsheetViewAccess')} onChange={() => togglePermission(s.id, 'rampsheetViewAccess', s.rampsheetViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'rampsheetEditAccess') || s.rampsheetEditAccess === true} disabled={isRoleAutoGranted(s, 'rampsheetEditAccess')} onChange={() => togglePermission(s.id, 'rampsheetEditAccess', s.rampsheetEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'rwyLightViewAccess') || s.rwyLightViewAccess === true} disabled={isRoleAutoGranted(s, 'rwyLightViewAccess')} onChange={() => togglePermission(s.id, 'rwyLightViewAccess', s.rwyLightViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'rwyLightEditAccess') || s.rwyLightEditAccess === true} disabled={isRoleAutoGranted(s, 'rwyLightEditAccess')} onChange={() => togglePermission(s.id, 'rwyLightEditAccess', s.rwyLightEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'birdCountViewAccess') || s.birdCountViewAccess === true} disabled={isRoleAutoGranted(s, 'birdCountViewAccess')} onChange={() => togglePermission(s.id, 'birdCountViewAccess', s.birdCountViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'birdCountEditAccess') || s.birdCountEditAccess === true} disabled={isRoleAutoGranted(s, 'birdCountEditAccess')} onChange={() => togglePermission(s.id, 'birdCountEditAccess', s.birdCountEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'opsBoardViewAccess') || s.opsBoardViewAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardViewAccess')} onChange={() => togglePermission(s.id, 'opsBoardViewAccess', s.opsBoardViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'opsBoardEditAccess') || s.opsBoardEditAccess === true} disabled={isRoleAutoGranted(s, 'opsBoardEditAccess')} onChange={() => togglePermission(s.id, 'opsBoardEditAccess', s.opsBoardEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'flightsViewAccess') || s.flightsViewAccess === true} disabled={isRoleAutoGranted(s, 'flightsViewAccess')} onChange={() => togglePermission(s.id, 'flightsViewAccess', s.flightsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'flightsEditAccess') || s.flightsEditAccess === true} disabled={isRoleAutoGranted(s, 'flightsEditAccess')} onChange={() => togglePermission(s.id, 'flightsEditAccess', s.flightsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'rosterViewAccess') || s.rosterViewAccess === true} disabled={isRoleAutoGranted(s, 'rosterViewAccess')} onChange={() => togglePermission(s.id, 'rosterViewAccess', s.rosterViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'rosterEditAccess') || s.rosterEditAccess === true} disabled={isRoleAutoGranted(s, 'rosterEditAccess')} onChange={() => togglePermission(s.id, 'rosterEditAccess', s.rosterEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'leaveViewAccess') || s.leaveViewAccess === true} disabled={isRoleAutoGranted(s, 'leaveViewAccess')} onChange={() => togglePermission(s.id, 'leaveViewAccess', s.leaveViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'leaveEditAccess') || s.leaveEditAccess === true} disabled={isRoleAutoGranted(s, 'leaveEditAccess')} onChange={() => togglePermission(s.id, 'leaveEditAccess', s.leaveEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'overtimeViewAccess') || s.overtimeViewAccess === true} disabled={isRoleAutoGranted(s, 'overtimeViewAccess')} onChange={() => togglePermission(s.id, 'overtimeViewAccess', s.overtimeViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'overtimeEditAccess') || s.overtimeEditAccess === true} disabled={isRoleAutoGranted(s, 'overtimeEditAccess')} onChange={() => togglePermission(s.id, 'overtimeEditAccess', s.overtimeEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'reportViewAccess') || s.reportViewAccess === true} disabled={isRoleAutoGranted(s, 'reportViewAccess')} onChange={() => togglePermission(s.id, 'reportViewAccess', s.reportViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'reportEditAccess') || s.reportEditAccess === true} disabled={isRoleAutoGranted(s, 'reportEditAccess')} onChange={() => togglePermission(s.id, 'reportEditAccess', s.reportEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'staffViewAccess') || s.staffViewAccess === true} disabled={isRoleAutoGranted(s, 'staffViewAccess')} onChange={() => togglePermission(s.id, 'staffViewAccess', s.staffViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'staffEditAccess') || s.staffEditAccess === true} disabled={isRoleAutoGranted(s, 'staffEditAccess')} onChange={() => togglePermission(s.id, 'staffEditAccess', s.staffEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                              <input type="checkbox" title="View" checked={isRoleAutoGranted(s, 'settingsViewAccess') || s.settingsViewAccess === true} disabled={isRoleAutoGranted(s, 'settingsViewAccess')} onChange={() => togglePermission(s.id, 'settingsViewAccess', s.settingsViewAccess === true)} style={{ width: '16px', height: '16px' }} />
-                              <span style={{ margin: '0 4px', color: '#cbd5e1' }}>|</span>
-                              <input type="checkbox" title="Edit" checked={isRoleAutoGranted(s, 'settingsEditAccess') || s.settingsEditAccess === true} disabled={isRoleAutoGranted(s, 'settingsEditAccess')} onChange={() => togglePermission(s.id, 'settingsEditAccess', s.settingsEditAccess === true)} style={{ width: '16px', height: '16px' }} />
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <section className="access-control-section compact">
+            <header><div><h4>RWY Lights inspectors</h4><p>Operational assignment list, separate from system access.</p></div></header>
+            <form className="access-inline-form" onSubmit={handleAddInspector}><select value={inspectorStaffId} onChange={event => setInspectorStaffId(event.target.value)} required><option value="">Select eligible staff…</option>{[...smtStaff, ...specialOpsStaff].filter((member, index, list) => list.findIndex(item => item.id === member.id) === index).map(member => <option key={member.id} value={member.id}>{member.name} · {member.department}</option>)}</select><button type="submit">Add inspector</button></form>
+            <div className="access-inspector-list">{inspectorList.map(inspector => <span key={inspector.staffId}><strong>{inspector.staffName}</strong><button type="button" onClick={() => setDeleteInspectorTarget(inspector.staffId)}>Remove</button></span>)}{inspectorList.length === 0 && <p className="access-empty">No inspectors assigned.</p>}</div>
+          </section>
         </div>
       )}
-
-      {activeTab === 'detailed' && isDev && (
+      {activeTab === 'detailed' && canManageAccess && (
         <div className="dash-card border-l-4 border-purple-500">
           <h3>📋 Access Details Matrix</h3>
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Comprehensive overview of all staff permissions.</p>
@@ -567,7 +301,7 @@ function SettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {staffList.map(s => (
+                {staffList.filter(s => isDev || getStaffRole(s) !== 'developer').map(s => (
                   <tr key={s.id}>
                     <td><strong>{s.name}</strong></td>
                     <td>{s.department}</td>
@@ -607,24 +341,6 @@ function SettingsPage() {
       )}
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
-
-      <ConfirmDialog 
-        isOpen={!!deleteTempTarget}
-        title="Remove Temp Access?"
-        message="Are you sure you want to remove this temporary access?"
-        confirmText="Remove"
-        isDanger={true}
-        onConfirm={async () => {
-          if (!deleteTempTarget) return;
-          try {
-            await apiFetch(`/temp-access/${deleteTempTarget}`, { method: 'DELETE' });
-            toast.success('Access removed');
-            fetchSettings();
-          } catch (err: any) { toast.error(err.message); }
-          setDeleteTempTarget(null);
-        }}
-        onCancel={() => setDeleteTempTarget(null)}
-      />
 
       <ConfirmDialog 
         isOpen={!!deleteInspectorTarget}

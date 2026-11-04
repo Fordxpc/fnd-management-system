@@ -144,6 +144,7 @@ async function checkModuleAccess(
     if ((profile as any)[editField] === true) return true;
   }
   if ((profile as any).specialOpsAccess === true) return true;
+  if (permissionField === "opsBoardEditAccess" && profile.isSmt === true && String(profile.department || "").toLowerCase() === "ground operations") return true;
   if (allowSMT && isSMTProfile(profile)) return true;
 
   const err: any = new Error("Access denied");
@@ -159,22 +160,14 @@ export async function requireRampView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "rampsheetViewAccess"
-  );
+  return checkModuleAccess(env, currentUser, "rampsheetViewAccess", true);
 }
 
 export async function requireRampEdit(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "rampsheetEditAccess"
-  );
+  return checkModuleAccess(env, currentUser, "rampsheetEditAccess", false);
 }
 
 /* ===================================================
@@ -275,22 +268,14 @@ export async function requireFlightsView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "flightsViewAccess"
-  );
+  return checkModuleAccess(env, currentUser, "flightsViewAccess", true);
 }
 
 export async function requireFlightsEdit(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "flightsEditAccess"
-  );
+  return checkModuleAccess(env, currentUser, "flightsEditAccess", false);
 }
 
 /* ===================================================
@@ -301,11 +286,7 @@ export async function requireRosterView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "rosterViewAccess"
-  );
+  return checkModuleAccess(env, currentUser, "rosterViewAccess", true);
 }
 
 export async function requireRosterEdit(
@@ -327,11 +308,7 @@ export async function requireLeaveView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "leaveViewAccess"
-  );
+  return checkModuleAccess(env, currentUser, "leaveViewAccess", true);
 }
 
 export async function requireLeaveEdit(
@@ -353,11 +330,7 @@ export async function requireOvertimeView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "overtimeViewAccess"
-  );
+  return checkModuleAccess(env, currentUser, "overtimeViewAccess", true);
 }
 
 export async function requireOvertimeEdit(
@@ -379,11 +352,7 @@ export async function requireReportsView(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "reportsViewAccess"
-  );
+  return checkModuleAccess(env, currentUser, "reportsViewAccess", true);
 }
 
 export async function requireReportsEdit(
