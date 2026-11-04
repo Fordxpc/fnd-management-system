@@ -67,6 +67,15 @@ export const birdCounts = pgTable("bird_counts", {
 	observer: text(), rows: text(), createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
+export const safetyOccurrenceReports = pgTable("safety_occurrence_reports", {
+	id: text().primaryKey().notNull(), reportNo: text("report_no"), date: text(), time: text(),
+	reporterName: text("reporter_name"), contactNo: text("contact_no"), organization: text(), email: text(),
+	category: text(), occurrenceType: text("occurrence_type"), birdSize: text("bird_size"), place: text(),
+	metConditions: text("met_conditions"), explanation: text(), correctiveAction: text("corrective_action"),
+	submittedBy: text("submitted_by"), designation: text(), photoBase64: text("photo_base64"),
+	peopleInvolved: text("people_involved"), aircraftInfo: text("aircraft_info"), createdBy: text("created_by"),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+});
 export const holidays = pgTable("holidays", {
 	id: text().primaryKey().notNull(), date: text(), name: text(),
 	createdAt: timestamp("created_at", { mode: 'string' }),

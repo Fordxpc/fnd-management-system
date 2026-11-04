@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -7,193 +7,95 @@ import { ConfirmDialog } from '../components/Dialogs';
 const CATEGORIES = ['Accident', 'Incident', 'Procedural', 'Failure', 'Hazard'];
 const OCCURRENCE_TYPES = ['Collision/strike', 'Damage to aircraft', 'Loss of control', 'Runway Excursion', 'Runway Incursion', 'Fire/explosion/fumes', 'Occupational Injury', 'Vehicle/Equipment Collision', 'Injuries to persons', 'Physical surface deficiency', 'Surface marking deficiency', 'Jet Blast/Propeller Wash', 'Physical obstruction', 'Power Failure', 'Spillage/leakage', 'Equipment/installation deficiency', 'Adverse Weather Condition', 'Aircraft Loading', 'Vehicle/Equipment Breakdown', 'Public protection deficiency', 'Apron management deficiency', 'Bird Strike', 'Near Strike'];
 const PLACES = ['Runway', 'Taxiway', 'Apron', 'Service Road', 'Hangar', 'Terminal Building', 'Vehicle Shed', 'Fire station', 'Baggage Make-up Area (BMA)', 'Baggage Breakdown Area (BBA)'];
+const today = () => new Date().toISOString().slice(0, 10);
+const emptyPerson = () => ({ name: '', nid: '', org: '', contact: '' });
 
 export default function BirdStrikePage() {
   const { profile } = useAuth();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-
+  const [people, setPeople] = useState([emptyPerson()]);
+  const [aircraft, setAircraft] = useState({ regNo: '', owner: '', type: '', flightNo: '' });
   const [form, setForm] = useState({
-    reportNo: '', date: new Date().toISOString().split('T')[0], time: '',
-    reporterName: '', contactNo: '', organization: '', email: '',
-    category: '', occurrenceType: '', birdSize: 'Small', place: '',
-    metConditions: '', explanation: '', correctiveAction: '', submittedBy: profile?.name || '', designation: profile?.position || '',
-    photoBase64: ''
+    reportNo: '', date: today(), time: '', reporterName: '', contactNo: '', organization: '', email: '',
+    category: '', occurrenceType: '', birdSize: 'Small', place: '', metConditions: '', explanation: '',
+    correctiveAction: '', submittedBy: profile?.name || '', designation: profile?.position || '', photoBase64: ''
   });
 
-  const [people, setPeople] = useState([{ name: '', nid: '', org: '', contact: '' }]);
-  const [aircraft, setAircraft] = useState({ regNo: '', name: '', owner: '', type: '', flightNo: '' });
-
+  const canDelete = ['developer', 'manager', 'admin', 'owner'].includes(profile?.role || '');
   const fetchData = useCallback(async () => {
-    try {
-      const data = await apiFetch('/birdstrikes');
-      setRecords(data);
-      setLoading(false);
-    } catch (err: any) { toast.error(err.message); setLoading(false); }
+    try { setRecords(await apiFetch('/birdstrikes')); }
+    catch (err: any) { toast.error(err.message); }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const filtered = useMemo(() => records.filter(record =>
+    [record.reportNo, record.occurrenceType, record.place, record.reporterName, record.category]
+      .some(value => String(value || '').toLowerCase().includes(search.toLowerCase()))
+  ), [records, search]);
 
-  const handlePhoto = (e: any) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setForm(prev => ({ ...prev, photoBase64: reader.result as string }));
-      reader.readAsDataURL(file);
-    }
+  const updatePerson = (index: number, field: string, value: string) => {
+    setPeople(current => current.map((person, position) => position === index ? { ...person, [field]: value } : person));
   };
-
-  const handleSubmit = async (e: any) => {
-    e.preventDefault();
+  const handlePhoto = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Select an image file'); event.target.value = ''; return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be 2 MB or smaller'); event.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onloadend = () => setForm(current => ({ ...current, photoBase64: String(reader.result || '') }));
+    reader.readAsDataURL(file);
+  };
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault(); setSaving(true);
     try {
-      await apiFetch('/birdstrikes', { 
-        method: 'POST', 
-        body: JSON.stringify({ ...form, peopleInvolved: people, aircraftInfo: aircraft }) 
-      });
-      toast.success('Birdstrike report submitted!');
-      setShowForm(false);
-      fetchData();
+      await apiFetch('/birdstrikes', { method: 'POST', body: JSON.stringify({ ...form, peopleInvolved: people, aircraftInfo: aircraft }) });
+      toast.success('Safety occurrence report submitted'); setShowForm(false); await fetchData();
     } catch (err: any) { toast.error(err.message); }
+    finally { setSaving(false); }
   };
 
-  if (loading) return <div className="page-content"><p>Loading...</p></div>;
+  return <div className="page-content occurrence-page">
+    <section className="occurrence-hero">
+      <div><span>Safety Management System</span><h2>Safety Occurrence Reporting</h2><p>Capture hazards, incidents, bird strikes and corrective actions in one traceable register.</p></div>
+      <button className="occurrence-primary" onClick={() => setShowForm(value => !value)}>{showForm ? 'Close form' : '+ New occurrence'}</button>
+    </section>
+    <section className="occurrence-summary">
+      <div><span>Total reports</span><strong>{records.length}</strong></div>
+      <div><span>Bird / near strikes</span><strong>{records.filter(r => String(r.occurrenceType || '').includes('Strike')).length}</strong></div>
+      <div><span>This month</span><strong>{records.filter(r => String(r.date || '').startsWith(today().slice(0, 7))).length}</strong></div>
+    </section>
 
-  return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>🚨 Safety Occurrence Report (Birdstrike)</h2>
-        <button className="add-staff-btn" onClick={() => setShowForm(!showForm)}>{showForm ? 'Cancel' : '+ New Report'}</button>
-      </div>
+    {showForm && <form className="occurrence-form" onSubmit={handleSubmit}>
+      <header><div><span>New occurrence</span><h3>Safety report details</h3></div><small>* Required fields</small></header>
+      <section><h4>Reporter and classification</h4><div className="occurrence-grid two">
+        <label>Reporter name *<input value={form.reporterName} onChange={e => setForm({...form, reporterName:e.target.value})} required /></label>
+        <label>Contact number<input value={form.contactNo} onChange={e => setForm({...form, contactNo:e.target.value})} /></label>
+        <label>Organization / airport<input value={form.organization} onChange={e => setForm({...form, organization:e.target.value})} /></label>
+        <label>Email<input type="email" value={form.email} onChange={e => setForm({...form, email:e.target.value})} /></label>
+        <label>Category *<select value={form.category} onChange={e => setForm({...form, category:e.target.value})} required><option value="">Select category</option>{CATEGORIES.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Occurrence type *<select value={form.occurrenceType} onChange={e => setForm({...form, occurrenceType:e.target.value})} required><option value="">Select type</option>{OCCURRENCE_TYPES.map(v=><option key={v}>{v}</option>)}</select></label>
+        <label>Date *<input type="date" value={form.date} onChange={e => setForm({...form, date:e.target.value})} required /></label>
+        <label>Time *<input type="time" value={form.time} onChange={e => setForm({...form, time:e.target.value})} required /></label>
+        <label>Place *<select value={form.place} onChange={e => setForm({...form, place:e.target.value})} required><option value="">Select place</option>{PLACES.map(v=><option key={v}>{v}</option>)}</select></label>
+        {form.occurrenceType.includes('Strike') && <label>Bird size<select value={form.birdSize} onChange={e => setForm({...form, birdSize:e.target.value})}><option>Small</option><option>Medium</option><option>Large</option></select></label>}
+      </div></section>
+      <section><h4>Conditions and people involved</h4><label>Meteorological conditions<textarea rows={2} value={form.metConditions} onChange={e=>setForm({...form,metConditions:e.target.value})} /></label>
+        {people.map((person,index)=><div className="occurrence-grid four" key={index}><input placeholder="Name" value={person.name} onChange={e=>updatePerson(index,'name',e.target.value)} /><input placeholder="NID" value={person.nid} onChange={e=>updatePerson(index,'nid',e.target.value)} /><input placeholder="Organization" value={person.org} onChange={e=>updatePerson(index,'org',e.target.value)} /><input placeholder="Contact" value={person.contact} onChange={e=>updatePerson(index,'contact',e.target.value)} /></div>)}
+        <button type="button" className="occurrence-add" onClick={()=>setPeople(current=>[...current,emptyPerson()])}>+ Add person</button>
+      </section>
+      <section><h4>Aircraft or equipment</h4><div className="occurrence-grid two"><input placeholder="Registration" value={aircraft.regNo} onChange={e=>setAircraft({...aircraft,regNo:e.target.value})}/><input placeholder="Aircraft type" value={aircraft.type} onChange={e=>setAircraft({...aircraft,type:e.target.value})}/><input placeholder="Owner / operator" value={aircraft.owner} onChange={e=>setAircraft({...aircraft,owner:e.target.value})}/><input placeholder="Flight number" value={aircraft.flightNo} onChange={e=>setAircraft({...aircraft,flightNo:e.target.value})}/></div></section>
+      <section><h4>Explanation and action</h4><label>Occurrence explanation *<textarea rows={4} value={form.explanation} onChange={e=>setForm({...form,explanation:e.target.value})} required /></label><label>Suggested corrective action<textarea rows={3} value={form.correctiveAction} onChange={e=>setForm({...form,correctiveAction:e.target.value})} /></label><label>Supporting image (maximum 2 MB)<input type="file" accept="image/*" onChange={handlePhoto} /></label><div className="occurrence-grid two"><label>Submitted by<input value={form.submittedBy} onChange={e=>setForm({...form,submittedBy:e.target.value})}/></label><label>Designation<input value={form.designation} onChange={e=>setForm({...form,designation:e.target.value})}/></label></div></section>
+      <button className="occurrence-submit" disabled={saving}>{saving ? 'Submitting...' : 'Submit occurrence report'}</button>
+    </form>}
 
-      {showForm && (
-        <form className="staff-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px' }}>
-          
-          {/* PAGE 1 */}
-          <div style={{ border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
-            <h3 style={{ margin: '0 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Reporter's Details</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <input placeholder="Full Name *" value={form.reporterName} onChange={e => setForm({...form, reporterName: e.target.value})} required />
-              <input placeholder="Contact No" value={form.contactNo} onChange={e => setForm({...form, contactNo: e.target.value})} />
-              <input placeholder="Organization / Airport" value={form.organization} onChange={e => setForm({...form, organization: e.target.value})} />
-              <input type="email" placeholder="Email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-            </div>
-
-            <h3 style={{ margin: '20px 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Categories of Occurrence</h3>
-            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-              {CATEGORIES.map(c => (
-                <label key={c} style={{ fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <input type="radio" name="category" value={c} checked={form.category === c} onChange={e => setForm({...form, category: e.target.value})} />
-                  {c}
-                </label>
-              ))}
-            </div>
-
-            <h3 style={{ margin: '20px 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Type of Safety Occurrence</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-              {OCCURRENCE_TYPES.map(t => (
-                <label key={t} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', background: '#f8fafc', padding: '8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}>
-                  <input type="radio" name="type" value={t} checked={form.occurrenceType === t} onChange={e => setForm({...form, occurrenceType: e.target.value})} />
-                  {t}
-                </label>
-              ))}
-            </div>
-
-            {form.occurrenceType.includes('Strike') && (
-              <div style={{ marginTop: '12px', background: '#fef2f2', padding: '12px', borderRadius: '6px', border: '1px solid #fecaca' }}>
-                <strong style={{ color: '#991b1b', fontSize: '13px' }}>Bird Size:</strong>
-                <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-                  {['Small', 'Medium', 'Large'].map(s => (
-                    <label key={s} style={{ fontSize: '12px' }}><input type="radio" name="birdSize" value={s} checked={form.birdSize === s} onChange={e => setForm({...form, birdSize: e.target.value})} /> {s}</label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '20px' }}>
-              <div><label>Date *</label><input type="date" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required /></div>
-              <div><label>Time *</label><input type="time" value={form.time} onChange={e => setForm({...form, time: e.target.value})} required /></div>
-            </div>
-          </div>
-
-          {/* PAGE 2 */}
-          <div style={{ border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
-            <h3 style={{ margin: '0 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Place of Occurrence</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-              {PLACES.map(p => (
-                <label key={p} style={{ fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <input type="radio" name="place" value={p} checked={form.place === p} onChange={e => setForm({...form, place: e.target.value})} />
-                  {p}
-                </label>
-              ))}
-            </div>
-
-            <h3 style={{ margin: '20px 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Meteorological Conditions</h3>
-            <textarea rows={3} placeholder="Describe weather conditions at time of occurrence..." value={form.metConditions} onChange={e => setForm({...form, metConditions: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} />
-
-            <h3 style={{ margin: '20px 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>People Involved</h3>
-            {people.map((p, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                <input placeholder="Name" value={p.name} onChange={e => { const n = [...people]; n[i].name = e.target.value; setPeople(n); }} />
-                <input placeholder="NID" value={p.nid} onChange={e => { const n = [...people]; n[i].nid = e.target.value; setPeople(n); }} />
-                <input placeholder="Organization" value={p.org} onChange={e => { const n = [...people]; n[i].org = e.target.value; setPeople(n); }} />
-                <input placeholder="Contact" value={p.contact} onChange={e => { const n = [...people]; n[i].contact = e.target.value; setPeople(n); }} />
-              </div>
-            ))}
-            <button type="button" onClick={() => setPeople([...people, { name: '', nid: '', org: '', contact: '' }])} style={{ background: '#e2e8f0', color: '#1e293b', padding: '6px 12px', fontSize: '12px', border: 'none', borderRadius: '4px' }}>+ Add Person</button>
-
-            <h3 style={{ margin: '20px 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Involved Aircraft / Equipment</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <input placeholder="Aircraft Registration (e.g. 8Q-XXX)" value={aircraft.regNo} onChange={e => setAircraft({...aircraft, regNo: e.target.value})} />
-              <input placeholder="Aircraft Type (e.g. ATR-72)" value={aircraft.type} onChange={e => setAircraft({...aircraft, type: e.target.value})} />
-              <input placeholder="Owner / Operator" value={aircraft.owner} onChange={e => setAircraft({...aircraft, owner: e.target.value})} />
-              <input placeholder="Flight No (e.g. Q2-123)" value={aircraft.flightNo} onChange={e => setAircraft({...aircraft, flightNo: e.target.value})} />
-            </div>
-          </div>
-
-          {/* PAGE 3 */}
-          <div style={{ border: '1px solid #cbd5e1', borderRadius: '8px', padding: '16px' }}>
-            <h3 style={{ margin: '0 0 16px', color: '#1e293b', borderBottom: '2px solid #e2e8f0', paddingBottom: '8px' }}>Explanation & Actions</h3>
-            <textarea rows={4} placeholder="Explain the safety occurrence, damage, and actions taken to mitigate..." value={form.explanation} onChange={e => setForm({...form, explanation: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '12px' }} />
-            
-            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Graphical Description (Photo)</label>
-            <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'block', marginBottom: '12px' }} />
-            
-            <textarea rows={3} placeholder="Suggested Corrective Action..." value={form.correctiveAction} onChange={e => setForm({...form, correctiveAction: e.target.value})} style={{ width: '100%', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', marginBottom: '12px' }} />
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div><label>Submitted By</label><input value={form.submittedBy} onChange={e => setForm({...form, submittedBy: e.target.value})} /></div>
-              <div><label>Designation</label><input value={form.designation} onChange={e => setForm({...form, designation: e.target.value})} /></div>
-            </div>
-          </div>
-
-          <button type="submit" style={{ background: '#dc2626', color: 'white', padding: '12px', fontSize: '16px', fontWeight: 'bold' }}>Submit Occurrence Report</button>
-        </form>
-      )}
-
-      <div className="staff-list">
-        <table>
-          <thead><tr><th>Date / Time</th><th>Type</th><th>Place</th><th>Reported By</th><th>Actions</th></tr></thead>
-          <tbody>
-            {records.map(r => (
-              <tr key={r.id}>
-                <td>{r.date} <br/><span style={{fontSize:'11px', color:'#64748b'}}>{r.time}</span></td>
-                <td><strong style={{color: r.occurrenceType.includes('Strike') ? '#dc2626' : '#1e293b'}}>{r.occurrenceType}</strong></td>
-                <td>{r.place}</td>
-                <td>{r.reporterName}</td>
-                <td><button className="delete-btn" onClick={() => setDeleteTarget(r.id)}>Delete</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      
-      <ConfirmDialog isOpen={!!deleteTarget} title="Delete Report?" message="Are you sure?" confirmText="Delete" isDanger={true} onConfirm={async () => {
-          if (!deleteTarget) return;
-          await apiFetch(`/birdstrikes/${deleteTarget}`, { method: 'DELETE' });
-          fetchData(); setDeleteTarget(null);
-      }} onCancel={() => setDeleteTarget(null)} />
-    </div>
-  );
+    <section className="occurrence-register-head"><div><h3>Occurrence register</h3><p>{filtered.length} report{filtered.length === 1 ? '' : 's'} shown</p></div><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search report, type, place or reporter" /></section>
+    <div className="staff-list occurrence-register">{loading ? <p className="occurrence-empty">Loading safety records...</p> : filtered.length === 0 ? <p className="occurrence-empty">No matching occurrence reports.</p> : <table><thead><tr><th>Reference</th><th>Date / time</th><th>Classification</th><th>Place</th><th>Reported by</th><th>Action</th></tr></thead><tbody>{filtered.map(record=><tr key={record.id}><td><strong>{record.reportNo || 'Pending'}</strong></td><td>{record.date}<small>{record.time}</small></td><td><strong className={String(record.occurrenceType || '').includes('Strike') ? 'occurrence-danger' : ''}>{record.occurrenceType || 'Unclassified'}</strong><small>{record.category}</small></td><td>{record.place || '—'}</td><td>{record.reporterName || '—'}</td><td>{canDelete ? <button className="delete-btn" onClick={()=>setDeleteTarget(record.id)}>Delete</button> : <span className="occurrence-readonly">Recorded</span>}</td></tr>)}</tbody></table>}</div>
+    <ConfirmDialog isOpen={!!deleteTarget} title="Delete report?" message="This removes the occurrence report permanently." confirmText="Delete" isDanger onConfirm={async()=>{if(!deleteTarget)return;try{await apiFetch(`/birdstrikes/${deleteTarget}`,{method:'DELETE'});toast.success('Report deleted');setDeleteTarget(null);await fetchData();}catch(err:any){toast.error(err.message);}}} onCancel={()=>setDeleteTarget(null)} />
+  </div>;
 }

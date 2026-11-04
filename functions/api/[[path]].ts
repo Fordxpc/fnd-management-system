@@ -4,7 +4,7 @@ import { getAuth } from "../../src/lib/auth.js";
 import { getDb } from "../../src/lib/db.js";
 import {
   user, session, account, users, staff, holidays, flights, leaveRequests, overtimeEntries,
-  rosterEntries, birdCounts, rampInspections, tempAccess, settings,
+  rosterEntries, birdCounts, safetyOccurrenceReports, rampInspections, tempAccess, settings,
   userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
   passwordResetRequests, chatGroups, chatGroupMembers, chatMessages
@@ -56,6 +56,15 @@ export const onRequest = async (context: any) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
+  const ensureSafetyOccurrenceTable = () => db.execute(sql`
+    CREATE TABLE IF NOT EXISTS safety_occurrence_reports (
+      id text PRIMARY KEY NOT NULL, report_no text, date text, time text, reporter_name text,
+      contact_no text, organization text, email text, category text, occurrence_type text,
+      bird_size text, place text, met_conditions text, explanation text, corrective_action text,
+      submitted_by text, designation text, photo_base64 text, people_involved text,
+      aircraft_info text, created_by text, created_at timestamp DEFAULT now()
+    )
+  `);
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -391,8 +400,29 @@ export const onRequest = async (context: any) => {
     // STAFF MODULE
     // ==========================================
     if (pathname === "/api/staff" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
       const results = await db.select().from(staff).orderBy(asc(staff.orderIndex));
-      return json(results);
+      const canViewPrivateStaffData = ["developer", "manager", "admin"].includes(currentUser.role);
+      const canViewInternalNotes = currentUser.role === "developer";
+      const requesterEmail = String(currentUser.email || "").toLowerCase();
+
+      return json(results.map((record: any) => {
+        const isOwnRecord = String(record.email || "").toLowerCase() === requesterEmail;
+        if (canViewPrivateStaffData || isOwnRecord) {
+          return canViewInternalNotes ? record : { ...record, notes: "" };
+        }
+        return {
+          ...record,
+          personalEmail: "",
+          nid: "",
+          phone: "",
+          notes: "",
+          basicSalary: 0,
+          dailyAllowance: 0,
+          holidayAllowanceRate: 0,
+          bankAccount: "",
+        };
+      }));
     }
 
     if (pathname === "/api/staff" && method === "POST") {
@@ -480,7 +510,7 @@ export const onRequest = async (context: any) => {
       const updateData: any = { updatedAt };
       const allowedFields = [
         'sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender',
-        'department', 'position', 'isSmt', 'isIncharge', 'balanceVisible', 'tempDeptAccess',
+        'department', 'position', 'isSMT', 'isIncharge', 'balanceVisible', 'tempDeptAccess',
         'rampsheetViewAccess', 'rampsheetEditAccess',
         'rwyLightViewAccess', 'rwyLightEditAccess',
         'birdCountViewAccess', 'birdCountEditAccess',
@@ -1397,6 +1427,54 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    // ==========================================
+    // SAFETY OCCURRENCE REPORTS
+    // ==========================================
+    if (pathname === "/api/birdstrikes" && method === "GET") {
+      await ensureSafetyOccurrenceTable();
+      const currentUser = await requireAuth(request, env);
+      await requireBirdView(env, currentUser);
+      const results = await db.select().from(safetyOccurrenceReports)
+        .orderBy(desc(safetyOccurrenceReports.date), desc(safetyOccurrenceReports.createdAt));
+      return json(results.map((row: any) => ({
+        ...row,
+        peopleInvolved: row.peopleInvolved ? JSON.parse(row.peopleInvolved) : [],
+        aircraftInfo: row.aircraftInfo ? JSON.parse(row.aircraftInfo) : {},
+      })));
+    }
+    if (pathname === "/api/birdstrikes" && method === "POST") {
+      await ensureSafetyOccurrenceTable();
+      const currentUser = await requireAuth(request, env);
+      await requireBirdEdit(env, currentUser);
+      const body: any = await request.json();
+      if (!body.reporterName?.trim() || !body.date || !body.time || !body.category || !body.occurrenceType || !body.place || !body.explanation?.trim()) {
+        return json({ message: "Complete all required occurrence fields" }, 400);
+      }
+      if (body.photoBase64 && (!body.photoBase64.startsWith("data:image/") || body.photoBase64.length > 2_900_000)) {
+        return json({ message: "Attachment must be an image no larger than 2 MB" }, 400);
+      }
+      const id = crypto.randomUUID();
+      await db.insert(safetyOccurrenceReports).values({
+        id, reportNo: body.reportNo?.trim() || `SOR-${body.date.replaceAll("-", "")}-${id.slice(0, 6).toUpperCase()}`,
+        date: body.date, time: body.time, reporterName: body.reporterName.trim(), contactNo: body.contactNo?.trim() || "",
+        organization: body.organization?.trim() || "", email: body.email?.trim() || "", category: body.category,
+        occurrenceType: body.occurrenceType, birdSize: body.occurrenceType.includes("Strike") ? body.birdSize : "",
+        place: body.place, metConditions: body.metConditions?.trim() || "", explanation: body.explanation.trim(),
+        correctiveAction: body.correctiveAction?.trim() || "", submittedBy: body.submittedBy?.trim() || currentUser.name || "",
+        designation: body.designation?.trim() || "", photoBase64: body.photoBase64 || "",
+        peopleInvolved: JSON.stringify(Array.isArray(body.peopleInvolved) ? body.peopleInvolved : []),
+        aircraftInfo: JSON.stringify(body.aircraftInfo || {}), createdBy: currentUser.email, createdAt: new Date().toISOString(),
+      });
+      return json({ success: true, id }, 201);
+    }
+    if (pathname.startsWith("/api/birdstrikes/") && method === "DELETE") {
+      await ensureSafetyOccurrenceTable();
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const id = pathname.split("/").pop();
+      await db.delete(safetyOccurrenceReports).where(eq(safetyOccurrenceReports.id, id!));
+      return json({ success: true });
+    }
     // ==========================================
     // WILDLIFE
     // ==========================================
