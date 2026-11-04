@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../auth';
 import { ConfirmDialog } from '../components/Dialogs';
@@ -150,17 +151,50 @@ function OpsBoardPage() {
   const handleSaveFOD = async (e: any) => { e.preventDefault(); if (!fodForm.grams || !fodForm.remarks) { toast.error('Please enter grams and remarks'); return; } setFodSubmitting(true); try { await apiFetch('/fod', { method: 'POST', body: JSON.stringify({ ...fodForm, grams: Number(fodForm.grams), loggedBy: user?.email || '' }) }); toast.success('FOD entry recorded!'); setFodForm({ date: INITIAL_DATE, grams: '', remarks: '' }); fetchData(); } catch (err: any) { toast.error(err.message); } setFodSubmitting(false); };
   const handleDeleteFOD = (id: string) => setDeleteFodTarget(id);
 
-  const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
-    if (!ref.current) return;
-    toast.info('Generating high-quality image...');
-    const wrapper = document.createElement('div'); wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; wrapper.style.top = '0'; wrapper.style.width = '700px'; wrapper.style.background = '#141414'; wrapper.style.padding = '20px';
-    const clone = ref.current.cloneNode(true) as HTMLElement; clone.style.width = '100%'; clone.style.background = 'transparent'; clone.style.overflow = 'visible';
-    const grids = clone.querySelectorAll('.ops-grid-3'); grids.forEach(g => { const el = g as HTMLElement; el.style.display = 'grid'; el.style.gridTemplateColumns = 'repeat(3, 1fr)'; el.style.gridAutoFlow = 'row'; el.style.gap = '8px'; el.style.overflow = 'visible'; el.style.width = '100%'; });
-    clone.querySelectorAll('.ops-card').forEach(c => { const el = c as HTMLElement; el.style.width = '100%'; el.style.minWidth = '0'; el.style.overflow = 'hidden'; (el.style as any).breakInside = 'avoid'; });
+  const renderBoardCanvas = async (ref: React.RefObject<HTMLDivElement | null>) => {
+    if (!ref.current) throw new Error('Board is not ready');
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'fixed'; wrapper.style.left = '-9999px'; wrapper.style.top = '0'; wrapper.style.width = '700px'; wrapper.style.background = '#141414'; wrapper.style.padding = '20px';
+    const clone = ref.current.cloneNode(true) as HTMLElement;
+    clone.style.width = '100%'; clone.style.background = 'transparent'; clone.style.overflow = 'visible';
+    clone.querySelectorAll('.ops-grid-3').forEach(grid => { const element = grid as HTMLElement; element.style.display = 'grid'; element.style.gridTemplateColumns = 'repeat(3, 1fr)'; element.style.gridAutoFlow = 'row'; element.style.gap = '8px'; element.style.overflow = 'visible'; element.style.width = '100%'; });
+    clone.querySelectorAll('.ops-card').forEach(card => { const element = card as HTMLElement; element.style.width = '100%'; element.style.minWidth = '0'; element.style.overflow = 'hidden'; (element.style as any).breakInside = 'avoid'; });
     wrapper.appendChild(clone); document.body.appendChild(wrapper); void wrapper.offsetHeight;
-    try { const canvas = await html2canvas(wrapper, { scale: 2, backgroundColor: '#141414', width: 700, height: wrapper.scrollHeight, windowWidth: 700, windowHeight: wrapper.scrollHeight }); document.body.removeChild(wrapper); const link = document.createElement('a'); link.download = `${filename}.jpg`; link.href = canvas.toDataURL('image/jpeg', 0.95); link.click(); toast.success('Downloaded successfully!'); } catch (err: any) { document.body.removeChild(wrapper); toast.error('Export failed: ' + err.message); }
+    try {
+      return await html2canvas(wrapper, { scale: 2, backgroundColor: '#141414', width: 700, height: wrapper.scrollHeight, windowWidth: 700, windowHeight: wrapper.scrollHeight });
+    } finally {
+      document.body.removeChild(wrapper);
+    }
   };
 
+  const exportBoard = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
+    toast.info('Generating high-quality image...');
+    try {
+      const canvas = await renderBoardCanvas(ref);
+      const link = document.createElement('a');
+      link.download = `${filename}_${INITIAL_DATE}.jpg`;
+      link.href = canvas.toDataURL('image/jpeg', 0.95);
+      link.click();
+      toast.success('JPG downloaded successfully');
+    } catch (err: any) { toast.error('Export failed: ' + err.message); }
+  };
+
+  const exportBoardPdf = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
+    toast.info('Preparing A4 landscape PDF...');
+    try {
+      const canvas = await renderBoardCanvas(ref);
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const margin = 8;
+      const pageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+      const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+      const width = canvas.width * ratio;
+      const height = canvas.height * ratio;
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', (pdf.internal.pageSize.getWidth() - width) / 2, (pdf.internal.pageSize.getHeight() - height) / 2, width, height);
+      pdf.save(`${filename}_${INITIAL_DATE}.pdf`);
+      toast.success('A4 PDF downloaded successfully');
+    } catch (err: any) { toast.error('PDF export failed: ' + err.message); }
+  };
   const allHistory = [...runwayHistory.map(h => ({ ...h, type: 'runway' })), ...groundHistory.map(h => ({ ...h, type: 'ground' }))].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const staffUtilization: { [name: string]: { runway: number, ground: number } } = {};
   allHistory.forEach(h => { if (h.type === 'runway') { [...(h.rwy19 || []), ...(h.rwy01 || []), ...(h.lights || [])].forEach((n: string) => { if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 }; staffUtilization[n].runway++; }); } else { Object.values(h.assignments || {}).flat().forEach((n: any) => { if (!staffUtilization[n]) staffUtilization[n] = { runway: 0, ground: 0 }; staffUtilization[n].ground++; }); } });
@@ -203,11 +237,11 @@ function OpsBoardPage() {
       {activeTab === 'runway' && (
         <div>
           {canEdit && (
-            <div className="dash-card" style={{ marginBottom: '20px' }}>
+            <div className="dash-card operations-assignment-panel" style={{ marginBottom: '20px' }}>
               <h3>Assign Staff (Cannot be in multiple zones)</h3>
-              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
+              <div className="operations-runway-staff" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
                 {staffPool.map(s => (
-                  <div key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  <div className="operations-runway-person" key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
                     </div>
@@ -257,21 +291,20 @@ function OpsBoardPage() {
             </div>
           </div>
 
-          {canEdit && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
-              <button className="quick-btn" style={{ background: '#dc2626', color: 'white' }} onClick={handleClearBoard}>🔄 Refresh</button>
-              <button className="quick-btn" style={{ background: '#3b82f6', color: 'white' }} onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>⭐ View & Export Board</button>
-              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveRunwayData}>💾 Save to Database</button>
-              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>📸 Export JPG</button>
-            </div>
-          )}
+          <div className="operations-board-actions">
+            {canEdit && <button className="operations-board-action danger" onClick={handleClearBoard}>Clear assignments</button>}
+            {canEdit && <button className="operations-board-action save" onClick={saveRunwayData}>Save board</button>}
+            <button className="operations-board-action preview" onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>Preview</button>
+            <button className="operations-board-action export" onClick={() => exportBoard(runwayRef, 'FND_Runway_Board')}>Export JPG</button>
+            <button className="operations-board-action pdf" onClick={() => exportBoardPdf(runwayRef, 'FND_Runway_Board')}>Export A4 PDF</button>
+          </div>
         </div>
       )}
 
       {activeTab === 'ground' && (
         <div>
           {canEdit && (
-            <div className="dash-card" style={{ marginBottom: '20px' }}>
+            <div className="dash-card operations-assignment-panel" style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                 <h3 style={{ margin: 0 }}>Assign Staff to Tasks</h3>
                 {canEdit && (
@@ -284,7 +317,7 @@ function OpsBoardPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
                 {tasks.map(t => (
-                  <div key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
+                  <div className="operations-task-assignment" key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: '13px', color: '#1e293b' }}>{t.label}</span>
                       {canEdit && (
@@ -296,7 +329,7 @@ function OpsBoardPage() {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
                       {staffPool.map(s => (
-                        <label key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: canEdit ? 'pointer' : 'default' }}>
+                        <label className={(groundAssign[t.id] || []).includes(s) ? 'operations-task-person selected' : 'operations-task-person'} key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: canEdit ? 'pointer' : 'default' }}>
                           <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} disabled={!canEdit} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
                           <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
                         </label>
@@ -338,14 +371,13 @@ function OpsBoardPage() {
             </div>
           </div>
 
-          {canEdit && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
-              <button className="quick-btn" style={{ background: '#dc2626', color: 'white' }} onClick={handleClearBoard}>🔄 Refresh</button>
-              <button className="quick-btn" style={{ background: '#3b82f6', color: 'white' }} onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>⭐ View & Export Board</button>
-              <button className="quick-btn" style={{ background: '#059669', color: 'white' }} onClick={saveGroundData}>💾 Save to Database</button>
-              <button className="add-staff-btn" style={{ background: '#0b2b4f' }} onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>📸 Export JPG</button>
-            </div>
-          )}
+          <div className="operations-board-actions">
+            {canEdit && <button className="operations-board-action danger" onClick={handleClearBoard}>Clear assignments</button>}
+            {canEdit && <button className="operations-board-action save" onClick={saveGroundData}>Save board</button>}
+            <button className="operations-board-action preview" onClick={() => { setShowPreview(true); setPreviewZoom(1); }}>Preview</button>
+            <button className="operations-board-action export" onClick={() => exportBoard(groundRef, 'FND_Ground_Board')}>Export JPG</button>
+            <button className="operations-board-action pdf" onClick={() => exportBoardPdf(groundRef, 'FND_Ground_Board')}>Export A4 PDF</button>
+          </div>
         </div>
       )}
 
@@ -528,6 +560,7 @@ function OpsBoardPage() {
 
           <div style={{ padding: '16px', background: '#141414', textAlign: 'center', borderTop: '1px solid #333', flexShrink: 0 }}>
             <button onClick={() => { exportBoard(activeTab === 'runway' ? runwayRef : groundRef, activeTab === 'runway' ? 'FND_Runway_Board' : 'FND_Ground_Board'); }} className="add-staff-btn" style={{ background: '#059669', padding: '12px 24px', fontSize: '16px' }}>📸 Download JPG</button>
+            <button onClick={() => { exportBoardPdf(activeTab === 'runway' ? runwayRef : groundRef, activeTab === 'runway' ? 'FND_Runway_Board' : 'FND_Ground_Board'); }} className="add-staff-btn" style={{ background: '#dc2626', padding: '12px 24px', fontSize: '16px', marginLeft: '8px' }}>Download A4 PDF</button>
           </div>
         </div>
       )}
