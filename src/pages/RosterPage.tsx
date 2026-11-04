@@ -211,7 +211,7 @@ const userDepartment = myStaff?.department || profile?.department;
     }
   }, []);
 
-  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 15000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); return () => window.clearTimeout(initialLoad); }, [fetchData]);
 
   useEffect(() => {
     document.body.classList.remove('print-all', 'print-large', 'print-small');

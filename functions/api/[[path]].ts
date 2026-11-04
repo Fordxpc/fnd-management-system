@@ -21,6 +21,7 @@ import {
   requireOpsBoardView,
   requireOpsBoardEdit,
   requireRosterEdit,
+  requireRosterView,
   requireLeaveEdit,
   requireOvertimeEdit,
   requireLeaveApproval,
@@ -78,6 +79,18 @@ export const onRequest = async (context: any) => {
       const err: any = new Error("Access denied"); err.status = 403; throw err;
     }
     return group;
+  };
+  const getAuthorizedRosterStaff = async (currentUser: any, staffId: string) => {
+    const [target] = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
+    if (!target) { const err: any = new Error("Staff member not found"); err.status = 404; throw err; }
+    if (isManagerRole(currentUser.role)) return target;
+    const [editor] = await db.select().from(staff).where(eq(staff.email, currentUser.email.toLowerCase())).limit(1);
+    const editorDept = String(editor?.department || currentUser.department || "").trim().toLowerCase();
+    const targetDept = String(target.department || "").trim().toLowerCase();
+    if (editor?.isIncharge !== true || (editorDept !== targetDept && !(editorDept === "safety" && targetDept === "security"))) {
+      const err: any = new Error("You cannot edit this department roster"); err.status = 403; throw err;
+    }
+    return target;
   };
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -795,71 +808,76 @@ export const onRequest = async (context: any) => {
     // ROSTER MODULE
     // ==========================================
     if (pathname === "/api/roster" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireRosterView(env, currentUser);
       const results = await db.select().from(rosterEntries).orderBy(asc(rosterEntries.date), asc(rosterEntries.staffName));
       return json(results);
     }
 
     if (pathname === "/api/roster" && method === "POST") {
-      
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-      
-      await requireRosterEdit(
-        env,
-        currentUser
-      );
-      
+      const currentUser = await requireAuth(request, env);
+      await requireRosterEdit(env, currentUser);
       const body: any = await request.json();
+      const allowedStatuses = ["scheduled", "clear", "OFF DAY", "ABSENT", "ANNUAL LEAVE", "SICK LEAVE", "SICK LEAVE / MC", "NO PAY LEAVE", "DUTY TRAVEL", "PATERNITY LEAVE", "MATERNITY LEAVE", "PRE-MATERNITY LEAVE", "FAMILY RESPONSIBILITY LEAVE (FRL)"];
+      if (!body.staffId || !/^\d{4}-\d{2}-\d{2}$/.test(body.date || "") || !allowedStatuses.includes(body.status)) {
+        return json({ message: "Valid staff, date and roster status are required" }, 400);
+      }
+      if (body.status === "scheduled" && (!body.shiftTime || String(body.shiftTime).length > 40)) {
+        return json({ message: "A valid shift time is required" }, 400);
+      }
+      const targetStaff = await getAuthorizedRosterStaff(currentUser, body.staffId);
       const existing = await db.select().from(rosterEntries).where(and(
-        eq(rosterEntries.staffId, body.staffId), 
-        eq(rosterEntries.date, body.date)
+        eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date)
       )).limit(1);
-
       if (existing.length > 0 && existing[0].leaveRequestId) return json({ message: "Cannot overwrite approved leave." }, 400);
-
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-
       if (existing.length > 0) await db.delete(rosterEntries).where(eq(rosterEntries.id, id));
-
       if (body.status !== "clear") {
-        try {
-          await db.insert(rosterEntries).values({
-            id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment,
-            date: body.date, shiftTime: body.shiftTime || "", status: body.status, createdAt,
-          });
-        } catch (err: any) { return json({ message: "This staff member already has a duty on this day." }, 400); }
+        await db.insert(rosterEntries).values({
+          id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
+          date: body.date, shiftTime: body.status === "scheduled" ? body.shiftTime : "", status: body.status,
+          createdAt: new Date().toISOString(),
+        });
       }
       return json({ success: true, id });
     }
 
     if (pathname === "/api/roster/bulk" && method === "POST") {
-      
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-      
-      await requireRosterEdit(
-        env,
-        currentUser
-      );
-      
+      const currentUser = await requireAuth(request, env);
+      await requireRosterEdit(env, currentUser);
       const body: any = await request.json();
-      const values = body.entries.map((entry: any) => ({
-        id: crypto.randomUUID(), staffId: entry.staffId, staffName: entry.staffName,
-        staffDepartment: entry.staffDepartment, date: entry.date, shiftTime: entry.shiftTime || "",
-        status: entry.status, createdAt: new Date().toISOString(),
-      }));
-      if (values.length > 0) {
-        try { await db.insert(rosterEntries).values(values); } 
-        catch (err: any) { return json({ message: "Some entries violate rules." }, 400); }
+      if (!Array.isArray(body.entries) || body.entries.length === 0 || body.entries.length > 500) {
+        return json({ message: "Bulk assignments must contain between 1 and 500 entries" }, 400);
       }
-      return json({ success: true });
+      const allowedStatuses = ["scheduled", "OFF DAY", "ABSENT", "ANNUAL LEAVE", "SICK LEAVE", "SICK LEAVE / MC", "NO PAY LEAVE", "DUTY TRAVEL", "PATERNITY LEAVE", "MATERNITY LEAVE", "PRE-MATERNITY LEAVE", "FAMILY RESPONSIBILITY LEAVE (FRL)"];
+      const validated: any[] = [];
+      const staffCache = new Map<string, any>();
+      for (const entry of body.entries) {
+        if (!entry.staffId || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date || "") || !allowedStatuses.includes(entry.status)) {
+          return json({ message: "Bulk assignment contains an invalid entry" }, 400);
+        }
+        if (entry.status === "scheduled" && (!entry.shiftTime || String(entry.shiftTime).length > 40)) {
+          return json({ message: "Every scheduled entry requires a valid shift" }, 400);
+        }
+        let targetStaff = staffCache.get(entry.staffId);
+        if (!targetStaff) { targetStaff = await getAuthorizedRosterStaff(currentUser, entry.staffId); staffCache.set(entry.staffId, targetStaff); }
+        const existing = await db.select().from(rosterEntries).where(and(
+          eq(rosterEntries.staffId, entry.staffId), eq(rosterEntries.date, entry.date)
+        )).limit(1);
+        if (existing[0]?.leaveRequestId) return json({ message: `Approved leave protects ${targetStaff.name} on ${entry.date}` }, 400);
+        validated.push({ entry, targetStaff, existing: existing[0] });
+      }
+      for (const item of validated) {
+        if (item.existing) await db.delete(rosterEntries).where(eq(rosterEntries.id, item.existing.id));
+        await db.insert(rosterEntries).values({
+          id: item.existing?.id || crypto.randomUUID(), staffId: item.targetStaff.id,
+          staffName: item.targetStaff.name || "", staffDepartment: item.targetStaff.department || "",
+          date: item.entry.date, shiftTime: item.entry.status === "scheduled" ? item.entry.shiftTime : "",
+          status: item.entry.status, createdAt: new Date().toISOString(),
+        });
+      }
+      return json({ success: true, count: validated.length });
     }
-
     // ==========================================
     // FLIGHTS MODULE
     // ==========================================
