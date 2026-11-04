@@ -118,7 +118,7 @@ function OvertimePage() {
   const canApprove =
     myStaff?.isSmt === true ||
     myStaff?.isIncharge === true ||
-    ["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase());
+    ["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase());
   
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
     if (canViewAll) return true;
@@ -158,7 +158,7 @@ function OvertimePage() {
     // Department mode
     filtered = filtered.filter((e) => e.staffId !== myStaff?.id);
 
-    const isManagerLevel = ["developer", "manager", "admin"].includes((profile?.role || "").toLowerCase());
+    const isManagerLevel = ["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase());
     if (!isManagerLevel) {
       if (myStaff?.isIncharge) {
         filtered = filtered.filter((e) => e.staffDepartment === myStaff.department);

@@ -17,7 +17,7 @@ function SettingsPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   const isDev = (profile?.role || '').toLowerCase() === 'developer';
-  const isManager = ['manager', 'admin'].includes((profile?.role || '').toLowerCase());
+  const isManager = ['manager', 'admin', 'owner'].includes((profile?.role || '').toLowerCase());
   const canManageAccess = isDev || isManager;
 
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
@@ -27,6 +27,7 @@ function SettingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [resetRequests, setResetRequests] = useState<any[]>([]);
+  const [completedReset, setCompletedReset] = useState<{ email: string; temporaryPassword: string } | null>(null);
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteTempTarget, setDeleteTempTarget] = useState<string | null>(null);
   const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
@@ -181,7 +182,11 @@ function SettingsPage() {
                       <td>{new Date(r.requestedAt).toLocaleString()}</td>
                       <td>
                         <button className="quick-btn" style={{ background: '#dc2626', color: 'white', padding: '4px 8px' }} onClick={async () => {
-                            try { await apiFetch(`/password-reset-requests/${r.id}/approve`, { method: 'POST' }); toast.success(`Password reset for ${r.email}`); fetchSettings(); } catch(e: any) { toast.error(e.message); }
+                            try {
+                              const result = await apiFetch(`/password-reset-requests/${r.id}/approve`, { method: 'POST' });
+                              setCompletedReset({ email: r.email, temporaryPassword: result.temporaryPassword });
+                              fetchSettings();
+                            } catch(e: any) { toast.error(e.message); }
                         }}>Approve & Reset</button>
                       </td>
                     </tr>
@@ -674,6 +679,15 @@ function SettingsPage() {
           setDeleteUserTarget(null);
         }}
         onCancel={() => setDeleteUserTarget(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={!!completedReset}
+        title="Temporary Password Created"
+        message={completedReset ? `Account: ${completedReset.email}\nTemporary password: ${completedReset.temporaryPassword}\n\nCopy this password now and give it securely to the user. It will not be shown again.` : ''}
+        confirmText="I have copied it"
+        onConfirm={() => setCompletedReset(null)}
+        onCancel={() => setCompletedReset(null)}
       />
 
       {editingUser && (
