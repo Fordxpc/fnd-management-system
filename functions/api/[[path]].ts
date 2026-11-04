@@ -1728,17 +1728,37 @@ export const onRequest = async (context: any) => {
       const dept =
         myStaff?.department || "";
 
-      const nextFlight =
+      const rawNextFlight =
         flightList
-          .filter(
-            (f: any) => f.date >= today
-          )
-          .sort(
-            (a: any, b: any) =>
-              (a.date || "").localeCompare(
-                b.date || ""
-              )
-          )[0] || null;
+          .filter((f: any) => {
+            const status = (f.status || "").toLowerCase();
+            return f.date >= today && !f.atd && !["departed", "cancelled", "completed"].includes(status);
+          })
+          .sort((a: any, b: any) => {
+            const dateCompare = (a.date || "").localeCompare(b.date || "");
+            if (dateCompare !== 0) return dateCompare;
+            return (a.arrivalTime || a.departureTime || "").localeCompare(
+              b.arrivalTime || b.departureTime || ""
+            );
+          })[0] || null;
+
+      let nextFlight: any = rawNextFlight;
+      if (rawNextFlight) {
+        let passengerCounts = { adults: 0, infants: 0 };
+        try {
+          const stored = JSON.parse(rawNextFlight.bookedFigure || "{}");
+          passengerCounts = typeof stored === "object" && stored !== null
+            ? { adults: Number(stored.adults) || 0, infants: Number(stored.infants) || 0 }
+            : { adults: Number(stored) || 0, infants: 0 };
+        } catch {
+          passengerCounts = { adults: Number(rawNextFlight.bookedFigure) || 0, infants: 0 };
+        }
+        nextFlight = {
+          ...rawNextFlight,
+          paxAdults: passengerCounts.adults,
+          paxInfants: passengerCounts.infants
+        };
+      }
 
       const onDutyToday =
         roster.filter(r => {
