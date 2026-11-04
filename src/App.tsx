@@ -37,25 +37,17 @@ function App() {
 
       await login(email, password);
 
-      let staffDept = "";
-      try {
-        const emailLower = email.trim().toLowerCase();
-        const staffData = await apiFetch('/staff');
-        const match = staffData.find(
-          (s: any) => (s.email || '').trim().toLowerCase() === emailLower
-        );
-        if (match) {
-          staffDept = match.department || "";
-        }
-      } catch (e) { console.warn(e); }
+      const [syncedProfile, staffData] = await Promise.all([
+        apiFetch('/users/me/sync', { method: 'POST' }),
+        apiFetch('/staff')
+      ]);
+      const emailLower = email.trim().toLowerCase();
+      const staffMatch = staffData.find(
+        (s: any) => (s.email || '').trim().toLowerCase() === emailLower
+      );
 
-      const users = await apiFetch('/users');
-      const data = users.find(
-        (u: any) => (u.email || '').toLowerCase() === email.toLowerCase()
-      ) || {};
-
-      const role = data.role || 'staff';
-      const userDept = staffDept || data.department || 'Ground Operations';
+      const role = syncedProfile?.role || 'staff';
+      const userDept = staffMatch?.department || syncedProfile?.department || 'Ground Operations';
       const isManagement = MANAGEMENT_ROLES.includes(role);
 
       if (tab === 'management' && !isManagement) {

@@ -26,35 +26,18 @@ export function AuthProvider({ children }: any) {
         const email = (data.user.email || "").trim().toLowerCase();
         const snPart = email.split('@')[0];
         
-        await apiFetch("/users/me/sync", { method: "POST" }).catch(e => console.warn(e));
-
-        const [users, staffData] = await Promise.all([
-          apiFetch("/users"),
+        const [syncedProfile, staffData] = await Promise.all([
+          apiFetch("/users/me/sync", { method: "POST" }),
           apiFetch("/staff")
         ]);
-
-        const userRecord = users.find((u: any) => (u.email || "").trim().toLowerCase() === email);
         const staffRecord = staffData.find((s: any) => 
           (s.email || "").trim().toLowerCase() === email || 
           (s.sn || "").trim().toLowerCase() === snPart
         );
 
-        console.log("STAFF RECORD:",
-          staffRecord
-        );
-
-        // 🚨 FORCE DEVELOPER ROLE FOR KNOWN ADMIN EMAILS
-        let role = (userRecord?.role || (staffRecord?.isSmt ? 'smt' : 'staff')).toLowerCase();
-        
-        if (email === 'developer@funadhooairport.com' || email.includes('developer')) {
-          role = 'developer';
-        }
-
-        // 🚨 DEBUG LOG - Check this in the browser Console (F12)
-        console.log("AUTH PROFILE LOADED:", { email, userRecord, staffRecord, finalRole: role });
+        const role = (syncedProfile?.role || (staffRecord?.isSmt ? "smt" : "staff")).toLowerCase();
 
         setProfile({
-          ...userRecord,
           ...staffRecord,
           role,
 
@@ -62,7 +45,6 @@ export function AuthProvider({ children }: any) {
 
           sn: 
             staffRecord?.sn ||
-            userRecord?.sn || 
             snPart.replace('sn-', ''),
 
           designation:
@@ -72,7 +54,7 @@ export function AuthProvider({ children }: any) {
 
           department:
             staffRecord?.department ||
-            staffRecord?.department ||
+            syncedProfile?.department ||
             '—',
           
           position:

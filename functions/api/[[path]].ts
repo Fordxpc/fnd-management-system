@@ -25,7 +25,15 @@ import {
 } from "../../src/lib/permission-check.js";
 
 const isManagerRole = (role: string | undefined | null) =>
-  ['developer', 'manager', 'admin'].includes(role || '');
+  ['developer', 'manager', 'admin', 'owner'].includes(role || '');
+
+const requireRoleAssignment = (currentRole: string, requestedRole: string | undefined) => {
+  if (requestedRole === "developer" && currentRole !== "developer") {
+    const err: any = new Error("Only a developer can assign the developer role");
+    err.status = 403;
+    throw err;
+  }
+};
 
 export const onRequest = async (context: any) => {
   const { request, env } = context;
@@ -49,6 +57,16 @@ export const onRequest = async (context: any) => {
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    const isPublicRequest =
+      (pathname === "/api/request-password-reset" && method === "POST") ||
+      (pathname === "/api/ramp/draft" && method === "GET");
+
+    // Every API route is private unless it is explicitly listed above.
+    // Individual handlers still perform their finer-grained role checks.
+    if (!isPublicRequest) {
+      await requireAuth(request, env);
+    }
+
     // ==========================================
     // CHAT SYSTEM
     // ==========================================
@@ -224,14 +242,16 @@ export const onRequest = async (context: any) => {
         await db.delete(account).where(eq(account.userId, userId));
         await db.delete(user).where(eq(user.id, userId));
 
+        const temporaryPassword = `Fnd!${crypto.randomUUID()}`;
         await getAuth(env).api.signUpEmail({
-          body: { email: reqData.email, password: "Fnd@2026", name: targetUser[0].name || "Staff Member" }
+          body: { email: reqData.email, password: temporaryPassword, name: targetUser[0].name || "Staff Member" }
         });
 
         await db.update(passwordResetRequests).set({ status: "resolved" }).where(eq(passwordResetRequests.id, id));
-        return json({ success: true, message: "Password reset to Fnd@2026" });
+        return json({ success: true, message: "Password reset completed", temporaryPassword });
       } catch (err: any) {
-        return json({ message: "Failed to reset password: " + err.message }, 500);
+        console.error("Failed to reset password", err);
+        return json({ message: "Failed to reset password" }, 500);
       }
     }
 
@@ -906,15 +926,18 @@ export const onRequest = async (context: any) => {
     // USERS
     // ==========================================
     if (pathname === "/api/users" && method === "GET") {
-      try {
-        const results = await db.select().from(users).orderBy(asc(users.email));
-        return json(results);
-      } catch (error: any) { return json({ message: error?.message, cause: error?.cause }, 500); }
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const results = await db.select().from(users).orderBy(asc(users.email));
+      return json(results);
     }
 
     if (pathname === "/api/users/sync" && method === "POST") {
       try {
+        const currentUser = await requireAuth(request, env);
+        requireManager(currentUser.role);
         const body: any = await request.json();
+        requireRoleAssignment(currentUser.role, body.role);
         await db.insert(users).values({
           id: body.uid, email: body.email.toLowerCase(), role: body.role || "user", 
           department: body.department || "", createdAt: new Date().toISOString(),
@@ -923,7 +946,10 @@ export const onRequest = async (context: any) => {
           set: { role: body.role || "user", department: body.department || "" } 
         });
         return json({ success: true });
-      } catch (error) { return json({ success: false, error: String(error) }, 500); }
+      } catch (error) {
+        console.error("Failed to sync user", error);
+        return json({ success: false, message: "Failed to sync user" }, 500);
+      }
     }
 
     if (url.pathname.startsWith("/api/users/") && method === "PUT") {
@@ -972,7 +998,7 @@ export const onRequest = async (context: any) => {
         return json({ success: true });
       } catch (err: any) {
         console.error("Failed to update role:", err);
-        return json({ message: "Failed to update role: " + err.message }, 500);
+        return json({ message: "Failed to update role" }, 500);
       }
     }
 
@@ -980,6 +1006,10 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = url.pathname.split("/").pop();
+      const [existingUser] = await db.select().from(users).where(eq(users.id, id!)).limit(1);
+      if (existingUser?.role === "developer" && currentUser.role !== "developer") {
+        return json({ message: "Cannot delete developer account" }, 403);
+      }
       await db.delete(users).where(eq(users.id, id!));
       return json({ success: true });
     }
@@ -992,6 +1022,7 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const body: any = await request.json();
       const { email, role, department, name, position, password } = body;
+      requireRoleAssignment(currentUser.role, role);
 
       if (!email || !password) return json({ message: "Email and password are required" }, 400);
       const activeUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -999,7 +1030,10 @@ export const onRequest = async (context: any) => {
 
       try {
         await getAuth(env).api.signUpEmail({ body: { email, password, name: name || "New User" } });
-      } catch (err: any) { return json({ message: "Failed to create auth account: " + err.message }, 400); }
+      } catch (err: any) {
+        console.error("Failed to create auth account", err);
+        return json({ message: "Failed to create auth account" }, 400);
+      }
 
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
@@ -1014,6 +1048,8 @@ export const onRequest = async (context: any) => {
     // USER PRESETS
     // ==========================================
     if (pathname === "/api/user-presets" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
       const results = await db.select().from(userPresets).orderBy(asc(userPresets.email));
       return json(results);
     }
@@ -1021,6 +1057,7 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
+      requireRoleAssignment(currentUser.role, body.role);
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
         id, email: body.email, role: body.role, department: body.department, 
@@ -1033,6 +1070,7 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       const body: any = await request.json();
+      requireRoleAssignment(currentUser.role, body.role);
       await db.update(userPresets).set({ 
         role: body.role, department: body.department, name: body.name || "", position: body.position || "" 
       }).where(eq(userPresets.id, id!));
@@ -1060,7 +1098,10 @@ export const onRequest = async (context: any) => {
           type: body.type, createdBy: body.createdBy || "System", createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
-      } catch (err: any) { return json({ error: err.message, stack: err.stack }, 500); }
+      } catch (err: any) {
+        console.error("Failed to save monthly report", err);
+        return json({ message: "Failed to save monthly report" }, 500);
+      }
     }
 
     // ==========================================
@@ -1378,6 +1419,8 @@ export const onRequest = async (context: any) => {
       return json(rows.length > 0 ? JSON.parse(rows[0].payload || "{}") : {});
     }
     if (pathname === "/api/ramp/draft" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      await requireRampEdit(env, currentUser);
       const body: any = await request.json();
       const payloadStr = JSON.stringify(body);
       await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr })
@@ -1456,10 +1499,14 @@ export const onRequest = async (context: any) => {
     // TIMESHEET
     // ==========================================
     if (pathname === "/api/timesheets" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
       const results = await db.select().from(timesheets).orderBy(asc(timesheets.date));
       return json(results);
     }
     if (pathname === "/api/timesheets" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
       const body: any = await request.json();
       const existing = await db.select().from(timesheets).where(and(
         eq(timesheets.staffId, body.staffId), 
@@ -1481,6 +1528,8 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
     if (pathname.startsWith("/api/timesheets/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
       const id = pathname.split("/").pop();
       await db.delete(timesheets).where(eq(timesheets.id, id!));
       return json({ success: true });
@@ -1805,6 +1854,9 @@ export const onRequest = async (context: any) => {
 
     return json({ message: "Not Found", pathname, method }, 404);
   } catch (err: any) {
-    return json({ message: err.message, stack: err.stack }, 500);
+    const status = Number.isInteger(err?.status) ? err.status : 500;
+    const message = status >= 500 ? "Internal server error" : err?.message || "Request failed";
+    console.error("API request failed", { pathname, method, status, error: err });
+    return json({ message }, status);
   }
 };
