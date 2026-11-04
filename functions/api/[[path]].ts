@@ -12,8 +12,10 @@ import {
 import { eq, and, inArray, sql, asc, desc, or, count, gte, lte } from "drizzle-orm";
 import {
   requireFlightsEdit,
+  requireFlightsView,
   requireRampEdit,
   requireBirdEdit,
+  requireBirdView,
   requireRWYEdit,
   requireOpsBoardView,
   requireOpsBoardEdit,
@@ -76,7 +78,7 @@ export const onRequest = async (context: any) => {
       const myMemberships = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.staffId, currentUser.id));
       const myGroupIds = myMemberships.map((m: any) => m.groupId);
 
-      const isDevOrManager = ['developer', 'manager', 'admin'].includes(currentUser.role);
+      const isDevOrManager = ['developer', 'manager', 'admin', 'owner'].includes(currentUser.role);
 
       const filteredGroups = allGroups.filter((g: any) => 
         myGroupIds.includes(g.id) || 
@@ -186,7 +188,7 @@ export const onRequest = async (context: any) => {
         eq(chatGroupMembers.role, 'admin')
       )).limit(1);
 
-      if (isGroupAdmin.length === 0 && !['developer', 'manager', 'admin'].includes(currentUser.role)) {
+      if (isGroupAdmin.length === 0 && !['developer', 'manager', 'admin', 'owner'].includes(currentUser.role)) {
         return json({ message: "Unauthorized to add members" }, 403);
       }
 
@@ -849,8 +851,21 @@ export const onRequest = async (context: any) => {
     // FLIGHTS MODULE
     // ==========================================
     if (pathname === "/api/flights" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireFlightsView(env, currentUser);
       const results = await db.select().from(flights).orderBy(asc(flights.date), asc(flights.departureTime));
-      return json(results);
+      return json(results.map((flight: any) => {
+        let passengerCounts = { adults: 0, infants: 0 };
+        try {
+          const stored = JSON.parse(flight.bookedFigure || "{}");
+          passengerCounts = typeof stored === "object" && stored !== null
+            ? { adults: Number(stored.adults) || 0, infants: Number(stored.infants) || 0 }
+            : { adults: Number(stored) || 0, infants: 0 };
+        } catch {
+          passengerCounts = { adults: Number(flight.bookedFigure) || 0, infants: 0 };
+        }
+        return { ...flight, paxAdults: passengerCounts.adults, paxInfants: passengerCounts.infants };
+      }));
     }
     if (pathname === "/api/flights" && method === "POST") {
       const currentUser = await requireAuth(request, env);
@@ -863,7 +878,7 @@ export const onRequest = async (context: any) => {
       const id = crypto.randomUUID();
       await db.insert(flights).values({
         id, date: body.date, flightNo: body.flightNo, type: body.type, aircraft: body.aircraft,
-        bookedFigure: body.bookedFigure || "", checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
+        bookedFigure: JSON.stringify({ adults: Number(body.paxAdults) || 0, infants: Number(body.paxInfants) || 0 }), checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
         departureTime: body.departureTime || "", route: body.route || "", originDepTime: body.originDepTime || "",
         eta: body.eta || null, ata: body.ata || null, atd: body.atd || null, status: body.status,
         remarks: body.remarks || "", createdAt: new Date().toISOString(),
@@ -881,7 +896,7 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       await db.update(flights).set({
         date: body.date, flightNo: body.flightNo, type: body.type, aircraft: body.aircraft,
-        bookedFigure: body.bookedFigure || "", checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
+        bookedFigure: JSON.stringify({ adults: Number(body.paxAdults) || 0, infants: Number(body.paxInfants) || 0 }), checkInTime: body.checkInTime || "", arrivalTime: body.arrivalTime || "",
         departureTime: body.departureTime || "", route: body.route || "", originDepTime: body.originDepTime || "",
         eta: body.eta || null, ata: body.ata || null, atd: body.atd || null, status: body.status,
         remarks: body.remarks || "", updatedAt: new Date().toISOString(),
@@ -1386,11 +1401,14 @@ export const onRequest = async (context: any) => {
     // WILDLIFE
     // ==========================================
     if (pathname === "/api/wildlife" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireBirdView(env, currentUser);
       const results = await db.select().from(birdCounts).orderBy(desc(birdCounts.date));
-      return json(results.map((row: any) => ({ 
-        ...row, 
-        rows: typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows 
-      })));
+      return json(results.map((row: any) => {
+        const stored = typeof row.rows === "string" ? JSON.parse(row.rows) : row.rows;
+        if (Array.isArray(stored)) return { ...row, rows: stored };
+        return { ...row, ...(stored || {}), rows: stored?.rows || [] };
+      }));
     }
     if (pathname === "/api/wildlife" && method === "POST") {
       const currentUser = await requireAuth(request, env);
@@ -1399,9 +1417,26 @@ export const onRequest = async (context: any) => {
       const id = crypto.randomUUID();
       await db.insert(birdCounts).values({ 
         id, date: body.date, refNo: body.refNo, observer: body.observer || "", 
-        rows: JSON.stringify(body.rows), createdAt: new Date().toISOString() 
+        rows: JSON.stringify({
+          rows: body.rows || [], wind: body.wind || "", temp: body.temp || "", cloud: body.cloud || "",
+          rain: body.rain || "N", startTime: body.startTime || "", endTime: body.endTime || ""
+        }), createdAt: new Date().toISOString()
       });
       return json({ success: true, id });
+    }
+    if (url.pathname.startsWith("/api/wildlife/") && method === "PUT") {
+      const currentUser = await requireAuth(request, env);
+      await requireBirdEdit(env, currentUser);
+      const id = url.pathname.split("/").pop();
+      const body: any = await request.json();
+      await db.update(birdCounts).set({
+        date: body.date, refNo: body.refNo, observer: body.observer || "",
+        rows: JSON.stringify({
+          rows: body.rows || [], wind: body.wind || "", temp: body.temp || "", cloud: body.cloud || "",
+          rain: body.rain || "N", startTime: body.startTime || "", endTime: body.endTime || ""
+        })
+      }).where(eq(birdCounts.id, id!));
+      return json({ success: true });
     }
     if (url.pathname.startsWith("/api/wildlife/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
