@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
+const INITIAL_DATE = new Date().toISOString().split('T')[0];
+const INITIAL_MONTH = INITIAL_DATE.slice(0, 7);
 
 const formatDate = (date: Date): string => {
   const y = date.getFullYear();
@@ -54,10 +56,13 @@ function OvertimePage() {
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [search, setSearch] = useState('');
 
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
 
-  const [monthFilter, setMonthFilter] = useState<string>(formatDate(new Date()).slice(0, 7));
+  const [monthFilter, setMonthFilter] = useState<string>(INITIAL_MONTH);
   const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [viewMode, setViewMode] = useState<'individual' | 'department'>('individual');
   const [filterDept, setFilterDept] = useState<string>('Ground Operations');
@@ -67,7 +72,7 @@ function OvertimePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formDept, setFormDept] = useState<string>('Ground Operations');
   const [formStaffId, setFormStaffId] = useState<string>('');
-  const [formDate, setFormDate] = useState<string>(formatDate(new Date()));
+  const [formDate, setFormDate] = useState<string>(INITIAL_DATE);
   const [formStart, setFormStart] = useState<string>('14:00');
   const [formEnd, setFormEnd] = useState<string>('16:00');
   const [formNotes, setFormNotes] = useState<string>('');
@@ -77,40 +82,46 @@ function OvertimePage() {
   const [rejectTarget, setRejectTarget] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
-      const [otData, staffData, leaveData, rulesData] = await Promise.all([
+      const results = await Promise.allSettled([
         apiFetch('/overtime'), apiFetch('/staff'), apiFetch('/leave-requests'), apiFetch('/settings/ot_rules')
       ]);
-      
-      setEntries(otData);
-      setStaff(staffData);
-      setLeaveReqs(leaveData);
-      if (rulesData) setOtRules(rulesData);
+      const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
+      const otData = getData(0);
+      const staffData = getData(1);
+      const leaveData = getData(2);
+      const rulesData = getData(3);
+      const failedRequests = results.filter((result) => result.status === 'rejected').length;
 
-      const mine = staffData.find((s: any) => (s.email || '').toLowerCase() === (user?.email || '').toLowerCase());
+      setEntries(Array.isArray(otData) ? otData : []);
+      setStaff(Array.isArray(staffData) ? staffData : []);
+      setLeaveReqs(Array.isArray(leaveData) ? leaveData : []);
+      if (rulesData && !Array.isArray(rulesData)) setOtRules(rulesData);
+      setLoadError(failedRequests ? failedRequests + ' overtime data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
+
+      const mine = (Array.isArray(staffData) ? staffData : []).find((member: any) => (member.email || '').toLowerCase() === (user?.email || '').toLowerCase());
       setMyStaff(mine || null);
       if (mine && !formStaffId) {
         setFormStaffId(mine.id);
         setFilterDept(mine.department);
         setFormDept(mine.department);
       }
-      setLoading(false);
     } catch (err: any) {
-      toast.error(err.message);
+      setLoadError(err.message || 'Overtime information could not be loaded.');
+      if (!quiet) toast.error(err.message);
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [user, formStaffId]);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 15000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
 
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
-  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true;
+  const isSMT = profile?.role === 'smt' || myStaff?.isSmt === true || myStaff?.isSMT === true;
   
   const canViewAll = isDev || isManager;
 
@@ -165,29 +176,41 @@ function OvertimePage() {
       } else if (myStaff?.isSmt) {
         filtered = filtered.filter((e) => {
           const entryStaff = staff.find(s => s.id === e.staffId);
-          return e.staffDepartment === myStaff.department && entryStaff?.isSMT !== true;
+          return e.staffDepartment === myStaff.department && entryStaff?.isSmt !== true && entryStaff?.isSMT !== true;
         });
       }
     }
 
+    if (canViewAll) {
+      filtered = filtered.filter((entry) => entry.staffDepartment === filterDept);
+    }
     if (filterStaff !== 'all') {
-      filtered = filtered.filter((e) => e.staffId === filterStaff);
+      filtered = filtered.filter((entry) => entry.staffId === filterStaff);
     }
   } else {
-    filtered = filtered.filter((e) => myStaff && e.staffId === myStaff.id);
+    filtered = filtered.filter((entry) => myStaff && entry.staffId === myStaff.id);
   }
 
-  filtered = filtered.filter(e => (e.status || 'approved').toLowerCase() === tab);
+  const scopedEntries = filtered;
+  const pendingCount = scopedEntries.filter((entry) => (entry.status || 'approved').toLowerCase() === 'pending').length;
+  const approvedCount = scopedEntries.filter((entry) => (entry.status || 'approved').toLowerCase() === 'approved').length;
+  const rejectedCount = scopedEntries.filter((entry) => (entry.status || 'approved').toLowerCase() === 'rejected').length;
 
-  filtered.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  filtered = scopedEntries
+    .filter((entry) => (entry.status || 'approved').toLowerCase() === tab)
+    .filter((entry) => {
+      const query = search.trim().toLowerCase();
+      return !query || [entry.staffName, entry.staffSN, entry.staffDepartment, entry.notes].some((value) => String(value || '').toLowerCase().includes(query));
+    })
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
   const weekMap: { [key: string]: any[] } = {};
-  filtered.forEach((e) => {
-    const weekKey = getWeekStart(e.date);
+  filtered.forEach((entry) => {
+    const weekKey = `${entry.staffId}::${getWeekStart(entry.date)}`;
     if (!weekMap[weekKey]) weekMap[weekKey] = [];
-    weekMap[weekKey].push(e);
+    weekMap[weekKey].push(entry);
   });
-  const weekKeys = Object.keys(weekMap).sort();
+  const weekKeys = Object.keys(weekMap).sort((a, b) => (a.split('::')[1] || '').localeCompare(b.split('::')[1] || ''));
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
@@ -272,46 +295,50 @@ function OvertimePage() {
   if (loading) return <div className="page-content"><p>Loading Overtime...</p></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header">
-        <h2>Overtime Sheet</h2>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} style={selectStyle} />
-          {!isExcludedFromOT(myStaff?.name, myStaff?.position) && (
-            <button className="add-staff-btn" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormNotes(''); }}>{showForm ? 'Cancel' : '+ Request OT'}</button>
-          )}
+    <div className="page-content overtime-management-page">
+      <header className="overtime-management-hero">
+        <div>
+          <span className="overtime-management-kicker">Hours and approvals</span>
+          <h2>Overtime Management</h2>
+          <p>Record additional duty, review departmental requests, and keep weekly overtime calculations separated by employee.</p>
         </div>
-      </div>
-
-      {(canViewAll || canApprove || tempAccess.length > 0) && (
-        <div className="leave-tabs" style={{ marginBottom: '16px' }}>
-          <button className={viewMode === 'individual' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('individual')}>👤 My Individual OT</button>
-          <button className={viewMode === 'department' ? 'leave-tab active' : 'leave-tab'} onClick={() => setViewMode('department')}>🏢 Department OT</button>
+        <div className="overtime-management-hero__actions">
+          <button type="button" className="overtime-management-secondary" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+          {(canViewAll || !isExcludedFromOT(myStaff?.name, myStaff?.position)) && <button type="button" className="overtime-management-primary" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormNotes(''); }}>{showForm ? 'Close request form' : 'Request overtime'}</button>}
         </div>
-      )}
+      </header>
 
-      {viewMode === 'department' && (canViewAll || canApprove) && (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-          {canViewAll && (
-            <select value={filterDept} onChange={(e) => { setFilterDept(e.target.value); setFilterStaff('all'); }} style={selectStyle}>
-              {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
-          )}
-          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} style={selectStyle}>
-            <option value="all">All Staff in {canViewAll ? filterDept : myStaff?.department}</option>
-            {staff.filter(s => (canViewAll ? s.department === filterDept : s.department === myStaff?.department) && s.id !== myStaff?.id).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-      )}
+      {loadError && <div className="overtime-management-alert" role="alert"><strong>Overtime information may be out of date.</strong><span>{loadError}</span></div>}
 
-      <div className="leave-tabs" style={{ marginBottom: '16px' }}>
-        <button className={tab === 'pending' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('pending')}>Pending</button>
-        <button className={tab === 'approved' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('approved')}>Approved</button>
-        <button className={tab === 'rejected' ? 'leave-tab active' : 'leave-tab'} onClick={() => setTab('rejected')}>Rejected</button>
-      </div>
+      <section className="overtime-management-summary" aria-label="Overtime summary">
+        <div><span>Pending</span><strong>{pendingCount}</strong><small>awaiting approval</small></div>
+        <div><span>Approved</span><strong>{approvedCount}</strong><small>confirmed entries</small></div>
+        <div><span>Rejected</span><strong>{rejectedCount}</strong><small>declined entries</small></div>
+        <div><span>Current view</span><strong>{filtered.length}</strong><small>matching entries</small></div>
+      </section>
 
-      {showForm && !isExcludedFromOT(myStaff?.name, myStaff?.position) && (
-        <form className="staff-form" onSubmit={handleSubmit}>
+      <section className="overtime-management-controls">
+        <label><span>Month</span><input type="month" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} /></label>
+        <label className="overtime-management-search"><span>Search entries</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Staff, SN, department or notes…" /></label>
+      </section>
+
+      {(canViewAll || canApprove || tempAccess.length > 0) && <nav className="overtime-management-view-tabs" aria-label="Overtime scope">
+        <button type="button" className={viewMode === 'individual' ? 'active' : ''} onClick={() => setViewMode('individual')}>My overtime</button>
+        <button type="button" className={viewMode === 'department' ? 'active' : ''} onClick={() => setViewMode('department')}>Department overtime</button>
+      </nav>}
+
+      {viewMode === 'department' && (canViewAll || canApprove) && <section className="overtime-management-department-filters">
+        {canViewAll && <label><span>Department</span><select value={filterDept} onChange={(event) => { setFilterDept(event.target.value); setFilterStaff('all'); }}>{DEPARTMENTS.map((departmentName) => <option key={departmentName} value={departmentName}>{departmentName}</option>)}</select></label>}
+        <label><span>Staff member</span><select value={filterStaff} onChange={(event) => setFilterStaff(event.target.value)}><option value="all">All staff in {canViewAll ? filterDept : myStaff?.department}</option>{staff.filter((member) => (canViewAll ? member.department === filterDept : member.department === myStaff?.department) && member.id !== myStaff?.id).map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      </section>}
+
+      <nav className="overtime-management-status-tabs" aria-label="Overtime status">
+        <button type="button" className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>Pending <span>{pendingCount}</span></button>
+        <button type="button" className={tab === 'approved' ? 'active' : ''} onClick={() => setTab('approved')}>Approved <span>{approvedCount}</span></button>
+        <button type="button" className={tab === 'rejected' ? 'active' : ''} onClick={() => setTab('rejected')}>Rejected <span>{rejectedCount}</span></button>
+      </nav>
+      {showForm && (canViewAll || !isExcludedFromOT(myStaff?.name, myStaff?.position)) && (
+        <form className="staff-form overtime-management-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>
             {editingId ? '✏️ Edit Overtime' : '⏰ Request Overtime'}
           </div>
@@ -353,15 +380,18 @@ function OvertimePage() {
       ) : (
         weekKeys.map((weekKey) => {
           const weekEntries = weekMap[weekKey];
+          const firstEntry = weekEntries[0];
+          if (!firstEntry) return null;
+          const weekStart = weekKey.split('::')[1] || INITIAL_DATE;
           const weekTotal = weekEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
           
-          const sampleStaff = staff.find(s => s.id === weekEntries[0].staffId);
+          const sampleStaff = staff.find(s => s.id === firstEntry.staffId);
           const isAdminDept = sampleStaff?.department === 'Administration';
           const targetHours = isAdminDept ? otRules.adminHours : otRules.regularHours;
 
-          const weekEnd = getWeekEnd(weekKey);
+          const weekEnd = getWeekEnd(weekStart);
           const weekLeaves = leaveReqs.filter(r => 
-            r.staffId === weekEntries[0].staffId && r.status === 'approved' && otRules.deductLeaves.includes(r.leaveType) && r.startDate <= weekEnd && r.endDate >= weekKey
+            r.staffId === firstEntry.staffId && r.status === 'approved' && otRules.deductLeaves.includes(r.leaveType) && r.startDate <= weekEnd && r.endDate >= weekStart
           );
           
           let deductionHours = 0;
@@ -371,7 +401,7 @@ function OvertimePage() {
             let count = 0;
             for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
               const dStr = formatDate(d);
-              if (dStr >= weekKey && dStr <= weekEnd) count++;
+              if (dStr >= weekStart && dStr <= weekEnd) count++;
             }
             deductionHours += count * 8;
           });
@@ -381,18 +411,18 @@ function OvertimePage() {
           const eligible = Math.max(0, weekTotal - adjustedTarget);
 
           return (
-            <div key={weekKey} style={{ marginBottom: '20px' }}>
-              <div style={{ padding: '12px', borderTopLeftRadius: '8px', borderTopRightRadius: '8px', fontWeight: 700, fontSize: '13px', display: 'flex', justifyContent: 'space-between', backgroundColor: isOver ? '#dcfce7' : '#f1f5f9', color: isOver ? '#065f46' : '#475569' }}>
-                <span>Week: {formatDisplay(weekKey)} – {formatDisplay(weekEnd)}</span>
+            <section key={weekKey} className="overtime-week-card">
+              <header className={isOver ? 'overtime-week-card__header is-eligible' : 'overtime-week-card__header'}>
+                <span>Week: {formatDisplay(weekStart)} – {formatDisplay(weekEnd)}</span>
                 <span>Total: {weekTotal.toFixed(2)} hrs {isOver ? `· ✅ Eligible (${eligible.toFixed(2)} OT)` : `· ${(adjustedTarget - weekTotal).toFixed(2)} hrs to ${adjustedTarget}`}</span>
-              </div>
-              <div className="staff-list" style={{ borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-                <table>
+              </header>
+              <div className="staff-list overtime-week-card__table-wrap">
+                <table className="overtime-management-table">
                   <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Status / Approved By</th><th>Actions</th></tr></thead>
                   <tbody>
                     {weekEntries.map((e) => {
                       const entryStaffRec = staff.find(s => s.id === e.staffId);
-                      const isEntrySMT = entryStaffRec?.isSMT === true;
+                      const isEntrySMT = entryStaffRec?.isSmt === true || entryStaffRec?.isSMT === true;
                       const canManage = canEditThisDept(e.staffDepartment, isEntrySMT);
                       const approverName = e.reviewedBy ? (staff.find(s => (s.email || '').toLowerCase() === e.reviewedBy.toLowerCase())?.name || e.reviewedBy) : null;
                       
@@ -412,7 +442,7 @@ function OvertimePage() {
                             )}
                           </td>
                           <td style={{ whiteSpace: 'nowrap' }}>
-                            {tab === 'pending' && canApprove && e.staffId !== myStaff?.id && (
+                            {tab === 'pending' && canApproveThisDept(e.staffDepartment, isEntrySMT) && e.staffId !== myStaff?.id && (
                               <>
                                 <button className="approve-btn" onClick={() => setApproveTarget(e.id)}>✓</button>
                                 <button className="reject-btn" onClick={() => setRejectTarget(e.id)}>✕</button>
@@ -427,7 +457,7 @@ function OvertimePage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+            </section>
           );
         })
       )}
