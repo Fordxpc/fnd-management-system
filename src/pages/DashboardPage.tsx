@@ -106,7 +106,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
     const fetchDashboard = async () => {
       try {
-        const data = await apiFetch('/dashboard');
+        const data = await apiFetch('/dashboard', { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
         if (!active) return;
         setDashboard(data);
         setLoadError('');
@@ -119,11 +119,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     };
 
     fetchDashboard();
-    const interval = setInterval(fetchDashboard, 300000);
+    const interval = window.setInterval(fetchDashboard, 30000);
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void fetchDashboard(); };
+    window.addEventListener('focus', fetchDashboard);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
 
     return () => {
       active = false;
-      clearInterval(interval);
+      window.clearInterval(interval);
+      window.removeEventListener('focus', fetchDashboard);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, []);
 
@@ -258,7 +263,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           ) : upcomingFlights.length > 0 ? (
             <div className="overview-flight-board-list">
               <div className="overview-flight-board-head" aria-hidden="true">
-                <span>Service</span><span>Route</span><span>Schedule</span><span>Live movement</span><span>Status</span>
+                <span>Service</span><span>Route</span><span>Schedule</span><span>Live movement</span><span>Flight details</span><span>Status</span>
               </div>
               {upcomingFlights.map((flight: any, index: number) => (
                 <button key={flight.id || `${flight.flightNo}-${flight.date}`} type="button" className={index === 0 ? 'is-next' : ''} onClick={() => onNavigate('flights')}>
@@ -266,6 +271,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <span className="overview-flight-route"><strong>{flight.route || 'Route TBC'}</strong><small>{shortFlightDate(flight.date)}</small></span>
                   <span className="overview-flight-times"><small>ARR <strong>{flight.arrivalTime || '—'}</strong></small><small>DEP <strong>{flight.departureTime || '—'}</strong></small></span>
                   <span className="overview-flight-times overview-flight-live-times"><small>ETA <strong>{flight.eta || '—'}</strong></small><small>ATA <strong>{flight.ata || '—'}</strong></small></span>
+                  <span className="overview-flight-details-compact"><small>CHECK-IN <strong>{flight.checkInTime || '—'}</strong></small><small>MLE DEP <strong>{flight.originDepTime || '—'}</strong></small><small>PAX <strong>{Number(flight.paxAdults) || 0} / {Number(flight.paxInfants) || 0} INF</strong></small></span>
                   <span className={`overview-board-status overview-board-status--${String(flightStatus(flight)).toLowerCase().replace(/[^a-z]+/g, '-')}`}>{flightStatus(flight)}</span>
                 </button>
               ))}
@@ -292,7 +298,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </Panel>
       </div>
       <Panel title="Live flight radar" eyebrow="Next FND movement" className="overview-flight-radar-panel" action={trackedFlight && <a className="overview-text-button" href={`https://www.flightradar24.com/${radarFlightId}`} target="_blank" rel="noreferrer">Open tracker</a>}>
-        {trackedFlight ? <div className="overview-flight-radar-content"><div className="overview-flight-radar-summary"><div><span>Tracking</span><strong>{trackedFlight.flightNo || 'Next flight'}</strong><small>{trackedFlight.route || 'Route TBC'} · {trackedFlight.aircraft || 'Aircraft TBC'}</small></div><span className="overview-board-status">{flightStatus(trackedFlight)}</span></div><div className="overview-flight-radar-frame"><iframe title={`Live tracking for ${trackedFlight.flightNo || 'next flight'}`} loading="lazy" src={`https://www.flightradar24.com/simple_index.php?flight=${radarFlightId}`} /></div><p>If live aircraft data is unavailable in the embedded view, open the full tracker in a new tab.</p></div> : <EmptyState>No upcoming flight is available for live tracking.</EmptyState>}
+        {trackedFlight ? <div className="overview-flight-radar-content"><div className="overview-flight-radar-summary"><div><span>Tracking</span><strong>{trackedFlight.flightNo || 'Next flight'}</strong><small>{trackedFlight.route || 'Route TBC'} · {trackedFlight.aircraft || 'Aircraft TBC'}</small></div><span className="overview-board-status">{flightStatus(trackedFlight)}</span></div><div className="overview-flight-radar-frame"><iframe title={`Live tracking for ${trackedFlight.flightNo || 'next flight'}`} loading="lazy" src={`https://www.flightradar24.com/simple_index.php?flight=${radarFlightId}`} /><a className="overview-mobile-radar-launch" href={`https://www.flightradar24.com/${radarFlightId}`} target="_blank" rel="noreferrer"><strong>Open live flight radar</strong><span>Mobile browsers may block the embedded tracker. Tap here to open the live map.</span></a></div><p>If live aircraft data is unavailable in the embedded view, open the full tracker in a new tab.</p></div> : <EmptyState>No upcoming flight is available for live tracking.</EmptyState>}
       </Panel>
       <section className="overview-metrics" aria-label="Today's operational activity">
         {operationMetrics.map((metric) => (

@@ -1998,7 +1998,7 @@ export const onRequest = async (context: any) => {
         const identityKey = `${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`;
         return !leaveStaffIds.has(staffId) && !leaveIdentityKeys.has(identityKey);
       });
-      const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [String(entry.staffId || `${entry.staffName}|${entry.staffDepartment}`).toLowerCase(), entry])).values());
+      const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [`${String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase()}|${String(entry.staffDepartment || "").trim().toLowerCase()}`, entry])).values());
       const onLeaveToday = activeLeaveToday.filter(leave => isManagerRole(currentUser.role) || currentUser.role === 'smt' || leave.staffDepartment === dept);
       let pendingLeave: any[] = [];
       let pendingOT: any[] = [];
