@@ -34,6 +34,11 @@ const getPeriodEnd = (start: Date): Date => {
   const d = new Date(start); d.setMonth(d.getMonth() + 1); d.setDate(15); return d;
 };
 
+const INITIAL_TODAY = new Date();
+const INITIAL_DATE = formatDate(INITIAL_TODAY);
+const INITIAL_PERIOD_START = getPeriodStart(INITIAL_TODAY);
+const INITIAL_PERIOD_END = getPeriodEnd(INITIAL_PERIOD_START);
+
 const getSaturdayOnOrBefore = (date: Date): Date => {
   const d = new Date(date); d.setHours(0, 0, 0, 0); const diff = (d.getDay() + 1) % 7; d.setDate(d.getDate() - diff); return d;
 };
@@ -110,8 +115,11 @@ function RosterPage() {
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [holidays, setHolidays] = useState<any[]>([]);
-  const [periodStart, setPeriodStart] = useState<Date>(getPeriodStart(new Date()));
+  const [periodStart, setPeriodStart] = useState<Date>(() => new Date(INITIAL_PERIOD_START.getTime()));
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [search, setSearch] = useState('');
   const [reorderMode, setReorderMode] = useState<boolean>(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
@@ -120,7 +128,7 @@ function RosterPage() {
 
   const [showForm, setShowForm] = useState<boolean>(false);
   const [staffId, setStaffId] = useState<string>('');
-  const [date, setDate] = useState<string>(formatDate(new Date()));
+  const [date, setDate] = useState<string>(INITIAL_DATE);
   const [shiftTime, setShiftTime] = useState<string>('06:00 - 14:00');
   const [customShift, setCustomShift] = useState<string>('');
   const [status, setStatus] = useState<string>('scheduled');
@@ -131,8 +139,8 @@ function RosterPage() {
 
   const [showBulkForm, setShowBulkForm] = useState<boolean>(false);
   const [bulkStaffIds, setBulkStaffIds] = useState<string[]>([]);
-  const [bulkStartDate, setBulkStartDate] = useState<string>('');
-  const [bulkEndDate, setBulkEndDate] = useState<string>('');
+  const [bulkStartDate, setBulkStartDate] = useState<string>(formatDate(INITIAL_PERIOD_START));
+  const [bulkEndDate, setBulkEndDate] = useState<string>(formatDate(INITIAL_PERIOD_END));
   const [bulkDaysOfWeek, setBulkDaysOfWeek] = useState<number[]>([0, 1, 2, 3, 4, 6]);
   const [bulkType, setBulkType] = useState<string>('scheduled');
   const [bulkShift, setBulkShift] = useState<string>('06:00 - 14:00');
@@ -147,9 +155,8 @@ function RosterPage() {
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
-  const isSMT = profile?.role === 'smt' || myStaff?.isSMT === true; 
-  
-  const userDepartment = myStaff?.department || profile?.department;
+  const isSMT = profile?.role === 'smt' || myStaff?.isSmt === true || myStaff?.isSMT === true;
+const userDepartment = myStaff?.department || profile?.department;
   const isAdmin = isDev || isManager || isSMT;
 
   // 🚨 ROSTER EDIT PERMISSION
@@ -169,6 +176,8 @@ function RosterPage() {
   const visibleStaff = [...staff]
     .filter((s) => {
       if (!ROSTER_DEPARTMENTS.includes(s.department)) return false;
+      const query = search.trim().toLowerCase();
+      if (query && ![s.name, s.sn, s.position, s.department].some((value) => String(value || '').toLowerCase().includes(query))) return false;
       if (isAdmin) {
         if (selectedDept === 'all') return true;
         return s.department === selectedDept;
@@ -179,35 +188,30 @@ function RosterPage() {
 
   const holidayDateSet = new Set<string>(holidays.map((h: any) => h.date));
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
-      const results = await Promise.allSettled([
-        apiFetch('/staff'), apiFetch('/roster'), apiFetch('/holidays')
-      ]);
-
-      const getData = (index: number) => {
-        if (results[index].status === 'fulfilled') return (results[index] as PromiseFulfilledResult<any>).value;
-        return []; 
-      };
-
+      const results = await Promise.allSettled([apiFetch('/staff'), apiFetch('/roster'), apiFetch('/holidays')]);
+      const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
+      const staffData = getData(0);
       const rawRoster = getData(1);
-      const uniqueRoster = Array.from(new Map(rawRoster.map((item: any) => [`${item.staffName}-${item.date}`, item])).values());
-
-      setStaff(getData(0));
+      const holidayData = getData(2);
+      const failedRequests = results.filter((result) => result.status === 'rejected').length;
+      const uniqueRoster: any[] = Array.from(new Map<string, any>((Array.isArray(rawRoster) ? rawRoster : []).map((item: any) => [`${item.staffId || item.staffName}-${item.date}`, item])).values());
+      setStaff(Array.isArray(staffData) ? staffData : []);
       setEntries(uniqueRoster);
-      setHolidays(getData(2));
-      setLoading(false);
+      setHolidays(Array.isArray(holidayData) ? holidayData : []);
+      setLoadError(failedRequests ? failedRequests + ' roster data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
     } catch (err: any) {
-      toast.error(err.message);
+      setLoadError(err.message || 'Roster information could not be loaded.');
+      if (!quiet) toast.error(err.message);
+    } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, [fetchData]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 15000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
 
   useEffect(() => {
     document.body.classList.remove('print-all', 'print-large', 'print-small');
@@ -215,11 +219,6 @@ function RosterPage() {
     else if (visibleStaff.length > 8) document.body.classList.add('print-large');
     else document.body.classList.add('print-small');
   }, [weeks.length, selectedDept, visibleStaff.length, isAdmin]);
-
-  useEffect(() => { 
-    setBulkStartDate(formatDate(periodStart)); 
-    setBulkEndDate(formatDate(periodEnd)); 
-  }, [periodStart]);
 
   const handleAdd = async (e: any) => {
     e.preventDefault();
@@ -378,7 +377,12 @@ function RosterPage() {
   };
 
   const changePeriod = (direction: number) => {
-    const newDate = new Date(periodStart); newDate.setMonth(newDate.getMonth() + direction); setPeriodStart(newDate);
+    const newDate = new Date(periodStart);
+    newDate.setMonth(newDate.getMonth() + direction);
+    const nextStart = getPeriodStart(newDate);
+    setPeriodStart(nextStart);
+    setBulkStartDate(formatDate(nextStart));
+    setBulkEndDate(formatDate(getPeriodEnd(nextStart)));
   };
 
   const moveStaff = async (id: string, direction: 'up' | 'down') => {
@@ -450,53 +454,57 @@ function RosterPage() {
 
   const editableStaffList = visibleStaff.filter(s => canEditDept(s.department));
 
+  const periodEntries = entries.filter((entry) => (entry.date || '') >= formatDate(periodStart) && (entry.date || '') <= formatDate(periodEnd));
+  const scheduledCount = periodEntries.filter((entry) => entry.status === 'scheduled').length;
+  const leaveCount = periodEntries.filter((entry) => entry.status && entry.status !== 'scheduled').length;
+  const periodHolidayCount = holidays.filter((holiday) => holiday.date >= formatDate(periodStart) && holiday.date <= formatDate(periodEnd)).length;
   if (loading) return <div className="page-content"><p>Loading Roster...</p></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header no-print">
-        <h2>Duty Roster</h2>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
-            <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setZoom(z => Math.max(0.5, z - 0.2))}>A-</button>
-            <div style={{ padding: '8px 12px', background: '#fff', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1' }}>
-              {Math.round(zoom * 100)}%
-            </div>
-            <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontWeight: 'bold' }} onClick={() => setZoom(z => Math.min(2.5, z + 0.2))}>A+</button>
-            <button style={{ padding: '8px 12px', border: 'none', background: 'none', cursor: 'pointer', fontSize: '11px', color: '#64748b' }} onClick={() => setZoom(1)}>Reset</button>
-          </div>
-
-          <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
-          <button className="export-btn jpg-btn" onClick={exportToJPG}>📸 JPG</button>
-          <button className="export-btn pdf-btn" onClick={exportToPDF}>📄 PDF</button>
-          
-          {isAdmin && (
-            <button className="export-btn bulk-btn" onClick={() => setReorderMode(!reorderMode)} style={{ background: reorderMode ? '#dc2626' : '#8b5cf6', color: 'white' }}>
-              {reorderMode ? 'Cancel Reorder' : '🔄 Reorder Staff'}
-            </button>
-          )}
-
-          {isAdmin && (
-             <button className="export-btn bulk-btn" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Cancel Bulk' : '⚡ Bulk Assign'}</button>
-          )}
-          
-          {editableStaffList.length > 0 && (
-            <button className="add-staff-btn" onClick={() => { setShowForm(!showForm); setShowBulkForm(false); }}>{showForm ? 'Cancel' : '+ Single'}</button>
-          )}
+    <div className="page-content roster-workspace-page">
+      <header className="roster-workspace-hero no-print">
+        <div>
+          <span className="roster-workspace-kicker">Workforce scheduling</span>
+          <h2>Duty Roster</h2>
+          <p>Plan shifts, reflect approved leave, and publish a clear operational schedule for every airport department.</p>
         </div>
-      </div>
-
-      {isAdmin && (
-        <div className="dept-tabs no-print">
-          <button className={selectedDept === 'all' ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept('all')}>All Departments</button>
-          {ROSTER_DEPARTMENTS.map((d) => (
-            <button key={d} className={selectedDept === d ? 'dept-tab active' : 'dept-tab'} onClick={() => setSelectedDept(d)}>{d}</button>
-          ))}
+        <div className="roster-workspace-hero__actions">
+          <button type="button" className="roster-workspace-secondary" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+          <button type="button" className="roster-workspace-secondary" onClick={handlePrint}>Print</button>
+          <button type="button" className="roster-workspace-secondary" onClick={exportToJPG}>Export JPG</button>
+          <button type="button" className="roster-workspace-secondary" onClick={exportToPDF}>Export PDF</button>
+          {editableStaffList.length > 0 && <button type="button" className="roster-workspace-primary" onClick={() => { setShowForm(!showForm); setShowBulkForm(false); }}>{showForm ? 'Close form' : 'Add shift'}</button>}
         </div>
-      )}
+      </header>
 
+      {loadError && <div className="roster-workspace-alert no-print" role="alert"><strong>Roster information may be out of date.</strong><span>{loadError}</span></div>}
+
+      <section className="roster-workspace-summary no-print" aria-label="Roster summary">
+        <div><span>Visible staff</span><strong>{visibleStaff.length}</strong><small>matching employees</small></div>
+        <div><span>Scheduled</span><strong>{scheduledCount}</strong><small>shift entries</small></div>
+        <div><span>Leave and off</span><strong>{leaveCount}</strong><small>status entries</small></div>
+        <div><span>Holidays</span><strong>{periodHolidayCount}</strong><small>within this period</small></div>
+      </section>
+
+      <section className="roster-workspace-controls no-print">
+        <label><span>Search staff</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, SN, designation…" /></label>
+        <div className="roster-workspace-zoom"><span>Grid scale</span><div><button type="button" onClick={() => setZoom(value => Math.max(.5, value - .2))}>−</button><strong>{Math.round(zoom * 100)}%</strong><button type="button" onClick={() => setZoom(value => Math.min(2.5, value + .2))}>+</button><button type="button" onClick={() => setZoom(1)}>Reset</button></div></div>
+        {isAdmin && <div className="roster-workspace-admin-actions"><button type="button" onClick={() => setReorderMode(!reorderMode)}>{reorderMode ? 'Stop reordering' : 'Reorder staff'}</button><button type="button" onClick={() => { setShowBulkForm(!showBulkForm); setShowForm(false); }}>{showBulkForm ? 'Close bulk form' : 'Bulk assign'}</button></div>}
+      </section>
+
+      {isAdmin && <nav className="roster-workspace-tabs no-print" aria-label="Department filter">
+        <button type="button" className={selectedDept === 'all' ? 'active' : ''} onClick={() => setSelectedDept('all')}>All <span>{staff.filter((member) => ROSTER_DEPARTMENTS.includes(member.department)).length}</span></button>
+        {ROSTER_DEPARTMENTS.map((departmentName) => <button type="button" key={departmentName} className={selectedDept === departmentName ? 'active' : ''} onClick={() => setSelectedDept(departmentName)}>{departmentName} <span>{staff.filter((member) => member.department === departmentName).length}</span></button>)}
+      </nav>}
+
+      <section className="roster-workspace-period no-print">
+        <button type="button" onClick={() => changePeriod(-1)}>Previous period</button>
+        <div><span>Current roster period</span><strong>{formatLongDate(periodStart)} — {formatLongDate(periodEnd)}</strong></div>
+        <button type="button" onClick={() => changePeriod(1)}>Next period</button>
+        {isAdmin && <button type="button" onClick={handleCopyPreviousPeriod} disabled={copying}>{copying ? 'Copying…' : 'Copy previous'}</button>}
+      </section>
       {showForm && (
-        <form className="staff-form no-print" onSubmit={handleAdd}>
+        <form className="staff-form roster-workspace-form no-print" onSubmit={handleAdd}>
           <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required>
             <option value="">Select Staff Member...</option>
             {editableStaffList.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn || 'No SN'})</option>)}
@@ -519,7 +527,7 @@ function RosterPage() {
       )}
 
       {showBulkForm && isAdmin && (
-        <div className="bulk-form no-print">
+        <div className="bulk-form roster-workspace-bulk no-print">
           <div className="bulk-form-title">⚡ Bulk Assign</div>
           <div className="bulk-form-grid">
             <div className="bulk-field bulk-field-full">
@@ -566,13 +574,6 @@ function RosterPage() {
           <button className="bulk-submit-btn" onClick={handleBulkAssign} disabled={bulkSubmitting}>{bulkSubmitting ? '...' : `⚡ Create Entries`}</button>
         </div>
       )}
-
-      <div className="week-nav no-print">
-        <button onClick={() => changePeriod(-1)}>← Previous Month</button>
-        <span>{formatLongDate(periodStart)} — {formatLongDate(periodEnd)}</span>
-        <button onClick={() => changePeriod(1)}>Next Month →</button>
-        {isAdmin && <button onClick={handleCopyPreviousPeriod} disabled={copying} style={{ background: '#8b5cf6' }}>{copying ? 'Copying...' : '📋 Copy Previous Period'}</button>}
-      </div>
 
       <div ref={gridRef} className="roster-export-area" style={{ zoom: zoom }}>
         <div className="roster-title">
