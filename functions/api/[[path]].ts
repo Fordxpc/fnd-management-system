@@ -65,6 +65,19 @@ export const onRequest = async (context: any) => {
       aircraft_info text, created_by text, created_at timestamp DEFAULT now()
     )
   `);
+  const requireChatGroupAccess = async (groupId: string, currentUser: any) => {
+    const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId)).limit(1);
+    if (!group) { const err: any = new Error("Channel not found"); err.status = 404; throw err; }
+    if (isManagerRole(currentUser.role)) return group;
+    const membership = await db.select().from(chatGroupMembers).where(and(
+      eq(chatGroupMembers.groupId, groupId), eq(chatGroupMembers.staffId, currentUser.id)
+    )).limit(1);
+    const sameDepartment = group.department && group.department === currentUser.department;
+    if (membership.length === 0 && !sameDepartment && group.department !== null) {
+      const err: any = new Error("Access denied"); err.status = 403; throw err;
+    }
+    return group;
+  };
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -119,73 +132,32 @@ export const onRequest = async (context: any) => {
 
     if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "GET") {
       const groupId = pathname.split("/")[4];
-
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
-      const membership = await db
-        .select()
-        .from(chatGroupMembers)
-        .where(
-          and(
-            eq(chatGroupMembers.groupId, groupId),
-            eq(chatGroupMembers.staffId, currentUser.id)
-          )
-        )
-        .limit(1);
-
-      if (
-        membership.length === 0 &&
-        !["developer","manager","admin"].includes(currentUser.role)
-      ) {
-        return json(
-          { message: "Access denied" },
-          403
-        );
-      }
-
+      const currentUser = await requireAuth(request, env);
+      await requireChatGroupAccess(groupId, currentUser);
       const messages = await db.select().from(chatMessages)
         .where(eq(chatMessages.groupId, groupId))
-        .orderBy(asc(chatMessages.createdAt));
-      return json(messages);
+        .orderBy(desc(chatMessages.createdAt)).limit(300);
+      return json(messages.reverse());
     }
 
     if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "POST") {
       const currentUser = await requireAuth(request, env);
       const groupId = pathname.split("/")[4];
-
-      const membership = await db
-        .select()
-        .from(chatGroupMembers)
-        .where(
-          and(
-            eq(chatGroupMembers.groupId, groupId),
-            eq(chatGroupMembers.staffId, currentUser.id)
-          )
-        )
-        .limit(1);
-
-      if (
-        membership.length === 0 &&
-        !["developer","manager","admin"].includes(currentUser.role)
-      ) {
-        return json(
-          { message: "Access denied" },
-          403
-        );
-      }
-
+      await requireChatGroupAccess(groupId, currentUser);
       const body: any = await request.json();
-      
+      const message = typeof body.message === "string" ? body.message.trim() : "";
+      const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
+      if (!message && !imageUrl) return json({ message: "A message or image is required" }, 400);
+      if (message.length > 2000) return json({ message: "Message must be 2,000 characters or fewer" }, 400);
+      if (imageUrl && (!imageUrl.startsWith("data:image/") || imageUrl.length > 2_900_000)) {
+        return json({ message: "Attachment must be an image no larger than 2 MB" }, 400);
+      }
       await db.insert(chatMessages).values({
         id: crypto.randomUUID(), groupId, senderId: currentUser.id, senderName: currentUser.name,
-        message: body.message || "", imageUrl: body.imageUrl || null, createdAt: new Date().toISOString(),
+        message, imageUrl: imageUrl || null, createdAt: new Date().toISOString(),
       });
-      return json({ success: true });
+      return json({ success: true }, 201);
     }
-
     if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/members") && method === "POST") {
       const currentUser = await requireAuth(request, env);
       const groupId = pathname.split("/")[4];

@@ -1,7 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+
+const formatTime = (value: string) => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
 
 export default function ConversationsPage() {
   const { profile } = useAuth();
@@ -10,116 +15,87 @@ export default function ConversationsPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [channelSearch, setChannelSearch] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchGroups = useCallback(async () => {
     try {
       const data = await apiFetch('/chat/groups');
       setGroups(data);
-      if (data.length > 0 && !activeGroup) setActiveGroup(data[0]);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
-  }, [activeGroup]);
+      setActiveGroup((current: any) => current && data.some((group: any) => group.id === current.id) ? current : data[0] || null);
+    } catch (err: any) { toast.error(err.message || 'Unable to load channels'); }
+    finally { setLoading(false); }
+  }, []);
 
-  useEffect(() => { fetchGroups(); }, [fetchGroups]);
-
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (quiet = false) => {
     if (!activeGroup) return;
-    try {
-      const data = await apiFetch(`/chat/groups/${activeGroup.id}/messages`);
-      setMessages(data);
-    } catch (err) { console.error(err); }
+    if (!quiet) setLoadingMessages(true);
+    try { setMessages(await apiFetch(`/chat/groups/${activeGroup.id}/messages`)); }
+    catch (err: any) { if (!quiet) toast.error(err.message || 'Unable to load messages'); }
+    finally { setLoadingMessages(false); }
   }, [activeGroup]);
 
+  useEffect(() => { void fetchGroups(); }, [fetchGroups]);
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
+    setMessages([]); void fetchMessages();
+    const interval = window.setInterval(() => void fetchMessages(true), 10000);
+    return () => window.clearInterval(interval);
   }, [fetchMessages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !activeGroup) return;
-    const msg = newMessage;
-    setNewMessage('');
+  const handleSend = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const message = newMessage.trim();
+    if (!message || !activeGroup || sending) return;
+    setSending(true);
     try {
-      await apiFetch(`/chat/groups/${activeGroup.id}/messages`, {
-        method: 'POST', body: JSON.stringify({ message: msg })
-      });
-      fetchMessages();
+      await apiFetch(`/chat/groups/${activeGroup.id}/messages`, { method: 'POST', body: JSON.stringify({ message }) });
+      setNewMessage(''); await fetchMessages(true);
     } catch (err: any) { toast.error(err.message); }
+    finally { setSending(false); }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; event.target.value = '';
     if (!file || !activeGroup) return;
+    if (!file.type.startsWith('image/')) { toast.error('Select an image file'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be 2 MB or smaller'); return; }
+    setUploading(true);
     const reader = new FileReader();
+    reader.onerror = () => { setUploading(false); toast.error('Unable to read this image'); };
     reader.onloadend = async () => {
       try {
-        await apiFetch(`/chat/groups/${activeGroup.id}/messages`, {
-          method: 'POST', body: JSON.stringify({ message: "Uploaded an image", imageUrl: reader.result })
-        });
-        fetchMessages();
+        await apiFetch(`/chat/groups/${activeGroup.id}/messages`, { method: 'POST', body: JSON.stringify({ message: '', imageUrl: String(reader.result || '') }) });
+        await fetchMessages(true);
       } catch (err: any) { toast.error(err.message); }
+      finally { setUploading(false); }
     };
     reader.readAsDataURL(file);
   };
 
-  if (loading) return <div className="page-content"><p>Loading chats...</p></div>;
+  const visibleGroups = groups.filter(group => String(group.name || '').toLowerCase().includes(channelSearch.toLowerCase()));
+  if (loading) return <div className="page-content"><p>Loading conversations…</p></div>;
 
-  return (
-    <div className="page-content" style={{ display: 'flex', height: 'calc(100vh - 120px)', gap: '20px' }}>
-      <div style={{ width: '300px', background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold', fontSize: '16px' }}>💬 Channels</div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-          {groups.map(g => (
-            <div key={g.id} onClick={() => setActiveGroup(g)}
-              style={{ padding: '12px', borderRadius: '8px', cursor: 'pointer', marginBottom: '4px', background: activeGroup?.id === g.id ? '#eff6ff' : 'transparent', color: activeGroup?.id === g.id ? '#1d4ed8' : '#475569', fontWeight: activeGroup?.id === g.id ? 700 : 500 }}>
-              # {g.name}
-            </div>
-          ))}
-          {groups.length === 0 && <p style={{ padding: '16px', color: '#94a3b8', fontSize: '13px' }}>No groups available.</p>}
-        </div>
-      </div>
+  return <div className="page-content conversations-page">
+    <aside className="conversations-sidebar">
+      <header><span>Internal communications</span><h2>Channels</h2><p>{groups.length} available</p></header>
+      <div className="conversation-search"><input value={channelSearch} onChange={event => setChannelSearch(event.target.value)} placeholder="Find a channel" /></div>
+      <nav>{visibleGroups.map(group => <button key={group.id} className={activeGroup?.id === group.id ? 'active' : ''} onClick={() => setActiveGroup(group)}><span>#</span><div><strong>{group.name}</strong><small>{group.department || 'All departments'}</small></div></button>)}{visibleGroups.length === 0 && <p>No matching channels.</p>}</nav>
+    </aside>
 
-      <div style={{ flex: 1, background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
-        {activeGroup ? (
-          <>
-            <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', fontWeight: 'bold', fontSize: '18px', background: '#f8fafc', borderTopLeftRadius: '12px', borderTopRightRadius: '12px' }}>
-              {activeGroup.name}
-            </div>
-            
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8fafc' }}>
-              {messages.map(m => {
-                const isMe = m.senderId === profile?.id;
-                return (
-                  <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
-                    <span style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px', marginLeft: isMe ? 0 : '8px', marginRight: isMe ? '8px' : 0 }}>{m.senderName}</span>
-                    <div style={{ background: isMe ? '#2563eb' : 'white', color: isMe ? 'white' : '#1e293b', padding: '10px 16px', borderRadius: '12px', borderBottomRightRadius: isMe ? 0 : '12px', borderBottomLeftRadius: isMe ? '12px' : 0, maxWidth: '70%', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', border: isMe ? 'none' : '1px solid #e2e8f0' }}>
-                      {m.message}
-                      {m.imageUrl && <img src={m.imageUrl} alt="attachment" style={{ maxWidth: '100%', borderRadius: '8px', marginTop: '8px', display: 'block' }} />}
-                    </div>
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <form onSubmit={handleSend} style={{ padding: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '10px' }}>
-              <label style={{ cursor: 'pointer', background: '#f1f5f9', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                📎 <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-              </label>
-              <input value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type a message..." style={{ flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1' }} />
-              <button type="submit" style={{ background: '#2563eb', color: 'white', padding: '0 24px', borderRadius: '8px', border: 'none', fontWeight: 'bold' }}>Send</button>
-            </form>
-          </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>Select a channel to start chatting</div>
-        )}
-      </div>
-    </div>
-  );
+    <main className="conversation-panel">
+      {activeGroup ? <>
+        <header className="conversation-header"><div><span>#</span><div><h3>{activeGroup.name}</h3><p>{activeGroup.description || activeGroup.department || 'Team conversation'}</p></div></div><button onClick={() => void fetchMessages()} disabled={loadingMessages}>{loadingMessages ? 'Refreshing…' : 'Refresh'}</button></header>
+        <section className="conversation-messages">{loadingMessages && messages.length === 0 ? <p className="conversation-empty">Loading messages…</p> : messages.length === 0 ? <div className="conversation-empty"><strong>No messages yet</strong><span>Start the conversation in #{activeGroup.name}.</span></div> : messages.map(message => {
+          const isMe = message.senderId === profile?.id;
+          return <article className={isMe ? 'mine' : ''} key={message.id}><div className="conversation-avatar">{String(message.senderName || '?').charAt(0).toUpperCase()}</div><div><header><strong>{isMe ? 'You' : message.senderName || 'Unknown user'}</strong><time>{formatTime(message.createdAt)}</time></header><div className="conversation-bubble">{message.message && <p>{message.message}</p>}{message.imageUrl && <a href={message.imageUrl} target="_blank" rel="noreferrer"><img src={message.imageUrl} alt="Shared attachment" /></a>}</div></div></article>;
+        })}<div ref={messagesEndRef} /></section>
+        <form className="conversation-composer" onSubmit={handleSend}><button type="button" className="attach" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Attach image">{uploading ? '…' : '+'}</button><input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} hidden /><div><input value={newMessage} maxLength={2000} onChange={event => setNewMessage(event.target.value)} placeholder={`Message #${activeGroup.name}`} disabled={sending} /><small>{newMessage.length}/2000</small></div><button className="send" disabled={sending || !newMessage.trim()}>{sending ? 'Sending…' : 'Send'}</button></form>
+      </> : <div className="conversation-empty large"><strong>No channel selected</strong><span>Choose a channel to view its messages.</span></div>}
+    </main>
+  </div>;
 }
