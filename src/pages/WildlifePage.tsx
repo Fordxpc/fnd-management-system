@@ -11,6 +11,9 @@ const BIRD_DB = [
 ].sort((a, b) => a.name.localeCompare(b.name));
 
 const ZONES = [1, 2, 3, 4, 5, 6, 7];
+const INITIAL_DATE = new Date().toISOString().split('T')[0];
+const INITIAL_YEAR = INITIAL_DATE.slice(0, 4);
+
 const WIND_DIRS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 
 function WildlifePage() {
@@ -20,12 +23,16 @@ function WildlifePage() {
   const [records, setRecords] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [viewingRecord, setViewingRecord] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [refNo, setRefNo] = useState(`RACL-FND-WHP-${new Date().getFullYear()}-01`);
+  const [date, setDate] = useState(INITIAL_DATE);
+  const [refNo, setRefNo] = useState(`RACL-FND-WHP-${INITIAL_YEAR}-01`);
   const [windDir, setWindDir] = useState('N');
   const [windSpd, setWindSpd] = useState('');
   const [temp, setTemp] = useState('');
@@ -36,30 +43,39 @@ function WildlifePage() {
   
   const [rows, setRows] = useState<any[]>(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] })));
 
-  const fetchRecords = useCallback(async () => {
+  const fetchRecords = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
     try {
-      const [data, staffData] = await Promise.all([
-        apiFetch('/wildlife'),
-        apiFetch('/staff').catch(() => []),
-      ]);
-      setRecords(data);
-
+      const [data, staffData] = await Promise.all([apiFetch('/wildlife'), apiFetch('/staff').catch(() => [])]);
+      setRecords(Array.isArray(data) ? data : []);
       const myEmail = String(profile?.email || user?.email || '').toLowerCase();
-      const mine = Array.isArray(staffData)
-        ? staffData.find((s: any) => (s.email || '').toLowerCase() === myEmail)
-        : null;
+      const mine = Array.isArray(staffData) ? staffData.find((member: any) => (member.email || '').toLowerCase() === myEmail) : null;
       setMyStaff(mine || null);
+      setLoadError('');
+    } catch (err: any) {
+      setLoadError(err.message || 'Wildlife records could not be loaded.');
+      if (!quiet) toast.error(err.message);
+    } finally {
       setLoading(false);
-    } catch (err: any) { toast.error(err.message); setLoading(false); }
-  }, [profile?.email, user?.email]);
+      setRefreshing(false);
+    }
+  }, [profile, user]);
 
-  useEffect(() => { fetchRecords(); const interval = setInterval(fetchRecords, 15000); return () => clearInterval(interval); }, [fetchRecords]);
+  useEffect(() => { const initialLoad = window.setTimeout(() => void fetchRecords(true), 0); const interval = window.setInterval(() => void fetchRecords(true), 15000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchRecords]);
 
   const canView = canViewBirdCounts(profile, myStaff);
   const canEdit = canEditBirdCounts(profile, myStaff);
 
   const handleRowChange = (index: number, field: string, value: any, zoneIdx?: number) => {
-    setRows(prev => { const updated = [...prev]; if (field === 'zone' && zoneIdx !== undefined) { updated[index].zones[zoneIdx] = Number(value) || 0; } else { updated[index][field] = value; } return updated; });
+    setRows((previous) => previous.map((row, rowIndex) => {
+      if (rowIndex !== index) return row;
+      if (field === 'zone' && zoneIdx !== undefined) {
+        const zones = [...row.zones];
+        zones[zoneIdx] = Number(value) || 0;
+        return { ...row, zones };
+      }
+      return { ...row, [field]: value };
+    }));
   };
 
   const calculateRisk = (row: any) => {
@@ -67,12 +83,12 @@ function WildlifePage() {
     const dbBird = BIRD_DB.find(b => b.name === row.bird);
     const rshb = dbBird?.rshb || 0; const mass = dbBird?.mass || 0;
     const flocksVal = row.flocks === 'Y' ? 2 : 1;
-    const totalBirds = row.zones.reduce((a: number, b: number) => a + b, 0);
+    const totalBirds = (row.zones || []).reduce((a: number, b: number) => a + b, 0);
     const riskIndex = Math.round(flocksVal * (mass / 1000) * rshb * totalBirds);
     let status = 'LOW RISK'; let action = 'Mitigation Not required';
     if (riskIndex >= 1000) { status = 'ALERT'; action = 'Urgently mitigation required before Operation'; }
-    else if (riskIndex > 250) { status = 'HIGH RISK'; action = 'Mitigation required before Operation'; }
-    else if (riskIndex > 100) { status = 'MODERATE'; action = 'Advise to disparce bird near Runway Area'; }
+    else if (riskIndex > 250) { status = 'SEVERE'; action = 'Mitigation required before operation'; }
+    else if (riskIndex > 100) { status = 'MODERATE'; action = 'Advise dispersal of birds near the runway area'; }
     return { total: totalBirds, riskIndex, status, rshb, action };
   };
 
@@ -81,12 +97,14 @@ function WildlifePage() {
     const validRows = rows.filter(r => r.bird);
     if (validRows.length === 0) { toast.error('Please select at least one bird species.'); return; }
     const observerName = `${profile?.name || user?.email || 'User'} (${profile?.position || 'Staff'})`;
+    setSaving(true);
     try {
       const payload = { date, refNo, wind: `${windDir} ${windSpd}km/h`.trim(), temp, cloud, rain, startTime, endTime, rows: validRows, observer: observerName };
       if (editingId) { await apiFetch(`/wildlife/${editingId}`, { method: 'PUT', body: JSON.stringify(payload) }); toast.success('Bird count updated!'); } 
       else { await apiFetch('/wildlife', { method: 'POST', body: JSON.stringify(payload) }); toast.success('Bird count saved!'); }
       setActiveTab('reports'); setEditingId(null); setRows(Array.from({ length: 10 }, () => ({ bird: '', flocks: 'N', zones: [0,0,0,0,0,0,0] }))); fetchRecords();
     } catch (err: any) { toast.error(err.message); }
+    finally { setSaving(false); }
   };
 
   const handleEdit = (record: any) => {
@@ -103,7 +121,7 @@ function WildlifePage() {
 
   const trendData = useMemo(() => {
     const dailyData: Record<string, Record<string, number>> = {}; const allSpecies = new Set<string>();
-    records.forEach(rec => { const d = rec.date; if (!dailyData[d]) dailyData[d] = {}; rec.rows?.forEach((r: any) => { if (!r.bird) return; allSpecies.add(r.bird); const total = r.zones.reduce((a: number, b: number) => a + b, 0); dailyData[d][r.bird] = (dailyData[d][r.bird] || 0) + total; }); });
+    records.forEach(rec => { const d = rec.date; if (!dailyData[d]) dailyData[d] = {}; rec.rows?.forEach((r: any) => { if (!r.bird) return; allSpecies.add(r.bird); const total = (r.zones || []).reduce((a: number, b: number) => a + b, 0); dailyData[d][r.bird] = (dailyData[d][r.bird] || 0) + total; }); });
     const monthlyTotals: Record<string, number> = {};
     Object.entries(dailyData).forEach(([dateStr, speciesMap]) => { const month = dateStr.substring(0, 7); const totalForDay = Object.values(speciesMap).reduce((a, b) => a + b, 0); monthlyTotals[month] = (monthlyTotals[month] || 0) + totalForDay; });
     const chart = Object.entries(monthlyTotals).map(([month, total]) => ({ month, total })).sort((a, b) => a.month.localeCompare(b.month));
@@ -111,21 +129,50 @@ function WildlifePage() {
     return { chart, tableRows, speciesList: Array.from(allSpecies).sort() };
   }, [records]);
 
+  const filteredRecords = records.filter((record) => {
+    const query = search.trim().toLowerCase();
+    return !query || [record.date, record.refNo, record.observer].some((value) => String(value || '').toLowerCase().includes(query));
+  });
+  const totalSightings = records.reduce((total, record) => total + (record.rows || []).reduce((rowTotal: number, row: any) => rowTotal + (row.zones || []).reduce((sum: number, count: number) => sum + Number(count || 0), 0), 0), 0);
+  const highRiskObservations = records.reduce((total, record) => total + (record.rows || []).filter((row: any) => calculateRisk(row).riskIndex > 250).length, 0);
+  const speciesObserved = new Set(records.flatMap((record) => (record.rows || []).map((row: any) => row.bird).filter(Boolean))).size;
   if (loading) return <div className="page-content"><p>Loading Wildlife Data...</p></div>;
   if (!canView) return <div className="page-content"><div className="empty-state"><h2>Access Denied</h2></div></div>;
 
   return (
-    <div className="page-content">
-      <div className="staff-header no-print"><h2>🦅 Wildlife & Bird Hazard Management</h2></div>
+    <div className="page-content wildlife-workspace-page">
+      <header className="wildlife-workspace-hero no-print">
+        <div>
+          <span className="wildlife-workspace-kicker">Airfield hazard monitoring</span>
+          <h2>Wildlife Management</h2>
+          <p>Record bird concentrations, evaluate strike risk, and track wildlife trends across the airport operating area.</p>
+        </div>
+        <div className="wildlife-workspace-hero__actions">
+          <button type="button" className="wildlife-workspace-secondary" onClick={() => void fetchRecords()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+          {canEdit && <button type="button" className="wildlife-workspace-primary" onClick={() => { setActiveTab('form'); if (!editingId) { setDate(INITIAL_DATE); setRefNo(`RACL-FND-WHP-${INITIAL_YEAR}-01`); } }}>{editingId ? 'Continue editing' : 'New bird count'}</button>}
+        </div>
+      </header>
 
-      <div className="ops-tabs no-print">
-        <button className={`ops-tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => { setActiveTab('form'); if(!editingId) { setDate(new Date().toISOString().split('T')[0]); setRefNo(`RACL-FND-WHP-${new Date().getFullYear()}-01`); } }}>{editingId ? '✏️ Editing Record' : '📝 Bird Count Form'}</button>
-        <button className={`ops-tab-btn ${activeTab === 'reports' ? 'active' : ''}`} onClick={() => setActiveTab('reports')}>📊 Reports & Analysis</button>
-        <button className={`ops-tab-btn ${activeTab === 'map' ? 'active' : ''}`} onClick={() => setActiveTab('map')}>🗺️ Zone Map</button>
-      </div>
+      {loadError && <div className="wildlife-workspace-alert no-print" role="alert"><strong>Wildlife information may be out of date.</strong><span>{loadError}</span></div>}
 
+      <section className="wildlife-workspace-summary no-print" aria-label="Wildlife summary">
+        <div><span>Saved reports</span><strong>{records.length}</strong><small>bird counts</small></div>
+        <div><span>Total sightings</span><strong>{totalSightings}</strong><small>birds recorded</small></div>
+        <div><span>Species</span><strong>{speciesObserved}</strong><small>observed types</small></div>
+        <div><span>Severe risk</span><strong>{highRiskObservations}</strong><small>observations requiring action</small></div>
+      </section>
+
+      <section className="wildlife-workspace-controls no-print">
+        <label><span>Search saved reports</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Date, reference or observer…" /></label>
+      </section>
+
+      <nav className="wildlife-workspace-tabs no-print" aria-label="Wildlife sections">
+        <button type="button" className={activeTab === 'form' ? 'active' : ''} onClick={() => setActiveTab('form')}>{editingId ? 'Editing record' : 'Bird count form'}</button>
+        <button type="button" className={activeTab === 'reports' ? 'active' : ''} onClick={() => setActiveTab('reports')}>Reports and analysis</button>
+        <button type="button" className={activeTab === 'map' ? 'active' : ''} onClick={() => setActiveTab('map')}>Zone map</button>
+      </nav>
       {activeTab === 'form' && (
-        <div className="dash-card" style={{ padding: '24px', overflowX: 'auto', background: '#fff' }}>
+        <div className="dash-card wildlife-count-form">
           <div className="bird-count-page-1">
             <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}><img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} /><div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div><div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div></div>
 
@@ -175,7 +222,7 @@ function WildlifePage() {
 
           <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }} className="no-print">
             <button className="export-btn print-btn" onClick={handlePrint}>🖨️ Print</button>
-            {canEdit && (<button className="add-staff-btn" onClick={handleSave} style={{ background: editingId ? '#2563eb' : '#16a34a' }}>{editingId ? '💾 Save Changes' : '💾 Save Bird Count'}</button>)}
+            {canEdit && (<button className="add-staff-btn" onClick={handleSave} disabled={saving} style={{ background: editingId ? '#2563eb' : '#16a34a' }}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save bird count'}</button>)}
           </div>
         </div>
       )}
@@ -206,7 +253,7 @@ function WildlifePage() {
             <table className="mini-table mt-4">
               <thead><tr><th>Date</th><th>Ref No</th><th>Observer</th><th>Total Species</th><th>Actions</th></tr></thead>
               <tbody>
-                {records.map((r: any) => (
+                {filteredRecords.map((r: any) => (
                   <tr key={r.id}>
                     <td>{r.date}</td><td>{r.refNo}</td><td>{r.observer}</td><td>{r.rows?.length || 0}</td>
                     <td style={{ whiteSpace: 'nowrap' }}>

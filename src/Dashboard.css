@@ -2223,3 +2223,32 @@
 @media (max-width: 1000px) { .runway-lights-hero { align-items: stretch; flex-direction: column; } }
 @media (max-width: 760px) { .runway-lights-hero { padding: 24px 20px; } .runway-lights-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .runway-lights-form { grid-template-columns: 1fr; padding: 18px; } .runway-lights-form > * { grid-column: auto !important; } }
 @media (max-width: 480px) { .runway-lights-hero__actions { flex-direction: column; } .runway-lights-hero__actions button { width: 100%; } .runway-lights-summary { gap: 9px; } .runway-lights-summary > div { padding: 15px; } .runway-lights-summary strong { font-size: 25px; } }
+
+/* Phase 12: Wildlife Monitoring workspace */
+.wildlife-workspace-page { display: flex; flex-direction: column; gap: 22px; }
+.wildlife-workspace-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 30px; border-radius: 24px; color: #fff; background: radial-gradient(circle at 90% 12%, rgba(74,222,128,.25), transparent 30%), linear-gradient(135deg, #0f172a 0%, #174333 65%, #166534 125%); box-shadow: 0 20px 45px rgba(15,23,42,.16); }
+.wildlife-workspace-kicker { display: block; margin-bottom: 8px; color: #86efac; font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.wildlife-workspace-hero h2 { margin: 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.04em; }
+.wildlife-workspace-hero p { max-width: 680px; margin: 10px 0 0; color: #dcfce7; line-height: 1.6; }
+.wildlife-workspace-hero__actions { display: flex; gap: 9px; }
+.wildlife-workspace-primary, .wildlife-workspace-secondary { min-height: 42px; padding: 0 17px; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.wildlife-workspace-primary { border-color: #86efac; color: #052e16; background: #86efac; }
+.wildlife-workspace-secondary { color: #dcfce7; background: rgba(255,255,255,.09); }
+.wildlife-workspace-secondary:disabled { cursor: wait; opacity: .65; }
+.wildlife-workspace-alert { display: flex; gap: 8px 20px; flex-wrap: wrap; padding: 14px 18px; border: 1px solid #fed7aa; border-radius: 12px; color: #9a3412; background: #fff7ed; }
+.wildlife-workspace-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.wildlife-workspace-summary > div { position: relative; overflow: hidden; padding: 20px; border: 1px solid #e2e8f0; border-radius: 18px; background: #fff; box-shadow: 0 10px 24px rgba(15,23,42,.05); }
+.wildlife-workspace-summary > div::after { position: absolute; right: -24px; bottom: -36px; width: 94px; height: 94px; border-radius: 50%; background: #dcfce7; content: ''; }
+.wildlife-workspace-summary span, .wildlife-workspace-summary small { position: relative; z-index: 1; display: block; color: #64748b; font-size: 11px; font-weight: 700; }
+.wildlife-workspace-summary strong { position: relative; z-index: 1; display: block; margin: 5px 0; color: #0f172a; font-size: 30px; line-height: 1; }
+.wildlife-workspace-controls { padding: 18px 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+.wildlife-workspace-controls label { display: flex; max-width: 560px; flex-direction: column; gap: 7px; color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.wildlife-workspace-controls input { min-height: 43px; padding: 0 13px; border: 1px solid #cbd5e1; border-radius: 10px; color: #172033; font: inherit; font-size: 13px; outline: none; }
+.wildlife-workspace-tabs { display: flex; gap: 7px; overflow-x: auto; padding: 7px; border: 1px solid #e2e8f0; border-radius: 15px; background: #eef2f7; }
+.wildlife-workspace-tabs button { min-height: 40px; padding: 0 15px; border: 0; border-radius: 10px; color: #64748b; background: transparent; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.wildlife-workspace-tabs button.active { color: #166534; background: #fff; box-shadow: 0 4px 12px rgba(15,23,42,.1); }
+.wildlife-count-form { overflow-x: auto; padding: 24px; border-radius: 18px; }
+.wildlife-count-form .add-staff-btn:disabled { cursor: wait; opacity: .65; }
+@media (max-width: 1000px) { .wildlife-workspace-hero { align-items: stretch; flex-direction: column; } }
+@media (max-width: 760px) { .wildlife-workspace-hero { padding: 24px 20px; } .wildlife-workspace-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .wildlife-workspace-hero__actions { flex-direction: column; } .wildlife-workspace-hero__actions button { width: 100%; } .wildlife-workspace-summary { gap: 9px; } .wildlife-workspace-summary > div { padding: 15px; } .wildlife-workspace-summary strong { font-size: 25px; } }
