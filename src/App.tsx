@@ -87,10 +87,17 @@ function App() {
 
   return (
     <div className="login-container">
+      <section className="login-brand-panel">
+        <div className="login-brand-mark">FND</div>
+        <div><span>Airport operations platform</span><h1>One clear view of every operational day.</h1><p>Secure access to flights, rosters, airside checks, staff requests and airport communications.</p></div>
+        <div className="login-feature-list"><span><i /> Live operational visibility</span><span><i /> Role-protected workspaces</span><span><i /> Funadhoo Airport local system</span></div>
+      </section>
+      <main className="login-card-panel">
       <div className="login-box">
         <div className="header">
-          <h1>Funadhoo Airport</h1>
-          <p>FND Management System</p>
+          <span>Welcome back</span>
+          <h1>Sign in to FND</h1>
+          <p>Funadhoo Airport Management System</p>
         </div>
 
         <div className="role-toggle">
@@ -128,7 +135,7 @@ function App() {
                 style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#64748b' }}
                 title={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? '🙈' : '👁️'}
+                {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
           </div>
@@ -155,6 +162,7 @@ function App() {
           <p>No account? <a href="#" onClick={(e) => { e.preventDefault(); toast.error('Please contact the Administrator to create an account.'); }}>Register</a></p>
         </div>
       </div>
+      </main>
       
       {showForgotPw && <ForgotPasswordModal onClose={() => setShowForgotPw(false)} />}
     </div>

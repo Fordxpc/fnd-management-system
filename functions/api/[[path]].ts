@@ -234,6 +234,9 @@ export const onRequest = async (context: any) => {
          return json({ message: "If an account exists, a request was sent." });
       }
 
+      const existingRequest = await db.select().from(passwordResetRequests).where(and(eq(passwordResetRequests.email, body.email.toLowerCase()), eq(passwordResetRequests.status, "pending"))).limit(1);
+      if (existingRequest.length > 0) return json({ success: true, message: "A forgot-password request is already pending." });
+
       const id = crypto.randomUUID();
       await db.insert(passwordResetRequests).values({
         id, email: body.email.toLowerCase(), status: "pending", requestedAt: new Date().toISOString(),
@@ -267,13 +270,13 @@ export const onRequest = async (context: any) => {
         await db.delete(account).where(eq(account.userId, userId));
         await db.delete(user).where(eq(user.id, userId));
 
-        const temporaryPassword = `Fnd!${crypto.randomUUID()}`;
+        const temporaryPassword = `Fnd!${crypto.randomUUID().replace(/-/g, "").slice(0, 6)}`;
         await getAuth(env).api.signUpEmail({
           body: { email: reqData.email, password: temporaryPassword, name: targetUser[0].name || "Staff Member" }
         });
 
         await db.update(passwordResetRequests).set({ status: "resolved" }).where(eq(passwordResetRequests.id, id));
-        return json({ success: true, message: "Password reset completed", temporaryPassword });
+        return json({ success: true, message: "Password reset completed", temporaryPassword, userName: reqData.email, loginUrl: env?.BETTER_AUTH_URL || "https://management.funadhooairport.com" });
       } catch (err: any) {
         console.error("Failed to reset password", err);
         return json({ message: "Failed to reset password" }, 500);
@@ -1111,7 +1114,7 @@ export const onRequest = async (context: any) => {
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       validateAccessAssignment(currentUser.role, role, department);
 
-      if (!/^\S+@\S+\.\S+$/.test(email) || typeof password !== "string" || password.length < 8 || password.length > 128) return json({ message: "A valid email and password of 8 to 128 characters are required" }, 400);
+      if (!/^\S+@\S+\.\S+$/.test(email) || typeof password !== "string" || password.length < 6 || password.length > 10) return json({ message: "A valid email and password of 6 to 10 characters are required" }, 400);
       const activeUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
       if (activeUser.length > 0) return json({ message: "This user already exists." }, 400);
 
@@ -1953,55 +1956,22 @@ export const onRequest = async (context: any) => {
         }) : [];
 
       const nextFlight = upcomingFlights[0] || null;
-      const onDutyToday =
-        roster.filter(r => {
-
-          if (
-            r.date !== today
-          ) {
-            return false;
-          }
-
-          if (
-            isManagerRole(
-              currentUser.role
-            )
-          ) {
-            return true;
-          }
-
-          return (
-            r.staffDepartment === dept
-          );
-        });
-
-      const onLeaveToday =
-        leaveList.filter(l => {
-
-          const active =
-            l.status === "approved" &&
-            (l.startDate || "") <= today &&
-            (l.endDate || "") >= today;
-
-          if (
-            !active
-          ) {
-            return false;
-          }
-
-          if (
-            isManagerRole(
-              currentUser.role
-            )
-          ) {
-            return true;
-          }
-
-          return (
-            l.staffDepartment === dept
-          );
-        });
-
+      const activeLeaveToday = leaveList.filter(leave =>
+        leave.status === 'approved' &&
+        String(leave.startDate || '') <= today &&
+        String(leave.endDate || '') >= today
+      );
+      const leaveStaffIds = new Set(activeLeaveToday.map(leave => String(leave.staffId || '')).filter(Boolean));
+      const leaveIdentityKeys = new Set(activeLeaveToday.map(leave => `${String(leave.staffName || '').trim().toLowerCase()}|${String(leave.staffDepartment || '').trim().toLowerCase()}`));
+      const visibleDutyEntries = roster.filter(entry => {
+        if (entry.date !== today) return false;
+        if (!isManagerRole(currentUser.role) && currentUser.role !== 'smt' && entry.staffDepartment !== dept) return false;
+        const staffId = String(entry.staffId || '');
+        const identityKey = `${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`;
+        return !leaveStaffIds.has(staffId) && !leaveIdentityKeys.has(identityKey);
+      });
+      const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [String(entry.staffId || `${entry.staffName}|${entry.staffDepartment}`).toLowerCase(), entry])).values());
+      const onLeaveToday = activeLeaveToday.filter(leave => isManagerRole(currentUser.role) || currentUser.role === 'smt' || leave.staffDepartment === dept);
       let pendingLeave: any[] = [];
       let pendingOT: any[] = [];
 

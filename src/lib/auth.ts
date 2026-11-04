@@ -31,6 +31,8 @@ export function getAuth(env: any) {
     }),
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: 6,
+      maxPasswordLength: 10,
     },
     user: {
       additionalFields: {

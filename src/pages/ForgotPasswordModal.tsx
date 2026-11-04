@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { apiFetch } from '../lib/api'; // <-- Import apiFetch
+import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
 
 export default function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
@@ -26,9 +26,9 @@ export default function ForgotPasswordModal({ onClose }: { onClose: () => void }
   return (
     <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 9999 }}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px', padding: '24px' }}>
-        <h3 style={{ marginTop: 0, color: '#1e293b' }}>🔐 Request Password Reset</h3>
+        <h3 style={{ marginTop: 0, color: '#1e293b' }}>🔐 Forgot password request</h3>
         <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
-          Enter your email. An Administrator will approve the reset, setting your password back to <b>Fnd@2026</b>.
+          Enter your work email to submit a forgot-password request. An authorized manager will create a temporary password and share the login details with you securely.
         </p>
         <form onSubmit={handleSubmit}>
           <input 

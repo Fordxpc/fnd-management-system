@@ -26,11 +26,16 @@ function SettingsPage() {
   const [updatingAccess, setUpdatingAccess] = useState('');
 
   const [resetRequests, setResetRequests] = useState<any[]>([]);
-  const [completedReset, setCompletedReset] = useState<{ email: string; temporaryPassword: string } | null>(null);
+  const [completedReset, setCompletedReset] = useState<{ email: string; temporaryPassword: string; userName: string; loginUrl: string } | null>(null);
   const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const resetShareMessage = completedReset ? `Funadhoo Airport Management System\n\nYour forgot-password request has been approved.\n\nLogin link: ${completedReset.loginUrl}\nUsername: ${completedReset.userName}\nTemporary password: ${completedReset.temporaryPassword}\n\nPlease sign in and change your password immediately. Your new password must be between 6 and 10 characters. Do not share this message with anyone else.` : '';
+  const copyResetMessage = async () => {
+    try { await navigator.clipboard.writeText(resetShareMessage); toast.success('Complete reset message copied'); }
+    catch { toast.error('Unable to copy automatically. Select the message and copy it manually.'); }
+  };
 
 
   const [inspectorStaffId, setInspectorStaffId] = useState('');
@@ -167,7 +172,7 @@ function SettingsPage() {
                         <button className="quick-btn" style={{ background: '#dc2626', color: 'white', padding: '4px 8px' }} onClick={async () => {
                             try {
                               const result = await apiFetch(`/password-reset-requests/${r.id}/approve`, { method: 'POST' });
-                              setCompletedReset({ email: r.email, temporaryPassword: result.temporaryPassword });
+                              setCompletedReset({ email: r.email, temporaryPassword: result.temporaryPassword, userName: result.userName || r.email, loginUrl: result.loginUrl || window.location.origin });
                               fetchSettings();
                             } catch(e: any) { toast.error(e.message); }
                         }}>Approve & Reset</button>
@@ -397,15 +402,18 @@ function SettingsPage() {
         onCancel={() => setDeleteUserTarget(null)}
       />
 
-      <ConfirmDialog
-        isOpen={!!completedReset}
-        title="Temporary Password Created"
-        message={completedReset ? `Account: ${completedReset.email}\nTemporary password: ${completedReset.temporaryPassword}\n\nCopy this password now and give it securely to the user. It will not be shown again.` : ''}
-        confirmText="I have copied it"
-        onConfirm={() => setCompletedReset(null)}
-        onCancel={() => setCompletedReset(null)}
-      />
-
+      {completedReset && (
+        <div className="modal-backdrop" onClick={() => setCompletedReset(null)}>
+          <div className="modal-content reset-share-modal" onClick={event => event.stopPropagation()}>
+            <span className="reset-share-kicker">Forgot-password request approved</span>
+            <h3>Temporary login details</h3>
+            <p>Copy the complete message below and send it securely to the user.</p>
+            <textarea readOnly value={resetShareMessage} rows={11} onFocus={event => event.currentTarget.select()} />
+            <div className="reset-share-details"><span>Password length</span><strong>{completedReset.temporaryPassword.length} characters</strong></div>
+            <div className="modal-actions"><button className="cancel-btn" onClick={() => setCompletedReset(null)}>Close</button><button className="submit-btn" onClick={() => void copyResetMessage()}>Copy complete message</button></div>
+          </div>
+        </div>
+      )}
       {editingUser && (
         <UserEditModal 
           user={editingUser} 

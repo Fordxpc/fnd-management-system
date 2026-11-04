@@ -96,7 +96,7 @@ function UsersPage() {
     
     const email = formData.email.trim().toLowerCase();
     if (!email || !formData.password) { toast.error('Email and Password are required'); return; }
-    if (formData.password.length < 8) { toast.error('Password must be at least 8 characters'); return; }
+    if (formData.password.length < 6 || formData.password.length > 10) { toast.error('Password must be between 6 and 10 characters'); return; }
     if (users.some((u) => (u.email || '').toLowerCase() === email)) { toast.error('This user already exists in the active database.'); return; }
 
     setSavingPreset(true);
@@ -138,7 +138,7 @@ function UsersPage() {
           <div><label>Full Name</label><input placeholder="e.g. Mohamed Fuadhu" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required /></div>
           <div><label>Designation</label><input placeholder="e.g. Operations Officer" value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} /></div>
           <div><label>Work Email *</label><input type="email" placeholder="email@funadhooairport.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} required /></div>
-          <div><label>Temporary Password *</label><input type="password" minLength={8} autoComplete="new-password" placeholder="Minimum 8 characters" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required /></div>
+          <div><label>Temporary Password *</label><input type="password" minLength={6} maxLength={10} autoComplete="new-password" placeholder="6–10 characters" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} required /></div>
           <div><label>Role</label><select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} style={selectStyle}>{assignableRoles.map((r) => <option key={r} value={r}>{r.toUpperCase()}</option>)}</select></div>
           <div><label>Department</label><select value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} style={selectStyle}>{DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}</select></div>
           <button type="submit" disabled={savingPreset} style={{ gridColumn: 'span 2', background: '#2563eb', color: 'white', padding: '12px', fontSize: '14px', marginTop: '10px' }}>
