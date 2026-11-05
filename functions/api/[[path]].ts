@@ -2085,10 +2085,9 @@ export const onRequest = async (context: any) => {
           env
         );
 
-      const today =
-        new Date()
-          .toISOString()
-          .split("T")[0];
+      const today = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Indian/Maldives', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(new Date());
 
       const staffList =
         await db
@@ -2172,20 +2171,32 @@ export const onRequest = async (context: any) => {
         }) : [];
 
       const nextFlight = upcomingFlights[0] || null;
+      const normalizeStaffName = (value: any) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const normalizeDepartment = (value: any) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const normalizeSn = (value: any) => String(value || '').trim().replace(/^sn-/i, '').toUpperCase();
       const activeLeaveToday = leaveList.filter(leave =>
-        leave.status === 'approved' &&
+        String(leave.status || '').trim().toLowerCase() === 'approved' &&
         String(leave.startDate || '') <= today &&
         String(leave.endDate || '') >= today
       );
-      const leaveStaffIds = new Set(activeLeaveToday.map(leave => String(leave.staffId || '')).filter(Boolean));
-      const leaveStaffNames = new Set(activeLeaveToday.map(leave => String(leave.staffName || '').trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean));
-      const leaveIdentityKeys = new Set(activeLeaveToday.map(leave => `${String(leave.staffName || '').trim().toLowerCase()}|${String(leave.staffDepartment || '').trim().toLowerCase()}`));
+      const rosterUnavailableStatuses = new Set(['absent', 'annual leave', 'sick leave', 'sick leave / mc', 'no pay leave', 'duty travel', 'paternity leave', 'maternity leave', 'pre-maternity leave', 'family responsibility leave (frl)']);
+      const rosterUnavailableToday = roster.filter(entry => entry.date === today && rosterUnavailableStatuses.has(String(entry.status || '').trim().toLowerCase()));
+      const leaveStaffIds = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => String(entry.staffId || '')).filter(Boolean));
+      const leaveStaffNames = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => normalizeStaffName(entry.staffName)).filter(Boolean));
+      const leaveIdentityKeys = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => `${normalizeStaffName(entry.staffName)}|${normalizeDepartment(entry.staffDepartment)}`));
+      const leaveStaffSns = new Set(activeLeaveToday.map(leave => normalizeSn((leave as any).staffSn)).filter(Boolean));
+      activeLeaveToday.forEach(leave => {
+        const linkedStaff = staffList.find(member => String(member.id || '') === String(leave.staffId || '') || normalizeStaffName(member.name) === normalizeStaffName(leave.staffName));
+        if (linkedStaff?.sn) leaveStaffSns.add(normalizeSn(linkedStaff.sn));
+      });
       const visibleDutyEntries = roster.filter(entry => {
-        if (entry.date !== today || String(entry.status || '').toLowerCase() !== 'scheduled') return false;
+        if (entry.date !== today || String(entry.status || '').trim().toLowerCase() !== 'scheduled') return false;
         const staffId = String(entry.staffId || '');
-        const identityKey = `${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`;
-        const normalizedName = String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase();
-        return !leaveStaffIds.has(staffId) && !leaveStaffNames.has(normalizedName) && !leaveIdentityKeys.has(identityKey);
+        const normalizedName = normalizeStaffName(entry.staffName);
+        const identityKey = `${normalizedName}|${normalizeDepartment(entry.staffDepartment)}`;
+        const linkedStaff = staffList.find(member => String(member.id || '') === staffId || normalizeStaffName(member.name) === normalizedName);
+        const linkedSn = normalizeSn(linkedStaff?.sn);
+        return !leaveStaffIds.has(staffId) && !leaveStaffNames.has(normalizedName) && !leaveIdentityKeys.has(identityKey) && (!linkedSn || !leaveStaffSns.has(linkedSn));
       });
       const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [`${String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase()}|${String(entry.staffDepartment || "").trim().toLowerCase()}`, entry])).values());
       const onLeaveToday = activeLeaveToday;
