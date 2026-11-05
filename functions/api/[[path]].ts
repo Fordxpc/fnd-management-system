@@ -112,7 +112,7 @@ export const onRequest = async (context: any) => {
     const [target] = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
     if (!target) { const err: any = new Error("Staff member not found"); err.status = 404; throw err; }
     if (isManagerRole(currentUser.role)) return target;
-    const [editor] = await db.select().from(staff).where(sql`lower(${staff.email}) = ${String(currentUser.email || "").trim().toLowerCase()}`).limit(1);
+    const editor = await getCurrentStaffProfile(currentUser);
     const editorDept = String(editor?.department || currentUser.department || "").trim().toLowerCase();
     const targetDept = String(target.department || "").trim().toLowerCase();
     const isDepartmentLead = currentUser.role === "smt" || editor?.isSmt === true || editor?.isIncharge === true;

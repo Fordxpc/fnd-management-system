@@ -148,7 +148,13 @@ function RosterPage() {
   const periodEnd = getPeriodEnd(periodStart);
   const weeks = chunkIntoWeeks(periodStart, periodEnd);
 
-  const myStaff = staff.find((s) => (s.email || '').toLowerCase() === (profile?.email || '').toLowerCase());
+  const loginIdentity = String(profile?.email || '').trim().toLowerCase();
+  const loginSn = loginIdentity.split('@')[0].replace(/^sn-/i, '').toUpperCase();
+  const myStaff = staff.find((member) =>
+    String(member.id || '') === String(profile?.id || '') ||
+    String(member.email || '').trim().toLowerCase() === loginIdentity ||
+    [String(member.sn || '').toUpperCase(), String(member.sn || '').replace(/^SN-/i, '').toUpperCase()].includes(loginSn)
+  );
   
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
