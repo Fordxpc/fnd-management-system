@@ -1764,7 +1764,8 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/ramp/draft" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       await requireRampView(env, currentUser);
-      const rows = await db.select().from(rampLiveDraft).limit(1);
+      const requestedDraftId = String(url.searchParams.get('draftId') || 'current').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || 'current';
+      const rows = await db.select().from(rampLiveDraft).where(eq(rampLiveDraft.id, requestedDraftId)).limit(1);
       return json(rows.length > 0 ? JSON.parse(rows[0].payload || "{}") : {});
     }
     if (pathname === "/api/ramp/draft" && method === "POST") {
@@ -1772,8 +1773,13 @@ export const onRequest = async (context: any) => {
       await requireRampEdit(env, currentUser);
       const body: any = await request.json();
       const payloadStr = JSON.stringify(body);
-      await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr })
+      const requestedDraftId = String(url.searchParams.get('draftId') || 'current').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || 'current';
+      await db.insert(rampLiveDraft).values({ id: requestedDraftId, payload: payloadStr })
         .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      if (requestedDraftId !== 'current' && Object.keys(body).length > 0) {
+        await db.insert(rampLiveDraft).values({ id: 'current', payload: payloadStr })
+          .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      }
       if (body.fltNo && body.date) {
         const normalizedFlightNo = normalizeFlightNumber(body.fltNo);
         const scheduledFlights = await db.select({ id: flights.id, flightNo: flights.flightNo, route: flights.route })
@@ -2159,17 +2165,21 @@ export const onRequest = async (context: any) => {
           .select()
           .from(rampInspections);
 
-      const [liveRampRow] = await db.select().from(rampLiveDraft).where(eq(rampLiveDraft.id, 'current')).limit(1);
-      let liveRampDraft: any = {};
-      try {
-        liveRampDraft = liveRampRow?.payload ? JSON.parse(liveRampRow.payload) : {};
-      } catch {
-        liveRampDraft = {};
-      }
+      const liveRampRows = await db.select().from(rampLiveDraft);
+      const liveRampDraftMap = new Map<string, any>();
+      liveRampRows.forEach(row => {
+        try {
+          const draft = row.payload ? JSON.parse(row.payload) : {};
+          if (draft?.date && draft?.fltNo) {
+            liveRampDraftMap.set(`${draft.date}|${normalizeFlightNumber(draft.fltNo)}`, draft);
+          }
+        } catch { /* Ignore malformed legacy draft. */ }
+      });
+      const liveRampDrafts = Array.from(liveRampDraftMap.values());
       const liveFlightList = flightList.map((flight: any) => {
-        const isLiveFlight = liveRampDraft?.date === flight.date &&
-          normalizeFlightNumber(liveRampDraft?.fltNo) === normalizeFlightNumber(flight.flightNo);
-        if (!isLiveFlight) return flight;
+        const liveRampDraft = liveRampDrafts.find(draft => draft.date === flight.date &&
+          normalizeFlightNumber(draft.fltNo) === normalizeFlightNumber(flight.flightNo));
+        if (!liveRampDraft) return flight;
         const isCompleted = String(flight.status || '').trim().toLowerCase() === 'completed';
         return {
           ...flight,
@@ -2214,9 +2224,24 @@ export const onRequest = async (context: any) => {
           if (dateCompare !== 0) return dateCompare;
           return String(b.createdAt || b.updatedAt || '').localeCompare(String(a.createdAt || a.updatedAt || ''));
         })[0];
-      const dashboardFlightList = activeFlightList.length > 0
-        ? activeFlightList
-        : (latestRecordedFlight ? [latestRecordedFlight] : []);
+      const flightMinutes = (flight: any) => {
+        const value = String(flight.arrivalTime || flight.departureTime || '');
+        const match = value.match(/^(\d{1,2}):(\d{2})/);
+        return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+      };
+      let dashboardFlightList: any[] = [];
+      if (activeFlightList.length > 0) {
+        const primaryFlight = activeFlightList[0];
+        const primaryMinutes = flightMinutes(primaryFlight);
+        dashboardFlightList = activeFlightList.filter((flight: any) => {
+          if (flight.date !== primaryFlight.date) return false;
+          const minutes = flightMinutes(flight);
+          if (primaryMinutes === null || minutes === null) return flight.id === primaryFlight.id;
+          return Math.abs(minutes - primaryMinutes) <= 90;
+        }).slice(0, 3);
+      } else if (latestRecordedFlight) {
+        dashboardFlightList = [latestRecordedFlight];
+      }
 
       const upcomingFlights = canViewFlightBoard ? dashboardFlightList
         .slice(0, 5)

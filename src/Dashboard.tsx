@@ -58,8 +58,10 @@ const PAGE_TITLES: Record<string, string> = {
 
 function Dashboard() {
   const { profile, logout } = useAuth();
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [activeModule, setActiveModule] = useState<Module>('dashboard');
+  const requestedPage = new URLSearchParams(window.location.search).get('page');
+  const initialPage = requestedPage === 'rampcheck' ? 'rampcheck' : 'dashboard';
+  const [currentPage, setCurrentPage] = useState(initialPage);
+  const [activeModule, setActiveModule] = useState<Module>(initialPage === 'rampcheck' ? 'operations' : 'dashboard');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const role = (profile?.role || '').toLowerCase();

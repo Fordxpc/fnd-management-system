@@ -36,6 +36,8 @@ function RampCheckSheetPage() {
   const isSmt = role === "smt" || profile?.isSmt === true || profile?.isSMT === true;
   const canView = isFullAccess || isSmt || profile?.specialOpsAccess === true || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
   const canEdit = isFullAccess || profile?.specialOpsAccess === true || profile?.rampsheetEditAccess === true;
+  const draftId = String(new URLSearchParams(window.location.search).get('draft') || 'current').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || 'current';
+  const draftEndpoint = `/ramp/draft?draftId=${encodeURIComponent(draftId)}`;
 
   // ---- All hooks first (rules of hooks) ----
   const [activeSubTab, setActiveSubTab] = useState<'form' | 'reports'>('form');
@@ -88,7 +90,7 @@ function RampCheckSheetPage() {
   useEffect(() => {
     const loadDraft = async () => {
       try {
-        const draft = await apiFetch('/ramp/draft');
+        const draft = await apiFetch(draftEndpoint);
         if (draft && Object.keys(draft).length > 0) {
           setFormData(prev => ({ ...prev, ...draft }));
         }
@@ -154,7 +156,7 @@ function RampCheckSheetPage() {
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {
       setFormData(current => {
-        void apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify(current) })
+        void apiFetch(draftEndpoint, { method: 'POST', body: JSON.stringify(current) })
           .then(() => setDraftStatus('saved'))
           .catch((err) => { console.error("Draft save failed", err); setDraftStatus('error'); toast.error('Draft autosave failed'); });
         return current;
@@ -222,7 +224,7 @@ function RampCheckSheetPage() {
   const clearLivePage = async () => {
     if (typingTimer.current) { clearTimeout(typingTimer.current); typingTimer.current = null; }
     try {
-      await apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
+      await apiFetch(draftEndpoint, { method: 'POST', body: JSON.stringify({}) });
       setDraftStatus('saved');
       toast.success('Live page cleared');
       setShowClearLiveConfirm(false);
@@ -285,6 +287,7 @@ function RampCheckSheetPage() {
             </span>
           )}
           <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
+          {canEdit && <button className="quick-btn" style={{ background: '#0f766e', color: 'white' }} onClick={() => window.open(`${window.location.origin}/?page=rampcheck&draft=${crypto.randomUUID()}`, '_blank', 'noopener,noreferrer')}>Open Another Ramp Form</button>}
           {canEdit && <button className="quick-btn ramp-clear-live-btn" onClick={() => setShowClearLiveConfirm(true)}>Clear Live Page</button>}
         </div>
       </div>
@@ -339,7 +342,7 @@ function RampCheckSheetPage() {
           if (typingTimer.current) { clearTimeout(typingTimer.current); typingTimer.current = null; }
           setFormData(INITIAL_FORM);
           setCurrentDocId(null);
-          apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
+          apiFetch(draftEndpoint, { method: 'POST', body: JSON.stringify({}) });
           toast.success('Form cleared');
           setShowClearConfirm(false);
         }}

@@ -102,7 +102,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [weatherError, setWeatherError] = useState('');
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [dutyFilter, setDutyFilter] = useState('all');
-  const [flightIndex, setFlightIndex] = useState(0);
 
   const role = (profile?.role || '').toLowerCase();
   const canManageRequests = ['manager', 'admin', 'developer', 'owner'].includes(role);
@@ -186,8 +185,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }, [canSeeTeamRequests]);
 
   const upcomingFlights = dashboard?.upcomingFlights || EMPTY_LIST;
-  const selectedFlightIndex = upcomingFlights.length > 0 ? flightIndex % upcomingFlights.length : 0;
-  const selectedFlight = upcomingFlights[selectedFlightIndex];
   const trackedFlight = upcomingFlights[0];
   const radarFlightId = String(trackedFlight?.flightNo || '').replace(/[^a-zA-Z0-9]/g, '');
   const canViewFlightBoard = dashboard?.canViewFlightBoard !== false;
@@ -286,9 +283,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               <div className="overview-flight-board-head" aria-hidden="true">
                 <span>Service</span><span>Route</span><span>Schedule</span><span>Live movement</span><span>Flight details</span><span>Status</span>
               </div>
-              {[selectedFlight].map((flight: any) => (
-                <button key={flight.id || `${flight.flightNo}-${flight.date}`} type="button" className={selectedFlightIndex === 0 ? 'is-next' : ''} onClick={() => onNavigate('flights')}>
-                  <span className="overview-flight-service"><i>{selectedFlightIndex === 0 ? 'NEXT' : shortFlightDate(flight.date)}</i><strong>{flight.flightNo || 'Flight'}</strong><small>{flight.aircraft || 'Aircraft TBC'}</small></span>
+              {upcomingFlights.map((flight: any, flightIndex: number) => (
+                <button key={flight.id || `${flight.flightNo}-${flight.date}`} type="button" className={flightIndex === 0 ? 'is-next' : ''} onClick={() => onNavigate('flights')}>
+                  <span className="overview-flight-service"><i>{flightIndex === 0 ? 'NEXT' : 'CONCURRENT'}</i><strong>{flight.flightNo || 'Flight'}</strong><small>{flight.aircraft || 'Aircraft TBC'}</small></span>
                   <span className="overview-flight-route"><strong>{flight.route || 'Route TBC'}</strong><small>{shortFlightDate(flight.date)}</small></span>
                   <span className="overview-flight-times"><small>ARR <strong>{flight.arrivalTime || '—'}</strong></small><small>DEP <strong>{flight.departureTime || '—'}</strong></small></span>
                   <span className="overview-flight-times overview-flight-live-times"><small>ETA <strong>{flight.eta || '—'}</strong></small><small>ATA <strong>{flight.ata || '—'}</strong></small><small>ATD <strong>{flight.atd || '—'}</strong></small></span>
@@ -296,7 +293,6 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <span className={`overview-board-status overview-board-status--${String(flightStatus(flight)).toLowerCase().replace(/[^a-z]+/g, '-')}`}>{flightStatus(flight)}</span>
                 </button>
               ))}
-              {upcomingFlights.length > 1 && <div className="overview-flight-carousel"><button type="button" aria-label="Previous flight" onClick={() => setFlightIndex(index => (index - 1 + upcomingFlights.length) % upcomingFlights.length)}>‹</button><div>{upcomingFlights.map((_: any, index: number) => <button type="button" key={index} className={index === selectedFlightIndex ? 'active' : ''} aria-label={`Show flight ${index + 1}`} onClick={() => setFlightIndex(index)} />)}</div><button type="button" aria-label="Next flight" onClick={() => setFlightIndex(index => (index + 1) % upcomingFlights.length)}>›</button></div>}
             </div>
           ) : (
             <EmptyState>No upcoming flight is scheduled.</EmptyState>
