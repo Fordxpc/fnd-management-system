@@ -1596,6 +1596,27 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
 
+    const getUnavailableOpsStaffNames = async (date: string) => {
+      const [leaveRows, rosterRows, staffRows] = await Promise.all([
+        db.select().from(leaveRequests),
+        db.select().from(rosterEntries).where(eq(rosterEntries.date, date)),
+        db.select().from(staff),
+      ]);
+      const unavailableRecords = [
+        ...leaveRows.filter((leave: any) => String(leave.status || '').trim().toLowerCase() === 'approved' && String(leave.startDate || '') <= date && String(leave.endDate || '') >= date),
+        ...rosterRows.filter((entry: any) => String(entry.status || '').trim().toLowerCase() !== 'scheduled'),
+      ];
+      const unavailableNames = new Set<string>();
+      unavailableRecords.forEach((record: any) => {
+        const recordName = String(record.staffName || '').trim().replace(/\s+/g, ' ').toUpperCase();
+        if (recordName) unavailableNames.add(recordName);
+        const linkedStaff = staffRows.find((member: any) => String(member.id || '') === String(record.staffId || '') || String(member.name || '').trim().toLowerCase() === String(record.staffName || '').trim().toLowerCase());
+        const linkedName = String(linkedStaff?.name || '').trim().replace(/\s+/g, ' ').toUpperCase();
+        if (linkedName) unavailableNames.add(linkedName);
+      });
+      return unavailableNames;
+    };
+
     // ==========================================
     // OPS RUNWAY
     // ==========================================
@@ -1614,10 +1635,16 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       await requireOpsBoardEdit(env, currentUser);
       const body: any = await request.json();
+      const date = String(body.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ message: 'A valid operations date is required' }, 400);
+      const unavailableNames = await getUnavailableOpsStaffNames(date);
+      const cleanNames = (value: any) => Array.from(new Set((Array.isArray(value) ? value : [])
+        .map((name: any) => String(name || '').trim().replace(/\s+/g, ' ').toUpperCase())
+        .filter((name: string) => name && !unavailableNames.has(name))));
       const id = crypto.randomUUID();
       await db.insert(opsRunwayHistory).values({
-        id, date: body.date, time: body.time, createdAt: new Date().toISOString(),
-        rwy19: JSON.stringify(body.rwy19), rwy01: JSON.stringify(body.rwy01), lights: JSON.stringify(body.lights),
+        id, date, time: String(body.time || ''), createdAt: new Date().toISOString(),
+        rwy19: JSON.stringify(cleanNames(body.rwy19)), rwy01: JSON.stringify(cleanNames(body.rwy01)), lights: JSON.stringify(cleanNames(body.lights)),
       });
       return json({ success: true, id });
     }
@@ -1638,10 +1665,20 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       await requireOpsBoardEdit(env, currentUser);
       const body: any = await request.json();
+      const date = String(body.date || '').trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json({ message: 'A valid operations date is required' }, 400);
+      const unavailableNames = await getUnavailableOpsStaffNames(date);
+      const assignments = body.assignments && typeof body.assignments === 'object' && !Array.isArray(body.assignments) ? body.assignments : {};
+      const cleanAssignments = Object.fromEntries(Object.entries(assignments).map(([taskId, names]: [string, any]) => [
+        taskId,
+        Array.from(new Set((Array.isArray(names) ? names : [])
+          .map((name: any) => String(name || '').trim().replace(/\s+/g, ' ').toUpperCase())
+          .filter((name: string) => name && !unavailableNames.has(name)))),
+      ]));
       const id = crypto.randomUUID();
       await db.insert(opsGroundHistory).values({
-        id, date: body.date, time: body.time, createdAt: new Date().toISOString(),
-        assignments: JSON.stringify(body.assignments),
+        id, date, time: String(body.time || ''), createdAt: new Date().toISOString(),
+        assignments: JSON.stringify(cleanAssignments),
       });
       return json({ success: true, id });
     }
@@ -2410,6 +2447,8 @@ export const onRequest = async (context: any) => {
         onDutyToday,
 
         onLeaveToday,
+
+        unavailableToday: [...activeLeaveToday, ...rosterUnavailableToday],
 
         pendingLeave,
 

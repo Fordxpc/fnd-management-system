@@ -94,7 +94,7 @@ function OpsBoardPage() {
       const staffData = getData(3);
       if (Array.isArray(staffData)) {
         const dashboardData = getData(4);
-        const leaveToday = Array.isArray(dashboardData?.onLeaveToday) ? dashboardData.onLeaveToday : [];
+        const leaveToday = Array.isArray(dashboardData?.unavailableToday) ? dashboardData.unavailableToday : (Array.isArray(dashboardData?.onLeaveToday) ? dashboardData.onLeaveToday : []);
         const leaveStaffIds = new Set(leaveToday.map((leave: any) => String(leave.staffId || '')).filter(Boolean));
         const leaveIdentityKeys = new Set(leaveToday.map((leave: any) =>
           `${String(leave.staffName || '').trim().toLowerCase()}|${String(leave.staffDepartment || '').trim().toLowerCase()}`
@@ -138,6 +138,14 @@ function OpsBoardPage() {
   useEffect(() => { localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign })); }, [rwy19, rwy01, lights, groundAssign]);
   useEffect(() => { if (dataReady) localStorage.setItem('ops_runway_staff_pool', JSON.stringify(runwayStaffPool)); }, [dataReady, runwayStaffPool]);
   useEffect(() => { if (dataReady) localStorage.setItem('ops_ground_staff_pool', JSON.stringify(groundStaffPool)); }, [dataReady, groundStaffPool]);
+  useEffect(() => {
+    if (!dataReady) return;
+    const allowedNames = new Set(runwayStaffPool.map(name => String(name).trim().toUpperCase()));
+    const prune = (names: string[]) => Array.from(new Set(names.map(name => String(name).trim().toUpperCase()).filter(name => allowedNames.has(name))));
+    setRwy19(prune);
+    setRwy01(prune);
+    setLights(prune);
+  }, [dataReady, runwayStaffPool]);
   useEffect(() => {
     if (!dataReady) return;
     const allowedNames = new Set(groundStaffPool.map(name => String(name).trim().toUpperCase()));
