@@ -46,7 +46,7 @@ function EmptyState({ children }: { children: ReactNode }) {
 }
 
 function flightStatus(flight: any) {
-  return flight?.status || (flight?.atd ? 'Departed' : flight?.ata ? 'Arrived' : flight?.eta ? 'Departed origin' : 'Scheduled');
+  return flight?.status || (flight?.atd ? 'Departed' : flight?.ata ? 'Landed' : flight?.eta ? 'Departed from origin' : 'Scheduled');
 }
 
 function shortFlightDate(value?: string) {

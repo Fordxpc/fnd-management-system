@@ -34,6 +34,20 @@ let staffPhotoColumnReady = false;
 const isManagerRole = (role: string | undefined | null) =>
   ['developer', 'manager', 'admin', 'owner'].includes(role || '');
 
+const normalizeFlightNumber = (value: any) => String(value || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+const rampFlightStatus = (draft: any, routeValue?: any) => {
+  if (draft?.atd) return 'Departed';
+  if (draft?.ata) return 'Landed';
+  if (draft?.eta) {
+    const route = String(draft.route || routeValue || '');
+    const airports = route.split(/[\/>]+/).map(code => code.trim().toUpperCase()).filter(Boolean);
+    const fndIndex = airports.indexOf('FND');
+    const origin = fndIndex > 0 ? airports[fndIndex - 1] : '';
+    return origin ? `Departed from ${origin}` : 'Departed from origin';
+  }
+  return 'Scheduled';
+};
+
 const requireRoleAssignment = (currentRole: string, requestedRole: string | undefined) => {
   if (requestedRole === "developer" && currentRole !== "developer") {
     const err: any = new Error("Only a developer can assign the developer role");
@@ -1761,14 +1775,14 @@ export const onRequest = async (context: any) => {
       await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr })
         .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
       if (body.fltNo && body.date) {
-        const liveStatus = body.atd ? "Departed" : body.ata ? "Arrived" : body.eta ? "Estimated" : "Scheduled";
-        const normalizedFlightNo = String(body.fltNo).replace(/[^a-z0-9]/gi, '').toUpperCase();
-        const scheduledFlights = await db.select({ id: flights.id, flightNo: flights.flightNo })
+        const normalizedFlightNo = normalizeFlightNumber(body.fltNo);
+        const scheduledFlights = await db.select({ id: flights.id, flightNo: flights.flightNo, route: flights.route })
           .from(flights).where(eq(flights.date, String(body.date).trim()));
         const matchedFlight = scheduledFlights.find(flight =>
-          String(flight.flightNo || '').replace(/[^a-z0-9]/gi, '').toUpperCase() === normalizedFlightNo
+          normalizeFlightNumber(flight.flightNo) === normalizedFlightNo
         );
         if (matchedFlight) {
+          const liveStatus = rampFlightStatus(body, matchedFlight.route);
           await db.update(flights).set({
             status: liveStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
             updatedAt: new Date().toISOString()
@@ -1809,13 +1823,17 @@ export const onRequest = async (context: any) => {
       });
 
       if (body.fltNo && body.date) {
-        const newStatus = "Completed";
-        await db.update(flights).set({
-          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null
-        }).where(and(
-          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`,
-          eq(flights.date, body.date)
-        ));
+        const sameDateFlights = await db.select({ id: flights.id, flightNo: flights.flightNo })
+          .from(flights).where(eq(flights.date, body.date));
+        const completedFlight = sameDateFlights.find(flight =>
+          normalizeFlightNumber(flight.flightNo) === normalizeFlightNumber(body.fltNo)
+        );
+        if (completedFlight) {
+          await db.update(flights).set({
+            status: 'Completed', eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
+            updatedAt: new Date().toISOString()
+          }).where(eq(flights.id, completedFlight.id));
+        }
       }
       return json({ success: true, id });
     }
@@ -1840,13 +1858,17 @@ export const onRequest = async (context: any) => {
       }).where(eq(rampInspections.id, id!));
 
       if (body.fltNo && body.date) {
-        const newStatus = "Completed";
-        await db.update(flights).set({
-          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null
-        }).where(and(
-          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`,
-          eq(flights.date, body.date)
-        ));
+        const sameDateFlights = await db.select({ id: flights.id, flightNo: flights.flightNo })
+          .from(flights).where(eq(flights.date, body.date));
+        const completedFlight = sameDateFlights.find(flight =>
+          normalizeFlightNumber(flight.flightNo) === normalizeFlightNumber(body.fltNo)
+        );
+        if (completedFlight) {
+          await db.update(flights).set({
+            status: 'Completed', eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
+            updatedAt: new Date().toISOString()
+          }).where(eq(flights.id, completedFlight.id));
+        }
       }
       return json({ success: true });
     }
@@ -2137,6 +2159,27 @@ export const onRequest = async (context: any) => {
           .select()
           .from(rampInspections);
 
+      const [liveRampRow] = await db.select().from(rampLiveDraft).where(eq(rampLiveDraft.id, 'current')).limit(1);
+      let liveRampDraft: any = {};
+      try {
+        liveRampDraft = liveRampRow?.payload ? JSON.parse(liveRampRow.payload) : {};
+      } catch {
+        liveRampDraft = {};
+      }
+      const liveFlightList = flightList.map((flight: any) => {
+        const isLiveFlight = liveRampDraft?.date === flight.date &&
+          normalizeFlightNumber(liveRampDraft?.fltNo) === normalizeFlightNumber(flight.flightNo);
+        if (!isLiveFlight) return flight;
+        const isCompleted = String(flight.status || '').trim().toLowerCase() === 'completed';
+        return {
+          ...flight,
+          eta: liveRampDraft.eta || flight.eta || null,
+          ata: liveRampDraft.ata || flight.ata || null,
+          atd: liveRampDraft.atd || flight.atd || null,
+          status: isCompleted ? 'Completed' : rampFlightStatus(liveRampDraft, flight.route),
+        };
+      });
+
       const myStaff =
         staffList.find(
           s =>
@@ -2154,7 +2197,7 @@ export const onRequest = async (context: any) => {
 
       const canViewFlightBoard = isManagerRole(currentUser.role) || currentUser.role === 'smt' || myStaff?.isSmt === true || myStaff?.isIncharge === true || myStaff?.specialOpsAccess === true || myStaff?.flightsViewAccess === true || myStaff?.flightsEditAccess === true;
 
-      const upcomingFlights = canViewFlightBoard ? flightList
+      const activeFlightList = liveFlightList
         .filter((flight: any) => {
           const status = String(flight.status || '').toLowerCase();
           return flight.date >= today && !['cancelled', 'completed'].includes(status);
@@ -2163,7 +2206,19 @@ export const onRequest = async (context: any) => {
           const dateCompare = String(a.date || '').localeCompare(String(b.date || ''));
           if (dateCompare !== 0) return dateCompare;
           return String(a.arrivalTime || a.departureTime || '').localeCompare(String(b.arrivalTime || b.departureTime || ''));
-        })
+        });
+      const latestRecordedFlight = [...liveFlightList]
+        .filter((flight: any) => String(flight.status || '').toLowerCase() !== 'cancelled')
+        .sort((a: any, b: any) => {
+          const dateCompare = String(b.date || '').localeCompare(String(a.date || ''));
+          if (dateCompare !== 0) return dateCompare;
+          return String(b.createdAt || b.updatedAt || '').localeCompare(String(a.createdAt || a.updatedAt || ''));
+        })[0];
+      const dashboardFlightList = activeFlightList.length > 0
+        ? activeFlightList
+        : (latestRecordedFlight ? [latestRecordedFlight] : []);
+
+      const upcomingFlights = canViewFlightBoard ? dashboardFlightList
         .slice(0, 5)
         .map((flight: any) => {
           let passengerCounts = { adults: 0, infants: 0 };

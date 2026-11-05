@@ -194,6 +194,7 @@ function RampCheckSheetPage() {
 
   const handleSave = async () => {
     if (!canEdit || saving) return;
+    if (typingTimer.current) { clearTimeout(typingTimer.current); typingTimer.current = null; }
     if (!formData.date || formData.fltNo.length < 3 || formData.acReg.length < 3) {
       toast.error('Date, flight number and aircraft registration are required');
       return;
