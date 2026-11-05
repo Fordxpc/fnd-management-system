@@ -1,23 +1,24 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './auth';
 import './Dashboard.css';
-import StaffPage from './pages/StaffPage';
-import RosterPage from './pages/RosterPage';
-import LeavePage from './pages/LeavePage';
-import HolidaysPage from './pages/HolidaysPage';
-import OvertimePage from './pages/OvertimePage';
-import UsersPage from './pages/UsersPage';
-import DashboardPage from './pages/DashboardPage';
-import SettingsPage from './pages/SettingsPage';
-import FlightsPage from './pages/FlightsPage';
-import OpsBoardPage from './pages/OpsBoardPage';
-import RampCheckSheetPage from './pages/RampCheckSheetPage';
-import WildlifePage from './pages/WildlifePage';
-import ReportsPage from './pages/ReportsPage';
-import RWYLightsPage from './pages/RWYLightsPage';
-import ConversationsPage from './pages/ConversationsPage';
-import AnnouncementsPage from './pages/AnnouncementsPage';
+
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const StaffPage = lazy(() => import('./pages/StaffPage'));
+const RosterPage = lazy(() => import('./pages/RosterPage'));
+const LeavePage = lazy(() => import('./pages/LeavePage'));
+const HolidaysPage = lazy(() => import('./pages/HolidaysPage'));
+const OvertimePage = lazy(() => import('./pages/OvertimePage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const FlightsPage = lazy(() => import('./pages/FlightsPage'));
+const OpsBoardPage = lazy(() => import('./pages/OpsBoardPage'));
+const RampCheckSheetPage = lazy(() => import('./pages/RampCheckSheetPage'));
+const WildlifePage = lazy(() => import('./pages/WildlifePage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const RWYLightsPage = lazy(() => import('./pages/RWYLightsPage'));
+const ConversationsPage = lazy(() => import('./pages/ConversationsPage'));
+const AnnouncementsPage = lazy(() => import('./pages/AnnouncementsPage'));
 
 type Module = 'dashboard' | 'operations' | 'reports' | 'roster' | 'system' | 'chat';
 
@@ -245,7 +246,9 @@ function Dashboard() {
         </nav>
 
         <div className="app-page">
-          {pages[currentPage] || <div className="empty-state">Access denied</div>}
+          <Suspense fallback={<div className="module-loading"><span /><strong>Loading workspace…</strong></div>}>
+            {pages[currentPage] || <div className="empty-state">Access denied</div>}
+          </Suspense>
         </div>
       </main>
     </div>

@@ -2411,3 +2411,6 @@ body.printing-bird-count .bird-count-page-2{margin-top:0!important;padding-top:0
 body.printing-bird-count input,body.printing-bird-count select{color:#000!important;background:#fff!important;-webkit-appearance:none!important;appearance:none!important}
 body.printing-bird-count .modal-backdrop,body.printing-bird-count .modal-content{position:static!important;width:100%!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;overflow:visible!important;background:#fff!important;box-shadow:none!important}
 }
+
+/* Phase 49: lazy workspace loading */
+.module-loading{display:flex;min-height:260px;align-items:center;justify-content:center;flex-direction:column;gap:13px;color:#64748b}.module-loading span{width:34px;height:34px;border:3px solid #cbd5e1;border-top-color:#0891b2;border-radius:50%;animation:module-loading-spin .75s linear infinite}.module-loading strong{font-size:11px;letter-spacing:.04em}@keyframes module-loading-spin{to{transform:rotate(360deg)}}
