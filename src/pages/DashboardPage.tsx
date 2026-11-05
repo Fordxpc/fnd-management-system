@@ -64,6 +64,18 @@ function weatherDescription(code?: number) {
   return 'Current conditions';
 }
 
+function weatherIcon(code?: number) {
+  const value = Number(code);
+  if (value === 0) return '☀️';
+  if ([1, 2].includes(value)) return '🌤️';
+  if (value === 3) return '☁️';
+  if ([45, 48].includes(value)) return '🌫️';
+  if ([51, 53, 55, 56, 57].includes(value)) return '🌦️';
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return '🌧️';
+  if ([95, 96, 99].includes(value)) return '⛈️';
+  return '🌤️';
+}
+
 function compassDirection(degrees?: number) {
   if (typeof degrees !== 'number') return '—';
   const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
@@ -90,6 +102,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [weatherError, setWeatherError] = useState('');
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [dutyFilter, setDutyFilter] = useState('all');
+  const [flightIndex, setFlightIndex] = useState(0);
 
   const role = (profile?.role || '').toLowerCase();
   const canManageRequests = ['manager', 'admin', 'developer', 'owner'].includes(role);
@@ -173,6 +186,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   }, [canSeeTeamRequests]);
 
   const upcomingFlights = dashboard?.upcomingFlights || EMPTY_LIST;
+  const selectedFlightIndex = upcomingFlights.length > 0 ? flightIndex % upcomingFlights.length : 0;
+  const selectedFlight = upcomingFlights[selectedFlightIndex];
   const trackedFlight = upcomingFlights[0];
   const radarFlightId = String(trackedFlight?.flightNo || '').replace(/[^a-zA-Z0-9]/g, '');
   const canViewFlightBoard = dashboard?.canViewFlightBoard !== false;
@@ -269,9 +284,9 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               <div className="overview-flight-board-head" aria-hidden="true">
                 <span>Service</span><span>Route</span><span>Schedule</span><span>Live movement</span><span>Flight details</span><span>Status</span>
               </div>
-              {upcomingFlights.map((flight: any, index: number) => (
-                <button key={flight.id || `${flight.flightNo}-${flight.date}`} type="button" className={index === 0 ? 'is-next' : ''} onClick={() => onNavigate('flights')}>
-                  <span className="overview-flight-service"><i>{index === 0 ? 'NEXT' : shortFlightDate(flight.date)}</i><strong>{flight.flightNo || 'Flight'}</strong><small>{flight.aircraft || 'Aircraft TBC'}</small></span>
+              {[selectedFlight].map((flight: any) => (
+                <button key={flight.id || `${flight.flightNo}-${flight.date}`} type="button" className={selectedFlightIndex === 0 ? 'is-next' : ''} onClick={() => onNavigate('flights')}>
+                  <span className="overview-flight-service"><i>{selectedFlightIndex === 0 ? 'NEXT' : shortFlightDate(flight.date)}</i><strong>{flight.flightNo || 'Flight'}</strong><small>{flight.aircraft || 'Aircraft TBC'}</small></span>
                   <span className="overview-flight-route"><strong>{flight.route || 'Route TBC'}</strong><small>{shortFlightDate(flight.date)}</small></span>
                   <span className="overview-flight-times"><small>ARR <strong>{flight.arrivalTime || '—'}</strong></small><small>DEP <strong>{flight.departureTime || '—'}</strong></small></span>
                   <span className="overview-flight-times overview-flight-live-times"><small>ETA <strong>{flight.eta || '—'}</strong></small><small>ATA <strong>{flight.ata || '—'}</strong></small><small>ATD <strong>{flight.atd || '—'}</strong></small></span>
@@ -279,6 +294,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <span className={`overview-board-status overview-board-status--${String(flightStatus(flight)).toLowerCase().replace(/[^a-z]+/g, '-')}`}>{flightStatus(flight)}</span>
                 </button>
               ))}
+              {upcomingFlights.length > 1 && <div className="overview-flight-carousel"><button type="button" aria-label="Previous flight" onClick={() => setFlightIndex(index => (index - 1 + upcomingFlights.length) % upcomingFlights.length)}>‹</button><div>{upcomingFlights.map((_: any, index: number) => <button type="button" key={index} className={index === selectedFlightIndex ? 'active' : ''} aria-label={`Show flight ${index + 1}`} onClick={() => setFlightIndex(index)} />)}</div><button type="button" aria-label="Next flight" onClick={() => setFlightIndex(index => (index + 1) % upcomingFlights.length)}>›</button></div>}
             </div>
           ) : (
             <EmptyState>No upcoming flight is scheduled.</EmptyState>
@@ -290,7 +306,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       <div className="overview-live-grid">
         <Panel title="Live weather" eyebrow="VRCF · Funadhoo Airport" className="overview-weather-panel" action={<span className="overview-live-source"><i /> Auto refresh</span>}>
           {weatherLoading ? <LoadingBlock /> : weather ? <div className="overview-weather-content">
-            <div className="overview-weather-now"><div className="overview-weather-condition"><b className="overview-weather-icon" aria-hidden="true">☀</b><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
+            <div className="overview-weather-now"><div className="overview-weather-condition"><b className="overview-weather-icon" aria-hidden="true">{weatherIcon(weather.weatherCode)}</b><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
             <div className="overview-weather-metrics"><div><span>Humidity</span><strong>{weather.humidity ?? '—'}%</strong></div><div><span>Visibility</span><strong>{weather.visibility ? `${Math.round(weather.visibility / 100) / 10} km` : '—'}</strong></div><div><span>Cloud</span><strong>{weather.cloudCover ?? '—'}%</strong></div><div><span>Pressure</span><strong>{weather.pressure ? `${Math.round(weather.pressure)} hPa` : '—'}</strong></div><div><span>Rain</span><strong>{weather.rain ?? weather.precipitation ?? 0} mm</strong></div></div>
             <p>Observed {new Date(weather.observedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })} · Coordinates 06°09′45″N 073°17′15″E</p>
           </div> : <EmptyState>{weatherError || 'Weather information is not available.'}</EmptyState>}
