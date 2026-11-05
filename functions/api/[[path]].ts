@@ -617,6 +617,39 @@ export const onRequest = async (context: any) => {
     // ==========================================
     // HOLIDAYS MODULE
     // ==========================================
+    if (pathname === "/api/holidays/import" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const body: any = await request.json().catch(() => ({}));
+      const year = Number(body.year || new Date().getUTCFullYear());
+      if (!Number.isInteger(year) || year < 2020 || year > 2100) return json({ message: "A valid import year is required" }, 400);
+      const sourceUrl = "https://calendar.google.com/calendar/ical/en.mv%23holiday%40group.v.calendar.google.com/public/basic.ics";
+      let calendarText = "";
+      try {
+        const response = await fetch(sourceUrl, { headers: { "User-Agent": "FND-Management-System/1.0" }, signal: AbortSignal.timeout(12000) });
+        if (!response.ok) return json({ message: "The online Maldives holiday calendar is temporarily unavailable. Existing saved holidays were not changed." }, 502);
+        calendarText = await response.text();
+      } catch {
+        return json({ message: "The online Maldives holiday calendar could not be reached. Existing saved holidays were not changed." }, 502);
+      }
+      const unfolded = calendarText.replace(/\r?\n[ \t]/g, "");
+      const importedCandidates = unfolded.split("BEGIN:VEVENT").slice(1).map(event => {
+        const dateMatch = event.match(/DTSTART(?:;VALUE=DATE)?[^:]*:(\d{4})(\d{2})(\d{2})/);
+        const summaryMatch = event.match(/SUMMARY(?:;[^:]*)?:(.*)/);
+        if (!dateMatch || !summaryMatch) return null;
+        const date = `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`;
+        const name = summaryMatch[1].trim().replace(/\\n/gi, " ").replace(/\\,/g, ",").replace(/\\;/g, ";").replace(/\\\\/g, "\\");
+        return date.startsWith(`${year}-`) && name ? { date, name: name.slice(0, 100) } : null;
+      }).filter(Boolean) as Array<{ date: string; name: string }>;
+      const uniqueCandidates = Array.from(new Map(importedCandidates.map(item => [item.date, item])).values());
+      if (uniqueCandidates.length === 0) return json({ message: `No online Maldives holidays were found for ${year}. Existing saved holidays were not changed.` }, 404);
+      const saved = await db.select().from(holidays);
+      const savedDates = new Set(saved.map(item => item.date));
+      const additions = uniqueCandidates.filter(item => !savedDates.has(item.date));
+      if (additions.length > 0) await db.insert(holidays).values(additions.map(item => ({ id: crypto.randomUUID(), date: item.date, name: item.name, createdAt: new Date().toISOString() })));
+      return json({ success: true, imported: additions.length, skipped: uniqueCandidates.length - additions.length, totalOnline: uniqueCandidates.length, year, source: "Google Maldives public holiday calendar" });
+    }
+
     if (pathname === "/api/holidays" && method === "GET") {
       const results = await db.select().from(holidays).orderBy(asc(holidays.date));
       return json(results);
@@ -638,7 +671,25 @@ export const onRequest = async (context: any) => {
       const id = crypto.randomUUID();
       await db.insert(holidays).values({ id, date, name, createdAt: new Date().toISOString() });
       return json({ success: true, id }, 201);
-    }    if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
+    }
+    if (pathname.startsWith("/api/holidays/") && method === "PUT") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const id = pathname.split("/").pop();
+      const body: any = await request.json();
+      const date = typeof body.date === "string" ? body.date.trim() : "";
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) return json({ message: "A valid holiday date is required" }, 400);
+      if (name.length < 2 || name.length > 100) return json({ message: "Holiday name must be between 2 and 100 characters" }, 400);
+      const record = await db.select().from(holidays).where(eq(holidays.id, id!)).limit(1);
+      if (record.length === 0) return json({ message: "Holiday not found" }, 404);
+      const duplicate = await db.select().from(holidays).where(eq(holidays.date, date));
+      if (duplicate.some(item => item.id !== id)) return json({ message: "A holiday already exists on this date" }, 409);
+      await db.update(holidays).set({ date, name }).where(eq(holidays.id, id!));
+      return json({ success: true });
+    }
+
+    if (pathname.startsWith("/api/holidays/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();

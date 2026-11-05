@@ -13,11 +13,13 @@ const formatHolidayDate = (value: string) => {
 
 function HolidaysPage() {
   const { profile } = useAuth();
-  const canEdit = ['developer', 'manager', 'admin', 'owner'].includes(profile?.role || '');
+  const canEdit = ['developer', 'manager', 'admin', 'owner'].includes(String(profile?.role || '').toLowerCase());
   const [holidays, setHolidays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [editingTarget, setEditingTarget] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
   const [date, setDate] = useState('');
   const [name, setName] = useState('');
@@ -41,11 +43,18 @@ function HolidaysPage() {
   const handleAdd = async (event: React.FormEvent) => {
     event.preventDefault(); if (saving) return; setSaving(true);
     try {
-      await apiFetch('/holidays', { method: 'POST', body: JSON.stringify({ date, name }) });
-      toast.success('Public holiday added'); setDate(''); setName(''); setShowForm(false); setYear(date.slice(0, 4)); await fetchHolidays(true);
+      await apiFetch(editingTarget ? `/holidays/${editingTarget.id}` : '/holidays', { method: editingTarget ? 'PUT' : 'POST', body: JSON.stringify({ date, name }) });
+      toast.success(editingTarget ? 'Public holiday updated' : 'Public holiday added'); setDate(''); setName(''); setEditingTarget(null); setShowForm(false); setYear(date.slice(0, 4)); await fetchHolidays(true);
     } catch (err: any) { toast.error(err.message); }
     finally { setSaving(false); }
   };
+  const handleImport = async () => {
+    if (!canEdit || importing) return; setImporting(true);
+    try { const result = await apiFetch('/holidays/import', { method: 'POST', body: JSON.stringify({ year }) }); toast.success(`${result.imported} holiday${result.imported === 1 ? '' : 's'} imported; ${result.skipped} existing date${result.skipped === 1 ? '' : 's'} preserved.`); await fetchHolidays(true); }
+    catch (err: any) { toast.error(err.message); }
+    finally { setImporting(false); }
+  };
+  const handleEdit = (holiday: any) => { setEditingTarget(holiday); setDate(holiday.date || ''); setName(holiday.name || ''); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const handleDelete = async () => {
     if (!deleteTarget) return;
     try { await apiFetch(`/holidays/${deleteTarget.id}`, { method: 'DELETE' }); toast.success('Holiday removed'); setDeleteTarget(null); await fetchHolidays(true); }
@@ -53,13 +62,14 @@ function HolidaysPage() {
   };
 
   return <div className="page-content holidays-page">
-    <section className="holidays-hero"><div><span>Workforce calendar</span><h2>Public Holiday Management</h2><p>Maintain the official holiday calendar used by roster planning, leave calculations and staff allowances.</p></div><div className="holidays-hero-actions"><button onClick={() => void fetchHolidays()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>{canEdit && <button className="primary" onClick={() => setShowForm(value => !value)}>{showForm ? 'Close form' : '+ Add holiday'}</button>}</div></section>
+    <section className="holidays-hero"><div><span>Workforce calendar</span><h2>Public Holiday Management</h2><p>Maintain the official holiday calendar used by roster planning, leave calculations and staff allowances.</p></div><div className="holidays-hero-actions"><button onClick={() => void fetchHolidays()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>{canEdit && <button onClick={() => void handleImport()} disabled={importing}>{importing ? 'Importing…' : `Import ${year} online`}</button>}{canEdit && <button className="primary" onClick={() => { if (showForm) { setShowForm(false); setEditingTarget(null); setDate(''); setName(''); } else setShowForm(true); }}>{showForm ? 'Close form' : '+ Add holiday'}</button>}</div></section>
     <section className="holidays-summary"><div><span>Total configured</span><strong>{holidays.length}</strong><small>All calendar years</small></div><div><span>Current year</span><strong>{thisYear}</strong><small>{currentYear}</small></div><div><span>Next holiday</span><strong className="date-value">{upcoming ? formatHolidayDate(upcoming.date) : 'None scheduled'}</strong><small>{upcoming?.name || 'Add the next official holiday'}</small></div></section>
+    {canEdit && <div className="holidays-import-note"><strong>Online import</strong><span>Imports missing dates from the Google Maldives public holiday calendar. Existing and manually edited dates are preserved for review.</span></div>}
 
-    {showForm && canEdit && <form className="holidays-form" onSubmit={handleAdd}><header><div><span>Calendar entry</span><h3>Add an official holiday</h3></div><small>Only one holiday can be recorded per date.</small></header><div><label>Date<input type="date" value={date} onChange={event => setDate(event.target.value)} required /></label><label>Holiday name<input maxLength={100} placeholder="e.g. National Day" value={name} onChange={event => setName(event.target.value)} required /></label><button disabled={saving}>{saving ? 'Saving…' : 'Save holiday'}</button></div></form>}
+    {showForm && canEdit && <form className="holidays-form" onSubmit={handleAdd}><header><div><span>{editingTarget ? 'Update entry' : 'Calendar entry'}</span><h3>{editingTarget ? 'Edit official holiday' : 'Add an official holiday'}</h3></div><small>Only one holiday can be recorded per date.</small></header><div><label>Date<input type="date" value={date} onChange={event => setDate(event.target.value)} required /></label><label>Holiday name<input maxLength={100} placeholder="e.g. National Day" value={name} onChange={event => setName(event.target.value)} required /></label><button disabled={saving}>{saving ? 'Saving…' : editingTarget ? 'Update holiday' : 'Save holiday'}</button></div></form>}
 
     <section className="holidays-controls"><label>Calendar year<select value={year} onChange={event => setYear(event.target.value)}>{years.map(value => <option key={value}>{value}</option>)}</select></label><label>Search holidays<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search by holiday name" /></label></section>
-    <section className="holidays-register"><header><div><h3>{year} holiday calendar</h3><p>{visible.length} configured date{visible.length === 1 ? '' : 's'}</p></div></header>{loading ? <p className="holidays-empty">Loading public holidays…</p> : visible.length === 0 ? <p className="holidays-empty">No holidays match this calendar view.</p> : <div className="holidays-grid">{visible.map(holiday => { const isPast = holiday.date < today; return <article className={isPast ? 'past' : ''} key={holiday.id}><div className="holiday-date-block"><strong>{new Date(`${holiday.date}T00:00:00`).toLocaleDateString(undefined, { day: '2-digit' })}</strong><span>{new Date(`${holiday.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })}</span></div><div className="holiday-details"><h4>{holiday.name}</h4><p>{formatHolidayDate(holiday.date)}</p><span>{isPast ? 'Completed' : holiday.date === today ? 'Today' : 'Upcoming'}</span></div>{canEdit && <button className="delete-btn" onClick={() => setDeleteTarget(holiday)}>Delete</button>}</article>; })}</div>}</section>
+    <section className="holidays-register"><header><div><h3>{year} holiday calendar</h3><p>{visible.length} configured date{visible.length === 1 ? '' : 's'}</p></div></header>{loading ? <p className="holidays-empty">Loading public holidays…</p> : visible.length === 0 ? <p className="holidays-empty">No holidays match this calendar view.</p> : <div className="holidays-grid">{visible.map(holiday => { const isPast = holiday.date < today; return <article className={isPast ? 'past' : ''} key={holiday.id}><div className="holiday-date-block"><strong>{new Date(`${holiday.date}T00:00:00`).toLocaleDateString(undefined, { day: '2-digit' })}</strong><span>{new Date(`${holiday.date}T00:00:00`).toLocaleDateString(undefined, { month: 'short' })}</span></div><div className="holiday-details"><h4>{holiday.name}</h4><p>{formatHolidayDate(holiday.date)}</p><span>{isPast ? 'Completed' : holiday.date === today ? 'Today' : 'Upcoming'}</span></div>{canEdit && <div className="holiday-card-actions"><button className="edit-btn" onClick={() => handleEdit(holiday)}>Edit</button><button className="delete-btn" onClick={() => setDeleteTarget(holiday)}>Delete</button></div>}</article>; })}</div>}</section>
 
     <ConfirmDialog isOpen={!!deleteTarget} title="Delete public holiday?" message={`${deleteTarget?.name || 'This holiday'} on ${formatHolidayDate(deleteTarget?.date || '')} will be removed from roster and leave calculations.`} confirmText="Delete" isDanger onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
   </div>;
