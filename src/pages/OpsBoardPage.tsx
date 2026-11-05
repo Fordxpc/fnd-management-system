@@ -8,7 +8,6 @@ import { useAuth } from '../auth';
 import { ConfirmDialog } from '../components/Dialogs';
 import { canViewOpsBoard, canEditOpsBoard } from '../lib/permissions';
 
-const DEFAULT_STAFF = ['ADAM SHAKIR', 'ADAM FAISAL', 'MOHAMED ADAM', 'MOHAMED SAMEEH', 'MOHAMED NADHEEM', 'ISMAIL KAMEEL', 'THORIQ MOHAMED', 'AHMED ASEEL', 'MOHAMED IBRAHIM', 'ZIMLA AYYOOB', 'AMINATH MOOSA'];
 const DEFAULT_TASKS = [{ id: 'chocks-on', label: 'CHOCKS ON', color: 'linear-gradient(135deg, #ec407a, #ad1457)', text: '#fff' }, { id: 'cone-setup', label: 'CONE SET UP', color: 'linear-gradient(135deg, #00c6ff, #0072ff)', text: '#fff' }, { id: 'unload-back', label: 'UNLOADING — BACK HOLD', color: 'linear-gradient(135deg, #66bb6a, #2e7d32)', text: '#fff' }, { id: 'unload-front', label: 'UNLOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffee58, #fbc02d)', text: '#1a1a1a' }, { id: 'unload-hall', label: 'UNLOADING — ARRIVAL HALL', color: 'linear-gradient(135deg, #ab47bc, #6a1b9a)', text: '#fff' }, { id: 'load-front', label: 'LOADING — FRONT HOLD', color: 'linear-gradient(135deg, #ffa726, #e65100)', text: '#fff' }, { id: 'load-back', label: 'LOADING — BACK HOLD', color: 'linear-gradient(135deg, #26c6da, #00838f)', text: '#fff' }, { id: 'cone-pickup', label: 'CONE PICK UP', color: 'linear-gradient(135deg, #ffca28, #ff8f00)', text: '#1a1a1a' }, { id: 'chocks-off', label: 'CHOCKS OFF', color: 'linear-gradient(135deg, #7e57c2, #4527a0)', text: '#fff' }, { id: 'door', label: 'DOOR OPEN / CLOSE', color: 'linear-gradient(135deg, #26a69a, #00695c)', text: '#fff' }, { id: 'aircraft-cleaning', label: 'AIRCRAFT CLEANING', color: 'linear-gradient(135deg, #64748b, #475569)', text: '#fff' }, { id: 'wchc', label: '♿ WCHC — FIRE-FIGHTER ASSIST', color: 'linear-gradient(135deg, #ef5350, #b71c1c)', text: '#fff' }, { id: 'wchr', label: '♿ WCHR — CLEANING TEAM ASSIST', color: 'linear-gradient(135deg, #8d6e63, #4e342e)', text: '#fff' }];
 const formatDate = (date: Date) => date.toISOString().split('T')[0];
 const INITIAL_DATE = formatDate(new Date());
@@ -42,7 +41,11 @@ function OpsBoardPage() {
   const [loadError, setLoadError] = useState('');
   const [myStaff, setMyStaff] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'runway' | 'ground' | 'fod' | 'history'>('runway');
-  const [staffPool, setStaffPool] = useState<string[]>(() => readStoredArray('ops_staff_pool', DEFAULT_STAFF));
+  const [availableStaff, setAvailableStaff] = useState<Array<{ name: string; department: string }>>([]);
+  const [runwayStaffPool, setRunwayStaffPool] = useState<string[]>(() => readStoredArray('ops_runway_staff_pool', []));
+  const [groundStaffPool, setGroundStaffPool] = useState<string[]>(() => readStoredArray('ops_ground_staff_pool', []));
+  const [showRunwayStaffManager, setShowRunwayStaffManager] = useState(false);
+  const [showGroundStaffManager, setShowGroundStaffManager] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewBaseScale, setPreviewBaseScale] = useState(1);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -89,11 +92,17 @@ function OpsBoardPage() {
 
       const staffData = getData(3);
       if (Array.isArray(staffData)) {
-        const operationalNames = Array.from(new Set(staffData
+        const operationalStaff = staffData
           .filter((member: any) => ['Ground Operations', 'Maintenance'].includes(member.department) && String(member.status || 'active').toLowerCase() !== 'inactive')
-          .map((member: any) => String(member.name || '').trim().toUpperCase())
-          .filter(Boolean))) as string[];
-        if (operationalNames.length > 0) setStaffPool(operationalNames.sort());
+          .map((member: any) => ({ name: String(member.name || '').trim().toUpperCase(), department: String(member.department || '') }))
+          .filter((member: any) => member.name)
+          .filter((member: any, index: number, list: any[]) => list.findIndex(item => item.name === member.name) === index)
+          .sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setAvailableStaff(operationalStaff);
+        const validNames = new Set(operationalStaff.map((member: any) => member.name));
+        const defaultOpsNames = operationalStaff.filter((member: any) => member.department === 'Ground Operations').map((member: any) => member.name);
+        setRunwayStaffPool(current => localStorage.getItem('ops_runway_staff_pool') === null ? defaultOpsNames : current.filter(name => validNames.has(name)));
+        setGroundStaffPool(current => localStorage.getItem('ops_ground_staff_pool') === null ? defaultOpsNames : current.filter(name => validNames.has(name)));
       }
       const myEmail = String(profile?.email || user?.email || '').toLowerCase();
       const mine = Array.isArray(staffData)
@@ -119,9 +128,29 @@ function OpsBoardPage() {
   }, [showPreview]);
 
   useEffect(() => { localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign })); }, [rwy19, rwy01, lights, groundAssign]);
+  useEffect(() => { if (dataReady) localStorage.setItem('ops_runway_staff_pool', JSON.stringify(runwayStaffPool)); }, [dataReady, runwayStaffPool]);
+  useEffect(() => { if (dataReady) localStorage.setItem('ops_ground_staff_pool', JSON.stringify(groundStaffPool)); }, [dataReady, groundStaffPool]);
 
   const canView = canViewOpsBoard(profile, myStaff);
   const canEdit = canEditOpsBoard(profile, myStaff);
+  const normalizedRole = String(profile?.role || '').toLowerCase();
+  const canManageBoardStaff = ['developer', 'admin', 'manager', 'owner'].includes(normalizedRole) || ((myStaff?.isSmt === true || normalizedRole === 'smt') && ['Ground Operations', 'Maintenance'].includes(String(myStaff?.department || '')));
+  const allBoardStaff = Array.from(new Set([...runwayStaffPool, ...groundStaffPool])).sort();
+
+  const toggleBoardStaff = (board: 'runway' | 'ground', name: string) => {
+    if (!canManageBoardStaff) return;
+    const member = availableStaff.find(item => item.name === name);
+    if (!member) return;
+    const pool = board === 'runway' ? runwayStaffPool : groundStaffPool;
+    const setPool = board === 'runway' ? setRunwayStaffPool : setGroundStaffPool;
+    if (pool.includes(name)) {
+      setPool(current => current.filter(item => item !== name));
+      if (board === 'runway') { setRwy19(current => current.filter(item => item !== name)); setRwy01(current => current.filter(item => item !== name)); setLights(current => current.filter(item => item !== name)); }
+      else setGroundAssign(current => Object.fromEntries(Object.entries(current).map(([taskId, names]) => [taskId, names.filter(item => item !== name)])));
+      return;
+    }
+    setPool(current => [...current, name].sort());
+  };
 
   const handleAddTask = () => { setEditingTaskId(null); setTaskForm({ label: '', colorStart: '#26c6da', colorEnd: '#00838f', text: '#fff' }); setShowTaskModal(true); };
   const handleEditTask = (task: any) => { const colorMatches = String(task.color || '').match(/#[0-9a-fA-F]{3,6}/g) || []; setTaskForm({ label: task.label || '', colorStart: colorMatches[0] || '#26c6da', colorEnd: colorMatches[1] || '#00838f', text: task.text || '#fff' }); setEditingTaskId(task.id); setShowTaskModal(true); };
@@ -222,7 +251,7 @@ function OpsBoardPage() {
       {loadError && <div className="operations-board-alert" role="alert"><strong>Some information may be out of date.</strong><span>{loadError}</span></div>}
 
       <section className="operations-board-summary" aria-label="Operations board summary">
-        <div><span>Staff pool</span><strong>{staffPool.length}</strong><small>available team members</small></div>
+        <div><span>Staff pool</span><strong>{allBoardStaff.length}</strong><small>selected team members</small></div>
         <div><span>Runway assigned</span><strong>{new Set([...rwy19, ...rwy01, ...lights]).size}</strong><small>current inspection team</small></div>
         <div><span>Ground duties</span><strong>{Object.values(groundAssign).reduce((total, names) => total + names.length, 0)}</strong><small>active assignments</small></div>
         <div><span>Saved boards</span><strong>{runwayHistory.length + groundHistory.length}</strong><small>historical records</small></div>
@@ -236,11 +265,12 @@ function OpsBoardPage() {
       </nav>
       {activeTab === 'runway' && (
         <div>
-          {canEdit && (
+          {(canEdit || canManageBoardStaff) && (
             <div className="dash-card operations-assignment-panel" style={{ marginBottom: '20px' }}>
-              <h3>Assign Staff (Cannot be in multiple zones)</h3>
+              <div className="operations-assignment-head"><div><h3>Assign runway inspection staff</h3><p>Select active Ground Operations and Maintenance staff for runway duties.</p></div>{canManageBoardStaff && <button type="button" onClick={() => setShowRunwayStaffManager(current => !current)}>{showRunwayStaffManager ? 'Close staff list' : 'Add / remove staff'}</button>}</div>
+              {showRunwayStaffManager && canManageBoardStaff && <div className="operations-staff-manager"><header><strong>Runway staff pool</strong><span>{runwayStaffPool.length} selected · Ground Operations and Maintenance</span></header><div>{availableStaff.map(member => { const selected = runwayStaffPool.includes(member.name); return <button type="button" className={selected ? 'selected' : ''} key={member.name} onClick={() => toggleBoardStaff('runway', member.name)}><span><strong>{member.name}</strong><small>{member.department}</small></span><em>{selected ? 'Remove' : 'Add'}</em></button>; })}</div></div>}
               <div className="operations-runway-staff" style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginTop: '12px' }}>
-                {staffPool.map(s => (
+                {runwayStaffPool.map(s => (
                   <div className="operations-runway-person" key={s} style={{ display: 'flex', flexDirection: 'column', gap: '4px', background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: '13px' }}>{s}</span>
@@ -303,18 +333,20 @@ function OpsBoardPage() {
 
       {activeTab === 'ground' && (
         <div>
-          {canEdit && (
+          {(canEdit || canManageBoardStaff) && (
             <div className="dash-card operations-assignment-panel" style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                 <h3 style={{ margin: 0 }}>Assign Staff to Tasks</h3>
-                {canEdit && (
+                {(canEdit || canManageBoardStaff) && (
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button className="quick-btn" style={{ background: '#6b7280', color: 'white' }} onClick={handleResetTasks}>↺ Reset Defaults</button>
-                    <button className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }} onClick={handleAddTask}>➕ Add Task Board</button>
+                    {canEdit && <button className="quick-btn" style={{ background: '#6b7280', color: 'white' }} onClick={handleResetTasks}>↺ Reset Defaults</button>}
+                    {canEdit && <button className="quick-btn" style={{ background: '#0b2b4f', color: 'white' }} onClick={handleAddTask}>➕ Add Task Board</button>}
+                    {canManageBoardStaff && <button className="quick-btn" style={{ background: '#0f766e', color: 'white' }} onClick={() => setShowGroundStaffManager(current => !current)}>{showGroundStaffManager ? 'Close Staff List' : 'Add / Remove Staff'}</button>}
                   </div>
                 )}
               </div>
 
+              {showGroundStaffManager && canManageBoardStaff && <div className="operations-staff-manager"><header><strong>Ground Task staff pool</strong><span>{groundStaffPool.length} selected · Ground Operations and Maintenance</span></header><div>{availableStaff.map(member => { const selected = groundStaffPool.includes(member.name); return <button type="button" className={selected ? 'selected' : ''} key={member.name} onClick={() => toggleBoardStaff('ground', member.name)}><span><strong>{member.name}</strong><small>{member.department}</small></span><em>{selected ? 'Remove' : 'Add'}</em></button>; })}</div></div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '12px' }}>
                 {tasks.map(t => (
                   <div className="operations-task-assignment" key={t.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px' }}>
@@ -328,7 +360,7 @@ function OpsBoardPage() {
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
-                      {staffPool.map(s => (
+                      {groundStaffPool.map(s => (
                         <label className={(groundAssign[t.id] || []).includes(s) ? 'operations-task-person selected' : 'operations-task-person'} key={s} style={{ fontSize: '10px', display: 'flex', alignItems: 'flex-start', gap: '4px', background: (groundAssign[t.id] || []).includes(s) ? '#dbeafe' : '#f8fafc', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1', cursor: canEdit ? 'pointer' : 'default' }}>
                           <input type="checkbox" checked={(groundAssign[t.id] || []).includes(s)} onChange={() => toggleGround(t.id, s)} disabled={!canEdit} style={{ width: '14px', height: '14px', flexShrink: 0, marginTop: '2px' }} />
                           <span style={{ lineHeight: '1.2', wordBreak: 'break-word' }}>{s}</span>
@@ -430,7 +462,7 @@ function OpsBoardPage() {
               <h3>🔍 Individual Staff Record</h3>
               <select value={selectedStaff} onChange={e => setSelectedStaff(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '10px', marginBottom: '16px' }}>
                 <option value="">— Select Staff —</option>
-                {staffPool.map(s => <option key={s} value={s}>{s}</option>)}
+                {allBoardStaff.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
 
               {selectedStaff ? (
