@@ -33,11 +33,11 @@ export default function PublicLiveView() {
         </span>
       </div>
 
-      <div className="ramp-container" style={{ background: 'transparent', padding: 0 }}>
+      {Object.keys(formData).length === 0 ? <div className="ramp-live-cleared"><strong>Live page cleared</strong><span>Waiting for the Ramp Supervisor to begin the next live sheet.</span></div> : <div className="ramp-container" style={{ background: 'transparent', padding: 0 }}>
         <RampForm
           formData={formData}
-          handleChange={() => {}} // Read-only
-          isManager={false} // Disables editing
+          handleChange={() => {}}
+          isManager={false}
           acTypes={[]}
           routeCodes={[]}
           handleAddAcType={() => {}}
@@ -45,7 +45,7 @@ export default function PublicLiveView() {
           appendRoute={() => {}}
           isViewOnlyMode={true}
         />
-      </div>
+      </div>}
     </div>
   );
 }

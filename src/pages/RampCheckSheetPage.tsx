@@ -50,6 +50,7 @@ function RampCheckSheetPage() {
   const typingTimer = useRef<any>(null);
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showClearLiveConfirm, setShowClearLiveConfirm] = useState(false);
   const [promptAction, setPromptAction] = useState<'acType' | 'routeCode' | null>(null);
 
   useEffect(() => {
@@ -211,13 +212,23 @@ function RampCheckSheetPage() {
         setCurrentDocId(res.id);
         toast.success('Record saved!');
       }
-      
-      await apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
-      
+
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
 
   const handleReset = () => setShowClearConfirm(true);
+
+  const clearLivePage = async () => {
+    if (typingTimer.current) { clearTimeout(typingTimer.current); typingTimer.current = null; }
+    try {
+      await apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
+      setDraftStatus('saved');
+      toast.success('Live page cleared');
+      setShowClearLiveConfirm(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Unable to clear the live page');
+    }
+  };
 
   const handlePrint = () => {
     document.body.classList.add('printing-ramp');
@@ -273,6 +284,7 @@ function RampCheckSheetPage() {
             </span>
           )}
           <button className="quick-btn" style={{ background: '#8b5cf6', color: 'white' }} onClick={copyLiveLink}>🔗 Copy Live Link</button>
+          {canEdit && <button className="quick-btn ramp-clear-live-btn" onClick={() => setShowClearLiveConfirm(true)}>Clear Live Page</button>}
         </div>
       </div>
 
@@ -323,6 +335,7 @@ function RampCheckSheetPage() {
         confirmText="Clear Form"
         isDanger={true}
         onConfirm={() => {
+          if (typingTimer.current) { clearTimeout(typingTimer.current); typingTimer.current = null; }
           setFormData(INITIAL_FORM);
           setCurrentDocId(null);
           apiFetch('/ramp/draft', { method: 'POST', body: JSON.stringify({}) });
@@ -330,6 +343,16 @@ function RampCheckSheetPage() {
           setShowClearConfirm(false);
         }}
         onCancel={() => setShowClearConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showClearLiveConfirm}
+        title="Clear Live Page?"
+        message="This removes the current data from the public live page. The Ramp Sheet form and saved record will remain unchanged."
+        confirmText="Clear Live Page"
+        isDanger={true}
+        onConfirm={() => void clearLivePage()}
+        onCancel={() => setShowClearLiveConfirm(false)}
       />
 
       <PromptDialog 
