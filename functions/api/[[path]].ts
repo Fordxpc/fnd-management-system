@@ -23,8 +23,6 @@ import {
   requireOpsBoardEdit,
   requireRosterEdit,
   requireRosterView,
-  requireLeaveEdit,
-  requireOvertimeEdit,
   requireLeaveApproval,
   requireOTApproval
 } from "../../src/lib/permission-check.js";
@@ -194,7 +192,35 @@ export const onRequest = async (context: any) => {
       status: "approved", requestedBy: currentUser.email, requestedAt: now, reviewedBy: currentUser.email, reviewedAt: now,
     });
     return id;
-  };  const scopeRequestsForUser = async (currentUser: any, rows: any[], smtCanViewAll: boolean) => {
+  };
+  const requireRequestMutationAccess = async (currentUser: any, record: any, recordLabel: string) => {
+    if (!record) {
+      const err: any = new Error(`${recordLabel} not found`);
+      err.status = 404;
+      throw err;
+    }
+    if (isManagerRole(currentUser.role)) return true;
+    if (String(record.status || '').trim().toLowerCase() !== 'pending') {
+      const err: any = new Error(`Only managers can change a reviewed ${recordLabel.toLowerCase()}`);
+      err.status = 403;
+      throw err;
+    }
+    const profile = await getCurrentStaffProfile(currentUser);
+    if (!profile) {
+      const err: any = new Error('Linked staff profile not found');
+      err.status = 403;
+      throw err;
+    }
+    const creatorEmail = String(record.requestedBy || record.createdBy || '').trim().toLowerCase();
+    const ownRecord = String(record.staffId || '') === String(profile.id || '') || creatorEmail === String(currentUser.email || '').trim().toLowerCase();
+    const departmentLead = currentUser.role === 'smt' || profile.isSmt === true || profile.isIncharge === true;
+    const sameDepartment = String(record.staffDepartment || '').trim().toLowerCase() === String(profile.department || '').trim().toLowerCase();
+    if (ownRecord || (departmentLead && sameDepartment)) return true;
+    const err: any = new Error(`You cannot change this ${recordLabel.toLowerCase()}`);
+    err.status = 403;
+    throw err;
+  };
+  const scopeRequestsForUser = async (currentUser: any, rows: any[], smtCanViewAll: boolean) => {
     if (isManagerRole(currentUser.role)) return rows;
     const profile = await getCurrentStaffProfile(currentUser);
     if (!profile) return [];
@@ -1032,18 +1058,10 @@ export const onRequest = async (context: any) => {
     }
 
     if (pathname.startsWith("/api/leave-requests/") && method === "DELETE") {
-
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
-      await requireLeaveEdit(
-        env,
-        currentUser
-      );
-
+      const currentUser = await requireAuth(request, env);
       const id = pathname.split("/").pop();
+      const [leaveRecord] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id!)).limit(1);
+      await requireRequestMutationAccess(currentUser, leaveRecord, 'Leave request');
       await db.delete(leaveRequests).where(eq(leaveRequests.id, id!));
       await db.delete(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
       return json({ success: true });
@@ -1449,12 +1467,9 @@ export const onRequest = async (context: any) => {
         env
       );
 
-      await requireOvertimeEdit(
-        env,
-        currentUser
-      );
-
       const id = pathname.split("/").pop();
+      const [overtimeRecord] = await db.select().from(overtimeEntries).where(eq(overtimeEntries.id, id!)).limit(1);
+      await requireRequestMutationAccess(currentUser, overtimeRecord, 'Overtime request');
       const body: any = await request.json();
       await db.update(overtimeEntries).set({
         date: body.date, startTime: body.startTime, endTime: body.endTime,
@@ -1573,18 +1588,10 @@ export const onRequest = async (context: any) => {
       return json({ success: true });
     }
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
-
-      const currentUser = await requireAuth(
-        request,
-        env
-      );
-
-      await requireOvertimeEdit(
-        env,
-        currentUser
-      );
-
+      const currentUser = await requireAuth(request, env);
       const id = pathname.split("/").pop();
+      const [overtimeRecord] = await db.select().from(overtimeEntries).where(eq(overtimeEntries.id, id!)).limit(1);
+      await requireRequestMutationAccess(currentUser, overtimeRecord, 'Overtime request');
       await db.delete(overtimeEntries).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
