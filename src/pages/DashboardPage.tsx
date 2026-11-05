@@ -89,6 +89,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [weather, setWeather] = useState<any>(null);
   const [weatherError, setWeatherError] = useState('');
   const [weatherLoading, setWeatherLoading] = useState(true);
+  const [dutyFilter, setDutyFilter] = useState('all');
 
   const role = (profile?.role || '').toLowerCase();
   const canManageRequests = ['manager', 'admin', 'developer', 'owner'].includes(role);
@@ -182,19 +183,22 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const pendingOT = dashboard?.pendingOT || EMPTY_LIST;
 
   const dutyByDepartment = useMemo(() => {
-    const grouped: Record<string, any[]> = {};
-    DEPARTMENTS.forEach((department) => {
-      grouped[department] = [];
-    });
-
+    const grouped: Record<string, any[]> = { Unassigned: [] };
+    DEPARTMENTS.forEach((department) => { grouped[department] = []; });
     onDuty.forEach((entry: any) => {
-      if (entry?.staffDepartment && grouped[entry.staffDepartment]) {
-        grouped[entry.staffDepartment].push(entry);
-      }
+      const value = String(entry?.staffDepartment || '').trim().toLowerCase();
+      const department = value.includes('ground') || value === 'operations' ? 'Ground Operations'
+        : value.includes('maint') ? 'Maintenance'
+        : value.includes('secur') ? 'Security'
+        : value.includes('fire') || value.includes('rescue') ? 'Fire & Rescue'
+        : value.includes('admin') ? 'Administration'
+        : value.includes('safe') ? 'Safety' : 'Unassigned';
+      grouped[department].push(entry);
     });
-
     return grouped;
   }, [onDuty]);
+  const dutyDepartments = dutyByDepartment.Unassigned.length > 0 ? [...DEPARTMENTS, 'Unassigned'] : DEPARTMENTS;
+  const visibleDutyDepartments = dutyFilter === 'all' ? dutyDepartments : dutyDepartments.filter(department => department === dutyFilter);
 
   const clock = time
     ? {
@@ -334,7 +338,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                 </div>
               </div>
               <div className="overview-department-bars">
-                {DEPARTMENTS.map((department) => {
+                {dutyDepartments.map((department) => {
                   const count = dutyByDepartment[department]?.length || 0;
                   const width = onDuty.length > 0 ? Math.max(6, Math.round((count / onDuty.length) * 100)) : 0;
                   return (
@@ -395,33 +399,21 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         <Panel
           title="Department duty"
           eyebrow="Team deployment"
-          action={<button type="button" className="overview-text-button" onClick={() => onNavigate('staff')}>Staff directory</button>}
+          action={<div className="overview-duty-actions"><select value={dutyFilter} onChange={event => setDutyFilter(event.target.value)} aria-label="Filter duty by department"><option value="all">All departments</option>{dutyDepartments.map(department => <option key={department} value={department}>{department}</option>)}</select><button type="button" className="overview-text-button" onClick={() => onNavigate('staff')}>Staff directory</button></div>}
         >
           {loading ? (
             <LoadingBlock />
           ) : (
             <div className="overview-duty-grid">
-              {DEPARTMENTS.map((department) => {
+              {visibleDutyDepartments.map((department) => {
                 const departmentStaff = dutyByDepartment[department] || [];
                 return (
-                  <article key={department}>
-                    <header>
-                      <strong>{department}</strong>
-                      <span>{departmentStaff.length}</span>
-                    </header>
+                  <details key={department} className="overview-duty-department" open>
+                    <summary><strong>{department}</strong><span>{departmentStaff.length}</span></summary>
                     {departmentStaff.length > 0 ? (
-                      <ul>
-                        {departmentStaff.slice(0, 4).map((entry: any) => (
-                          <li key={entry.id}>
-                            <span>{entry.staffName}</span>
-                            <small>{entry.shiftTime || entry.status || 'On duty'}</small>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>No staff scheduled</p>
-                    )}
-                  </article>
+                      <ul>{departmentStaff.map((entry: any) => <li key={entry.id}><span>{entry.staffName}</span><small>{entry.shiftTime || entry.status || 'On duty'}</small></li>)}</ul>
+                    ) : <p>No staff scheduled</p>}
+                  </details>
                 );
               })}
             </div>

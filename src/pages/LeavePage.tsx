@@ -21,6 +21,7 @@ const allDatesInRange = (start: string, end: string): string[] => { const dates:
 const countAnnualLeaveDays = (start: string, end: string, holidayDates: Set<string>) => { const dates = allDatesInRange(start, end); let countable = 0, skippedFridays = 0, skippedHolidays = 0; for (const d of dates) { if (isFriday(d)) skippedFridays++; else if (holidayDates.has(d)) skippedHolidays++; else countable++; } return { countable, skippedFridays, skippedHolidays }; };
 const getCurrentLeaveYear = (joinDateStr: string) => { if (!joinDateStr) return null; const jd = new Date(joinDateStr + 'T00:00:00'); if (isNaN(jd.getTime())) return null; const today = new Date(); today.setHours(0, 0, 0, 0); let startYear = today.getFullYear(); let anniversary = new Date(startYear, jd.getMonth(), jd.getDate()); if (today < anniversary) { startYear -= 1; anniversary = new Date(startYear, jd.getMonth(), jd.getDate()); } return { start: anniversary, end: new Date(startYear + 1, jd.getMonth(), jd.getDate() - 1) }; };
 const getYearsOfService = (joinDateStr: string): number => { if (!joinDateStr) return 0; const jd = new Date(joinDateStr + 'T00:00:00'); if (isNaN(jd.getTime())) return 0; const today = new Date(); let years = today.getFullYear() - jd.getFullYear(); const m = today.getMonth() - jd.getMonth(); if (m < 0 || (m === 0 && today.getDate() < jd.getDate())) years -= 1; return years; };
+const formatAuditDate = (value?: string) => value ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const getLeaveTypesForStaff = (staffMember: any): string[] => { const g = (staffMember?.gender || '').toLowerCase(); if (!g) return LEAVE_TYPES; return LEAVE_TYPES.filter((t) => { if (g === 'female' && MALE_ONLY.includes(t)) return false; if (g === 'male' && FEMALE_ONLY.includes(t)) return false; return true; }); };
 const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, requests: any[]): number => { if (!joinDate) return 0; const years = getYearsOfService(joinDate); const isAnnual = leaveType === 'ANNUAL LEAVE'; const renews = years >= ANNUAL_LEAVE_SERVICE_YEARS; let used = 0; const ly = getCurrentLeaveYear(joinDate); requests.filter((r: any) => r.staffId === staffId && r.status?.toLowerCase() === 'approved' && r.leaveType === leaveType).forEach((r: any) => { if (isAnnual && !renews) used += r.days || 0; else if (ly) { const lyStart = formatDate(ly.start); const lyEnd = formatDate(ly.end); if ((r.startDate || '') >= lyStart && (r.startDate || '') <= lyEnd) used += r.days || 0; } }); return used; };
 
@@ -319,10 +320,11 @@ function LeavePage() {
       <div className="staff-list leave-management-list">
         {visibleRequests.length === 0 ? (<div className="empty-state"><p>No leave requests found.</p></div>) : (
           <table className="leave-management-table">
-            <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Requested by / time</th><th>Status / decision audit</th><th>Actions</th></tr></thead>
             <tbody>
               {visibleRequests.map((r: any) => {
                 const approverName = r.reviewedBy ? (staffList.find(s => (s.email || '').toLowerCase() === r.reviewedBy.toLowerCase())?.name || r.reviewedBy) : null;
+                const requesterName = r.requestedBy ? (staffList.find(s => (s.email || '').toLowerCase() === r.requestedBy.toLowerCase())?.name || r.requestedBy) : 'System';
                 return (
                   <tr key={r.id}>
                     <td><strong>{r.staffName}</strong> {r.staffIsSMT && '⭐'}</td>
@@ -331,7 +333,8 @@ function LeavePage() {
                     <td>{formatDisplay(r.startDate)}</td>
                     <td>{formatDisplay(r.endDate)}</td>
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
-                    <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span>{approverName && (<div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px', textAlign: 'center' }}>By: {approverName}</div>)}</td>
+                    <td><div className="request-audit"><strong>{requesterName}</strong><span>{formatAuditDate(r.requestedAt)}</span></div></td>
+                    <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span><div className="request-audit decision"><strong>{approverName || 'Awaiting decision'}</strong><span>{formatAuditDate(r.reviewedAt)}</span></div></td>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       {canApproveRequest(r) && r.status?.toLowerCase() === 'pending' && (
                         <>

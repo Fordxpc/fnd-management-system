@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
+const formatAuditDate = (value?: string) => value ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const INITIAL_DATE = new Date().toISOString().split('T')[0];
 const INITIAL_MONTH = INITIAL_DATE.slice(0, 7);
 
@@ -417,13 +418,14 @@ function OvertimePage() {
               </header>
               <div className="staff-list overtime-week-card__table-wrap">
                 <table className="overtime-management-table">
-                  <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Status / Approved By</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Day</th>{viewMode === 'department' && <th>Staff</th>}<th>Time</th><th>Hours</th><th>Notes</th><th>Requested by / time</th><th>Status / decision audit</th><th>Actions</th></tr></thead>
                   <tbody>
                     {weekEntries.map((e) => {
                       const entryStaffRec = staff.find(s => s.id === e.staffId);
                       const isEntrySMT = entryStaffRec?.isSmt === true || entryStaffRec?.isSMT === true;
                       const canManage = canEditThisDept(e.staffDepartment, isEntrySMT);
                       const approverName = e.reviewedBy ? (staff.find(s => (s.email || '').toLowerCase() === e.reviewedBy.toLowerCase())?.name || e.reviewedBy) : null;
+                      const requesterName = e.createdBy ? (staff.find(s => (s.email || '').toLowerCase() === e.createdBy.toLowerCase())?.name || e.createdBy) : 'System';
                       
                       return (
                         <tr key={e.id}>
@@ -433,13 +435,8 @@ function OvertimePage() {
                           <td style={{ fontSize: '12px' }}>{e.startTime} – {e.endTime}</td>
                           <td style={{ textAlign: 'center', fontWeight: 600 }}>{e.hours}</td>
                           <td style={{ fontSize: '12px', color: '#64748b' }}>{e.notes || '—'}</td>
-                          <td>
-                            {tab !== 'pending' && approverName && (
-                              <div style={{ fontSize: '11px', color: '#64748b' }}>
-                                {tab === 'approved' ? '✅ Approved' : '❌ Rejected'} by:<br/><strong>{approverName}</strong>
-                              </div>
-                            )}
-                          </td>
+                          <td><div className="request-audit"><strong>{requesterName}</strong><span>{formatAuditDate(e.createdAt)}</span></div></td>
+                          <td><span className={`status-badge status-${String(e.status || 'pending').toLowerCase()}`}>{String(e.status || 'pending').toUpperCase()}</span><div className="request-audit decision"><strong>{approverName || 'Awaiting decision'}</strong><span>{formatAuditDate(e.reviewedAt)}</span></div></td>
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {tab === 'pending' && canApproveThisDept(e.staffDepartment, isEntrySMT) && e.staffId !== myStaff?.id && (
                               <>
