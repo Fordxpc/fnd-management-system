@@ -449,11 +449,17 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/staff" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       const results = await db.select().from(staff).orderBy(asc(staff.orderIndex));
-      const canViewPrivateStaffData = ["developer", "manager", "admin"].includes(currentUser.role);
+      const canViewPrivateStaffData = ["developer", "manager", "admin", "owner"].includes(currentUser.role);
       const canViewInternalNotes = currentUser.role === "developer";
       const requesterEmail = String(currentUser.email || "").toLowerCase();
+      const developerEmails = currentUser.role === "developer"
+        ? new Set<string>()
+        : new Set((await db.select({ email: users.email }).from(users).where(eq(users.role, "developer"))).map((entry: any) => String(entry.email || "").toLowerCase()));
+      const visibleResults = currentUser.role === "developer"
+        ? results
+        : results.filter((record: any) => !developerEmails.has(String(record.email || "").toLowerCase()));
 
-      return json(results.map((record: any) => {
+      return json(visibleResults.map((record: any) => {
         const isOwnRecord = String(record.email || "").toLowerCase() === requesterEmail;
         if (canViewPrivateStaffData || isOwnRecord) {
           return canViewInternalNotes ? record : { ...record, notes: "" };
@@ -555,6 +561,7 @@ export const onRequest = async (context: any) => {
       const [targetStaff] = await db.select().from(staff).where(eq(staff.id, id!)).limit(1);
       if (!targetStaff) return json({ message: "Staff member not found" }, 404);
       const [targetUser] = targetStaff.email ? await db.select().from(users).where(eq(users.email, targetStaff.email.toLowerCase())).limit(1) : [];
+      if (targetUser?.role === "developer" && currentUser.role !== "developer") return json({ message: "Developer records can only be modified by the Developer" }, 403);
       const targetIsSMT = targetStaff.isSmt === true || targetUser?.role === "smt" || body.isSMT === true;
       if (body.isIncharge === true && !targetIsSMT) return json({ message: "Only SMT members can be department in-charge" }, 400);
       if (body.specialOpsAccess === true && !["Ground Operations", "Maintenance", "Fire & Rescue"].includes(targetStaff.department || "")) {
@@ -595,6 +602,10 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const id = pathname.split("/").pop();
+      const [targetStaff] = await db.select().from(staff).where(eq(staff.id, id!)).limit(1);
+      if (!targetStaff) return json({ message: "Staff member not found" }, 404);
+      const [targetUser] = targetStaff.email ? await db.select().from(users).where(eq(users.email, targetStaff.email.toLowerCase())).limit(1) : [];
+      if (targetUser?.role === "developer" && currentUser.role !== "developer") return json({ message: "Developer records can only be removed by the Developer" }, 403);
       await db.delete(staff).where(eq(staff.id, id!));
       return json({ success: true });
     }
@@ -1086,7 +1097,7 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const results = await db.select().from(users).orderBy(asc(users.email));
-      return json(results);
+      return json(currentUser.role === "developer" ? results : results.filter((record: any) => record.role !== "developer"));
     }
 
     if (pathname === "/api/users/sync" && method === "POST") {
@@ -1213,7 +1224,7 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const results = await db.select().from(userPresets).orderBy(asc(userPresets.email));
-      return json(results);
+      return json(currentUser.role === "developer" ? results : results.filter((record: any) => record.role !== "developer"));
     }
     if (pathname === "/api/user-presets" && method === "POST") {
       const currentUser = await requireAuth(request, env);
