@@ -1762,10 +1762,18 @@ export const onRequest = async (context: any) => {
         .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
       if (body.fltNo && body.date) {
         const liveStatus = body.atd ? "Departed" : body.ata ? "Arrived" : body.eta ? "Estimated" : "Scheduled";
-        await db.update(flights).set({
-          status: liveStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
-          updatedAt: new Date().toISOString()
-        }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
+        const normalizedFlightNo = String(body.fltNo).replace(/[^a-z0-9]/gi, '').toUpperCase();
+        const scheduledFlights = await db.select({ id: flights.id, flightNo: flights.flightNo })
+          .from(flights).where(eq(flights.date, String(body.date).trim()));
+        const matchedFlight = scheduledFlights.find(flight =>
+          String(flight.flightNo || '').replace(/[^a-z0-9]/gi, '').toUpperCase() === normalizedFlightNo
+        );
+        if (matchedFlight) {
+          await db.update(flights).set({
+            status: liveStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
+            updatedAt: new Date().toISOString()
+          }).where(eq(flights.id, matchedFlight.id));
+        }
       }
       return json({ success: true });
     }
@@ -2149,7 +2157,7 @@ export const onRequest = async (context: any) => {
       const upcomingFlights = canViewFlightBoard ? flightList
         .filter((flight: any) => {
           const status = String(flight.status || '').toLowerCase();
-          return flight.date >= today && !flight.atd && !['departed', 'cancelled', 'completed'].includes(status);
+          return flight.date >= today && !['cancelled', 'completed'].includes(status);
         })
         .sort((a: any, b: any) => {
           const dateCompare = String(a.date || '').localeCompare(String(b.date || ''));
@@ -2180,15 +2188,25 @@ export const onRequest = async (context: any) => {
         String(leave.endDate || '') >= today
       );
       const rosterUnavailableStatuses = new Set(['absent', 'annual leave', 'sick leave', 'sick leave / mc', 'no pay leave', 'duty travel', 'paternity leave', 'maternity leave', 'pre-maternity leave', 'family responsibility leave (frl)']);
-      const rosterUnavailableToday = roster.filter(entry => entry.date === today && rosterUnavailableStatuses.has(String(entry.status || '').trim().toLowerCase()));
+      const rosterUnavailableToday = roster.filter(entry => {
+        if (entry.date !== today) return false;
+        const status = String(entry.status || '').trim().toLowerCase();
+        return status !== 'scheduled' || rosterUnavailableStatuses.has(status);
+      });
       const leaveStaffIds = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => String(entry.staffId || '')).filter(Boolean));
       const leaveStaffNames = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => normalizeStaffName(entry.staffName)).filter(Boolean));
       const leaveIdentityKeys = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => `${normalizeStaffName(entry.staffName)}|${normalizeDepartment(entry.staffDepartment)}`));
       const leaveStaffSns = new Set(activeLeaveToday.map(leave => normalizeSn((leave as any).staffSn)).filter(Boolean));
-      activeLeaveToday.forEach(leave => {
-        const linkedStaff = staffList.find(member => String(member.id || '') === String(leave.staffId || '') || normalizeStaffName(member.name) === normalizeStaffName(leave.staffName));
-        if (linkedStaff?.sn) leaveStaffSns.add(normalizeSn(linkedStaff.sn));
-      });
+      const addLinkedUnavailableStaff = (entry: any) => {
+        const linkedStaff = staffList.find(member => String(member.id || '') === String(entry.staffId || '') || normalizeStaffName(member.name) === normalizeStaffName(entry.staffName));
+        if (!linkedStaff) return;
+        leaveStaffIds.add(String(linkedStaff.id || ''));
+        leaveStaffNames.add(normalizeStaffName(linkedStaff.name));
+        leaveIdentityKeys.add(`${normalizeStaffName(linkedStaff.name)}|${normalizeDepartment(linkedStaff.department)}`);
+        if (linkedStaff.sn) leaveStaffSns.add(normalizeSn(linkedStaff.sn));
+      };
+      activeLeaveToday.forEach(addLinkedUnavailableStaff);
+      rosterUnavailableToday.forEach(addLinkedUnavailableStaff);
       const visibleDutyEntries = roster.filter(entry => {
         if (entry.date !== today || String(entry.status || '').trim().toLowerCase() !== 'scheduled') return false;
         const staffId = String(entry.staffId || '');
