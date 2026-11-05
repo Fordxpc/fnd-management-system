@@ -29,6 +29,8 @@ import {
   requireOTApproval
 } from "../../src/lib/permission-check.js";
 
+let staffPhotoColumnReady = false;
+
 const isManagerRole = (role: string | undefined | null) =>
   ['developer', 'manager', 'admin', 'owner'].includes(role || '');
 
@@ -54,6 +56,11 @@ export const onRequest = async (context: any) => {
   const url = new URL(request.url);
   const method = request.method;
   const pathname = url.pathname;
+
+  if (!staffPhotoColumnReady) {
+    await db.execute(sql`ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "photo_base64" text`);
+    staffPhotoColumnReady = true;
+  }
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -214,8 +221,9 @@ export const onRequest = async (context: any) => {
       const staffRows = await db.select().from(staff);
       const userRows = await db.select().from(users);
       const roleByEmail = new Map(userRows.map((account: any) => [String(account.email || "").toLowerCase(), String(account.role || "staff").toLowerCase()]));
-      const existingChannelMemberships = await db.select().from(chatGroupMembers).limit(1);
-      for (const group of existingChannelMemberships.length === 0 ? allGroups.filter((item: any) => item.createdBy === "system") : []) {
+      for (const group of allGroups.filter((item: any) => item.createdBy === "system")) {
+        const existingMembers = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.groupId, group.id)).limit(1);
+        if (existingMembers.length > 0) continue;
         const recommended = staffRows.filter((member: any) => {
           const memberRole = roleByEmail.get(String(member.email || "").toLowerCase()) || (member.isSmt ? "smt" : "staff");
           const management = ["developer", "admin", "manager", "owner"].includes(memberRole);
@@ -570,12 +578,14 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
+      if (body.photoBase64 && (!String(body.photoBase64).startsWith('data:image/') || String(body.photoBase64).length > 900_000)) return json({ message: 'Profile photo must be an image smaller than 650 KB' }, 400);
 
       await db.insert(staff).values({
         id,
         sn: body.sn || "",
         name: body.name,
         email: body.email,
+        photoBase64: body.photoBase64 || "",
         personalEmail: body.personalEmail || "",
         nid: body.nid || "",
         joinDate: body.joinDate || "",
@@ -653,11 +663,12 @@ export const onRequest = async (context: any) => {
       if (body.specialOpsAccess === true && !["Ground Operations", "Maintenance", "Fire & Rescue"].includes(targetStaff.department || "")) {
         return json({ message: "Special Ops Access is limited to eligible operational departments" }, 400);
       }
+      if (body.photoBase64 && (!String(body.photoBase64).startsWith('data:image/') || String(body.photoBase64).length > 900_000)) return json({ message: 'Profile photo must be an image smaller than 650 KB' }, 400);
       const updatedAt = new Date().toISOString();
 
       const updateData: any = { updatedAt };
       const allowedFields = [
-        'sn', 'name', 'email', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender',
+        'sn', 'name', 'email', 'photoBase64', 'personalEmail', 'nid', 'joinDate', 'phone', 'gender',
         'department', 'position', 'isSMT', 'isIncharge', 'balanceVisible', 'specialOpsAccess', 'tempDeptAccess',
         'rampsheetViewAccess', 'rampsheetEditAccess',
         'rwyLightViewAccess', 'rwyLightEditAccess',
@@ -1749,6 +1760,13 @@ export const onRequest = async (context: any) => {
       const payloadStr = JSON.stringify(body);
       await db.insert(rampLiveDraft).values({ id: "current", payload: payloadStr })
         .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      if (body.fltNo && body.date) {
+        const liveStatus = body.atd ? "Departed" : body.ata ? "Arrived" : body.eta ? "Estimated" : "Scheduled";
+        await db.update(flights).set({
+          status: liveStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null,
+          updatedAt: new Date().toISOString()
+        }).where(and(sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, eq(flights.date, body.date)));
+      }
       return json({ success: true });
     }
     if (pathname === "/api/ramp/reports" && method === "GET") {
@@ -1783,7 +1801,7 @@ export const onRequest = async (context: any) => {
       });
 
       if (body.fltNo && body.date) {
-        const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
+        const newStatus = "Completed";
         await db.update(flights).set({
           status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null
         }).where(and(
@@ -1814,7 +1832,7 @@ export const onRequest = async (context: any) => {
       }).where(eq(rampInspections.id, id!));
 
       if (body.fltNo && body.date) {
-        const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
+        const newStatus = "Completed";
         await db.update(flights).set({
           status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null
         }).where(and(
@@ -2132,7 +2150,7 @@ export const onRequest = async (context: any) => {
       const upcomingFlights = canViewFlightBoard ? flightList
         .filter((flight: any) => {
           const status = String(flight.status || '').toLowerCase();
-          return flight.date >= today && !flight.atd && !['departed', 'cancelled', 'completed'].includes(status);
+          return flight.date >= today && status !== 'cancelled';
         })
         .sort((a: any, b: any) => {
           const dateCompare = String(a.date || '').localeCompare(String(b.date || ''));
@@ -2160,12 +2178,14 @@ export const onRequest = async (context: any) => {
         String(leave.endDate || '') >= today
       );
       const leaveStaffIds = new Set(activeLeaveToday.map(leave => String(leave.staffId || '')).filter(Boolean));
+      const leaveStaffNames = new Set(activeLeaveToday.map(leave => String(leave.staffName || '').trim().replace(/\s+/g, ' ').toLowerCase()).filter(Boolean));
       const leaveIdentityKeys = new Set(activeLeaveToday.map(leave => `${String(leave.staffName || '').trim().toLowerCase()}|${String(leave.staffDepartment || '').trim().toLowerCase()}`));
       const visibleDutyEntries = roster.filter(entry => {
         if (entry.date !== today || String(entry.status || '').toLowerCase() !== 'scheduled') return false;
         const staffId = String(entry.staffId || '');
         const identityKey = `${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`;
-        return !leaveStaffIds.has(staffId) && !leaveIdentityKeys.has(identityKey);
+        const normalizedName = String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase();
+        return !leaveStaffIds.has(staffId) && !leaveStaffNames.has(normalizedName) && !leaveIdentityKeys.has(identityKey);
       });
       const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [`${String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase()}|${String(entry.staffDepartment || "").trim().toLowerCase()}`, entry])).values());
       const onLeaveToday = activeLeaveToday;

@@ -228,14 +228,13 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     <div className="overview-dashboard">
       <section className="overview-welcome overview-greeting-board">
         <div className="overview-greeting-copy">
-          <div className="overview-profile-mark" aria-hidden="true">{String(profile?.name || 'FND').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase()}</div>
+          <div className="overview-profile-stack"><div className="overview-profile-mark">{profile?.photoBase64 ? <img src={profile.photoBase64} alt={`${profile?.name || 'Staff'} profile`} /> : String(profile?.name || 'FND').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase()}</div>{profile?.sn && <small>SN-{String(profile.sn).replace(/^sn-/i, '')}</small>}</div>
           <span className="overview-kicker">Funadhoo Airport · Daily command view</span>
           <h1><span>{clock.greeting},</span><strong>{profile?.name || 'team member'}</strong></h1>
           <p>Here is the operational picture for {clock.day.toLowerCase()}.</p>
           <div className="overview-identity-row">
-            {profile?.sn && <span>SN-{String(profile.sn).replace(/^sn-/i, '')}</span>}
             <span>{profile?.position || role || 'Airport staff'}</span>
-            <span>{profile?.department || 'Funadhoo Airport'}{(role === 'smt' || profile?.isSmt) ? ' · SMT' : ''}</span>
+            <span>{profile?.department || 'Funadhoo Airport'}{(role === 'smt' || profile?.isSmt) ? ' · SMT' : ''}{profile?.isIncharge ? ' · In-charge' : ''}</span>
           </div>
         </div>
         <div className="overview-clock" aria-label={`${clock.day}, ${clock.date}, ${clock.time}`}>
@@ -275,7 +274,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <span className="overview-flight-service"><i>{index === 0 ? 'NEXT' : shortFlightDate(flight.date)}</i><strong>{flight.flightNo || 'Flight'}</strong><small>{flight.aircraft || 'Aircraft TBC'}</small></span>
                   <span className="overview-flight-route"><strong>{flight.route || 'Route TBC'}</strong><small>{shortFlightDate(flight.date)}</small></span>
                   <span className="overview-flight-times"><small>ARR <strong>{flight.arrivalTime || '—'}</strong></small><small>DEP <strong>{flight.departureTime || '—'}</strong></small></span>
-                  <span className="overview-flight-times overview-flight-live-times"><small>ETA <strong>{flight.eta || '—'}</strong></small><small>ATA <strong>{flight.ata || '—'}</strong></small></span>
+                  <span className="overview-flight-times overview-flight-live-times"><small>ETA <strong>{flight.eta || '—'}</strong></small><small>ATA <strong>{flight.ata || '—'}</strong></small><small>ATD <strong>{flight.atd || '—'}</strong></small></span>
                   <span className="overview-flight-details-compact"><small>CHECK-IN <strong>{flight.checkInTime || '—'}</strong></small><small>MLE DEP <strong>{flight.originDepTime || '—'}</strong></small><small>PAX <strong>{Number(flight.paxAdults) || 0} / {Number(flight.paxInfants) || 0} INF</strong></small></span>
                   <span className={`overview-board-status overview-board-status--${String(flightStatus(flight)).toLowerCase().replace(/[^a-z]+/g, '-')}`}>{flightStatus(flight)}</span>
                 </button>
@@ -303,7 +302,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         </Panel>
       </div>
       <Panel title="Live flight radar" eyebrow="Next FND movement" className="overview-flight-radar-panel" action={trackedFlight && <a className="overview-text-button" href={`https://www.flightradar24.com/${radarFlightId}`} target="_blank" rel="noreferrer">Open tracker</a>}>
-        {trackedFlight ? <div className="overview-flight-radar-content"><div className="overview-flight-radar-summary"><div><span>Tracking</span><strong>{trackedFlight.flightNo || 'Next flight'}</strong><small>{trackedFlight.route || 'Route TBC'} · {trackedFlight.aircraft || 'Aircraft TBC'}</small></div><span className="overview-board-status">{flightStatus(trackedFlight)}</span></div><div className="overview-flight-radar-frame"><iframe title={`Live tracking for ${trackedFlight.flightNo || 'next flight'}`} loading="lazy" src={`https://www.flightradar24.com/simple_index.php?flight=${radarFlightId}`} /><a className="overview-mobile-radar-launch" href={`https://www.flightradar24.com/${radarFlightId}`} target="_blank" rel="noreferrer"><strong>Open live flight radar</strong><span>Mobile browsers may block the embedded tracker. Tap here to open the live map.</span></a></div><p>If live aircraft data is unavailable in the embedded view, open the full tracker in a new tab.</p></div> : <EmptyState>No upcoming flight is available for live tracking.</EmptyState>}
+        {trackedFlight ? <div className="overview-flight-radar-content"><div className="overview-flight-radar-summary"><div><span>Tracking</span><strong>{trackedFlight.flightNo || 'Next flight'}</strong><small>{trackedFlight.route || 'Route TBC'} · {trackedFlight.aircraft || 'Aircraft TBC'}</small></div><span className="overview-board-status">{flightStatus(trackedFlight)}</span></div><div className="overview-flight-radar-frame"><iframe title={`Live tracking for ${trackedFlight.flightNo || 'next flight'}`} loading="lazy" src={`https://www.flightradar24.com/simple_index.php?flight=${radarFlightId}`} /><div className="overview-mobile-radar-launch"><strong>External live tracking</strong><span>Embedded trackers may be blocked on mobile.</span><div><a href={`https://www.flightaware.com/live/flight/${radarFlightId}`} target="_blank" rel="noreferrer">FlightAware</a><a href="https://globe.adsbexchange.com/" target="_blank" rel="noreferrer">ADS-B Exchange</a></div></div></div><p>If live aircraft data is unavailable in the embedded view, open the full tracker in a new tab.</p></div> : <EmptyState>No upcoming flight is available for live tracking.</EmptyState>}
       </Panel>
       <section className="overview-metrics" aria-label="Today's operational activity">
         {operationMetrics.map((metric) => (
@@ -378,16 +377,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             <div className="overview-request-summary">
               <button type="button" onClick={() => onNavigate('leave')}>
                 <span>Leave requests</span>
-                <strong>{pendingLeave.length}</strong>
+                <strong>{pendingLeave.length}</strong><small>Review ›</small>
               </button>
               <button type="button" onClick={() => onNavigate('overtime')}>
                 <span>Overtime requests</span>
-                <strong>{pendingOT.length}</strong>
+                <strong>{pendingOT.length}</strong><small>Review ›</small>
               </button>
               {canSeeTeamRequests && (
                 <button type="button" onClick={() => canManageRequests && onNavigate('settings')}>
                   <span>Password resets</span>
-                  <strong>{passwordResets.length}</strong>
+                  <strong>{passwordResets.length}</strong><small>Review ›</small>
                 </button>
               )}
             </div>

@@ -92,7 +92,7 @@ export const flights = pgTable("flights", {
 });
 
 export const staff = pgTable("staff", {
-	id: text().primaryKey().notNull(), sn: text(), name: text(), email: text(),
+	id: text().primaryKey().notNull(), sn: text(), name: text(), email: text(), photoBase64: text("photo_base64"),
 	department: text(), position: text(), isSmt: boolean("is_smt").default(false),
 	balanceVisible: boolean("balance_visible").default(false), personalEmail: text("personal_email"),
 	isIncharge: boolean("is_incharge").default(false), basicSalary: real("basic_salary").default(0),

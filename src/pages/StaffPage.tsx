@@ -92,7 +92,7 @@ function StaffPage() {
   const [basicSalary, setBasicSalary] = useState<string>('');
   const [dailyAllowance, setDailyAllowance] = useState<string>('');
   const [holidayAllowanceRate, setHolidayAllowanceRate] = useState<string>('');
-  const [bankAccount, setBankAccount] = useState<string>('');
+  const [photoBase64, setPhotoBase64] = useState<string>('');
   const [createUserAccount, setCreateUserAccount] = useState<boolean>(true);
 
   const fetchStaff = useCallback(async (quiet = false) => {
@@ -117,19 +117,18 @@ function StaffPage() {
 
   const resetForm = () => {
     setSn(''); setName(''); setEmail(''); setPersonalEmail(''); setNid(''); setJoinDate(''); setPhone(''); setGender(''); setDepartment('Ground Operations'); setPosition('');
-    setIsSMT(false); setBalanceVisible(false); setNotes(''); setBasicSalary(''); setDailyAllowance(''); setHolidayAllowanceRate(''); setBankAccount('');
+    setIsSMT(false); setBalanceVisible(false); setNotes(''); setBasicSalary(''); setDailyAllowance(''); setHolidayAllowanceRate(''); setPhotoBase64('');
     setCreateUserAccount(true); setEditingId(null);
   };
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
     if (!name || !email) { toast.error('Name and Email are required'); return; }
-    const payload: any = { sn, name, email, personalEmail, nid, joinDate, phone, gender, department, position, isSMT: isSmt, balanceVisible };
+    const payload: any = { sn, name, email, photoBase64, personalEmail, nid, joinDate, phone, gender, department, position, isSMT: isSmt, balanceVisible };
     if (canViewFinancials) {
       payload.basicSalary = Number(basicSalary) || 0;
       payload.dailyAllowance = Number(dailyAllowance) || 0;
       payload.holidayAllowanceRate = Number(holidayAllowanceRate) || 0;
-      payload.bankAccount = bankAccount;
     }
     if (canSeeSensitive) payload.notes = notes;
 
@@ -152,7 +151,7 @@ function StaffPage() {
   };
 
   const handleEdit = (s: any) => {
-    setEditingId(s.id); setSn(s.sn || ''); setName(s.name || ''); setEmail(s.email || ''); setPersonalEmail(s.personalEmail || ''); setNid(s.nid || ''); setJoinDate(s.joinDate || ''); setPhone(s.phone || ''); setGender(s.gender || ''); setDepartment(s.department || 'Ground Operations'); setPosition(s.position || ''); setIsSMT(s.isSmt === true || s.isSMT === true); setBalanceVisible(!!s.balanceVisible); setNotes(s.notes || ''); setBasicSalary(s.basicSalary ? String(s.basicSalary) : ''); setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : ''); setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : ''); setBankAccount(s.bankAccount || ''); setCreateUserAccount(false); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' });
+    setEditingId(s.id); setSn(s.sn || ''); setName(s.name || ''); setEmail(s.email || ''); setPersonalEmail(s.personalEmail || ''); setNid(s.nid || ''); setJoinDate(s.joinDate || ''); setPhone(s.phone || ''); setGender(s.gender || ''); setDepartment(s.department || 'Ground Operations'); setPosition(s.position || ''); setIsSMT(s.isSmt === true || s.isSMT === true); setBalanceVisible(!!s.balanceVisible); setNotes(s.notes || ''); setBasicSalary(s.basicSalary ? String(s.basicSalary) : ''); setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : ''); setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : ''); setPhotoBase64(s.photoBase64 || ''); setCreateUserAccount(false); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const confirmDelete = async () => {
@@ -246,6 +245,7 @@ const myDept = myStaff?.department;
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb' }}>👤 Personal Information</div>
           <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
           <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
+          <label className="staff-photo-upload"><span>{photoBase64 ? <img src={photoBase64} alt="Staff preview" /> : 'PHOTO'}</span><div><strong>Passport-size profile picture</strong><small>JPG or PNG, maximum 650 KB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; if (file.size > 650 * 1024) { toast.error('Photo must be 650 KB or smaller'); return; } const reader = new FileReader(); reader.onloadend = () => setPhotoBase64(String(reader.result || '')); reader.readAsDataURL(file); }} /></div>{photoBase64 && <button type="button" onClick={() => setPhotoBase64('')}>Remove</button>}</label>
           <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <select value={gender} onChange={(e) => setGender(e.target.value)}><option value="">Gender — select...</option><option value="Male">Male</option><option value="Female">Female</option></select>
           <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} title="Join Date" />
@@ -260,7 +260,6 @@ const myDept = myStaff?.department;
             <input type="number" placeholder="Basic Salary (MVR)" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} step="0.01" min="0" />
             <input type="number" placeholder="Daily Allowance (MVR)" value={dailyAllowance} onChange={(e) => setDailyAllowance(e.target.value)} step="0.01" min="0" />
             <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
-            <input placeholder="Bank Account Number" value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} />
           </>}
           {canSeeSensitive && (<><div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>📝 Internal Notes (developer only)</div><textarea placeholder="Internal notes..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ gridColumn: 'span 2', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} /></>)}
           <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e' }}><input type="checkbox" checked={isSmt} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px' }} />⭐ Mark as SMT (Senior Management Team) member</label>
