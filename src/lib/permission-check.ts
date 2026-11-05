@@ -2,7 +2,7 @@
 
 import { getDb } from "../../src/lib/db";
 import { staff, users } from "../../src/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export interface CurrentUser {
   id: string;
@@ -459,7 +459,7 @@ async function requireDepartmentApproval(
   const approverUserRows = await db
     .select()
     .from(users)
-    .where(eq(users.email, approverEmail.toLowerCase()))
+    .where(sql`lower(${users.email}) = ${approverEmail.trim().toLowerCase()}`)
     .limit(1);
   const approverUser = approverUserRows[0];
   const role = (approverUser?.role || "").toLowerCase();
@@ -472,7 +472,7 @@ async function requireDepartmentApproval(
   const approverStaffRows = await db
     .select()
     .from(staff)
-    .where(eq(staff.email, approverEmail.toLowerCase()))
+    .where(sql`lower(${staff.email}) = ${approverEmail.trim().toLowerCase()}`)
     .limit(1);
   const approverStaff = approverStaffRows[0];
 
@@ -499,7 +499,7 @@ async function requireDepartmentApproval(
   const targetStaffRows = await db
     .select()
     .from(staff)
-    .where(eq(staff.email, targetEmail.toLowerCase()))
+    .where(sql`lower(${staff.email}) = ${targetEmail.trim().toLowerCase()}`)
     .limit(1);
   const targetStaff = targetStaffRows[0];
 

@@ -115,7 +115,7 @@ export const onRequest = async (context: any) => {
     const [target] = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
     if (!target) { const err: any = new Error("Staff member not found"); err.status = 404; throw err; }
     if (isManagerRole(currentUser.role)) return target;
-    const [editor] = await db.select().from(staff).where(eq(staff.email, currentUser.email.toLowerCase())).limit(1);
+    const [editor] = await db.select().from(staff).where(sql`lower(${staff.email}) = ${String(currentUser.email || "").trim().toLowerCase()}`).limit(1);
     const editorDept = String(editor?.department || currentUser.department || "").trim().toLowerCase();
     const targetDept = String(target.department || "").trim().toLowerCase();
     if (editor?.isIncharge !== true || (editorDept !== targetDept && !(editorDept === "safety" && targetDept === "security"))) {
@@ -124,8 +124,13 @@ export const onRequest = async (context: any) => {
     return target;
   };
   const getCurrentStaffProfile = async (currentUser: any) => {
-    const [profile] = await db.select().from(staff)
-      .where(eq(staff.email, String(currentUser.email || "").toLowerCase())).limit(1);
+    const email = String(currentUser.email || "").trim().toLowerCase();
+    const snPart = email.split("@")[0].replace(/^sn-/i, "").toUpperCase();
+    const [profile] = await db.select().from(staff).where(or(
+      sql`lower(${staff.email}) = ${email}`,
+      sql`upper(${staff.sn}) = ${snPart}`,
+      sql`upper(${staff.sn}) = ${`SN-${snPart}`}`
+    )).limit(1);
     return profile || null;
   };
   const getAuthorizedRequestStaff = async (currentUser: any, staffId: string) => {
