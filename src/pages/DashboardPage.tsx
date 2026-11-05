@@ -119,7 +119,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     };
 
     fetchDashboard();
-    const interval = window.setInterval(fetchDashboard, 30000);
+    const interval = window.setInterval(fetchDashboard, 15000);
     const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void fetchDashboard(); };
     window.addEventListener('focus', fetchDashboard);
     document.addEventListener('visibilitychange', refreshWhenVisible);

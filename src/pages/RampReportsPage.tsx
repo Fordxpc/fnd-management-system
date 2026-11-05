@@ -16,6 +16,8 @@ const normalizeRampLoads = (report: any) => {
   Object.entries(aliases).forEach(([legacy, current]) => {
     ['In', 'Out', 'Trans'].forEach(direction => {
       if (!normalized[`${current}${direction}`] && normalized[`${legacy}${direction}`]) normalized[`${current}${direction}`] = normalized[`${legacy}${direction}`];
+      if (!normalized[`${current}${direction}Pcs`] && normalized[`${legacy}${direction}Pcs`]) normalized[`${current}${direction}Pcs`] = normalized[`${legacy}${direction}Pcs`];
+      if (!normalized[`${current}${direction}Kg`] && normalized[`${legacy}${direction}Kg`]) normalized[`${current}${direction}Kg`] = normalized[`${legacy}${direction}Kg`];
     });
   });
   ['cargo', 'mail', 'bag', 'other'].forEach(prefix => {

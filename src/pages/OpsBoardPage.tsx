@@ -84,6 +84,7 @@ function OpsBoardPage() {
         apiFetch('/ops/ground'),
         apiFetch('/fod'),
         apiFetch('/staff'),
+        apiFetch('/dashboard'),
       ]);
       const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
       setRunwayHistory(getData(0)); setGroundHistory(getData(1)); setFodList(getData(2));
@@ -92,8 +93,15 @@ function OpsBoardPage() {
 
       const staffData = getData(3);
       if (Array.isArray(staffData)) {
+        const dashboardData = getData(4);
+        const leaveToday = Array.isArray(dashboardData?.onLeaveToday) ? dashboardData.onLeaveToday : [];
+        const leaveStaffIds = new Set(leaveToday.map((leave: any) => String(leave.staffId || '')).filter(Boolean));
+        const leaveIdentityKeys = new Set(leaveToday.map((leave: any) =>
+          `${String(leave.staffName || '').trim().toLowerCase()}|${String(leave.staffDepartment || '').trim().toLowerCase()}`
+        ));
         const operationalStaff = staffData
           .filter((member: any) => ['Ground Operations', 'Maintenance'].includes(member.department) && String(member.status || 'active').toLowerCase() !== 'inactive')
+          .filter((member: any) => !leaveStaffIds.has(String(member.id || '')) && !leaveIdentityKeys.has(`${String(member.name || '').trim().toLowerCase()}|${String(member.department || '').trim().toLowerCase()}`))
           .map((member: any) => ({ name: String(member.name || '').trim().toUpperCase(), department: String(member.department || '') }))
           .filter((member: any) => member.name)
           .filter((member: any, index: number, list: any[]) => list.findIndex(item => item.name === member.name) === index)

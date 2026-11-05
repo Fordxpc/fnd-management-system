@@ -2074,14 +2074,13 @@ export const onRequest = async (context: any) => {
       const leaveStaffIds = new Set(activeLeaveToday.map(leave => String(leave.staffId || '')).filter(Boolean));
       const leaveIdentityKeys = new Set(activeLeaveToday.map(leave => `${String(leave.staffName || '').trim().toLowerCase()}|${String(leave.staffDepartment || '').trim().toLowerCase()}`));
       const visibleDutyEntries = roster.filter(entry => {
-        if (entry.date !== today) return false;
-        if (!isManagerRole(currentUser.role) && currentUser.role !== 'smt' && entry.staffDepartment !== dept) return false;
+        if (entry.date !== today || String(entry.status || '').toLowerCase() !== 'scheduled') return false;
         const staffId = String(entry.staffId || '');
         const identityKey = `${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`;
         return !leaveStaffIds.has(staffId) && !leaveIdentityKeys.has(identityKey);
       });
       const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [`${String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase()}|${String(entry.staffDepartment || "").trim().toLowerCase()}`, entry])).values());
-      const onLeaveToday = activeLeaveToday.filter(leave => isManagerRole(currentUser.role) || currentUser.role === 'smt' || leave.staffDepartment === dept);
+      const onLeaveToday = activeLeaveToday;
       let pendingLeave: any[] = [];
       let pendingOT: any[] = [];
 

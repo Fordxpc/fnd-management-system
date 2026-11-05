@@ -310,3 +310,15 @@
     page-break-inside: avoid !important;
   }
 }
+@media print {
+  body.printing-ramp:not(.printing-modal) .ramp-container {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+  }
+  body.printing-ramp .ramp-sheet,
+  body.printing-ramp .flight-form {
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+}
