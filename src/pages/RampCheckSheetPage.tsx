@@ -45,6 +45,7 @@ function RampCheckSheetPage() {
   const [currentDocId, setCurrentDocId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [draftStatus, setDraftStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [scheduledFlights, setScheduledFlights] = useState<any[]>([]);
 
   const typingTimer = useRef<any>(null);
 
@@ -58,6 +59,30 @@ function RampCheckSheetPage() {
     const savedRoutes = JSON.parse(localStorage.getItem('routeCodes') || '[]');
     setRouteCodes([...new Set([...DEFAULT_ROUTE_CODES, ...savedRoutes])]);
   }, []);
+
+  useEffect(() => {
+    apiFetch('/flights').then(data => setScheduledFlights(Array.isArray(data) ? data : [])).catch(() => setScheduledFlights([]));
+  }, []);
+
+  useEffect(() => {
+    if (!canEdit || !formData.date || !formData.fltNo) return;
+    const normalizeFlight = (value: string) => String(value || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+    const match = scheduledFlights.find(flight => flight.date === formData.date && normalizeFlight(flight.flightNo) === normalizeFlight(formData.fltNo));
+    if (!match) return;
+    setFormData(current => ({
+      ...current,
+      acType: current.acType || match.aircraft || '',
+      route: current.route || match.route || '',
+      checkIn: current.checkIn || match.checkInTime || '',
+      sta: current.sta || match.arrivalTime || '',
+      eta: current.eta || match.eta || '',
+      ata: current.ata || match.ata || '',
+      atd: current.atd || match.atd || '',
+      paxOutAdult: current.paxOutAdult || (match.paxAdults ? String(match.paxAdults) : ''),
+      paxOutInf: current.paxOutInf || (match.paxInfants ? String(match.paxInfants) : ''),
+      paxOutTotal: current.paxOutTotal || (Number(match.paxAdults) + Number(match.paxInfants) ? String((Number(match.paxAdults) || 0) + (Number(match.paxInfants) || 0)) : ''),
+    }));
+  }, [canEdit, formData.date, formData.fltNo, scheduledFlights]);
 
   useEffect(() => {
     const loadDraft = async () => {

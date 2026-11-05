@@ -130,6 +130,11 @@ function OpsBoardPage() {
   useEffect(() => { localStorage.setItem('ops_board_draft', JSON.stringify({ rwy19, rwy01, lights, groundAssign })); }, [rwy19, rwy01, lights, groundAssign]);
   useEffect(() => { if (dataReady) localStorage.setItem('ops_runway_staff_pool', JSON.stringify(runwayStaffPool)); }, [dataReady, runwayStaffPool]);
   useEffect(() => { if (dataReady) localStorage.setItem('ops_ground_staff_pool', JSON.stringify(groundStaffPool)); }, [dataReady, groundStaffPool]);
+  useEffect(() => {
+    if (!dataReady) return;
+    const allowedNames = new Set(groundStaffPool.map(name => String(name).trim().toUpperCase()));
+    setGroundAssign(current => Object.fromEntries(Object.entries(current).map(([taskId, names]) => [taskId, Array.from(new Set((Array.isArray(names) ? names : []).map(name => String(name).trim().toUpperCase()).filter(name => allowedNames.has(name))))])));
+  }, [dataReady, groundStaffPool]);
 
   const canView = canViewOpsBoard(profile, myStaff);
   const canEdit = canEditOpsBoard(profile, myStaff);

@@ -10,6 +10,30 @@ const DEFAULT_AC_TYPES = ['ATR-42/600', 'ATR-72/600', 'A320', 'A321', 'B737-800'
 const today = new Date().toISOString().slice(0, 10);
 interface RampReportsPageProps { onEdit?: (report: any) => void; }
 
+const normalizeRampLoads = (report: any) => {
+  const normalized = { ...report };
+  const aliases: Record<string, string> = { baggage: 'bag' };
+  Object.entries(aliases).forEach(([legacy, current]) => {
+    ['In', 'Out', 'Trans'].forEach(direction => {
+      if (!normalized[`${current}${direction}`] && normalized[`${legacy}${direction}`]) normalized[`${current}${direction}`] = normalized[`${legacy}${direction}`];
+    });
+  });
+  ['cargo', 'mail', 'bag', 'other'].forEach(prefix => {
+    ['In', 'Out', 'Trans'].forEach(direction => {
+      const combinedKey = `${prefix}${direction}`;
+      const piecesKey = `${combinedKey}Pcs`;
+      const kgKey = `${combinedKey}Kg`;
+      const combined = String(normalized[combinedKey] || '').trim();
+      if (combined && (!normalized[piecesKey] || !normalized[kgKey])) {
+        const parts = combined.split(/[\/|]/).map(value => value.trim());
+        if (!normalized[piecesKey]) normalized[piecesKey] = parts[0] || '';
+        if (!normalized[kgKey]) normalized[kgKey] = parts[1] || '';
+      }
+      if (!normalized[combinedKey] && (normalized[piecesKey] || normalized[kgKey])) normalized[combinedKey] = `${normalized[piecesKey] || ''}/${normalized[kgKey] || ''}`;
+    });
+  });
+  return normalized;
+};
 function RampReportsPage({ onEdit }: RampReportsPageProps) {
   const { profile, user } = useAuth();
   const [reports, setReports] = useState<any[]>([]);
@@ -27,7 +51,7 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
     if (!quiet) setRefreshing(true);
     try {
       const [data, staffData] = await Promise.all([apiFetch('/ramp/reports'), apiFetch('/staff').catch(() => [])]);
-      setReports(Array.isArray(data) ? data : []);
+      setReports(Array.isArray(data) ? data.map(normalizeRampLoads) : []);
       const myEmail = String(profile?.email || user?.email || '').toLowerCase();
       setMyStaff(Array.isArray(staffData) ? staffData.find((staff: any) => String(staff.email || '').toLowerCase() === myEmail) || null : null);
     } catch (err: any) { toast.error(err.message || 'Unable to load Ramp reports'); }

@@ -451,15 +451,18 @@ const userDepartment = myStaff?.department || profile?.department;
 
   const editableStaffList = visibleStaff.filter(s => canEditDept(s.department));
 
-  const visibleStaffIds = new Set(visibleStaff.map(member => String(member.id || '')));
-  const visibleStaffKeys = new Set(visibleStaff.map(member => `${String(member.name || '').trim().toLowerCase()}|${String(member.department || '').trim().toLowerCase()}`));
+  const summaryStaff = staff.filter(member => ROSTER_DEPARTMENTS.includes(member.department) && (isAdmin ? selectedDept === 'all' || member.department === selectedDept : member.department === userDepartment));
+  const visibleStaffIds = new Set(summaryStaff.map(member => String(member.id || '')));
+  const visibleStaffKeys = new Set(summaryStaff.map(member => `${String(member.name || '').trim().toLowerCase()}|${String(member.department || '').trim().toLowerCase()}`));
   const periodEntries = entries.filter((entry) => {
     const inPeriod = (entry.date || '') >= formatDate(periodStart) && (entry.date || '') <= formatDate(periodEnd);
     const identityVisible = visibleStaffIds.has(String(entry.staffId || '')) || visibleStaffKeys.has(`${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`);
     return inPeriod && identityVisible;
   });
   const scheduledCount = periodEntries.filter((entry) => entry.status === 'scheduled').length;
-  const leaveCount = periodEntries.filter((entry) => entry.status && entry.status !== 'scheduled').length;
+  const offCount = periodEntries.filter((entry) => String(entry.status || '').toUpperCase() === 'OFF DAY').length;
+  const leaveCount = periodEntries.filter((entry) => String(entry.status || '').toUpperCase().includes('LEAVE')).length;
+  const leaveAndOffCount = leaveCount + offCount;
   const periodHolidayCount = holidays.filter((holiday) => holiday.date >= formatDate(periodStart) && holiday.date <= formatDate(periodEnd)).length;
   if (loading) return <div className="page-content"><p>Loading Roster...</p></div>;
 
@@ -483,9 +486,9 @@ const userDepartment = myStaff?.department || profile?.department;
       {loadError && <div className="roster-workspace-alert no-print" role="alert"><strong>Roster information may be out of date.</strong><span>{loadError}</span></div>}
 
       <section className="roster-workspace-summary no-print" aria-label="Roster summary">
-        <div><span>Visible staff</span><strong>{visibleStaff.length}</strong><small>matching employees</small></div>
+        <div><span>Roster staff</span><strong>{summaryStaff.length}</strong><small>{selectedDept === 'all' ? 'selected roster' : selectedDept}</small></div>
         <div><span>Scheduled</span><strong>{scheduledCount}</strong><small>shift entries</small></div>
-        <div><span>Leave and off</span><strong>{leaveCount}</strong><small>status entries</small></div>
+        <div><span>Leave and off</span><strong>{leaveAndOffCount}</strong><small>{leaveCount} leave · {offCount} off</small></div>
         <div><span>Holidays</span><strong>{periodHolidayCount}</strong><small>within this period</small></div>
       </section>
 

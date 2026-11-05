@@ -144,16 +144,11 @@ function SettingsPage() {
 
       {activeTab === 'general' && (
         <>
-          <div className="dash-card mb-4 border-l-4 border-slate-500" style={{ textAlign: 'center', padding: '30px' }}>
-            <h3 style={{ marginBottom: '16px' }}>👤 Account Information</h3>
-            <p style={{ margin: '0 0 8px', color: '#475569', fontSize: '16px' }}>Logged in as: <strong style={{ color: '#0f172a', fontSize: '18px' }}>{profile?.name || user?.name || 'User'}</strong></p>
-            <p style={{ margin: '0 0 20px', color: '#475569', fontSize: '14px' }}>Email: <strong>{profile?.email || user?.email}</strong></p>
-            <p style={{ margin: '0 0 20px', color: '#475569', fontSize: '14px' }}>Role: <span style={{ textTransform: 'uppercase', fontWeight: 800, color: '#2563eb', background: '#eff6ff', padding: '4px 10px', borderRadius: '12px' }}>{profile?.role || 'Staff'}</span></p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button className="change-pw-btn" style={{ width: 'auto', padding: '10px 20px' }} onClick={() => setShowPasswordModal(true)}>🔐 Change Password</button>
-              <button className="logout-btn" style={{ width: 'auto', padding: '10px 20px' }} onClick={logout}>Log Out</button>
-            </div>
-          </div>
+          <section className="settings-account-card">
+            <div className="settings-account-avatar">{String(profile?.name || user?.name || 'U').trim().charAt(0).toUpperCase()}</div>
+            <div className="settings-account-copy"><span>Signed-in system account</span><h3>{profile?.name || user?.name || 'User'}</h3><p>{profile?.email || user?.email}</p><div><strong>{profile?.role || 'Staff'}</strong><em>{profile?.department || 'FND'}</em></div></div>
+            <div className="settings-account-actions"><button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>Change password</button><button className="logout-btn" onClick={logout}>Log out</button></div>
+          </section>
         </>
       )}
 
