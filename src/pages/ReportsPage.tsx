@@ -3,8 +3,9 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 
-const TABS = ['Custom Generator', 'DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
+const TABS = ['DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
 const AIRCRAFT_COLORS: Record<string, string> = { 'ATR-72/600': '#fef3c7', 'ATR-42/600': '#dcfce7', 'DASH-8/300': '#dbeafe', 'DH-8/300': '#dbeafe', 'DASH-8/200': '#f3e8ff', 'DH-8/200': '#f3e8ff' };
+const CURRENT_YEAR = String(new Date().getFullYear());
 const MONTHS = [{ val: '01', name: 'January' }, { val: '02', name: 'February' }, { val: '03', name: 'March' }, { val: '04', name: 'April' }, { val: '05', name: 'May' }, { val: '06', name: 'June' }, { val: '07', name: 'July' }, { val: '08', name: 'August' }, { val: '09', name: 'September' }, { val: '10', name: 'October' }, { val: '11', name: 'November' }, { val: '12', name: 'December' }];
 
 function ReportsPage() {
@@ -12,7 +13,7 @@ function ReportsPage() {
   
   // 🚨 RBAC LOGIC: SMT and above can view/print
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true;
   const canView = isDev || isManager || isSMT;
 
@@ -26,14 +27,16 @@ function ReportsPage() {
   const [rampReports, setRampReports] = useState<any[]>([]);
   const [wildlifeReports, setWildlifeReports] = useState<any[]>([]);
   const [fodReports, setFodReports] = useState<any[]>([]);
+  const [rwyLightReports, setRwyLightReports] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
 
   const fetchAllData = useCallback(async () => {
     try {
-      const [ramp, wildlife, fod, staff] = await Promise.allSettled([apiFetch('/ramp/reports'), apiFetch('/wildlife'), apiFetch('/fod'), apiFetch('/staff')]);
+      const [ramp, wildlife, fod, lights, staff] = await Promise.allSettled([apiFetch('/ramp/reports'), apiFetch('/wildlife'), apiFetch('/fod'), apiFetch('/lights'), apiFetch('/staff')]);
       if (ramp.status === 'fulfilled') setRampReports(ramp.value);
       if (wildlife.status === 'fulfilled') setWildlifeReports(wildlife.value);
       if (fod.status === 'fulfilled') setFodReports(fod.value);
+      if (lights.status === 'fulfilled') setRwyLightReports(lights.value);
       if (staff.status === 'fulfilled') setStaffList(staff.value);
       setLoading(false);
     } catch (err: any) { toast.error('Failed to load data: ' + err.message); setLoading(false); }
@@ -48,7 +51,7 @@ function ReportsPage() {
   const filterByDate = useCallback((item: any) => {
     const d = item.date || item.createdAt?.split('T')[0];
     if (!d) return true;
-    if (selectedMonth && !d.startsWith(`2026-${selectedMonth}`)) return false;
+    if (selectedMonth && !d.startsWith(`${CURRENT_YEAR}-${selectedMonth}`)) return false;
     if (dateFrom && d < dateFrom) return false;
     if (dateTo && d > dateTo) return false;
     return true;
@@ -61,6 +64,7 @@ function ReportsPage() {
 
   const filteredRamp = useMemo(() => rampReports.filter(filterByDate).sort((a, b) => (b.date || '').localeCompare(a.date || '')), [rampReports, filterByDate]);
   const nonAirAmbulanceRamp = useMemo(() => filteredRamp.filter(r => !isAirAmbulance(r)), [filteredRamp]);
+  const filteredLights = useMemo(() => rwyLightReports.filter(filterByDate).sort((a, b) => `${b.date || ''} ${b.time || ''}`.localeCompare(`${a.date || ''} ${a.time || ''}`)), [rwyLightReports, filterByDate]);
 
   const dfisTotals = useMemo(() => {
     let paxInAdult = 0, paxInInf = 0, paxInLocal = 0, paxInForeign = 0, paxInTotal = 0, paxOutAdult = 0, paxOutInf = 0, paxOutLocal = 0, paxOutForeign = 0, paxOutTotal = 0, paxTransAdult = 0, paxTransInf = 0, mailIn = 0, mailOut = 0, mailTrans = 0, cargoIn = 0, cargoOut = 0, cargoTrans = 0, otherIn = 0, otherOut = 0, otherTrans = 0, bagIn = 0, bagOut = 0, bagTrans = 0, mvmnts = 0;
@@ -83,7 +87,7 @@ function ReportsPage() {
         <h2>📊 Operations Reports</h2>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <select value={zoom} onChange={e => setZoom(Number(e.target.value))} style={{ padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px' }}><option value="1">100%</option><option value="0.75">75%</option><option value="0.5">50%</option></select>
-          <button className="add-staff-btn" style={{ background: '#f1f5f9', color: '#475569' }} onClick={handleSaveReport}>💾 Save Report</button>
+          {isManager && <button className="add-staff-btn" style={{ background: '#f1f5f9', color: '#475569' }} onClick={handleSaveReport}>💾 Save Report</button>}
           <button className="add-staff-btn" style={{ background: '#16a34a', color: 'white' }} onClick={handlePrint}>🖨️ Print / PDF</button>
         </div>
       </div>
@@ -214,7 +218,12 @@ function ReportsPage() {
             </table>
           )}
 
-          {['Custom Generator', 'RWY Lights'].includes(activeTab) && (<div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}><p>Content for <strong>{activeTab}</strong> will appear here.</p></div>)}
+          {activeTab === 'RWY Lights' && (
+            <div className="reports-rwy-lights">
+              <header><div><span>Airfield electrical safety</span><h2>Runway Lights Inspection Report</h2><p>Funadhoo Airport · {selectedMonth ? `${MONTHS.find(month => month.val === selectedMonth)?.name} ${CURRENT_YEAR}` : 'Selected reporting period'}</p></div><div className="reports-rwy-summary"><div><strong>{filteredLights.length}</strong><span>Inspections</span></div><div><strong>{filteredLights.filter(record => record.data?.rob?.status === 'Faulty' || record.data?.windcone?.status === 'Faulty').length}</strong><span>Fault reports</span></div></div></header>
+              <div className="reports-rwy-table"><table className="mini-table"><thead><tr><th>Date</th><th>Time</th><th>Inspector</th><th>Edge A / B</th><th>End 01 / 19</th><th>Threshold 01 / 19</th><th>PAPI 01 / 19</th><th>ROB</th><th>Windcone</th><th>Weather / remarks</th></tr></thead><tbody>{filteredLights.map(record => <tr key={record.id}><td>{record.date}</td><td>{record.time || '—'}</td><td><strong>{record.inspectorName || '—'}</strong></td><td>{record.data?.edge?.sideA ?? '—'} / {record.data?.edge?.sideB ?? '—'}</td><td>{record.data?.end?.rwy01 ?? '—'} / {record.data?.end?.rwy19 ?? '—'}</td><td>{record.data?.threshold?.rwy01 ?? '—'} / {record.data?.threshold?.rwy19 ?? '—'}</td><td>{record.data?.papi?.rwy01?.count ?? '—'} / {record.data?.papi?.rwy19?.count ?? '—'}</td><td><span className={record.data?.rob?.status === 'Faulty' ? 'reports-rwy-status is-faulty' : 'reports-rwy-status'}>{record.data?.rob?.status || '—'}</span></td><td><span className={record.data?.windcone?.status === 'Faulty' ? 'reports-rwy-status is-faulty' : 'reports-rwy-status'}>{record.data?.windcone?.status || '—'}</span></td><td><small>{record.weather || '—'}</small>{record.remarks && <em>{record.remarks}</em>}</td></tr>)}{filteredLights.length === 0 && <tr><td colSpan={10}><div className="empty-state">No runway-light inspections found for this period.</div></td></tr>}</tbody></table></div>
+            </div>
+          )}
         </div>
       )}
     </div>
