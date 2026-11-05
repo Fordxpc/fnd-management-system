@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { FormEvent } from 'react';
-import { authClient } from '../lib/auth-client';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -27,7 +26,6 @@ function SettingsPage() {
 
   const [resetRequests, setResetRequests] = useState<any[]>([]);
   const [completedReset, setCompletedReset] = useState<{ email: string; temporaryPassword: string; userName: string; loginUrl: string } | null>(null);
-  const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -44,20 +42,20 @@ function SettingsPage() {
   const fetchSettings = useCallback(async () => {
     try {
       const [rulesData, usersData, staffData, inspectorsData, requestsData] = await Promise.all([
-        apiFetch('/settings/ot_rules').catch(() => null), 
-        apiFetch('/users').catch(() => []), 
-        apiFetch('/staff').catch(() => []), 
+        apiFetch('/settings/ot_rules').catch(() => null),
+        apiFetch('/users').catch(() => []),
+        apiFetch('/staff').catch(() => []),
         apiFetch('/lights-inspectors').catch(() => []),
         canManageAccess ? apiFetch('/password-reset-requests').catch(() => []) : Promise.resolve([])
       ]);
-      
+
       if (rulesData) setOtRules(rulesData);
       setActiveUsers(Array.isArray(usersData) ? usersData : []);
-      setStaffList(Array.isArray(staffData) ? staffData : []); 
+      setStaffList(Array.isArray(staffData) ? staffData : []);
       setInspectorList(Array.isArray(inspectorsData) ? inspectorsData : []);
       setResetRequests(Array.isArray(requestsData) ? requestsData : []);
-    } catch (err: any) { 
-      console.error("Failed to load settings", err); 
+    } catch (err: any) {
+      console.error("Failed to load settings", err);
     }
   }, [canManageAccess]);
 
@@ -67,18 +65,18 @@ function SettingsPage() {
     return () => clearInterval(interval);
   }, [fetchSettings]);
 
-  const saveRules = async (e: FormEvent) => { 
-    e.preventDefault(); setSavingRules(true); 
-    try { await apiFetch('/settings/ot_rules', { method: 'POST', body: JSON.stringify(otRules) }); toast.success('System rules updated!'); } 
-    catch (err: any) { toast.error('Error: ' + err.message); } 
-    setSavingRules(false); 
+  const saveRules = async (e: FormEvent) => {
+    e.preventDefault(); setSavingRules(true);
+    try { await apiFetch('/settings/ot_rules', { method: 'POST', body: JSON.stringify(otRules) }); toast.success('System rules updated!'); }
+    catch (err: any) { toast.error('Error: ' + err.message); }
+    setSavingRules(false);
   };
 
-  const handleAddInspector = async (e: FormEvent) => { 
-    e.preventDefault(); const staff = staffList.find(s => s.id === inspectorStaffId); 
-    if (!staff) { toast.error("Select a staff member"); return; } 
-    try { await apiFetch('/lights-inspectors', { method: 'POST', body: JSON.stringify({ staffId: staff.id, staffName: staff.name, staffSN: staff.sn }) }); toast.success('Inspector added'); setInspectorStaffId(''); fetchSettings(); } 
-    catch (err: any) { toast.error(err.message); } 
+  const handleAddInspector = async (e: FormEvent) => {
+    e.preventDefault(); const staff = staffList.find(s => s.id === inspectorStaffId);
+    if (!staff) { toast.error("Select a staff member"); return; }
+    try { await apiFetch('/lights-inspectors', { method: 'POST', body: JSON.stringify({ staffId: staff.id, staffName: staff.name, staffSN: staff.sn }) }); toast.success('Inspector added'); setInspectorStaffId(''); fetchSettings(); }
+    catch (err: any) { toast.error(err.message); }
   };
 
   const togglePermission = async (staffId: string, field: string, currentVal: boolean) => {
@@ -105,22 +103,22 @@ function SettingsPage() {
   };
 
   let allMergedUsers: any[] = [];
-  activeUsers.forEach(a => { 
-    if (!a.email) return; 
+  activeUsers.forEach(a => {
+    if (!a.email) return;
     const emailLower = a.email.toLowerCase();
     const snPart = emailLower.split('@')[0];
-    const staffMatch = staffList.find(s => 
-      (s.email || '').toLowerCase() === emailLower || 
+    const staffMatch = staffList.find(s =>
+      (s.email || '').toLowerCase() === emailLower ||
       (s.sn || '').toLowerCase() === snPart ||
       `sn-${(s.sn || '').toLowerCase()}` === snPart
     );
     const realName = staffMatch?.name || a.name || (a.email || '').split('@')[0];
-    const idx = allMergedUsers.findIndex(u => (u.email || '').toLowerCase() === emailLower); 
-    if (idx >= 0) { 
-      allMergedUsers[idx] = { ...allMergedUsers[idx], name: realName, role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' }; 
-    } else { 
-      allMergedUsers.push({ email: a.email, name: realName, password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' }); 
-    } 
+    const idx = allMergedUsers.findIndex(u => (u.email || '').toLowerCase() === emailLower);
+    if (idx >= 0) {
+      allMergedUsers[idx] = { ...allMergedUsers[idx], name: realName, role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' };
+    } else {
+      allMergedUsers.push({ email: a.email, name: realName, password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' });
+    }
   });
 
   const filteredUsers = allMergedUsers.filter((u: any) => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())).sort((a: any, b: any) => (a.email || '').localeCompare(b.email || ''));
@@ -155,7 +153,7 @@ function SettingsPage() {
       {activeTab === 'rules' && canManageAccess && (
         <div className="dash-card border-l-4 border-blue-500">
           <h3>⚙️ System Rules & Access Control</h3>
-          
+
           {resetRequests.length > 0 && (
             <div style={{ background: '#fff', border: '1px solid #fca5a5', padding: '20px', borderRadius: '8px', marginBottom: '24px', marginTop: '16px' }}>
               <h4 style={{ margin: '0 0 12px', color: '#dc2626' }}>🚨 Pending Password Resets</h4>
@@ -219,7 +217,7 @@ function SettingsPage() {
                         <td><span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', background: u.status === 'Active' ? '#dcfce7' : '#f1f5f9', color: u.status === 'Active' ? '#166534' : '#475569' }}>{u.status.toUpperCase()}</span></td>
                         <td style={{ whiteSpace: 'nowrap' }}>
                           {u.id && (<button className="edit-btn" onClick={() => setEditingUser(u)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>✏️ Edit</button>)}
-                          <button className="reset-pw-btn" disabled={resetPwTarget === u.email} onClick={() => setResetPwTarget(u.email)} style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}>{resetPwTarget === u.email ? '...' : '📧 Reset'}</button>
+
                           {u.id && (<button className="delete-btn" onClick={() => setDeleteUserTarget({ id: u.id!, email: u.email })} style={{ padding: '4px 8px', fontSize: '11px' }}>Remove</button>)}
                         </td>
                       </tr>
@@ -281,7 +279,7 @@ function SettingsPage() {
         <div className="dash-card border-l-4 border-purple-500">
           <h3>📋 Access Details Matrix</h3>
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Comprehensive overview of all staff permissions.</p>
-          
+
           <div style={{ overflowX: 'auto', maxHeight: '65vh' }}>
             <table className="mini-table" style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>
               <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
@@ -332,7 +330,7 @@ function SettingsPage() {
 
       {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />}
 
-      <ConfirmDialog 
+      <ConfirmDialog
         isOpen={!!deleteInspectorTarget}
         title="Remove Inspector?"
         message="Are you sure you want to remove this staff member from RWY Lights inspectors?"
@@ -350,26 +348,9 @@ function SettingsPage() {
         onCancel={() => setDeleteInspectorTarget(null)}
       />
 
-      <ConfirmDialog 
-        isOpen={!!resetPwTarget}
-        title="Send Password Reset?"
-        message={`Send a password reset email to ${resetPwTarget}?`}
-        confirmText="Send Email"
-        isDanger={false}
-        onConfirm={async () => {
-          if (!resetPwTarget) return;
-          try {
-            await (authClient as any).forgetPassword({ email: resetPwTarget, redirectTo: '/reset-password' });
-            toast.success(`Reset email sent to ${resetPwTarget}.`);
-          } catch (err: any) {
-            toast.error(err.message || 'Failed to send reset email.');
-          }
-          setResetPwTarget(null);
-        }}
-        onCancel={() => setResetPwTarget(null)}
-      />
 
-      <ConfirmDialog 
+
+      <ConfirmDialog
         isOpen={!!deleteUserTarget}
         title="Remove User?"
         message={`Are you sure you want to remove ${deleteUserTarget?.email} from the database?`}
@@ -400,10 +381,10 @@ function SettingsPage() {
         </div>
       )}
       {editingUser && (
-        <UserEditModal 
-          user={editingUser} 
-          onClose={() => setEditingUser(null)} 
-          onSaved={fetchSettings} 
+        <UserEditModal
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+          onSaved={fetchSettings}
         />
       )}
     </div>

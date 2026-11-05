@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { FormEvent } from 'react';
-import { authClient } from '../lib/auth-client';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
@@ -25,7 +24,6 @@ function UsersPage() {
   const [presets, setPresets] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [resetPwTarget, setResetPwTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{ id: string, email: string } | null>(null);
   const [deletePresetTarget, setDeletePresetTarget] = useState<{ id: string, email: string } | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -85,7 +83,6 @@ function UsersPage() {
   };
 
   const handleDelete = (userId: string, email: string) => setDeleteUserTarget({ id: userId, email });
-  const handleSendReset = (email: string) => setResetPwTarget(email);
   const handleDeletePreset = (id: string, email: string) => setDeletePresetTarget({ id, email });
 
   const handleCreateUser = async (e: FormEvent) => {
@@ -184,17 +181,12 @@ function UsersPage() {
               <td data-label="Identity"><div className="users-identity"><i>{String(user.name || getStaffName(user.email) || '?').charAt(0)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span>{isSelf && <small>Current account</small>}</div></div></td>
               <td data-label="Role"><select value={user.role || 'staff'} onChange={event => void handleChangeRole(user.id, event.target.value)} disabled={!canEdit || protectedDeveloper || isSelf}>{assignableRoles.map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></td>
               <td data-label="Department"><select value={user.department || 'Ground Operations'} onChange={event => void handleChangeDept(user.id, event.target.value)} disabled={!canEdit || protectedDeveloper}>{DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}</select></td>
-              {canEdit && <td data-label="Actions">{protectedDeveloper ? <span className="users-protected">Protected</span> : <div className="users-row-actions"><button onClick={() => setEditingUser({ ...user, status: 'Active' })}>Edit</button><button onClick={() => handleSendReset(user.email)}>Reset password</button><button className="danger" disabled={isSelf} onClick={() => handleDelete(user.id, user.email)}>Remove</button></div>}</td>}
+              {canEdit && <td data-label="Actions">{protectedDeveloper ? <span className="users-protected">Protected</span> : <div className="users-row-actions"><button onClick={() => setEditingUser({ ...user, status: 'Active' })}>Edit</button><button className="danger" disabled={isSelf} onClick={() => handleDelete(user.id, user.email)}>Remove</button></div>}</td>}
             </tr>;
           })}
         </tbody></table></div>}
       </section>
-      <ConfirmDialog isOpen={!!resetPwTarget} title="Send Password Reset?" message={`Send a password reset email to ${resetPwTarget}?`} confirmText="Send" isDanger={false} onConfirm={async () => {
-          if (!resetPwTarget) return;
-          try { await (authClient as any).forgetPassword({ email: resetPwTarget, redirectTo: '/reset-password' }); toast.success(`Reset email sent.`); } 
-          catch (err: any) { toast.error(err.message); }
-          setResetPwTarget(null);
-        }} onCancel={() => setResetPwTarget(null)} />
+
 
       <ConfirmDialog isOpen={!!deleteUserTarget} title="Remove User?" message={`Remove ${deleteUserTarget?.email} from the database?`} confirmText="Remove" isDanger={true} onConfirm={async () => {
           if (!deleteUserTarget) return;
