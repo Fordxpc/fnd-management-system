@@ -37,29 +37,19 @@ export function AuthProvider({ children }: any) {
 
         const role = (syncedProfile?.role || (staffRecord?.isSmt ? "smt" : "staff")).toLowerCase();
 
+        const accountName = String(data.user.name || '').trim();
+        const emailIdentity = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter: string) => letter.toUpperCase());
+        const roleLabel = role === 'smt' ? 'SMT Member' : role.replace(/\b\w/g, (letter: string) => letter.toUpperCase());
+
         setProfile({
           ...staffRecord,
           role,
-
           email,
-
-          sn: 
-            staffRecord?.sn ||
-            snPart.replace('sn-', ''),
-
-          designation:
-            staffRecord?.position ||
-            staffRecord?.designation ||
-            '—',
-
-          department:
-            staffRecord?.department ||
-            syncedProfile?.department ||
-            '—',
-          
-          position:
-            staffRecord?.position ||
-            '—'
+          name: staffRecord?.name || accountName || emailIdentity || 'Airport User',
+          sn: staffRecord?.sn || (snPart.toLowerCase().startsWith('sn-') ? snPart.slice(3).toUpperCase() : ''),
+          designation: staffRecord?.position || staffRecord?.designation || roleLabel || 'Airport Staff',
+          department: staffRecord?.department || syncedProfile?.department || 'Funadhoo Airport',
+          position: staffRecord?.position || roleLabel || 'Airport Staff',
         });
 
       } catch (err) {

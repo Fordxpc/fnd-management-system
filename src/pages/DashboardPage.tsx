@@ -92,7 +92,7 @@ function LoadingBlock() {
 }
 
 export default function DashboardPage({ onNavigate }: DashboardPageProps) {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [time, setTime] = useState<Date | null>(null);
   const [dashboard, setDashboard] = useState<any>(null);
   const [passwordResets, setPasswordResets] = useState<any[]>([]);
@@ -104,6 +104,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [dutyFilter, setDutyFilter] = useState('all');
 
   const role = (profile?.role || '').toLowerCase();
+  const accountName = String(profile?.name || user?.name || user?.email?.split('@')[0] || 'Airport User').trim();
+  const accountInitials = accountName.split(/\s+/).slice(0, 2).map((part: string) => part.charAt(0)).join('').toUpperCase() || 'FND';
+  const accountPosition = profile?.position || profile?.designation || (role ? role.replace(/\b\w/g, (letter: string) => letter.toUpperCase()) : 'Airport Staff');
+  const accountDepartment = profile?.department && profile.department !== '—' ? profile.department : 'Funadhoo Airport';
   const canManageRequests = ['manager', 'admin', 'developer', 'owner'].includes(role);
   const canSeeTeamRequests = canManageRequests || role === 'smt';
 
@@ -240,13 +244,13 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     <div className="overview-dashboard">
       <section className="overview-welcome overview-greeting-board">
         <div className="overview-greeting-copy">
-          <div className="overview-profile-stack"><div className="overview-profile-mark">{profile?.photoBase64 ? <img src={profile.photoBase64} alt={`${profile?.name || 'Staff'} profile`} /> : String(profile?.name || 'FND').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase()}</div>{profile?.sn && <small>SN-{String(profile.sn).replace(/^sn-/i, '')}</small>}</div>
+          <div className="overview-profile-stack"><div className="overview-profile-mark">{profile?.photoBase64 ? <img src={profile.photoBase64} alt={`${accountName} profile`} /> : accountInitials}</div>{profile?.sn && <small>SN-{String(profile.sn).replace(/^sn-/i, '')}</small>}</div>
           <span className="overview-kicker">Funadhoo Airport · Daily command view</span>
-          <h1><span>{clock.greeting},</span><strong>{profile?.name || 'team member'}</strong></h1>
+          <h1><span>{clock.greeting},</span><strong>{accountName}</strong></h1>
           <p>Here is the operational picture for {clock.day.toLowerCase()}.</p>
           <div className="overview-identity-row">
-            <span className="identity-designation">{profile?.position || role || 'Airport staff'}</span>
-            <span className="identity-department">{profile?.department || 'Funadhoo Airport'}</span>
+            <span className="identity-designation">{accountPosition}</span>
+            <span className="identity-department">{accountDepartment}</span>
             {(role === 'smt' || profile?.isSmt || profile?.isIncharge) && <span className="identity-leadership">{(role === 'smt' || profile?.isSmt) ? 'SMT' : ''}{profile?.isIncharge ? `${(role === 'smt' || profile?.isSmt) ? ' · ' : ''}In-charge` : ''}</span>}
           </div>
         </div>
