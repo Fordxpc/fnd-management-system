@@ -29,7 +29,7 @@ function LeavePage() {
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true || profile?.isSmt === true;
-  const isStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
+  const accountIsStaff = !isDev && !isManager && !isSMT && profile?.role !== 'owner' && profile?.role !== 'admin';
 
   const [requests, setRequests] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
@@ -55,6 +55,8 @@ function LeavePage() {
   const [approveTarget, setApproveTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const isDepartmentLead = isSMT || myStaff?.isSMT === true || myStaff?.isSmt === true || myStaff?.isIncharge === true;
+  const isStaff = accountIsStaff && !isDepartmentLead;
 
   const fetchData = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
@@ -89,6 +91,7 @@ function LeavePage() {
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
   const canApproveAnyDept = isDev || isManager;
+  const formDepartments = canApproveAnyDept ? FORM_DEPARTMENTS : [myStaff?.department || profile?.department || 'Ground Operations'];
   
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
     if (canApproveAnyDept) return true;
@@ -302,7 +305,7 @@ function LeavePage() {
       {showForm && (
         <form className="staff-form leave-management-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
-          {!isStaff && (<select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>{FORM_DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}</select>)}
+          {!isStaff && (<select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>{formDepartments.map(d => <option key={d} value={d}>{d}</option>)}</select>)}
           {!isStaff ? (<select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required style={selectStyle}><option value="">Select Staff Member...</option>{formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}</select>) : (<input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />)}
           <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={selectStyle}>{allowedLeaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
           <input placeholder="Reason (optional)" value={reason} onChange={(e) => setReason(e.target.value)} />

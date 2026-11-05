@@ -226,10 +226,6 @@ const userDepartment = myStaff?.department || profile?.department;
       toast.error('You do not have permission to edit this department.');
       return;
     }
-    if (isApprovedLeaveStatus(status)) {
-      toast.error('Use Leave Requests page to apply for leave.');
-      return;
-    }
 
     let finalShiftTime = '';
     if (status === 'scheduled') {
@@ -245,7 +241,7 @@ const userDepartment = myStaff?.department || profile?.department;
           date, shiftTime: finalShiftTime, status: status === 'scheduled' ? 'scheduled' : status
         })
       });
-      toast.success('Roster entry added!');
+      toast.success(isApprovedLeaveStatus(status) ? 'Leave added to roster and Leave Request History.' : 'Roster entry added!');
       setShowForm(false); setCustomShift('');
       fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }

@@ -141,7 +141,30 @@ export const onRequest = async (context: any) => {
     }
     return target;
   };
-  const scopeRequestsForUser = async (currentUser: any, rows: any[], smtCanViewAll: boolean) => {
+  const rosterLeaveStatuses = new Set(["ANNUAL LEAVE", "SICK LEAVE", "SICK LEAVE / MC", "NO PAY LEAVE", "DUTY TRAVEL", "PATERNITY LEAVE", "MATERNITY LEAVE", "PRE-MATERNITY LEAVE", "FAMILY RESPONSIBILITY LEAVE (FRL)"]);
+  const ensureRosterLeaveHistory = async (currentUser: any, targetStaff: any, leaveType: string, date: string) => {
+    if (!rosterLeaveStatuses.has(leaveType)) return null;
+    const existing = await db.select().from(leaveRequests).where(and(
+      eq(leaveRequests.staffId, targetStaff.id), eq(leaveRequests.startDate, date),
+      eq(leaveRequests.endDate, date), eq(leaveRequests.leaveType, leaveType)
+    )).limit(1);
+    const now = new Date().toISOString();
+    if (existing[0]) {
+      if (existing[0].status !== "approved") await db.update(leaveRequests).set({
+        status: "approved", reason: existing[0].reason || "Entered from Duty Roster",
+        reviewedBy: currentUser.email, reviewedAt: now,
+      }).where(eq(leaveRequests.id, existing[0].id));
+      return existing[0].id;
+    }
+    const id = crypto.randomUUID();
+    await db.insert(leaveRequests).values({
+      id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
+      staffSn: targetStaff.sn || "", staffGender: targetStaff.gender || "", leaveType,
+      startDate: date, endDate: date, days: 1, reason: "Entered from Duty Roster",
+      status: "approved", requestedBy: currentUser.email, requestedAt: now, reviewedBy: currentUser.email, reviewedAt: now,
+    });
+    return id;
+  };  const scopeRequestsForUser = async (currentUser: any, rows: any[], smtCanViewAll: boolean) => {
     if (isManagerRole(currentUser.role)) return rows;
     const profile = await getCurrentStaffProfile(currentUser);
     if (!profile) return [];
@@ -979,12 +1002,13 @@ export const onRequest = async (context: any) => {
       )).limit(1);
       if (existing.length > 0 && existing[0].leaveRequestId) return json({ message: "Cannot overwrite approved leave." }, 400);
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
+      const rosterLeaveRequestId = await ensureRosterLeaveHistory(currentUser, targetStaff, body.status, body.date);
       if (existing.length > 0) await db.delete(rosterEntries).where(eq(rosterEntries.id, id));
       if (body.status !== "clear") {
         await db.insert(rosterEntries).values({
           id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
           date: body.date, shiftTime: body.status === "scheduled" ? body.shiftTime : "", status: body.status,
-          createdAt: new Date().toISOString(),
+          leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
         });
       }
       return json({ success: true, id });
@@ -1017,11 +1041,12 @@ export const onRequest = async (context: any) => {
       }
       for (const item of validated) {
         if (item.existing) await db.delete(rosterEntries).where(eq(rosterEntries.id, item.existing.id));
+        const rosterLeaveRequestId = await ensureRosterLeaveHistory(currentUser, item.targetStaff, item.entry.status, item.entry.date);
         await db.insert(rosterEntries).values({
           id: item.existing?.id || crypto.randomUUID(), staffId: item.targetStaff.id,
           staffName: item.targetStaff.name || "", staffDepartment: item.targetStaff.department || "",
           date: item.entry.date, shiftTime: item.entry.status === "scheduled" ? item.entry.shiftTime : "",
-          status: item.entry.status, createdAt: new Date().toISOString(),
+          status: item.entry.status, leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
         });
       }
       return json({ success: true, count: validated.length });
