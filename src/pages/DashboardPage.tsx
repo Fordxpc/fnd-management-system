@@ -248,10 +248,12 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           <h1><span>{clock.greeting},</span><strong>{profile?.name || 'team member'}</strong></h1>
           <p>Here is the operational picture for {clock.day.toLowerCase()}.</p>
           <div className="overview-identity-row">
-            <span>{profile?.position || role || 'Airport staff'}</span>
-            <span>{profile?.department || 'Funadhoo Airport'}{(role === 'smt' || profile?.isSmt) ? ' · SMT' : ''}{profile?.isIncharge ? ' · In-charge' : ''}</span>
+            <span className="identity-designation">{profile?.position || role || 'Airport staff'}</span>
+            <span className="identity-department">{profile?.department || 'Funadhoo Airport'}</span>
+            {(role === 'smt' || profile?.isSmt || profile?.isIncharge) && <span className="identity-leadership">{(role === 'smt' || profile?.isSmt) ? 'SMT' : ''}{profile?.isIncharge ? `${(role === 'smt' || profile?.isSmt) ? ' · ' : ''}In-charge` : ''}</span>}
           </div>
         </div>
+        <div className="overview-airport-art" aria-hidden="true"><svg viewBox="0 0 720 230" role="presentation"><path className="airport-horizon" d="M0 211h720v19H0z"/><path className="airport-terminal" d="M68 206v-34l30-18h120l28 18v34m-166-32h154m-133 0v32m36-32v32m36-32v32m36-32v32M246 206v-47l35-20h198l37 20v47m-251-45h232m-198 0v45m48-45v45m48-45v45m48-45v45M516 206v-25h126v25m-111-25v-20h96v20"/><path className="airport-tower" d="M338 206h50l-7-101h-36zM330 105h65l-8-25h-49zM353 80l5-48h17l5 48"/><path className="airport-flight-path" d="M145 98c88-49 175-64 269-42"/><path className="airport-plane" d="M406 47l32-16 10 3-19 18 28 5 7 8-40-2-19 14-7-2 8-15-25-5-5-6z"/></svg></div>
         <div className="overview-clock" aria-label={`${clock.day}, ${clock.date}, ${clock.time}`}>
           <span className="overview-station-status"><i /> Station · FND</span>
           <strong>{clock.time}</strong>
@@ -270,7 +272,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
       <div className="overview-flight-stage">
         <Panel
-          title="Flight movement board"
+          title="Flight Movement"
           eyebrow="Live schedule"
           action={<div className="overview-widget-actions"><span className="overview-live-badge"><i /> Live</span><button type="button" className="overview-text-button" onClick={() => onNavigate('flights')}>Full schedule ›</button></div>}
           className="overview-flight-panel overview-flight-board"
