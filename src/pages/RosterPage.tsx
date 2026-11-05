@@ -4,7 +4,6 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
-import { ConfirmDialog } from '../components/Dialogs';
 
 const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const ADMIN_DEPARTMENTS = ['Administration'];
@@ -123,8 +122,6 @@ function RosterPage() {
   const [reorderMode, setReorderMode] = useState<boolean>(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const [deleteStaffTarget, setDeleteStaffTarget] = useState<string | null>(null);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const [showForm, setShowForm] = useState<boolean>(false);
   const [staffId, setStaffId] = useState<string>('');
@@ -454,7 +451,13 @@ const userDepartment = myStaff?.department || profile?.department;
 
   const editableStaffList = visibleStaff.filter(s => canEditDept(s.department));
 
-  const periodEntries = entries.filter((entry) => (entry.date || '') >= formatDate(periodStart) && (entry.date || '') <= formatDate(periodEnd));
+  const visibleStaffIds = new Set(visibleStaff.map(member => String(member.id || '')));
+  const visibleStaffKeys = new Set(visibleStaff.map(member => `${String(member.name || '').trim().toLowerCase()}|${String(member.department || '').trim().toLowerCase()}`));
+  const periodEntries = entries.filter((entry) => {
+    const inPeriod = (entry.date || '') >= formatDate(periodStart) && (entry.date || '') <= formatDate(periodEnd);
+    const identityVisible = visibleStaffIds.has(String(entry.staffId || '')) || visibleStaffKeys.has(`${String(entry.staffName || '').trim().toLowerCase()}|${String(entry.staffDepartment || '').trim().toLowerCase()}`);
+    return inPeriod && identityVisible;
+  });
   const scheduledCount = periodEntries.filter((entry) => entry.status === 'scheduled').length;
   const leaveCount = periodEntries.filter((entry) => entry.status && entry.status !== 'scheduled').length;
   const periodHolidayCount = holidays.filter((holiday) => holiday.date >= formatDate(periodStart) && holiday.date <= formatDate(periodEnd)).length;
@@ -575,6 +578,11 @@ const userDepartment = myStaff?.department || profile?.department;
         </div>
       )}
 
+      <section className="roster-workspace-legend no-print" aria-label="Roster colour legend">
+        <div><strong>Roster key</strong><span>Colours used in the operational grid</span></div>
+        <ul><li><i className="morning" />Morning</li><li><i className="day" />Day</li><li><i className="afternoon" />Afternoon</li><li><i className="night" />Night</li><li><i className="leave" />Leave / off</li><li><i className="holiday" />Public holiday</li></ul>
+        <p>{editableStaffList.length > 0 ? 'Select a roster cell to add or update an entry.' : 'This roster is available in view-only mode.'}</p>
+      </section>
       <div ref={gridRef} className="roster-export-area" style={{ zoom: zoom }}>
         <div className="roster-title">
           <h1>FND {activeDeptName ? `${activeDeptName} ` : ''}DUTY ROSTER {formatLongDate(periodStart)} - {formatLongDate(periodEnd)}</h1>
@@ -677,25 +685,6 @@ const userDepartment = myStaff?.department || profile?.department;
         </div>
       )}
 
-      <ConfirmDialog 
-        isOpen={!!deleteStaffTarget}
-        title="Remove Staff?"
-        message="Are you sure you want to remove this staff member from the active pool?"
-        confirmText="Remove"
-        isDanger={true}
-        onConfirm={() => setDeleteStaffTarget(null)}
-        onCancel={() => setDeleteStaffTarget(null)}
-      />
-
-      <ConfirmDialog 
-        isOpen={showClearConfirm}
-        title="Clear All Selections?"
-        message="Are you sure you want to clear all selections for this board?"
-        confirmText="Clear"
-        isDanger={true}
-        onConfirm={() => setShowClearConfirm(false)}
-        onCancel={() => setShowClearConfirm(false)}
-      />
     </div>
   );
 }
