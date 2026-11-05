@@ -258,7 +258,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         <Panel
           title="Flight movement board"
           eyebrow="Live schedule"
-          action={<button type="button" className="overview-text-button" onClick={() => onNavigate('flights')}>Full schedule</button>}
+          action={<div className="overview-widget-actions"><span className="overview-live-badge"><i /> Live</span><button type="button" className="overview-text-button" onClick={() => onNavigate('flights')}>Full schedule ›</button></div>}
           className="overview-flight-panel overview-flight-board"
         >
           {loading ? (
@@ -291,7 +291,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       <div className="overview-live-grid">
         <Panel title="Live weather" eyebrow="VRCF · Funadhoo Airport" className="overview-weather-panel" action={<span className="overview-live-source"><i /> Auto refresh</span>}>
           {weatherLoading ? <LoadingBlock /> : weather ? <div className="overview-weather-content">
-            <div className="overview-weather-now"><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
+            <div className="overview-weather-now"><div className="overview-weather-condition"><b className="overview-weather-icon" aria-hidden="true">☀</b><div><span>{weatherDescription(weather.weatherCode)}</span><strong>{Math.round(weather.temperature)}°C</strong><small>Feels like {Math.round(weather.feelsLike)}°C</small></div></div><div className="overview-weather-wind"><span>Wind</span><strong>{compassDirection(weather.windDirection)} {Math.round(weather.windSpeed)} km/h</strong><small>Gusts {Math.round(weather.windGusts || 0)} km/h</small></div></div>
             <div className="overview-weather-metrics"><div><span>Humidity</span><strong>{weather.humidity ?? '—'}%</strong></div><div><span>Visibility</span><strong>{weather.visibility ? `${Math.round(weather.visibility / 100) / 10} km` : '—'}</strong></div><div><span>Cloud</span><strong>{weather.cloudCover ?? '—'}%</strong></div><div><span>Pressure</span><strong>{weather.pressure ? `${Math.round(weather.pressure)} hPa` : '—'}</strong></div><div><span>Rain</span><strong>{weather.rain ?? weather.precipitation ?? 0} mm</strong></div></div>
             <p>Observed {new Date(weather.observedAt).toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })} · Coordinates 06°09′45″N 073°17′15″E</p>
           </div> : <EmptyState>{weatherError || 'Weather information is not available.'}</EmptyState>}

@@ -103,11 +103,8 @@ export const onRequest = async (context: any) => {
     const membership = await db.select().from(chatGroupMembers).where(and(
       eq(chatGroupMembers.groupId, groupId), eq(chatGroupMembers.staffId, currentUser.id)
     )).limit(1);
-    const sameDepartment = group.department && group.department === currentUser.department;
-    const isSmtChannel = group.department === "__smt__" && currentUser.role === "smt";
-    const isFlightOpsChannel = group.department === "__flight_ops__" && (currentUser.department === "Ground Operations" || currentUser.role === "smt");
-    if (membership.length === 0 && !sameDepartment && !isSmtChannel && !isFlightOpsChannel && group.department !== null) {
-      const err: any = new Error("Access denied"); err.status = 403; throw err;
+    if (membership.length === 0) {
+      const err: any = new Error("You are not a member of this channel"); err.status = 403; throw err;
     }
     return group;
   };
@@ -214,21 +211,27 @@ export const onRequest = async (context: any) => {
         await db.insert(chatGroups).values(coreChannels).onConflictDoNothing();
         allGroups = await db.select().from(chatGroups);
       }
+      const staffRows = await db.select().from(staff);
+      const userRows = await db.select().from(users);
+      const roleByEmail = new Map(userRows.map((account: any) => [String(account.email || "").toLowerCase(), String(account.role || "staff").toLowerCase()]));
+      const existingChannelMemberships = await db.select().from(chatGroupMembers).limit(1);
+      for (const group of existingChannelMemberships.length === 0 ? allGroups.filter((item: any) => item.createdBy === "system") : []) {
+        const recommended = staffRows.filter((member: any) => {
+          const memberRole = roleByEmail.get(String(member.email || "").toLowerCase()) || (member.isSmt ? "smt" : "staff");
+          const management = ["developer", "admin", "manager", "owner"].includes(memberRole);
+          if (group.name === "FND Staffs") return true;
+          if (group.name === "SMT & Management") return management || memberRole === "smt" || member.isSmt === true || member.isIncharge === true;
+          if (group.name === "Flight Operations") return management || memberRole === "smt" || member.isSmt === true || member.isIncharge === true || member.department === "Ground Operations";
+          return group.department === member.department;
+        });
+        if (recommended.length > 0) await db.insert(chatGroupMembers).values(recommended.map((member: any) => ({
+          id: crypto.randomUUID(), groupId: group.id, staffId: member.id, role: 'member', createdAt: new Date().toISOString()
+        }))).onConflictDoNothing();
+      }
       const myMemberships = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.staffId, currentUser.id));
-      const myGroupIds = myMemberships.map((m: any) => m.groupId);
-
+      const myGroupIds = myMemberships.map((membership: any) => membership.groupId);
       const isDevOrManager = ['developer', 'manager', 'admin', 'owner'].includes(currentUser.role);
-
-      const filteredGroups = allGroups.filter((g: any) =>
-        myGroupIds.includes(g.id) ||
-        isDevOrManager ||
-        (g.department === currentUser.department) ||
-        (g.department === "__smt__" && currentUser.role === "smt") ||
-        (g.department === "__flight_ops__" && (currentUser.department === "Ground Operations" || currentUser.role === "smt")) ||
-        g.department === null
-      );
-
-      return json(filteredGroups);
+      return json(allGroups.filter((group: any) => isDevOrManager || myGroupIds.includes(group.id)));
     }
 
     if (pathname === "/api/chat/groups" && method === "POST") {
@@ -257,6 +260,34 @@ export const onRequest = async (context: any) => {
       return json({ success: true, id });
     }
 
+    if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/members") && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const groupId = pathname.split("/")[4];
+      const groupRows = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId)).limit(1);
+      if (!groupRows[0]) return json({ message: "Channel not found" }, 404);
+      const memberRows = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.groupId, groupId));
+      const memberIds = new Set(memberRows.map((membership: any) => String(membership.staffId)));
+      const staffRows = await db.select().from(staff);
+      const userRows = await db.select().from(users);
+      const roleByEmail = new Map(userRows.map((account: any) => [String(account.email || "").toLowerCase(), String(account.role || "staff").toLowerCase()]));
+      const visibleStaff = staffRows.filter((member: any) => currentUser.role === "developer" || roleByEmail.get(String(member.email || "").toLowerCase()) !== "developer");
+      return json(visibleStaff.map((member: any) => ({
+        staffId: member.id, name: member.name, sn: member.sn, department: member.department,
+        role: roleByEmail.get(String(member.email || "").toLowerCase()) || (member.isSmt ? "smt" : "staff"),
+        isMember: memberIds.has(String(member.id)),
+      })).sort((a: any, b: any) => String(a.name || "").localeCompare(String(b.name || ""))));
+    }
+
+    if (pathname.startsWith("/api/chat/groups/") && pathname.includes("/members/") && method === "DELETE") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const parts = pathname.split("/");
+      const groupId = parts[4];
+      const staffId = parts[6];
+      await db.delete(chatGroupMembers).where(and(eq(chatGroupMembers.groupId, groupId), eq(chatGroupMembers.staffId, staffId)));
+      return json({ success: true });
+    }
     if (pathname.startsWith("/api/chat/groups/") && pathname.endsWith("/messages") && method === "GET") {
       const groupId = pathname.split("/")[4];
       const currentUser = await requireAuth(request, env);
