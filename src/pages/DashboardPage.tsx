@@ -224,6 +224,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     <div className="overview-dashboard">
       <section className="overview-welcome overview-greeting-board">
         <div className="overview-greeting-copy">
+          <div className="overview-profile-mark" aria-hidden="true">{String(profile?.name || 'FND').trim().split(/\s+/).slice(0, 2).map(part => part.charAt(0)).join('').toUpperCase()}</div>
           <span className="overview-kicker">Funadhoo Airport · Daily command view</span>
           <h1><span>{clock.greeting},</span><strong>{profile?.name || 'team member'}</strong></h1>
           <p>Here is the operational picture for {clock.day.toLowerCase()}.</p>
