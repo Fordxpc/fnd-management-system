@@ -162,7 +162,7 @@ const userDepartment = myStaff?.department || profile?.department;
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (userDepartment || '').trim().toLowerCase();
     if (currentDept === 'safety' && targetDept === 'security') return true;
-    if (myStaff?.isIncharge !== true) return false;
+    if (!isSMT && myStaff?.isIncharge !== true) return false;
     return currentDept === targetDept;
   };
 

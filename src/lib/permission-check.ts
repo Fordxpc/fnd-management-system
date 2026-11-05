@@ -2,7 +2,7 @@
 
 import { getDb } from "../../src/lib/db";
 import { staff, users } from "../../src/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 export interface CurrentUser {
   id: string;
@@ -55,10 +55,12 @@ export async function getStaffProfile(
 ) {
   const db = getDb(env);
 
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const snPart = normalizedEmail.split("@")[0].replace(/^sn-/i, "").toUpperCase();
   const result = await db
     .select()
     .from(staff)
-    .where(eq(staff.email, email.toLowerCase()))
+    .where(sql`lower(${staff.email}) = ${normalizedEmail} or upper(${staff.sn}) = ${snPart} or upper(${staff.sn}) = ${`SN-${snPart}`}`)
     .limit(1);
 
   return result[0] || null;
@@ -294,11 +296,7 @@ export async function requireRosterEdit(
   env: any,
   currentUser: CurrentUser
 ) {
-  return requirePermission(
-    env,
-    currentUser,
-    "rosterEditAccess"
-  );
+  return checkModuleAccess(env, currentUser, "rosterEditAccess", true);
 }
 
 /* ===================================================

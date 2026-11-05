@@ -118,8 +118,9 @@ export const onRequest = async (context: any) => {
     const [editor] = await db.select().from(staff).where(sql`lower(${staff.email}) = ${String(currentUser.email || "").trim().toLowerCase()}`).limit(1);
     const editorDept = String(editor?.department || currentUser.department || "").trim().toLowerCase();
     const targetDept = String(target.department || "").trim().toLowerCase();
-    if (editor?.isIncharge !== true || (editorDept !== targetDept && !(editorDept === "safety" && targetDept === "security"))) {
-      const err: any = new Error("You cannot edit this department roster"); err.status = 403; throw err;
+    const isDepartmentLead = currentUser.role === "smt" || editor?.isSmt === true || editor?.isIncharge === true;
+    if (!isDepartmentLead || (editorDept !== targetDept && !(editorDept === "safety" && targetDept === "security"))) {
+      const err: any = new Error("You can only edit your own department roster"); err.status = 403; throw err;
     }
     return target;
   };
