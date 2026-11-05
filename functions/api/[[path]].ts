@@ -2150,7 +2150,7 @@ export const onRequest = async (context: any) => {
       const upcomingFlights = canViewFlightBoard ? flightList
         .filter((flight: any) => {
           const status = String(flight.status || '').toLowerCase();
-          return flight.date >= today && status !== 'cancelled';
+          return flight.date >= today && !flight.atd && !['departed', 'cancelled', 'completed'].includes(status);
         })
         .sort((a: any, b: any) => {
           const dateCompare = String(a.date || '').localeCompare(String(b.date || ''));
