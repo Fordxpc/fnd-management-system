@@ -50,7 +50,7 @@ const getWeekEnd = (weekStartStr: string): string => {
 const selectStyle = { padding: '8px', border: '1px solid #cbd5e1', borderRadius: '6px', color: '#1e293b', backgroundColor: '#ffffff' };
 
 function OvertimePage() {
-  const { profile, user, tempAccess } = useAuth();
+  const { profile, user } = useAuth();
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
@@ -123,7 +123,8 @@ function OvertimePage() {
   const isManager = profile?.role === 'manager' || profile?.role === 'admin';
   const isSMT = profile?.role === 'smt' || myStaff?.isSmt === true || myStaff?.isSMT === true;
   
-  const canViewAll = isDev || isManager;
+  const canManageAll = isDev || isManager;
+  const canViewAll = canManageAll;
 
   // NEW: Simple hierarchy approval gate
   const canApprove =
@@ -132,14 +133,12 @@ function OvertimePage() {
     ["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase());
   
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
-    if (canViewAll) return true;
+    if (canManageAll) return true;
 
     const target = (dept || '').toLowerCase();
     const current = (myStaff?.department || '').toLowerCase();
     const isIncharge = myStaff?.isIncharge === true;
 
-    if (current === 'safety' && target === 'security') return true;
-    if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === target)) return true;
 
     if (isSMTRequester) {
       return isIncharge && current === target;
@@ -150,7 +149,7 @@ function OvertimePage() {
   };
 
   const canEditThisDept = (dept: string, isSMTRequester: boolean = false) => {
-    return canViewAll || canApproveThisDept(dept, isSMTRequester);
+    return canManageAll || canApproveThisDept(dept, isSMTRequester);
   };
 
   const isExcludedFromOT = (staffName: string, position: string) => {
@@ -322,7 +321,7 @@ function OvertimePage() {
         <label className="overtime-management-search"><span>Search entries</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Staff, SN, department or notes…" /></label>
       </section>
 
-      {(canViewAll || canApprove || tempAccess.length > 0) && <nav className="overtime-management-view-tabs" aria-label="Overtime scope">
+      {(canViewAll || canApprove) && <nav className="overtime-management-view-tabs" aria-label="Overtime scope">
         <button type="button" className={viewMode === 'individual' ? 'active' : ''} onClick={() => setViewMode('individual')}>My overtime</button>
         <button type="button" className={viewMode === 'department' ? 'active' : ''} onClick={() => setViewMode('department')}>Department overtime</button>
       </nav>}
@@ -343,13 +342,13 @@ function OvertimePage() {
             {editingId ? '✏️ Edit Overtime' : '⏰ Request Overtime'}
           </div>
           
-          {canViewAll && !editingId && (
+          {canManageAll && !editingId && (
             <select value={formDept} onChange={(e) => { setFormDept(e.target.value); setFormStaffId(''); }} required style={selectStyle}>
               {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
             </select>
           )}
 
-          {canViewAll && !editingId ? (
+          {canManageAll && !editingId ? (
             <select value={formStaffId} onChange={(e) => setFormStaffId(e.target.value)} required style={selectStyle}>
               <option value="">Select Staff...</option>
               {staff.filter(s => s.department === formDept && !isExcludedFromOT(s.name, s.position)).map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}

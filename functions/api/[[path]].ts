@@ -9,7 +9,7 @@ import {
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
   passwordResetRequests, announcements, chatGroups, chatGroupMembers, chatMessages
 } from "../../src/db/schema.js";
-import { eq, and, inArray, sql, asc, desc, or, count, gte, lte } from "drizzle-orm";
+import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -120,6 +120,36 @@ export const onRequest = async (context: any) => {
     }
     return target;
   };
+  const getCurrentStaffProfile = async (currentUser: any) => {
+    const [profile] = await db.select().from(staff)
+      .where(eq(staff.email, String(currentUser.email || "").toLowerCase())).limit(1);
+    return profile || null;
+  };
+  const getAuthorizedRequestStaff = async (currentUser: any, staffId: string) => {
+    const [target] = await db.select().from(staff).where(eq(staff.id, staffId)).limit(1);
+    if (!target) { const err: any = new Error("Staff member not found"); err.status = 404; throw err; }
+    if (isManagerRole(currentUser.role)) return target;
+    const profile = await getCurrentStaffProfile(currentUser);
+    if (!profile) { const err: any = new Error("No staff profile found"); err.status = 403; throw err; }
+    const isDepartmentLead = currentUser.role === "smt" || profile.isSmt === true || profile.isIncharge === true;
+    const sameDepartment = String(profile.department || "").trim().toLowerCase() === String(target.department || "").trim().toLowerCase();
+    if (profile.id !== target.id && !(isDepartmentLead && sameDepartment)) {
+      const err: any = new Error("You can only submit for yourself or an authorized department member"); err.status = 403; throw err;
+    }
+    return target;
+  };
+  const scopeRequestsForUser = async (currentUser: any, rows: any[], smtCanViewAll: boolean) => {
+    if (isManagerRole(currentUser.role)) return rows;
+    const profile = await getCurrentStaffProfile(currentUser);
+    if (!profile) return [];
+    const isSmtViewer = currentUser.role === "smt" || profile.isSmt === true || profile.isIncharge === true;
+    if (isSmtViewer && smtCanViewAll) return rows;
+    if (isSmtViewer) {
+      const department = String(profile.department || "").trim().toLowerCase();
+      return rows.filter((row: any) => String(row.staffDepartment || "").trim().toLowerCase() === department);
+    }
+    return rows.filter((row: any) => String(row.staffId || "") === String(profile.id));
+  };
   if (method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
@@ -144,8 +174,8 @@ export const onRequest = async (context: any) => {
 
       const isDevOrManager = ['developer', 'manager', 'admin', 'owner'].includes(currentUser.role);
 
-      const filteredGroups = allGroups.filter((g: any) => 
-        myGroupIds.includes(g.id) || 
+      const filteredGroups = allGroups.filter((g: any) =>
+        myGroupIds.includes(g.id) ||
         (isDevOrManager && g.createdBy === currentUser.email) ||
         (g.department === currentUser.department) ||
         g.department === null
@@ -204,10 +234,10 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       const groupId = pathname.split("/")[4];
       const body: any = await request.json();
-      
+
       const isGroupAdmin = await db.select().from(chatGroupMembers).where(and(
-        eq(chatGroupMembers.groupId, groupId), 
-        eq(chatGroupMembers.staffId, currentUser.id), 
+        eq(chatGroupMembers.groupId, groupId),
+        eq(chatGroupMembers.staffId, currentUser.id),
         eq(chatGroupMembers.role, 'admin')
       )).limit(1);
 
@@ -255,7 +285,7 @@ export const onRequest = async (context: any) => {
     if (pathname.startsWith("/api/password-reset-requests/") && pathname.endsWith("/approve") && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
-      
+
       const id = pathname.split("/")[3];
       const [reqData] = await db.select().from(passwordResetRequests).where(eq(passwordResetRequests.id, id)).limit(1);
       if (!reqData) return json({ message: "Request not found" }, 404);
@@ -450,22 +480,22 @@ export const onRequest = async (context: any) => {
       const createdAt = new Date().toISOString();
 
       await db.insert(staff).values({
-        id, 
-        sn: body.sn || "", 
-        name: body.name, 
+        id,
+        sn: body.sn || "",
+        name: body.name,
         email: body.email,
-        personalEmail: body.personalEmail || "", 
-        nid: body.nid || "", 
+        personalEmail: body.personalEmail || "",
+        nid: body.nid || "",
         joinDate: body.joinDate || "",
-        phone: body.phone || "", 
-        gender: body.gender || "", 
+        phone: body.phone || "",
+        gender: body.gender || "",
         department: body.department,
-        position: body.position || "", 
-        isSmt: !!body.isSMT, 
+        position: body.position || "",
+        isSmt: !!body.isSMT,
         isIncharge: !!body.isIncharge,
-        balanceVisible: !!body.balanceVisible, 
+        balanceVisible: !!body.balanceVisible,
         tempDeptAccess: !!body.tempDeptAccess,
-        
+
         // View/Edit Permissions
         rampsheetViewAccess: !!body.rampsheetViewAccess,
         rampsheetEditAccess: !!body.rampsheetEditAccess,
@@ -489,29 +519,29 @@ export const onRequest = async (context: any) => {
         staffEditAccess: !!body.staffEditAccess,
         settingsViewAccess: !!body.settingsViewAccess,
         settingsEditAccess: !!body.settingsEditAccess,
-        
-        tempDeptTarget: body.tempDeptTarget || "", 
+
+        tempDeptTarget: body.tempDeptTarget || "",
         notes: body.notes || "",
-        basicSalary: body.basicSalary || 0, 
+        basicSalary: body.basicSalary || 0,
         dailyAllowance: body.dailyAllowance || 0,
-        holidayAllowanceRate: body.holidayAllowanceRate || 0, 
+        holidayAllowanceRate: body.holidayAllowanceRate || 0,
         bankAccount: body.bankAccount || "",
-        status: "active", 
-        orderIndex: 9999, 
+        status: "active",
+        orderIndex: 9999,
         createdAt,
       });
       return json({ success: true, id });
     }
 
     if (pathname === "/api/staff/reorder" && method === "PUT") {
-      
+
       const currentUser = await requireAuth(
         request,
         env
       );
-      
+
       requireManager(currentUser.role);
-      
+
       const body: any = await request.json();
       await Promise.all(body.orderedIds.map((id: string, index: number) => db.update(staff).set({ orderIndex: index }).where(eq(staff.id, id))));
       return json({ success: true });
@@ -549,7 +579,7 @@ export const onRequest = async (context: any) => {
         'settingsViewAccess', 'settingsEditAccess',
         'tempDeptTarget', 'notes', 'basicSalary', 'dailyAllowance', 'holidayAllowanceRate', 'bankAccount'
       ];
-      
+
       for (const field of allowedFields) {
         if (body[field] !== undefined) {
           const dbField = field === 'isSMT' ? 'isSmt' : field;
@@ -598,17 +628,17 @@ export const onRequest = async (context: any) => {
       });
       return json({ success: true, id }, 201);
     }    if (pathname.startsWith("/api/checklist/") && method === "DELETE") {
-      
+
       const currentUser = await requireAuth(
         request,
         env
       );
-      
+
       await requireOpsBoardEdit(
         env,
         currentUser
       );
-      
+
       const id = pathname.split("/").pop();
       await db.delete(opsChecks).where(eq(opsChecks.id, id!));
       return json({ success: true });
@@ -701,15 +731,18 @@ export const onRequest = async (context: any) => {
     // LEAVE REQUESTS MODULE
     // ==========================================
     if (pathname === "/api/leave-requests" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
       const results = await db.select().from(leaveRequests).orderBy(asc(leaveRequests.startDate));
-      return json(results);
+      return json(await scopeRequestsForUser(currentUser, results, true));
     }
     if (pathname === "/api/leave-requests" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
       const body: any = await request.json();
+      const targetStaff = await getAuthorizedRequestStaff(currentUser, String(body.staffId || ""));
       const id = crypto.randomUUID();
       const existingLeave = await db.select().from(leaveRequests).where(and(
-        eq(leaveRequests.staffId, body.staffId), 
-        eq(leaveRequests.startDate, body.startDate), 
+        eq(leaveRequests.staffId, body.staffId),
+        eq(leaveRequests.startDate, body.startDate),
         eq(leaveRequests.endDate, body.endDate)
       )).limit(1);
 
@@ -717,13 +750,13 @@ export const onRequest = async (context: any) => {
 
       try {
         await db.insert(leaveRequests).values({
-          id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment,
-          staffSn: body.staffSN || "", staffGender: body.staffGender || "", leaveType: body.leaveType,
+          id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
+          staffSn: targetStaff.sn || "", staffGender: targetStaff.gender || "", leaveType: body.leaveType,
           startDate: body.startDate, endDate: body.endDate, days: body.days, reason: body.reason || "",
-          status: body.status || "pending", requestedBy: body.requestedBy || "", requestedAt: new Date().toISOString(),
+          status: "pending", requestedBy: currentUser.email, requestedAt: new Date().toISOString(),
         });
         return json({ success: true, id });
-      } catch (err: any) { return json({ message: "Failed to create leave request." }, 400); }
+      } catch { return json({ message: "Failed to create leave request." }, 400); }
     }
 
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/approve") && method === "PUT") {
@@ -769,21 +802,15 @@ export const onRequest = async (context: any) => {
       const targetStaff =
         staffRows[0] as any;
 
-      if (targetStaff) {
+      if (!targetStaff?.email) return json({ message: "Linked staff profile not found" }, 409);
+      if (targetStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return json({ message: "You cannot review your own leave request" }, 403);
+      await requireLeaveApproval(env, currentUser.email, targetStaff.email);
 
-        await requireLeaveApproval(
-          env,
-          currentUser.email,
-          targetStaff.email
-        );
-
-      }
-
-      const body: any = await request.json();
+      await request.json();
       const reviewedAt = new Date().toISOString();
 
-      const [reqData] = await db.update(leaveRequests).set({ 
-        status: "approved", reviewedBy: body.reviewedBy, reviewedAt 
+      const [reqData] = await db.update(leaveRequests).set({
+        status: "approved", reviewedBy: currentUser.email, reviewedAt
       }).where(eq(leaveRequests.id, id!)).returning();
 
       if (reqData) {
@@ -858,36 +885,30 @@ export const onRequest = async (context: any) => {
       const targetStaff =
         staffRows[0] as any;
 
-      if (targetStaff) {
-
-        await requireLeaveApproval(
-          env,
-          currentUser.email,
-          targetStaff.email
-        );
-
-      }
+      if (!targetStaff?.email) return json({ message: "Linked staff profile not found" }, 409);
+      if (targetStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return json({ message: "You cannot review your own leave request" }, 403);
+      await requireLeaveApproval(env, currentUser.email, targetStaff.email);
 
       const body: any = await request.json();
-      await db.update(leaveRequests).set({ 
-        status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString(), 
-        reviewNotes: body.reviewNotes || "" 
+      await db.update(leaveRequests).set({
+        status: "rejected", reviewedBy: currentUser.email, reviewedAt: new Date().toISOString(),
+        reviewNotes: body.reviewNotes || ""
       }).where(eq(leaveRequests.id, id!));
       return json({ success: true });
     }
 
     if (pathname.startsWith("/api/leave-requests/") && method === "DELETE") {
-      
+
       const currentUser = await requireAuth(
         request,
         env
       );
-      
+
       await requireLeaveEdit(
         env,
         currentUser
       );
-      
+
       const id = pathname.split("/").pop();
       await db.delete(leaveRequests).where(eq(leaveRequests.id, id!));
       await db.delete(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
@@ -1051,9 +1072,9 @@ export const onRequest = async (context: any) => {
       const deductLeavesStr = JSON.stringify(body.deductLeaves);
       await db.insert(settings).values({
         id: "ot_rules", adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr,
-      }).onConflictDoUpdate({ 
-        target: settings.id, 
-        set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr } 
+      }).onConflictDoUpdate({
+        target: settings.id,
+        set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr }
       });
       return json({ success: true });
     }
@@ -1075,11 +1096,11 @@ export const onRequest = async (context: any) => {
         const body: any = await request.json();
         requireRoleAssignment(currentUser.role, body.role);
         await db.insert(users).values({
-          id: body.uid, email: body.email.toLowerCase(), role: body.role || "user", 
+          id: body.uid, email: body.email.toLowerCase(), role: body.role || "user",
           department: body.department || "", createdAt: new Date().toISOString(),
-        }).onConflictDoUpdate({ 
-          target: users.email, 
-          set: { role: body.role || "user", department: body.department || "" } 
+        }).onConflictDoUpdate({
+          target: users.email,
+          set: { role: body.role || "user", department: body.department || "" }
         });
         return json({ success: true });
       } catch (error) {
@@ -1130,7 +1151,7 @@ export const onRequest = async (context: any) => {
 
         // 2. Update the Better Auth user table to keep them in sync
         await db
-          .update(user) 
+          .update(user)
           .set({ role: body.role, department: body.department })
           .where(eq(user.id, id!));
 
@@ -1178,7 +1199,7 @@ export const onRequest = async (context: any) => {
 
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
-        id, email, role: role || "staff", department: department || "", 
+        id, email, role: role || "staff", department: department || "",
         name: name || "", position: position || "", createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
 
@@ -1201,7 +1222,7 @@ export const onRequest = async (context: any) => {
       requireRoleAssignment(currentUser.role, body.role);
       const id = crypto.randomUUID();
       await db.insert(userPresets).values({
-        id, email: body.email, role: body.role, department: body.department, 
+        id, email: body.email, role: body.role, department: body.department,
         name: body.name || "", position: body.position || "", createdAt: new Date().toISOString(),
       }).onConflictDoNothing();
       return json({ success: true, id });
@@ -1212,8 +1233,8 @@ export const onRequest = async (context: any) => {
       const id = pathname.split("/").pop();
       const body: any = await request.json();
       requireRoleAssignment(currentUser.role, body.role);
-      await db.update(userPresets).set({ 
-        role: body.role, department: body.department, name: body.name || "", position: body.position || "" 
+      await db.update(userPresets).set({
+        role: body.role, department: body.department, name: body.name || "", position: body.position || ""
       }).where(eq(userPresets.id, id!));
       return json({ success: true });
     }
@@ -1235,7 +1256,7 @@ export const onRequest = async (context: any) => {
         const body: any = await request.json();
         const id = crypto.randomUUID();
         await db.insert(savedReports).values({
-          id, month: body.month, dateFrom: body.dateFrom, dateTo: body.dateTo, 
+          id, month: body.month, dateFrom: body.dateFrom, dateTo: body.dateTo,
           type: body.type, createdBy: body.createdBy || "System", createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
@@ -1249,39 +1270,36 @@ export const onRequest = async (context: any) => {
     // OVERTIME MODULE
     // ==========================================
     if (pathname === "/api/overtime" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
       const results = await db.select().from(overtimeEntries).orderBy(asc(overtimeEntries.date));
-      return json(results);
+      return json(await scopeRequestsForUser(currentUser, results, false));
     }
     if (pathname === "/api/overtime" && method === "POST") {
-      
+
       const currentUser = await requireAuth(
         request,
         env
       );
-      
-      await requireOvertimeEdit(
-        env,
-        currentUser
-      );
-      
+
       const body: any = await request.json();
+      const targetStaff = await getAuthorizedRequestStaff(currentUser, String(body.staffId || ""));
       const id = crypto.randomUUID();
       const existingOvertime = await db.select().from(overtimeEntries).where(and(
-        eq(overtimeEntries.staffId, body.staffId), 
-        eq(overtimeEntries.date, body.date), 
+        eq(overtimeEntries.staffId, body.staffId),
+        eq(overtimeEntries.date, body.date),
         eq(overtimeEntries.startTime, body.startTime)
       )).limit(1);
       if (existingOvertime.length > 0) return json({ message: "Overtime logged for this exact time already." }, 400);
 
       try {
         await db.insert(overtimeEntries).values({
-          id, staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "", 
-          staffDepartment: body.staffDepartment, date: body.date, startTime: body.startTime, 
+          id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffSn: targetStaff.sn || "",
+          staffDepartment: targetStaff.department || "", date: body.date, startTime: body.startTime,
           endTime: body.endTime, hours: body.hours, notes: body.notes || "",
-          status: "pending", createdBy: body.createdBy || "", createdAt: new Date().toISOString(),
+          status: "pending", createdBy: currentUser.email, createdAt: new Date().toISOString(),
         });
         return json({ success: true, id });
-      } catch (err: any) { return json({ message: "Failed to create overtime." }, 400); }
+      } catch { return json({ message: "Failed to create overtime." }, 400); }
     }
     if (
       pathname.startsWith("/api/overtime/") &&
@@ -1289,22 +1307,22 @@ export const onRequest = async (context: any) => {
       !pathname.endsWith("/approve") &&
       !pathname.endsWith("/reject")
     ) {
-      
+
       const currentUser = await requireAuth(
         request,
         env
       );
-      
+
       await requireOvertimeEdit(
         env,
         currentUser
       );
-      
+
       const id = pathname.split("/").pop();
       const body: any = await request.json();
-      await db.update(overtimeEntries).set({ 
-        date: body.date, startTime: body.startTime, endTime: body.endTime, 
-        hours: body.hours, notes: body.notes || "" 
+      await db.update(overtimeEntries).set({
+        date: body.date, startTime: body.startTime, endTime: body.endTime,
+        hours: body.hours, notes: body.notes || ""
       }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
@@ -1353,19 +1371,13 @@ export const onRequest = async (context: any) => {
       const targetStaff =
         staffRows[0] as any;
 
-      if (targetStaff) {
+      if (!targetStaff?.email) return json({ message: "Linked staff profile not found" }, 409);
+      if (targetStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return json({ message: "You cannot review your own overtime request" }, 403);
+      await requireOTApproval(env, currentUser.email, targetStaff.email);
 
-        await requireOTApproval(
-          env,
-          currentUser.email,
-          targetStaff.email
-        );
-
-      }
-
-      const body: any = await request.json();
-      await db.update(overtimeEntries).set({ 
-        status: "approved", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() 
+      await request.json();
+      await db.update(overtimeEntries).set({
+        status: "approved", reviewedBy: currentUser.email, reviewedAt: new Date().toISOString()
       }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
@@ -1414,34 +1426,28 @@ export const onRequest = async (context: any) => {
       const targetStaff =
         staffRows[0] as any;
 
-      if (targetStaff) {
+      if (!targetStaff?.email) return json({ message: "Linked staff profile not found" }, 409);
+      if (targetStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return json({ message: "You cannot review your own overtime request" }, 403);
+      await requireOTApproval(env, currentUser.email, targetStaff.email);
 
-        await requireOTApproval(
-          env,
-          currentUser.email,
-          targetStaff.email
-        );
-
-      }
-
-      const body: any = await request.json();
-      await db.update(overtimeEntries).set({ 
-        status: "rejected", reviewedBy: body.reviewedBy, reviewedAt: new Date().toISOString() 
+      await request.json();
+      await db.update(overtimeEntries).set({
+        status: "rejected", reviewedBy: currentUser.email, reviewedAt: new Date().toISOString()
       }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
-      
+
       const currentUser = await requireAuth(
         request,
         env
       );
-      
+
       await requireOvertimeEdit(
         env,
         currentUser
       );
-      
+
       const id = pathname.split("/").pop();
       await db.delete(overtimeEntries).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
@@ -1589,8 +1595,8 @@ export const onRequest = async (context: any) => {
       await requireBirdEdit(env, currentUser);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(birdCounts).values({ 
-        id, date: body.date, refNo: body.refNo, observer: body.observer || "", 
+      await db.insert(birdCounts).values({
+        id, date: body.date, refNo: body.refNo, observer: body.observer || "",
         rows: JSON.stringify({
           rows: body.rows || [], wind: body.wind || "", temp: body.temp || "", cloud: body.cloud || "",
           rain: body.rain || "N", startTime: body.startTime || "", endTime: body.endTime || ""
@@ -1641,10 +1647,10 @@ export const onRequest = async (context: any) => {
       await requireRampView(env, currentUser);
       const results = await db.select().from(rampInspections)
         .orderBy(desc(rampInspections.date), desc(rampInspections.createdAt));
-      return json(results.map((row: any) => ({ 
-        ...JSON.parse(row.payload || "{}"), 
-        id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg, 
-        createdAt: row.createdAt, updatedAt: row.updatedAt 
+      return json(results.map((row: any) => ({
+        ...JSON.parse(row.payload || "{}"),
+        id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg,
+        createdAt: row.createdAt, updatedAt: row.updatedAt
       })));
     }
     if (pathname === "/api/ramp/reports" && method === "POST") {
@@ -1662,17 +1668,17 @@ export const onRequest = async (context: any) => {
       }
       if (JSON.stringify(body).length > 250_000) return json({ message: "Ramp report is too large" }, 413);
       const id = crypto.randomUUID();
-      await db.insert(rampInspections).values({ 
-        id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", 
-        payload: JSON.stringify(body), createdAt: new Date().toISOString() 
+      await db.insert(rampInspections).values({
+        id, date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "",
+        payload: JSON.stringify(body), createdAt: new Date().toISOString()
       });
 
       if (body.fltNo && body.date) {
         const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
-        await db.update(flights).set({ 
-          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null 
+        await db.update(flights).set({
+          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null
         }).where(and(
-          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, 
+          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`,
           eq(flights.date, body.date)
         ));
       }
@@ -1693,17 +1699,17 @@ export const onRequest = async (context: any) => {
         return json({ message: "Date, flight number and aircraft registration are required" }, 400);
       }
       if (JSON.stringify(body).length > 250_000) return json({ message: "Ramp report is too large" }, 413);
-      await db.update(rampInspections).set({ 
-        date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "", 
-        payload: JSON.stringify(body), updatedAt: new Date().toISOString() 
+      await db.update(rampInspections).set({
+        date: body.date || "", fltNo: body.fltNo || "", acReg: body.acReg || "",
+        payload: JSON.stringify(body), updatedAt: new Date().toISOString()
       }).where(eq(rampInspections.id, id!));
 
       if (body.fltNo && body.date) {
         const newStatus = body.atd ? "Departed" : body.ata ? "Landed" : body.eta ? "Departed (Origin)" : "Scheduled";
-        await db.update(flights).set({ 
-          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null 
+        await db.update(flights).set({
+          status: newStatus, eta: body.eta || null, ata: body.ata || null, atd: body.atd || null
         }).where(and(
-          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`, 
+          sql`TRIM(UPPER(${flights.flightNo})) = TRIM(UPPER(${body.fltNo}))`,
           eq(flights.date, body.date)
         ));
       }
@@ -1734,21 +1740,21 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const body: any = await request.json();
       const existing = await db.select().from(timesheets).where(and(
-        eq(timesheets.staffId, body.staffId), 
+        eq(timesheets.staffId, body.staffId),
         eq(timesheets.date, body.date)
       )).limit(1);
 
       if (existing.length > 0) {
-        await db.update(timesheets).set({ 
-          clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || "" 
+        await db.update(timesheets).set({
+          clockIn: body.clockIn, clockOut: body.clockOut, status: body.status, notes: body.notes || ""
         }).where(eq(timesheets.id, existing[0].id));
         return json({ success: true, id: existing[0].id });
       }
       const id = crypto.randomUUID();
-      await db.insert(timesheets).values({ 
-        id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment, 
-        date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "", 
-        status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString() 
+      await db.insert(timesheets).values({
+        id, staffId: body.staffId, staffName: body.staffName, staffDepartment: body.staffDepartment,
+        date: body.date, clockIn: body.clockIn || "", clockOut: body.clockOut || "",
+        status: body.status || "Present", notes: body.notes || "", createdAt: new Date().toISOString()
       });
       return json({ success: true, id });
     }
@@ -1772,9 +1778,9 @@ export const onRequest = async (context: any) => {
       requireManager(currentUser.role);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(tempAccess).values({ 
-        id, email: body.email, targetDept: body.targetDept, 
-        startDate: body.startDate, endDate: body.endDate 
+      await db.insert(tempAccess).values({
+        id, email: body.email, targetDept: body.targetDept,
+        startDate: body.startDate, endDate: body.endDate
       });
       return json({ success: true, id });
     }
@@ -1797,11 +1803,11 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       await requireRWYEdit(env, currentUser);
       const body: any = await request.json();
-      await db.insert(lightsInspectors).values({ 
-        staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || "" 
-      }).onConflictDoUpdate({ 
-        target: lightsInspectors.staffId, 
-        set: { staffName: body.staffName, staffSn: body.staffSN || "" } 
+      await db.insert(lightsInspectors).values({
+        staffId: body.staffId, staffName: body.staffName, staffSn: body.staffSN || ""
+      }).onConflictDoUpdate({
+        target: lightsInspectors.staffId,
+        set: { staffName: body.staffName, staffSn: body.staffSN || "" }
       });
       return json({ success: true });
     }
@@ -1818,9 +1824,9 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/lights" && method === "GET") {
       const results = await db.select().from(rwyLights).orderBy(desc(rwyLights.date));
-      return json(results.map((row: any) => ({ 
-        ...row, 
-        data: typeof row.data === "string" ? JSON.parse(row.data) : row.data 
+      return json(results.map((row: any) => ({
+        ...row,
+        data: typeof row.data === "string" ? JSON.parse(row.data) : row.data
       })));
     }
     if (pathname === "/api/lights" && method === "POST") {
@@ -1828,10 +1834,10 @@ export const onRequest = async (context: any) => {
       await requireRWYEdit(env, currentUser);
       const body: any = await request.json();
       const id = crypto.randomUUID();
-      await db.insert(rwyLights).values({ 
-        id, date: body.date, time: body.time || "", weather: body.weather || "", 
-        inspectorName: body.inspectorName, data: JSON.stringify(body.data), 
-        remarks: body.remarks || "", createdAt: new Date().toISOString() 
+      await db.insert(rwyLights).values({
+        id, date: body.date, time: body.time || "", weather: body.weather || "",
+        inspectorName: body.inspectorName, data: JSON.stringify(body.data),
+        remarks: body.remarks || "", createdAt: new Date().toISOString()
       });
       return json({ success: true, id });
     }

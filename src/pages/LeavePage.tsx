@@ -10,8 +10,6 @@ const FEMALE_ONLY = ['PRE-MATERNITY LEAVE', 'MATERNITY LEAVE'];
 const MALE_ONLY = ['PATERNITY LEAVE'];
 const ANNUAL_LEAVE_SERVICE_YEARS = 2;
 const ANNUAL_LEAVE_TOTAL = 30;
-const APPROVER_DESIGNATIONS = ['Airport Manager', 'Assistant Manager', 'Assistant Safety Officer', 'Senior Airport Officer', 'Operations Officer', 'Assistant Operations Officer', 'Assistant Security Officer', 'Assistant Administrative Officer', 'Leading Fireman'];
-const GLOBAL_APPROVERS = ['Airport Manager', 'Assistant Manager'];
 const FORM_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const selectStyle = { padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', color: '#1e293b', backgroundColor: '#ffffff' };
 const INITIAL_DATE = new Date().toISOString().split('T')[0];
@@ -27,7 +25,7 @@ const getLeaveTypesForStaff = (staffMember: any): string[] => { const g = (staff
 const computeUsedDays = (staffId: string, joinDate: string, leaveType: string, requests: any[]): number => { if (!joinDate) return 0; const years = getYearsOfService(joinDate); const isAnnual = leaveType === 'ANNUAL LEAVE'; const renews = years >= ANNUAL_LEAVE_SERVICE_YEARS; let used = 0; const ly = getCurrentLeaveYear(joinDate); requests.filter((r: any) => r.staffId === staffId && r.status?.toLowerCase() === 'approved' && r.leaveType === leaveType).forEach((r: any) => { if (isAnnual && !renews) used += r.days || 0; else if (ly) { const lyStart = formatDate(ly.start); const lyEnd = formatDate(ly.end); if ((r.startDate || '') >= lyStart && (r.startDate || '') <= lyEnd) used += r.days || 0; } }); return used; };
 
 function LeavePage() {
-  const { profile, user, tempAccess } = useAuth();
+  const { profile, user } = useAuth();
   const isDev = profile?.role === 'developer';
   const isManager = profile?.role === 'manager' || profile?.role === 'admin' || profile?.role === 'owner';
   const isSMT = profile?.role === 'smt' || profile?.isSMT === true || profile?.isSmt === true;
@@ -90,19 +88,16 @@ function LeavePage() {
   useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 10000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
 
   const holidaySet = new Set<string>(holidays.map((h: any) => h.date));
-  const canApproveAnyDept = isDev || isManager || GLOBAL_APPROVERS.includes(myStaff?.position || '');
-  const isDeptManager = canApproveAnyDept || APPROVER_DESIGNATIONS.includes(myStaff?.position || '');
+  const canApproveAnyDept = isDev || isManager;
   
   const canApproveThisDept = (dept: string, isSMTRequester: boolean = false) => {
-    if (isDev || isManager || canApproveAnyDept) return true;
+    if (canApproveAnyDept) return true;
     
     const targetDept = (dept || '').trim().toLowerCase();
     const currentDept = (myStaff?.department || '').trim().toLowerCase();
     const isActuallySMT = isSMT || myStaff?.isSMT === true || myStaff?.isSmt === true;
     const isIncharge = myStaff?.isIncharge === true;
     
-    if (tempAccess.some((t: any) => t.targetDept.toLowerCase() === targetDept)) return true;
-    if (currentDept === 'safety' && targetDept === 'security') return true;
 
     // If requester is SMT, only Manager/Dev or Department Incharge can approve
     if (isSMTRequester) {
@@ -112,7 +107,7 @@ function LeavePage() {
 
     // If requester is standard staff, Dept Manager or Dept SMT can approve
     if (isActuallySMT && currentDept === targetDept) return true;
-    if (isDeptManager && currentDept === targetDept) return true;
+
     return false;
   };
 
@@ -132,7 +127,7 @@ function LeavePage() {
 
   // NEW: Hierarchy-based pre-filter
   let displayRequests = requests;
-  if (!["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase())) {
+  if (!["developer", "manager", "admin", "owner"].includes((profile?.role || "").toLowerCase()) && !isSMT) {
     if (myStaff?.isIncharge) {
       displayRequests = requests.filter((r: any) => r.staffDepartment === myStaff.department);
     } else if (myStaff?.isSmt) {
@@ -283,7 +278,7 @@ function LeavePage() {
         </div>
       )}
 
-      {(canApproveAnyDept || isSMT || tempAccess.length > 0 || myStaff?.isIncharge) && deptBalanceStaff.length > 0 && (
+      {(canApproveAnyDept || isSMT || myStaff?.isIncharge) && deptBalanceStaff.length > 0 && (
         <div className="collapsible-card">
           <button className="collapsible-header" onClick={() => setShowDeptBalances(!showDeptBalances)}><span><strong>👥 Department Staff Balances</strong></span><span className="collapsible-toggle">{showDeptBalances ? '▼' : '▶'}</span></button>
           {showDeptBalances && (
