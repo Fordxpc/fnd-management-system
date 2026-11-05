@@ -46,6 +46,14 @@ function isSMTProfile(profile: any): boolean {
   return !!(profile && (profile.isSmt === true || profile.isIncharge === true));
 }
 
+const SPECIAL_OPS_PERMISSION_FIELDS = new Set([
+  'opsBoardViewAccess', 'opsBoardEditAccess',
+  'flightsViewAccess', 'flightsEditAccess',
+  'rampsheetViewAccess', 'rampsheetEditAccess',
+  'birdCountViewAccess', 'birdCountEditAccess',
+  'rwyLightViewAccess', 'rwyLightEditAccess',
+]);
+
 /**
  * Load staff profile connected to current user
  */
@@ -116,7 +124,7 @@ export async function requirePermission(
  * Rules:
  *   - Full access roles (developer / admin / manager / owner) → allowed
  *   - Explicit permission field === true                        → allowed
- *   - specialOpsAccess === true                                → allowed
+ *   - specialOpsAccess === true for approved operational fields → allowed
  *   - SMT (isSmt / isIncharge) and allowSMT === true           → allowed
  *     (SMT is auto-granted on VIEW actions only; EDIT actions
  *      require an explicit permission field)
@@ -145,7 +153,7 @@ async function checkModuleAccess(
     const editField = permissionField.replace("ViewAccess", "EditAccess");
     if ((profile as any)[editField] === true) return true;
   }
-  if ((profile as any).specialOpsAccess === true) return true;
+  if ((profile as any).specialOpsAccess === true && SPECIAL_OPS_PERMISSION_FIELDS.has(permissionField)) return true;
   if (["opsBoardViewAccess", "opsBoardEditAccess"].includes(permissionField) && String(profile.department || "").toLowerCase() === "safety") return true;
   if (permissionField === "opsBoardEditAccess" && profile.isSmt === true && String(profile.department || "").toLowerCase() === "ground operations") return true;
   if (allowSMT && isSMTProfile(profile)) return true;

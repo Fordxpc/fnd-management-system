@@ -117,12 +117,18 @@ export const onRequest = async (context: any) => {
     if (audience === 'Flight Operations') return department === 'Ground Operations' || isSmt || staffProfile?.specialOpsAccess === true;
     return false;
   };
+  const getChatStaffId = async (currentUser: any) => {
+    const profile = await getCurrentStaffProfile(currentUser);
+    return profile?.id ? String(profile.id) : String(currentUser.id || '');
+  };
   const requireChatGroupAccess = async (groupId: string, currentUser: any) => {
     const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId)).limit(1);
     if (!group) { const err: any = new Error("Channel not found"); err.status = 404; throw err; }
     if (isManagerRole(currentUser.role)) return group;
+    const chatStaffId = await getChatStaffId(currentUser);
     const membership = await db.select().from(chatGroupMembers).where(and(
-      eq(chatGroupMembers.groupId, groupId), eq(chatGroupMembers.staffId, currentUser.id)
+      eq(chatGroupMembers.groupId, groupId),
+      or(eq(chatGroupMembers.staffId, chatStaffId), eq(chatGroupMembers.staffId, String(currentUser.id || '')))
     )).limit(1);
     if (membership.length === 0) {
       const err: any = new Error("You are not a member of this channel"); err.status = 403; throw err;
@@ -250,7 +256,11 @@ export const onRequest = async (context: any) => {
           id: crypto.randomUUID(), groupId: group.id, staffId: member.id, role: 'member', createdAt: new Date().toISOString()
         }))).onConflictDoNothing();
       }
-      const myMemberships = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.staffId, currentUser.id));
+      const chatStaffId = await getChatStaffId(currentUser);
+      const myMemberships = await db.select().from(chatGroupMembers).where(or(
+        eq(chatGroupMembers.staffId, chatStaffId),
+        eq(chatGroupMembers.staffId, String(currentUser.id || ''))
+      ));
       const myGroupIds = myMemberships.map((membership: any) => membership.groupId);
       const isDevOrManager = ['developer', 'manager', 'admin', 'owner'].includes(currentUser.role);
       return json(allGroups.filter((group: any) => isDevOrManager || myGroupIds.includes(group.id)));
@@ -275,8 +285,9 @@ export const onRequest = async (context: any) => {
         createdBy: currentUser.email, createdAt: new Date().toISOString(),
       });
 
+      const creatorStaffId = await getChatStaffId(currentUser);
       await db.insert(chatGroupMembers).values({
-        id: crypto.randomUUID(), groupId: id, staffId: currentUser.id, role: 'admin', createdAt: new Date().toISOString()
+        id: crypto.randomUUID(), groupId: id, staffId: creatorStaffId, role: 'admin', createdAt: new Date().toISOString()
       });
 
       return json({ success: true, id });
@@ -343,9 +354,10 @@ export const onRequest = async (context: any) => {
       const groupId = pathname.split("/")[4];
       const body: any = await request.json();
 
+      const chatStaffId = await getChatStaffId(currentUser);
       const isGroupAdmin = await db.select().from(chatGroupMembers).where(and(
         eq(chatGroupMembers.groupId, groupId),
-        eq(chatGroupMembers.staffId, currentUser.id),
+        or(eq(chatGroupMembers.staffId, chatStaffId), eq(chatGroupMembers.staffId, String(currentUser.id || ''))),
         eq(chatGroupMembers.role, 'admin')
       )).limit(1);
 
