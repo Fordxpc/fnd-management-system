@@ -46,6 +46,7 @@ function LeavePage() {
   const [showDeptBalances, setShowDeptBalances] = useState<boolean>(false); 
   const [balanceTab, setBalanceTab] = useState<'annual' | 'sick' | 'other'>('annual');
   const [showForm, setShowForm] = useState<boolean>(false);
+  const [showRegister, setShowRegister] = useState<boolean>(true);
   const [selectedFormDept, setSelectedFormDept] = useState<string>('Ground Operations');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [leaveType, setLeaveType] = useState<string>('ANNUAL LEAVE');
@@ -317,7 +318,8 @@ function LeavePage() {
         </form>
       )}
 
-      <div className="staff-list leave-management-list">
+      <div className="long-register-toolbar"><div><strong>Leave request register</strong><span>{visibleRequests.length} matching requests</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
+      <div className={`staff-list leave-management-list ${showRegister ? '' : 'long-register-collapsed'}`}>
         {visibleRequests.length === 0 ? (<div className="empty-state"><p>No leave requests found.</p></div>) : (
           <table className="leave-management-table">
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Requested by / time</th><th>Status / decision audit</th><th>Actions</th></tr></thead>

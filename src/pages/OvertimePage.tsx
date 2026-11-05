@@ -60,6 +60,7 @@ function OvertimePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [search, setSearch] = useState('');
+  const [showRegister, setShowRegister] = useState<boolean>(true);
 
   const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
 
@@ -375,6 +376,8 @@ function OvertimePage() {
         </form>
       )}
 
+      <div className="long-register-toolbar"><div><strong>Overtime register</strong><span>{filtered.length} matching entries</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
+      <div className={showRegister ? '' : 'long-register-collapsed'}>
       {weekKeys.length === 0 ? (
         <div className="staff-list"><div className="empty-state"><p>No {tab} OT entries for this period.</p></div></div>
       ) : (
@@ -457,6 +460,7 @@ function OvertimePage() {
           );
         })
       )}
+      </div>
 
       <ConfirmDialog isOpen={!!approveTarget} title="Approve OT?" message="Are you sure you want to approve this OT entry?" confirmText="Approve" isDanger={false} onConfirm={confirmApprove} onCancel={() => setApproveTarget(null)} />
       <ConfirmDialog isOpen={!!rejectTarget} title="Reject OT?" message="Are you sure you want to reject this OT entry?" confirmText="Reject" isDanger={true} onConfirm={confirmReject} onCancel={() => setRejectTarget(null)} />

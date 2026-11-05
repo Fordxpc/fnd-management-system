@@ -74,6 +74,7 @@ function StaffPage() {
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
+  const [showRegister, setShowRegister] = useState<boolean>(true);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string, name: string, sn: string } | null>(null);
 
   const [sn, setSn] = useState<string>('');
@@ -269,7 +270,8 @@ const myDept = myStaff?.department;
         </form>
       )}
 
-      <div className="staff-list staff-management-list">
+      <div className="long-register-toolbar"><div><strong>Staff register</strong><span>{visibleStaff.length} matching records</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
+      <div className={`staff-list staff-management-list ${showRegister ? '' : 'long-register-collapsed'}`}>
         {visibleStaff.length === 0 ? (
           <div className="empty-state"><p>No staff members found for <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.</p></div>
         ) : (
