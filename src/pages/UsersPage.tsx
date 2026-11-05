@@ -56,11 +56,9 @@ function UsersPage() {
 
   if (!canView) return <div className="page-content"><h2>Access Denied</h2><p>You do not have permission to view this page.</p></div>;
 
-  const getStaffName = (email: string) => {
-    if (!email) return '—';
-    const s = staffList.find((st) => (st.email || '').toLowerCase() === email.toLowerCase());
-    return s ? s.name : '—';
-  };
+  const getStaffRecord = (email: string) => staffList.find((staff) => (staff.email || '').toLowerCase() === String(email || '').toLowerCase());
+  const getStaffName = (email: string) => getStaffRecord(email)?.name || '—';
+  const getStaffSN = (email: string) => String(getStaffRecord(email)?.sn || 'NO SN').toUpperCase();
 
   const handleChangeRole = async (userId: string, value: string) => {
     if (!canEdit) return;
@@ -115,10 +113,10 @@ function UsersPage() {
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const visibleUsers = users
     .filter(user => role === 'developer' || String(user.role || '').toLowerCase() !== 'developer')
-    .filter(user => !normalizedSearch || [user.name, getStaffName(user.email), user.email, user.role, user.department].some(value => String(value || '').toLowerCase().includes(normalizedSearch)));
+    .filter(user => !normalizedSearch || [user.name, getStaffName(user.email), getStaffSN(user.email), user.email, user.role, user.department].some(value => String(value || '').toLowerCase().includes(normalizedSearch)));
   const visiblePresets = presets
     .filter(user => role === 'developer' || String(user.role || '').toLowerCase() !== 'developer')
-    .filter(user => !normalizedSearch || [user.name, getStaffName(user.email), user.email, user.role, user.department].some(value => String(value || '').toLowerCase().includes(normalizedSearch)));
+    .filter(user => !normalizedSearch || [user.name, getStaffName(user.email), getStaffSN(user.email), user.email, user.role, user.department].some(value => String(value || '').toLowerCase().includes(normalizedSearch)));
   if (loading) return <div className="page-content"><p>Loading Users...</p></div>;
 
   return (
@@ -162,7 +160,7 @@ function UsersPage() {
           <summary><div><span>Pending activation</span><strong>Pre-registered users</strong></div><em>{visiblePresets.length}</em></summary>
           <div className="users-table-wrap"><table className="users-table"><thead><tr><th>Identity</th><th>Role</th><th>Department</th>{canEdit && <th>Actions</th>}</tr></thead><tbody>
             {visiblePresets.map(user => <tr key={user.id}>
-              <td data-label="Identity"><div className="users-identity"><i>{String(user.name || getStaffName(user.email) || '?').charAt(0)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span></div></div></td>
+              <td data-label="Identity"><div className="users-identity"><i className="users-sn-avatar">{getStaffSN(user.email)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span></div></div></td>
               <td data-label="Role"><span className={`users-role users-role--${String(user.role || 'staff').toLowerCase()}`}>{user.role || 'staff'}</span></td>
               <td data-label="Department">{user.department || '—'}</td>
               {canEdit && <td data-label="Actions"><div className="users-row-actions"><button onClick={() => setEditingUser({ ...user, status: 'Pre-registered' })}>Edit</button><button className="danger" onClick={() => handleDeletePreset(user.id, user.email)}>Remove</button></div></td>}
@@ -178,7 +176,7 @@ function UsersPage() {
             const protectedDeveloper = String(user.role || '').toLowerCase() === 'developer' && role !== 'developer';
             const isSelf = String(user.email || '').toLowerCase() === String(profile?.email || '').toLowerCase();
             return <tr key={user.id}>
-              <td data-label="Identity"><div className="users-identity"><i>{String(user.name || getStaffName(user.email) || '?').charAt(0)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span>{isSelf && <small>Current account</small>}</div></div></td>
+              <td data-label="Identity"><div className="users-identity"><i className="users-sn-avatar">{getStaffSN(user.email)}</i><div><strong>{user.name || getStaffName(user.email)}</strong><span>{user.email}</span>{isSelf && <small>Current account</small>}</div></div></td>
               <td data-label="Role"><select value={user.role || 'staff'} onChange={event => void handleChangeRole(user.id, event.target.value)} disabled={!canEdit || protectedDeveloper || isSelf}>{assignableRoles.map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></td>
               <td data-label="Department"><select value={user.department || 'Ground Operations'} onChange={event => void handleChangeDept(user.id, event.target.value)} disabled={!canEdit || protectedDeveloper}>{DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}</select></td>
               {canEdit && <td data-label="Actions">{protectedDeveloper ? <span className="users-protected">Protected</span> : <div className="users-row-actions"><button onClick={() => setEditingUser({ ...user, status: 'Active' })}>Edit</button><button className="danger" disabled={isSelf} onClick={() => handleDelete(user.id, user.email)}>Remove</button></div>}</td>}

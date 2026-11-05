@@ -104,7 +104,9 @@ export const onRequest = async (context: any) => {
       eq(chatGroupMembers.groupId, groupId), eq(chatGroupMembers.staffId, currentUser.id)
     )).limit(1);
     const sameDepartment = group.department && group.department === currentUser.department;
-    if (membership.length === 0 && !sameDepartment && group.department !== null) {
+    const isSmtChannel = group.department === "__smt__" && currentUser.role === "smt";
+    const isFlightOpsChannel = group.department === "__flight_ops__" && (currentUser.department === "Ground Operations" || currentUser.role === "smt");
+    if (membership.length === 0 && !sameDepartment && !isSmtChannel && !isFlightOpsChannel && group.department !== null) {
       const err: any = new Error("Access denied"); err.status = 403; throw err;
     }
     return group;
@@ -168,7 +170,21 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/chat/groups" && method === "GET") {
       const currentUser = await requireAuth(request, env);
-      const allGroups = await db.select().from(chatGroups);
+      let allGroups = await db.select().from(chatGroups);
+      if (allGroups.length === 0) {
+        const createdAt = new Date().toISOString();
+        const coreChannels = [
+          { id: crypto.randomUUID(), name: "FND Staffs", description: "Airport-wide staff conversation", department: null, createdBy: "system", createdAt },
+          { id: crypto.randomUUID(), name: "Ground Operations", description: "Ground Operations department", department: "Ground Operations", createdBy: "system", createdAt },
+          { id: crypto.randomUUID(), name: "Maintenance", description: "Maintenance department", department: "Maintenance", createdBy: "system", createdAt },
+          { id: crypto.randomUUID(), name: "Security", description: "Security department", department: "Security", createdBy: "system", createdAt },
+          { id: crypto.randomUUID(), name: "Fire & Rescue", description: "Fire & Rescue department", department: "Fire & Rescue", createdBy: "system", createdAt },
+          { id: crypto.randomUUID(), name: "SMT & Management", description: "SMT and management coordination", department: "__smt__", createdBy: "system", createdAt },
+          { id: crypto.randomUUID(), name: "Flight Operations", description: "Flight operations coordination", department: "__flight_ops__", createdBy: "system", createdAt },
+        ];
+        await db.insert(chatGroups).values(coreChannels).onConflictDoNothing();
+        allGroups = await db.select().from(chatGroups);
+      }
       const myMemberships = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.staffId, currentUser.id));
       const myGroupIds = myMemberships.map((m: any) => m.groupId);
 
@@ -176,8 +192,10 @@ export const onRequest = async (context: any) => {
 
       const filteredGroups = allGroups.filter((g: any) =>
         myGroupIds.includes(g.id) ||
-        (isDevOrManager && g.createdBy === currentUser.email) ||
+        isDevOrManager ||
         (g.department === currentUser.department) ||
+        (g.department === "__smt__" && currentUser.role === "smt") ||
+        (g.department === "__flight_ops__" && (currentUser.department === "Ground Operations" || currentUser.role === "smt")) ||
         g.department === null
       );
 
@@ -188,10 +206,18 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
+      const name = typeof body.name === "string" ? body.name.trim() : "";
+      const description = typeof body.description === "string" ? body.description.trim() : "";
+      const allowedDepartments = ["Ground Operations", "Maintenance", "Security", "Fire & Rescue"];
+      const department = allowedDepartments.includes(body.department) ? body.department : null;
+      if (name.length < 2 || name.length > 60) return json({ message: "Channel name must contain 2 to 60 characters" }, 400);
+      if (description.length > 180) return json({ message: "Description must be 180 characters or fewer" }, 400);
+      const duplicate = await db.select().from(chatGroups).where(eq(chatGroups.name, name)).limit(1);
+      if (duplicate.length) return json({ message: "A channel with this name already exists" }, 409);
       const id = crypto.randomUUID();
 
       await db.insert(chatGroups).values({
-        id, name: body.name, description: body.description || "", department: body.department || null,
+        id, name, description, department,
         createdBy: currentUser.email, createdAt: new Date().toISOString(),
       });
 

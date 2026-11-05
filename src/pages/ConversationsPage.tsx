@@ -19,6 +19,10 @@ export default function ConversationsPage() {
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [channelSearch, setChannelSearch] = useState('');
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [creatingChannel, setCreatingChannel] = useState(false);
+  const [channelForm, setChannelForm] = useState({ name: '', description: '', department: '' });
+  const canCreateChannel = ['developer', 'admin', 'manager', 'owner'].includes(String(profile?.role || '').toLowerCase());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -77,12 +81,26 @@ export default function ConversationsPage() {
     reader.readAsDataURL(file);
   };
 
+  const handleCreateChannel = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canCreateChannel || creatingChannel) return;
+    setCreatingChannel(true);
+    try {
+      const result = await apiFetch('/chat/groups', { method: 'POST', body: JSON.stringify(channelForm) });
+      toast.success('Channel created');
+      setChannelForm({ name: '', description: '', department: '' });
+      setShowCreateChannel(false);
+      await fetchGroups();
+      if (result?.id) setActiveGroup((await apiFetch('/chat/groups')).find((group: any) => group.id === result.id) || null);
+    } catch (err: any) { toast.error(err.message || 'Unable to create channel'); }
+    finally { setCreatingChannel(false); }
+  };
   const visibleGroups = groups.filter(group => String(group.name || '').toLowerCase().includes(channelSearch.toLowerCase()));
   if (loading) return <div className="page-content"><p>Loading conversations…</p></div>;
 
   return <div className="page-content conversations-page">
     <aside className="conversations-sidebar">
-      <header><span>Internal communications</span><h2>Channels</h2><p>{groups.length} available</p></header>
+      <header><div><span>Internal communications</span><h2>Channels</h2><p>{groups.length} available</p></div>{canCreateChannel && <button className="conversation-create-button" type="button" onClick={() => setShowCreateChannel(true)}>+ Create</button>}</header>
       <div className="conversation-search"><input value={channelSearch} onChange={event => setChannelSearch(event.target.value)} placeholder="Find a channel" /></div>
       <nav>{visibleGroups.map(group => <button key={group.id} className={activeGroup?.id === group.id ? 'active' : ''} onClick={() => setActiveGroup(group)}><span>#</span><div><strong>{group.name}</strong><small>{group.department || 'All departments'}</small></div></button>)}{visibleGroups.length === 0 && <p>No matching channels.</p>}</nav>
     </aside>
@@ -97,5 +115,6 @@ export default function ConversationsPage() {
         <form className="conversation-composer" onSubmit={handleSend}><button type="button" className="attach" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Attach image">{uploading ? '…' : '+'}</button><input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} hidden /><div><input value={newMessage} maxLength={2000} onChange={event => setNewMessage(event.target.value)} placeholder={`Message #${activeGroup.name}`} disabled={sending} /><small>{newMessage.length}/2000</small></div><button className="send" disabled={sending || !newMessage.trim()}>{sending ? 'Sending…' : 'Send'}</button></form>
       </> : <div className="conversation-empty large"><strong>No channel selected</strong><span>Choose a channel to view its messages.</span></div>}
     </main>
+    {showCreateChannel && <div className="modal-backdrop" onClick={() => setShowCreateChannel(false)}><form className="modal-content conversation-create-modal" onSubmit={handleCreateChannel} onClick={event => event.stopPropagation()}><span>New conversation space</span><h3>Create channel</h3><p>Create an airport-wide channel or limit it to one operational department.</p><label><span>Channel name</span><input value={channelForm.name} minLength={2} maxLength={60} onChange={event => setChannelForm({...channelForm, name: event.target.value})} placeholder="e.g. Flight Operations" required /></label><label><span>Description</span><textarea value={channelForm.description} maxLength={180} onChange={event => setChannelForm({...channelForm, description: event.target.value})} placeholder="What should this channel be used for?" rows={3} /></label><label><span>Visibility</span><select value={channelForm.department} onChange={event => setChannelForm({...channelForm, department: event.target.value})}><option value="">All FND staff</option><option>Ground Operations</option><option>Maintenance</option><option>Security</option><option>Fire & Rescue</option></select></label><div className="modal-actions"><button type="button" className="cancel-btn" onClick={() => setShowCreateChannel(false)}>Cancel</button><button className="submit-btn" disabled={creatingChannel}>{creatingChannel ? 'Creating…' : 'Create channel'}</button></div></form></div>}
   </div>;
 }

@@ -115,9 +115,9 @@ function SettingsPage() {
     const realName = staffMatch?.name || a.name || (a.email || '').split('@')[0];
     const idx = allMergedUsers.findIndex(u => (u.email || '').toLowerCase() === emailLower);
     if (idx >= 0) {
-      allMergedUsers[idx] = { ...allMergedUsers[idx], name: realName, role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' };
+      allMergedUsers[idx] = { ...allMergedUsers[idx], name: realName, role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—', sn: staffMatch?.sn || 'NO SN' };
     } else {
-      allMergedUsers.push({ email: a.email, name: realName, password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—' });
+      allMergedUsers.push({ email: a.email, name: realName, password: '—', role: a.role || 'staff', department: a.department || '—', status: 'Active', id: a.id, position: staffMatch?.position || '—', sn: staffMatch?.sn || 'NO SN' });
     }
   });
 
@@ -125,6 +125,8 @@ function SettingsPage() {
   const getStaffRole = (member: any) => activeUsers.find(account => String(account.email || '').toLowerCase() === String(member.email || '').toLowerCase())?.role || (member.isSmt ? 'smt' : 'staff');
   const smtStaff = staffList.filter(member => getStaffRole(member) !== 'developer' && (member.isSmt === true || getStaffRole(member) === 'smt'));
   const specialOpsStaff = staffList.filter(member => getStaffRole(member) === 'staff' && !smtStaff.some(smt => smt.id === member.id) && ['Ground Operations', 'Maintenance', 'Fire & Rescue'].includes(member.department));
+  const currentStaff = staffList.find(member => String(member.email || '').toLowerCase() === String(profile?.email || user?.email || '').toLowerCase()) || staffList.find(member => String(member.sn || '').toLowerCase() === String(profile?.sn || '').toLowerCase());
+  const currentSN = String(currentStaff?.sn || profile?.sn || '').trim() || 'NO SN';
 
   return (
     <div className="page-content settings-workspace">
@@ -143,15 +145,15 @@ function SettingsPage() {
       {activeTab === 'general' && (
         <>
           <section className="settings-account-card">
-            <div className="settings-account-avatar">{String(profile?.name || user?.name || 'U').trim().charAt(0).toUpperCase()}</div>
-            <div className="settings-account-copy"><span>Signed-in system account</span><h3>{profile?.name || user?.name || 'User'}</h3><p>{profile?.email || user?.email}</p><div><strong>{profile?.role || 'Staff'}</strong><em>{profile?.department || 'FND'}</em></div></div>
+            <div className="settings-account-avatar"><small>STAFF ID</small><strong>{currentSN.toUpperCase()}</strong></div>
+            <div className="settings-account-copy"><span>Signed-in system account</span><h3>{profile?.name || user?.name || 'User'}</h3><p>{profile?.email || user?.email}</p><div><b>{currentSN.toUpperCase()}</b><strong>{profile?.role || 'Staff'}</strong><em>{profile?.department || 'FND'}</em></div></div>
             <div className="settings-account-actions"><button className="change-pw-btn" onClick={() => setShowPasswordModal(true)}>Change password</button><button className="logout-btn" onClick={logout}>Log out</button></div>
           </section>
         </>
       )}
 
       {activeTab === 'rules' && canManageAccess && (
-        <div className="dash-card border-l-4 border-blue-500">
+        <div className="dash-card settings-rules-workspace">
           <h3>⚙️ System Rules & Access Control</h3>
 
           {resetRequests.length > 0 && (
@@ -180,7 +182,7 @@ function SettingsPage() {
             </div>
           )}
 
-          <form onSubmit={saveRules} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px', marginTop: '16px' }}>
+          <form className="settings-rules-panel" onSubmit={saveRules} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '24px', marginTop: '16px' }}>
             <h4 style={{ margin: '0 0 16px', color: '#1e293b' }}>Overtime Thresholds</h4>
             <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '16px' }}>
               <div>
@@ -196,7 +198,7 @@ function SettingsPage() {
           </form>
 
           {isDev && (
-            <div style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
+            <div className="settings-master-users" style={{ background: '#fff', border: '1px solid #e2e8f0', padding: '20px', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
                 <div><h4 style={{ margin: 0, color: '#1e293b' }}>👥 Master User List ({activeUsers.length})</h4></div>
                 <input type="text" placeholder="🔍 Search name or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ padding: '8px 12px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '250px', fontSize: '13px', color: '#1e293b' }} />
@@ -204,13 +206,14 @@ function SettingsPage() {
               <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
                 <table className="mini-table" style={{ margin: 0, width: '100%' }}>
                   <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
-                    <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+                    <tr><th>SN</th><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {filteredUsers.length === 0 ? (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px' }}>No users found matching "{searchQuery}"</td></tr>
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: '20px' }}>No users found matching "{searchQuery}"</td></tr>
                     ) : filteredUsers.map(u => (
                       <tr key={u.email}>
+                        <td><span className="settings-user-sn">{String(u.sn || 'NO SN').toUpperCase()}</span></td>
                         <td><strong>{u.name}</strong></td>
                         <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{u.email}</td>
                         <td><span style={{ textTransform: 'uppercase', fontWeight: 700, fontSize: '11px', background: u.role === 'developer' ? '#fee2e2' : u.role === 'smt' ? '#fef3c7' : '#eff6ff', padding: '2px 6px', borderRadius: '4px' }}>{u.role}</span></td>
@@ -276,12 +279,12 @@ function SettingsPage() {
         </div>
       )}
       {activeTab === 'detailed' && canManageAccess && (
-        <div className="dash-card border-l-4 border-purple-500">
+        <div className="dash-card access-matrix-card">
           <h3>📋 Access Details Matrix</h3>
           <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Comprehensive overview of all staff permissions.</p>
 
-          <div style={{ overflowX: 'auto', maxHeight: '65vh' }}>
-            <table className="mini-table" style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>
+          <div className="access-matrix-wrap" style={{ overflowX: 'auto', maxHeight: '65vh' }}>
+            <table className="mini-table access-matrix-table" style={{ fontSize: '11px', whiteSpace: 'nowrap' }}>
               <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
                 <tr>
                   <th>Name</th>
