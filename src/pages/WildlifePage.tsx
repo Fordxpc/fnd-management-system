@@ -172,7 +172,7 @@ function WildlifePage() {
         <button type="button" className={activeTab === 'map' ? 'active' : ''} onClick={() => setActiveTab('map')}>Zone map</button>
       </nav>
       {activeTab === 'form' && (
-        <div className="dash-card wildlife-count-form">
+        <div className="dash-card wildlife-count-form wildlife-print-root">
           <div className="bird-count-page-1">
             <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}><img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} /><div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div><div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div></div>
 
@@ -279,7 +279,7 @@ function WildlifePage() {
         <div className="modal-backdrop" onClick={() => setViewingRecord(null)} style={{ zIndex: 9999 }}>
           <div className="modal-content" style={{ maxWidth: '1100px', width: '95%', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header no-print" style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><h3 style={{ margin: 0 }}>Bird Count Report: {viewingRecord.date}</h3><div><button className="quick-btn" style={{ background: '#166534', color: 'white', marginRight: '10px' }} onClick={handlePrint}>🖨️ Print / Save as PDF</button><button className="cancel-btn" onClick={() => setViewingRecord(null)}>Close</button></div></div>
-            <div className="modal-scrollable-body" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#fff' }}>
+            <div className="modal-scrollable-body wildlife-print-root" style={{ padding: '20px', overflowY: 'auto', flex: 1, background: '#fff' }}>
               <div className="bird-count-page-1">
                 <div style={{ textAlign: 'center', marginBottom: '16px', fontFamily: 'Arial, sans-serif' }}><img src="/racl-logo.png" alt="RACL" style={{ height: '60px', objectFit: 'contain', marginBottom: '8px' }} /><div style={{ fontSize: '16px', fontWeight: 'bold' }}>Wild Life Bird Count Form</div><div style={{ fontSize: '14px', fontWeight: 'bold' }}>Funadhoo Airport</div></div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px', fontFamily: 'Arial' }}>

@@ -6,6 +6,27 @@ import { toast } from 'sonner';
 const TABS = ['DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
 const AIRCRAFT_COLORS: Record<string, string> = { 'ATR-72/600': '#fef3c7', 'ATR-42/600': '#dcfce7', 'DASH-8/300': '#dbeafe', 'DH-8/300': '#dbeafe', 'DASH-8/200': '#f3e8ff', 'DH-8/200': '#f3e8ff' };
 const CURRENT_YEAR = String(new Date().getFullYear());
+const normalizeRampLoads = (report: any) => {
+  const normalized = { ...report };
+  ['In', 'Out', 'Trans'].forEach(direction => {
+    if (!normalized[`bag${direction}`] && normalized[`baggage${direction}`]) normalized[`bag${direction}`] = normalized[`baggage${direction}`];
+    if (!normalized[`bag${direction}Pcs`] && normalized[`baggage${direction}Pcs`]) normalized[`bag${direction}Pcs`] = normalized[`baggage${direction}Pcs`];
+    if (!normalized[`bag${direction}Kg`] && normalized[`baggage${direction}Kg`]) normalized[`bag${direction}Kg`] = normalized[`baggage${direction}Kg`];
+  });
+  ['cargo', 'mail', 'bag', 'other'].forEach(prefix => ['In', 'Out', 'Trans'].forEach(direction => {
+    const combinedKey = `${prefix}${direction}`;
+    const piecesKey = `${combinedKey}Pcs`;
+    const kgKey = `${combinedKey}Kg`;
+    const combined = String(normalized[combinedKey] || '').trim();
+    if (combined && (!normalized[piecesKey] || !normalized[kgKey])) {
+      const parts = combined.split(/[\/|]/).map(value => value.trim());
+      if (!normalized[piecesKey]) normalized[piecesKey] = parts[0] || '';
+      if (!normalized[kgKey]) normalized[kgKey] = parts[1] || '';
+    }
+    if (!normalized[combinedKey] && (normalized[piecesKey] || normalized[kgKey])) normalized[combinedKey] = `${normalized[piecesKey] || ''}/${normalized[kgKey] || ''}`;
+  }));
+  return normalized;
+};
 const MONTHS = [{ val: '01', name: 'January' }, { val: '02', name: 'February' }, { val: '03', name: 'March' }, { val: '04', name: 'April' }, { val: '05', name: 'May' }, { val: '06', name: 'June' }, { val: '07', name: 'July' }, { val: '08', name: 'August' }, { val: '09', name: 'September' }, { val: '10', name: 'October' }, { val: '11', name: 'November' }, { val: '12', name: 'December' }];
 
 function ReportsPage() {
@@ -33,7 +54,7 @@ function ReportsPage() {
   const fetchAllData = useCallback(async () => {
     try {
       const [ramp, wildlife, fod, lights, staff] = await Promise.allSettled([apiFetch('/ramp/reports'), apiFetch('/wildlife'), apiFetch('/fod'), apiFetch('/lights'), apiFetch('/staff')]);
-      if (ramp.status === 'fulfilled') setRampReports(ramp.value);
+      if (ramp.status === 'fulfilled') setRampReports(Array.isArray(ramp.value) ? ramp.value.map(normalizeRampLoads) : []);
       if (wildlife.status === 'fulfilled') setWildlifeReports(wildlife.value);
       if (fod.status === 'fulfilled') setFodReports(fod.value);
       if (lights.status === 'fulfilled') setRwyLightReports(lights.value);
@@ -109,7 +130,7 @@ function ReportsPage() {
       </div>
 
       {loading ? (<div className="empty-state">Loading report data...</div>) : (
-        <div className="dash-card" style={{ overflowX: 'auto', zoom: zoom }}>
+        <div className="dash-card reports-print-root" style={{ overflowX: 'auto', zoom: zoom }}>
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
