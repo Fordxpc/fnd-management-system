@@ -414,41 +414,39 @@ function OpsBoardPage() {
       )}
 
       {activeTab === 'fod' && (
-        <div className="dash-grid">
-          {canEdit && (
-            <div className="dash-card">
-              <h3>🪨 Log FOD Collection</h3>
-              <form onSubmit={handleSaveFOD} className="staff-form" style={{ gridTemplateColumns: '1fr', padding: 0, boxShadow: 'none' }}>
-                <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Date</label><input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} required /></div>
-                <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Stone Count (grams)</label><input type="number" placeholder="e.g. 15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required /></div>
-                <div><label style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>Remarks / Details</label><input placeholder="e.g. Small rocks found near RWY 19" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required /></div>
-                <button type="submit" disabled={fodSubmitting} style={{ gridColumn: 'span 1' }}>{fodSubmitting ? 'Saving...' : 'Save FOD Entry'}</button>
-              </form>
-            </div>
-          )}
+        <section className="operations-fod-workspace">
+          <header className="operations-fod-header">
+            <div><span>Airside housekeeping</span><h3>FOD Collection Log</h3><p>Record collected foreign object debris by weight and preserve a clear operational history.</p></div>
+            <div className="operations-fod-header__metrics"><div><strong>{fodList.filter(item => item.date === INITIAL_DATE).length}</strong><span>today</span></div><div><strong>{fodList.reduce((total, item) => total + (Number(item.grams) || 0), 0)}g</strong><span>total recorded</span></div></div>
+          </header>
 
-          <div className="dash-card" style={!canEdit ? { gridColumn: 'span 2' } : undefined}>
-            <h3>📋 Recent FOD Collections</h3>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              <table className="mini-table">
-                <thead><tr><th>Date</th><th>Grams</th><th>Remarks</th><th>Logged By</th><th></th></tr></thead>
-                <tbody>
-                  {fodList.length === 0 ? (<tr><td colSpan={5} style={{ textAlign: 'center' }}>No FOD records yet.</td></tr>) : fodList.map(f => (
-                    <tr key={f.id}>
-                      <td>{f.date}</td>
-                      <td style={{ fontWeight: 800, color: '#dc2626' }}>{f.grams}g</td>
-                      <td style={{ fontSize: '12px' }}>{f.remarks}</td>
-                      <td style={{ fontSize: '11px', color: '#64748b' }}>{f.loggedBy.split('@')[0]}</td>
-                      <td>{canEdit && <button className="delete-btn" onClick={() => handleDeleteFOD(f.id)}>Delete</button>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className={`operations-fod-layout ${!canEdit ? 'is-readonly' : ''}`}>
+            {canEdit && (
+              <form onSubmit={handleSaveFOD} className="operations-fod-form">
+                <header><span>New collection</span><h4>Log collected FOD</h4><p>The signed-in user will be recorded automatically.</p></header>
+                <label><span>Collection date</span><input type="date" value={fodForm.date} onChange={e => setFodForm({ ...fodForm, date: e.target.value })} max={INITIAL_DATE} required /></label>
+                <label><span>Collected weight</span><div className="operations-fod-weight"><input type="number" min="0.1" max="100000" step="0.1" inputMode="decimal" placeholder="15" value={fodForm.grams} onChange={e => setFodForm({ ...fodForm, grams: e.target.value })} required /><strong>grams</strong></div></label>
+                <label><span>Location and details</span><textarea rows={4} maxLength={300} placeholder="Example: Small stones collected near RWY 19 threshold" value={fodForm.remarks} onChange={e => setFodForm({ ...fodForm, remarks: e.target.value })} required /><small>{fodForm.remarks.length}/300</small></label>
+                <button type="submit" disabled={fodSubmitting}>{fodSubmitting ? 'Saving record…' : 'Save FOD record'}</button>
+              </form>
+            )}
+
+            <div className="operations-fod-history">
+              <header><div><span>Collection history</span><h4>Recent records</h4></div><strong>{fodList.length}</strong></header>
+              <div className="operations-fod-table-wrap">
+                <table>
+                  <thead><tr><th>Date</th><th>Weight</th><th>Location / details</th><th>Recorded by</th>{canEdit && <th>Action</th>}</tr></thead>
+                  <tbody>
+                    {fodList.length === 0 ? <tr><td colSpan={canEdit ? 5 : 4}><div className="operations-fod-empty"><strong>No FOD records yet</strong><span>Saved collection entries will appear here.</span></div></td></tr> : fodList.map(f => (
+                      <tr key={f.id}><td data-label="Date"><strong>{f.date}</strong></td><td data-label="Weight"><span className="operations-fod-weight-badge">{f.grams}g</span></td><td data-label="Details">{f.remarks}</td><td data-label="Recorded by">{String(f.loggedBy || 'Unknown').split('@')[0]}</td>{canEdit && <td data-label="Action"><button type="button" className="operations-fod-delete" onClick={() => handleDeleteFOD(f.id)}>Delete</button></td>}</tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
       )}
-
       {activeTab === 'history' && (
         <div>
           <div className="dash-stats" style={{ marginBottom: '20px' }}>

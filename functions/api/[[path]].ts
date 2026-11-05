@@ -18,6 +18,7 @@ import {
   requireBirdEdit,
   requireBirdView,
   requireRWYEdit,
+  requireRWYView,
   requireOpsBoardView,
   requireOpsBoardEdit,
   requireRosterEdit,
@@ -154,8 +155,7 @@ export const onRequest = async (context: any) => {
 
   try {
     const isPublicRequest =
-      (pathname === "/api/request-password-reset" && method === "POST") ||
-      (pathname === "/api/ramp/draft" && method === "GET");
+      pathname === "/api/request-password-reset" && method === "POST";
 
     // Every API route is private unless it is explicitly listed above.
     // Individual handlers still perform their finer-grained role checks.
@@ -1507,23 +1507,31 @@ export const onRequest = async (context: any) => {
     // FOD
     // ==========================================
     if (pathname === "/api/fod" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireOpsBoardView(env, currentUser);
       const results = await db.select().from(fodCollections).orderBy(desc(fodCollections.date));
       return json(results);
     }
     if (pathname === "/api/fod" && method === "POST") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireOpsBoardEdit(env, currentUser);
       const body: any = await request.json();
+      const date = String(body.date || "").trim();
+      const grams = Number(body.grams);
+      const remarks = String(body.remarks || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(grams) || grams <= 0 || grams > 100000 || !remarks || remarks.length > 300) {
+        return json({ message: "Enter a valid date, weight and collection details" }, 400);
+      }
       const id = crypto.randomUUID();
       await db.insert(fodCollections).values({
-        id, date: body.date, grams: body.grams, remarks: body.remarks,
-        loggedBy: body.loggedBy || "", createdAt: new Date().toISOString(),
+        id, date, grams, remarks,
+        loggedBy: currentUser.email, createdAt: new Date().toISOString(),
       });
       return json({ success: true, id });
     }
     if (pathname.startsWith("/api/fod/") && method === "DELETE") {
       const currentUser = await requireAuth(request, env);
-      requireSMT(currentUser.role);
+      await requireOpsBoardEdit(env, currentUser);
       const id = pathname.split("/").pop();
       await db.delete(fodCollections).where(eq(fodCollections.id, id!));
       return json({ success: true });
@@ -1630,6 +1638,8 @@ export const onRequest = async (context: any) => {
     // RAMP DRAFT & REPORTS
     // ==========================================
     if (pathname === "/api/ramp/draft" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireRampView(env, currentUser);
       const rows = await db.select().from(rampLiveDraft).limit(1);
       return json(rows.length > 0 ? JSON.parse(rows[0].payload || "{}") : {});
     }
@@ -1796,6 +1806,8 @@ export const onRequest = async (context: any) => {
     // LIGHTS INSPECTORS
     // ==========================================
     if (pathname === "/api/lights-inspectors" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireRWYView(env, currentUser);
       const results = await db.select().from(lightsInspectors);
       return json(results);
     }
@@ -1823,6 +1835,8 @@ export const onRequest = async (context: any) => {
     // RUNWAY LIGHTS
     // ==========================================
     if (pathname === "/api/lights" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      await requireRWYView(env, currentUser);
       const results = await db.select().from(rwyLights).orderBy(desc(rwyLights.date));
       return json(results.map((row: any) => ({
         ...row,

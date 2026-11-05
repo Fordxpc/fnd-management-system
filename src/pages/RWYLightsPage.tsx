@@ -164,83 +164,53 @@ export default function RWYLightsPage() {
         <label><span>Search inspection history</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Date, inspector, weather or remarks…" /></label>
       </section>
       {showForm && canEdit && (
-        <form className="staff-form runway-lights-form" onSubmit={handleSubmit}>
-          <div style={{ gridColumn: 'span 2', fontWeight: 600, marginBottom: '8px' }}>Inspection Details</div>
-          <div><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} required /></div>
-          <div><label>Time</label><input type="time" value={time} onChange={e => setTime(e.target.value)} required /></div>
-          
-          <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-            
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Visibility</label>
-              <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-                <select value={weatherVisCond} onChange={e => setWeatherVisCond(e.target.value)} style={{ flex: 1, border: 'none', padding: '8px', outline: 'none', background: 'transparent' }}>
-                  <option value="Good">Good</option>
-                  <option value="Moderate">Mod</option>
-                  <option value="Poor">Poor</option>
-                </select>
-                <span style={{ padding: '0 4px', color: '#94a3b8' }}>|</span>
-                <input type="number" value={weatherVisKm} onChange={e => setWeatherVisKm(e.target.value)} style={{ width: '45px', border: 'none', padding: '8px', outline: 'none', textAlign: 'center' }} />
-                <span style={{ paddingRight: '10px', fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>km</span>
-              </div>
+        <form className="runway-lights-form" onSubmit={handleSubmit}>
+          <header className="runway-lights-form__header">
+            <div><span>New inspection</span><h3>Airfield lighting condition report</h3></div>
+            <p>Record the observed serviceable light count and immediately flag equipment faults.</p>
+          </header>
+
+          <section className="runway-lights-form__section">
+            <div className="runway-lights-form__section-title"><span>01</span><div><h4>Inspection details</h4><p>Date, time and authorized inspector</p></div></div>
+            <div className="runway-lights-form__grid runway-lights-form__grid--three">
+              <label><span>Date</span><input type="date" value={date} onChange={e => setDate(e.target.value)} required /></label>
+              <label><span>Time</span><input type="time" value={time} onChange={e => setTime(e.target.value)} required /></label>
+              <label><span>Inspected by</span><select value={inspector} onChange={e => setInspector(e.target.value)} required><option value="">Select authorized staff…</option>{lightsInspectors.map((s: any) => <option key={s.staffId} value={s.staffName}>{s.staffName}</option>)}</select></label>
             </div>
+          </section>
 
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Cloud</label>
-              <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-                <select value={weatherCloudCond} onChange={e => setWeatherCloudCond(e.target.value)} style={{ flex: 1, border: 'none', padding: '8px', outline: 'none', background: 'transparent' }}>
-                  <option value="Clear">Clear</option>
-                  <option value="Few">Few</option>
-                  <option value="Scattered">SCT</option>
-                  <option value="Broken">BKN</option>
-                  <option value="Overcast">OVC</option>
-                </select>
-                <span style={{ padding: '0 4px', color: '#94a3b8' }}>|</span>
-                <input type="number" value={weatherCloudPct} onChange={e => setWeatherCloudPct(e.target.value)} style={{ width: '45px', border: 'none', padding: '8px', outline: 'none', textAlign: 'center' }} />
-                <span style={{ paddingRight: '10px', fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>%</span>
-              </div>
+          <section className="runway-lights-form__section">
+            <div className="runway-lights-form__section-title"><span>02</span><div><h4>Weather at inspection</h4><p>Visibility, cloud and surface wind</p></div></div>
+            <div className="runway-lights-weather-grid">
+              <div className="runway-lights-composite"><strong>Visibility</strong><div><select aria-label="Visibility condition" value={weatherVisCond} onChange={e => setWeatherVisCond(e.target.value)}><option value="Good">Good</option><option value="Moderate">Moderate</option><option value="Poor">Poor</option></select><input aria-label="Visibility distance" type="number" min="0" max="50" step="0.1" value={weatherVisKm} onChange={e => setWeatherVisKm(e.target.value)} /><em>km</em></div></div>
+              <div className="runway-lights-composite"><strong>Cloud</strong><div><select aria-label="Cloud condition" value={weatherCloudCond} onChange={e => setWeatherCloudCond(e.target.value)}><option value="Clear">Clear</option><option value="Few">Few</option><option value="Scattered">Scattered</option><option value="Broken">Broken</option><option value="Overcast">Overcast</option></select><input aria-label="Cloud cover" type="number" min="0" max="100" value={weatherCloudPct} onChange={e => setWeatherCloudPct(e.target.value)} /><em>%</em></div></div>
+              <div className="runway-lights-composite"><strong>Wind</strong><div><select aria-label="Wind direction" value={weatherWindDir} onChange={e => setWeatherWindDir(e.target.value)}>{WIND_DIRS.map(d => <option key={d} value={d}>{d}</option>)}</select><input aria-label="Wind speed" type="number" min="0" max="200" value={weatherWindSpd} onChange={e => setWeatherWindSpd(e.target.value)} /><em>km/h</em></div></div>
             </div>
+          </section>
 
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>Wind</label>
-              <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '6px', overflow: 'hidden' }}>
-                <select value={weatherWindDir} onChange={e => setWeatherWindDir(e.target.value)} style={{ flex: 1, border: 'none', padding: '8px', outline: 'none', background: 'transparent' }}>
-                  {WIND_DIRS.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
-                <span style={{ padding: '0 4px', color: '#94a3b8' }}>|</span>
-                <input type="number" value={weatherWindSpd} onChange={e => setWeatherWindSpd(e.target.value)} style={{ width: '45px', border: 'none', padding: '8px', outline: 'none', textAlign: 'center' }} />
-                <span style={{ paddingRight: '10px', fontSize: '12px', fontWeight: 'bold', color: '#64748b' }}>km/h</span>
-              </div>
+          <section className="runway-lights-form__section">
+            <div className="runway-lights-form__section-title"><span>03</span><div><h4>Serviceable lighting count</h4><p>Enter the observed count for each installation</p></div></div>
+            <div className="runway-lights-equipment-grid">
+              <fieldset><legend>Edge lights</legend><label><span>Side A</span><input type="number" min="0" value={lights.edge.sideA} onChange={e => handleLightChange('edge', 'sideA', e.target.value)} /></label><label><span>Side B</span><input type="number" min="0" value={lights.edge.sideB} onChange={e => handleLightChange('edge', 'sideB', e.target.value)} /></label></fieldset>
+              <fieldset><legend>End lights</legend><label><span>RWY 01</span><input type="number" min="0" value={lights.end.rwy01} onChange={e => handleLightChange('end', 'rwy01', e.target.value)} /></label><label><span>RWY 19</span><input type="number" min="0" value={lights.end.rwy19} onChange={e => handleLightChange('end', 'rwy19', e.target.value)} /></label></fieldset>
+              <fieldset><legend>Threshold lights</legend><label><span>RWY 01</span><input type="number" min="0" value={lights.threshold.rwy01} onChange={e => handleLightChange('threshold', 'rwy01', e.target.value)} /></label><label><span>RWY 19</span><input type="number" min="0" value={lights.threshold.rwy19} onChange={e => handleLightChange('threshold', 'rwy19', e.target.value)} /></label></fieldset>
+              <fieldset><legend>PAPI RWY 01</legend><label><span>Count</span><input type="number" min="0" value={lights.papi.rwy01.count} onChange={e => handleLightChange('papi', 'rwy01', e.target.value, 'count')} /></label><label><span>Brightness</span><select value={lights.papi.rwy01.brightness} onChange={e => handleLightChange('papi', 'rwy01', e.target.value, 'brightness')}>{[1,2,3,4,5].map(level => <option key={level} value={level}>{level}</option>)}</select></label></fieldset>
+              <fieldset><legend>PAPI RWY 19</legend><label><span>Count</span><input type="number" min="0" value={lights.papi.rwy19.count} onChange={e => handleLightChange('papi', 'rwy19', e.target.value, 'count')} /></label><label><span>Brightness</span><select value={lights.papi.rwy19.brightness} onChange={e => handleLightChange('papi', 'rwy19', e.target.value, 'brightness')}>{[1,2,3,4,5].map(level => <option key={level} value={level}>{level}</option>)}</select></label></fieldset>
+              <fieldset><legend>Taxi boards</legend><label><span>Board A</span><input type="number" min="0" value={lights.taxi.boardA} onChange={e => handleLightChange('taxi', 'boardA', e.target.value)} /></label><label><span>Board B</span><input type="number" min="0" value={lights.taxi.boardB} onChange={e => handleLightChange('taxi', 'boardB', e.target.value)} /></label></fieldset>
+              <fieldset><legend>Apron mast lighting</legend><label><span>Masts</span><input type="number" min="0" value={lights.apron.masts} onChange={e => handleLightChange('apron', 'masts', e.target.value)} /></label><label><span>Per mast</span><input type="number" min="0" value={lights.apron.perMast} onChange={e => handleLightChange('apron', 'perMast', e.target.value)} /></label></fieldset>
             </div>
+          </section>
 
-          </div>
+          <section className="runway-lights-form__section">
+            <div className="runway-lights-form__section-title"><span>04</span><div><h4>Equipment status and remarks</h4><p>Flag faults for immediate operational attention</p></div></div>
+            <div className="runway-lights-status-grid">
+              <label className={lights.rob.status === 'Faulty' ? 'is-faulty' : 'is-serviceable'}><span>ROB status</span><select value={lights.rob.status} onChange={e => handleLightChange('rob', 'status', e.target.value)}><option>In Service</option><option>Faulty</option></select></label>
+              <label className={lights.windcone.status === 'Faulty' ? 'is-faulty' : 'is-serviceable'}><span>Windcone</span><select value={lights.windcone.status} onChange={e => handleLightChange('windcone', 'status', e.target.value)}><option>In Service</option><option>Faulty</option></select></label>
+              <label className="runway-lights-form__remarks"><span>Technician remarks / action taken</span><textarea rows={3} maxLength={500} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Record defects, location and action taken…" /><small>{remarks.length}/500</small></label>
+            </div>
+          </section>
 
-          <div>
-            <label>Inspected By</label>
-            <select value={inspector} onChange={e => setInspector(e.target.value)} required style={{ color: '#1e293b' }}>
-              <option value="">Select Authorized Staff...</option>
-              {lightsInspectors.map((s: any) => (
-                <option key={s.staffId} value={s.staffName}>{s.staffName}</option>
-              ))}
-            </select>
-          </div>
-
-          <div style={{ gridColumn: 'span 2', fontWeight: 600, marginTop: '16px', borderBottom: '1px solid #cbd5e1' }}>Light Details</div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', gridColumn: 'span 2', background: '#f8fafc', padding: '16px', borderRadius: '8px' }}>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Edge Lights (A / B)</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="A" value={lights.edge.sideA} onChange={e => handleLightChange('edge', 'sideA', e.target.value)} /><input type="number" placeholder="B" value={lights.edge.sideB} onChange={e => handleLightChange('edge', 'sideB', e.target.value)} /></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>End Lights (01 / 19)</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="01" value={lights.end.rwy01} onChange={e => handleLightChange('end', 'rwy01', e.target.value)} /><input type="number" placeholder="19" value={lights.end.rwy19} onChange={e => handleLightChange('end', 'rwy19', e.target.value)} /></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Threshold (01 / 19)</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="01" value={lights.threshold.rwy01} onChange={e => handleLightChange('threshold', 'rwy01', e.target.value)} /><input type="number" placeholder="19" value={lights.threshold.rwy19} onChange={e => handleLightChange('threshold', 'rwy19', e.target.value)} /></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>PAPI RWY 01</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="Count" value={lights.papi.rwy01.count} onChange={e => handleLightChange('papi', 'rwy01', e.target.value, 'count')} /><select value={lights.papi.rwy01.brightness} onChange={e => handleLightChange('papi', 'rwy01', e.target.value, 'brightness')} style={{ padding: '8px' }}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>PAPI RWY 19</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="Count" value={lights.papi.rwy19.count} onChange={e => handleLightChange('papi', 'rwy19', e.target.value, 'count')} /><select value={lights.papi.rwy19.brightness} onChange={e => handleLightChange('papi', 'rwy19', e.target.value, 'brightness')} style={{ padding: '8px' }}><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Taxi Boards (A / B)</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="A" value={lights.taxi.boardA} onChange={e => handleLightChange('taxi', 'boardA', e.target.value)} /><input type="number" placeholder="B" value={lights.taxi.boardB} onChange={e => handleLightChange('taxi', 'boardB', e.target.value)} /></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Apron Mast</label><div style={{ display: 'flex', gap: '8px' }}><input type="number" placeholder="Masts" value={lights.apron.masts} onChange={e => handleLightChange('apron', 'masts', e.target.value)} /><input type="number" placeholder="Per Mast" value={lights.apron.perMast} onChange={e => handleLightChange('apron', 'perMast', e.target.value)} /></div></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>ROB Status</label><select value={lights.rob.status} onChange={e => handleLightChange('rob', 'status', e.target.value)} style={{ padding: '8px', width: '100%' }}><option>In Service</option><option>Faulty</option></select></div>
-            <div><label style={{ fontSize: '12px', fontWeight: 'bold' }}>Windcone</label><select value={lights.windcone.status} onChange={e => handleLightChange('windcone', 'status', e.target.value)} style={{ padding: '8px', width: '100%' }}><option>In Service</option><option>Faulty</option></select></div>
-          </div>
-
-          <div style={{ gridColumn: 'span 2' }}><label>Technician Remarks / Notes</label><textarea rows={2} value={remarks} onChange={e => setRemarks(e.target.value)} /></div>
-          <button type="submit" disabled={saving} style={{ gridColumn: 'span 2', background: '#16a34a' }}>{saving ? 'Saving…' : 'Save inspection'}</button>
+          <footer className="runway-lights-form__footer"><span>Review all values before saving the permanent inspection record.</span><button type="submit" disabled={saving}>{saving ? 'Saving inspection…' : 'Save inspection'}</button></footer>
         </form>
       )}
 
