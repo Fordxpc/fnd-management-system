@@ -2374,8 +2374,20 @@ export const onRequest = async (context: any) => {
         }) : [];
 
       const nextFlight = upcomingFlights[0] || null;
-      const normalizeStaffName = (value: any) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
-      const normalizeDepartment = (value: any) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const normalizeStaffName = (value: any) => String(value || '')
+        .normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const normalizeDepartment = (value: any) => String(value || '')
+        .normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+      const canonicalDepartment = (value: any) => {
+        const department = normalizeDepartment(value);
+        if (department.includes('ground') || department === 'operations') return 'ground operations';
+        if (department.includes('maint')) return 'maintenance';
+        if (department.includes('secur')) return 'security';
+        if (department.includes('fire') || department.includes('rescue')) return 'fire & rescue';
+        if (department.includes('admin')) return 'administration';
+        if (department.includes('safe')) return 'safety';
+        return department || 'unassigned';
+      };
       const normalizeSn = (value: any) => String(value || '').trim().replace(/^sn-/i, '').toUpperCase();
       const activeLeaveToday = leaveList.filter(leave =>
         String(leave.status || '').trim().toLowerCase() === 'approved' &&
@@ -2411,8 +2423,14 @@ export const onRequest = async (context: any) => {
         const linkedSn = normalizeSn(linkedStaff?.sn);
         return !leaveStaffIds.has(staffId) && !leaveStaffNames.has(normalizedName) && !leaveIdentityKeys.has(identityKey) && (!linkedSn || !leaveStaffSns.has(linkedSn));
       });
-      const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [`${String(entry.staffName || "").trim().replace(/\s+/g, " ").toLowerCase()}|${String(entry.staffDepartment || "").trim().toLowerCase()}`, entry])).values());
-      const onLeaveToday = activeLeaveToday;
+      const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [
+        `${normalizeStaffName(entry.staffName)}|${canonicalDepartment(entry.staffDepartment)}`,
+        entry,
+      ])).values());
+      const onLeaveToday = Array.from(new Map(activeLeaveToday.map(entry => [
+        `${normalizeStaffName(entry.staffName)}|${canonicalDepartment(entry.staffDepartment)}`,
+        entry,
+      ])).values());
       let pendingLeave: any[] = [];
       let pendingOT: any[] = [];
 
