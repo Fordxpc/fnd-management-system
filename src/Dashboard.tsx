@@ -1,12 +1,14 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './auth';
 import './Dashboard.css';
+import './styles/notifications.css';
 
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const StaffPage = lazy(() => import('./pages/StaffPage'));
 const RosterPage = lazy(() => import('./pages/RosterPage'));
 const LeavePage = lazy(() => import('./pages/LeavePage'));
+const ResignationsPage = lazy(() => import('./pages/ResignationsPage'));
 const HolidaysPage = lazy(() => import('./pages/HolidaysPage'));
 const OvertimePage = lazy(() => import('./pages/OvertimePage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
@@ -16,8 +18,10 @@ const OpsBoardPage = lazy(() => import('./pages/OpsBoardPage'));
 const RampCheckSheetPage = lazy(() => import('./pages/RampCheckSheetPage'));
 const WildlifePage = lazy(() => import('./pages/WildlifePage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const ManagerReportsPage = lazy(() => import('./pages/ManagerReportsPage'));
 const RWYLightsPage = lazy(() => import('./pages/RWYLightsPage'));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage'));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const AnnouncementsPage = lazy(() => import('./pages/AnnouncementsPage'));
 
 type Module = 'dashboard' | 'operations' | 'reports' | 'roster' | 'system' | 'chat';
@@ -45,24 +49,49 @@ const PAGE_TITLES: Record<string, string> = {
   wildlife: 'Wildlife and bird hazard',
   lights: 'Runway lights',
   reports: 'Analytics and reports',
+  managerReports: 'Management reports',
   staff: 'Staff directory',
   roster: 'Duty roster',
   leave: 'Leave requests',
+  resignations: 'Resignations',
   overtime: 'Overtime sheet',
   holidays: 'Airport holidays',
   announcements: 'Announcements',
   users: 'User accounts',
   settings: 'System settings',
   conversations: 'Conversations',
+  notifications: 'Notifications',
 };
 
 function Dashboard() {
   const { profile, logout } = useAuth();
   const requestedPage = new URLSearchParams(window.location.search).get('page');
-  const initialPage = requestedPage === 'rampcheck' ? 'rampcheck' : 'dashboard';
+  const initialPage = ['rampcheck', 'notifications', 'dashboard'].includes(String(requestedPage || '')) ? String(requestedPage) : 'dashboard';
   const [currentPage, setCurrentPage] = useState(initialPage);
-  const [activeModule, setActiveModule] = useState<Module>(initialPage === 'rampcheck' ? 'operations' : 'dashboard');
+  const [activeModule, setActiveModule] = useState<Module>(initialPage === 'rampcheck' ? 'operations' : initialPage === 'notifications' ? 'system' : 'dashboard');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notificationUnread, setNotificationUnread] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch('/api/notifications', { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (active) setNotificationUnread(Number(data.unread || 0));
+      } catch { /* offline: retain latest count */ }
+    };
+    const updated = (event: Event) => {
+      const detail = (event as CustomEvent<number>).detail;
+      if (active && typeof detail === 'number') setNotificationUnread(detail);
+      else void refresh();
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    window.addEventListener('fnd-notifications-updated', updated);
+    return () => { active = false; window.clearInterval(interval); window.removeEventListener('fnd-notifications-updated', updated); };
+  }, []);
 
   const role = (profile?.role || '').toLowerCase();
   const isDev = role === 'developer';
@@ -75,7 +104,7 @@ function Dashboard() {
   const canSeeOpsBoard = hasFullAccess || isSMT || hasSpecialOps || profile?.department === "Safety" || profile?.opsBoardViewAccess === true || profile?.opsBoardEditAccess === true;
   const canSeeFlights = hasFullAccess || isSMT || hasSpecialOps || profile?.flightsViewAccess === true || profile?.flightsEditAccess === true;
   const canSeeRampCheck = hasFullAccess || isSMT || hasSpecialOps || profile?.rampsheetViewAccess === true || profile?.rampsheetEditAccess === true;
-  const canSeeStaffList = hasFullAccess || isSMT;
+  const canSeeStaffList = hasFullAccess || isSMT || profile?.isIncharge === true;
   const canSeeReports = hasFullAccess || isSMT || profile?.reportsViewAccess === true || profile?.reportsEditAccess === true;
   const canSeeWildlife = hasFullAccess || isSMT || hasSpecialOps || profile?.birdCountViewAccess === true || profile?.birdCountEditAccess === true;
   const canSeeLights = hasFullAccess || isSMT || hasSpecialOps || profile?.rwyLightViewAccess === true || profile?.rwyLightEditAccess === true;
@@ -98,20 +127,22 @@ function Dashboard() {
       ...(canSeeWildlife ? [{ id: 'wildlife', label: 'Wildlife', shortLabel: 'WH' }] : []),
       ...(canSeeLights ? [{ id: 'lights', label: 'RWY Lights', shortLabel: 'RL' }] : []),
     ],
-    reports: canSeeReports ? [{ id: 'reports', label: 'Analytics & Reports', shortLabel: 'AR' }] : [],
+    reports: canSeeReports ? [{ id: 'reports', label: 'Analytics & Reports', shortLabel: 'AR' }, ...(hasFullAccess ? [{ id: 'managerReports', label: 'Management Summary', shortLabel: 'MS' }] : [])] : [],
     roster: [
       ...(canSeeStaffList ? [{ id: 'staff', label: 'Staff List', shortLabel: 'SL' }] : []),
       { id: 'roster', label: 'Duty Roster', shortLabel: 'DR' },
       { id: 'leave', label: 'Leave Requests', shortLabel: 'LR' },
+      { id: 'resignations', label: 'Resignations', shortLabel: 'RS' },
       { id: 'overtime', label: 'Overtime', shortLabel: 'OT' },
     ],
     system: [
       { id: 'announcements', label: 'Announcements', shortLabel: 'AN' },
       { id: 'holidays', label: 'Holidays', shortLabel: 'HD' },
       ...(canManageUsers ? [{ id: 'users', label: 'User Accounts', shortLabel: 'UA' }] : []),
+      { id: 'notifications', label: 'Notifications', shortLabel: 'NT' },
       { id: 'settings', label: 'Settings', shortLabel: 'ST' },
     ],
-    chat: [{ id: 'conversations', label: 'Conversations', shortLabel: 'CH' }],
+    chat: [{ id: 'conversations', label: 'Group channels', shortLabel: 'CH' }],
   };
 
   const pages: Record<string, ReactNode> = {
@@ -122,15 +153,18 @@ function Dashboard() {
     wildlife: <WildlifePage />,
     lights: <RWYLightsPage />,
     reports: <ReportsPage />,
+    managerReports: hasFullAccess ? <ManagerReportsPage /> : <div className="empty-state">Access denied</div>,
     staff: <StaffPage />,
     roster: <RosterPage />,
     leave: <LeavePage />,
+    resignations: <ResignationsPage />,
     overtime: <OvertimePage />,
     announcements: <AnnouncementsPage />,
     holidays: <HolidaysPage />,
     users: <UsersPage />,
     settings: <SettingsPage />,
     conversations: <ConversationsPage />,
+    notifications: <NotificationsPage onNavigate={navigate} />,
   };
 
   function navigate(page: string) {
@@ -139,9 +173,9 @@ function Dashboard() {
 
     if (page === 'dashboard') setActiveModule('dashboard');
     else if (['opsboard', 'flights', 'rampcheck', 'wildlife', 'lights'].includes(page)) setActiveModule('operations');
-    else if (page === 'reports') setActiveModule('reports');
-    else if (['staff', 'roster', 'leave', 'overtime'].includes(page)) setActiveModule('roster');
-    else if (['announcements', 'holidays', 'users', 'settings'].includes(page)) setActiveModule('system');
+    else if (['reports','managerReports'].includes(page)) setActiveModule('reports');
+    else if (['staff', 'roster', 'leave', 'resignations', 'overtime'].includes(page)) setActiveModule('roster');
+    else if (['announcements', 'holidays', 'users', 'settings', 'notifications'].includes(page)) setActiveModule('system');
     else if (page === 'conversations') setActiveModule('chat');
   }
 
@@ -227,6 +261,11 @@ function Dashboard() {
             <h1>{PAGE_TITLES[currentPage] || 'Funadhoo Airport'}</h1>
           </div>
 
+          <button type="button" className="app-alert-button" onClick={() => navigate('notifications')}
+            aria-label={notificationUnread > 0 ? `${notificationUnread} unread notifications` : 'Notifications'}>
+            <span aria-hidden="true">🔔</span> Alerts
+            {notificationUnread > 0 && <span className="app-alert-count">{notificationUnread > 99 ? '99+' : notificationUnread}</span>}
+          </button>
           <div className="app-system-status">
             <span className="app-status-dot" aria-hidden="true" />
             System online

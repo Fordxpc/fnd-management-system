@@ -1,3 +1,6 @@
+import LeaveChit from './LeaveChit';
+import { displayLeavePeriods } from '../lib/leave-periods';
+import '../styles/leave-periods.css';
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
@@ -62,6 +65,7 @@ function LeavePage() {
   const [integrityAudit, setIntegrityAudit] = useState<any>(null);
   const [integrityLoading, setIntegrityLoading] = useState(false);
   const [integrityVisible, setIntegrityVisible] = useState(false);
+  const [chitTarget, setChitTarget] = useState<any>(null);
 
   const isDepartmentLead = isSMT || myStaff?.isSMT === true || myStaff?.isSmt === true || myStaff?.isIncharge === true;
   const isStaff = accountIsStaff && !isDepartmentLead;
@@ -166,8 +170,11 @@ function LeavePage() {
       return !query || [r.staffName, r.staffSN, r.staffDepartment, r.leaveType, r.reason].some((value) => String(value || '').toLowerCase().includes(query));
     });
 
+  // Group for presentation only: original request IDs and approvals remain intact.
+  const displayedPeriods = displayLeavePeriods(visibleRequests, holidaySet);
+
   const pendingCount = displayRequests.filter((request: any) => request.status?.toLowerCase() === 'pending').length;
-  const approvedCount = displayRequests.filter((request: any) => request.status?.toLowerCase() === 'approved').length;
+  const approvedCount = displayLeavePeriods(displayRequests.filter((request: any) => request.status?.toLowerCase() === 'approved'), holidaySet).length;
   const rejectedCount = displayRequests.filter((request: any) => request.status?.toLowerCase() === 'rejected').length;
 
   const myYearsOfService = myStaff?.joinDate ? getYearsOfService(myStaff.joinDate) : 0;
@@ -330,7 +337,7 @@ function LeavePage() {
         <div><span>Pending</span><strong>{pendingCount}</strong><small>awaiting a decision</small></div>
         <div><span>Approved</span><strong>{approvedCount}</strong><small>confirmed requests</small></div>
         <div><span>Rejected</span><strong>{rejectedCount}</strong><small>declined requests</small></div>
-        <div><span>Current view</span><strong>{visibleRequests.length}</strong><small>matching records</small></div>
+        <div><span>Current view</span><strong>{displayedPeriods.length}</strong><small>leave periods</small></div>
       </section>
 
       <div className="leave-management-note">Manually submitted leave updates the roster after approval; leave entered directly through the roster is automatically approved.</div>
@@ -344,7 +351,7 @@ function LeavePage() {
         <button type="button" className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>Pending <span>{pendingCount}</span></button>
         <button type="button" className={tab === 'approved' ? 'active' : ''} onClick={() => setTab('approved')}>Approved <span>{approvedCount}</span></button>
         <button type="button" className={tab === 'rejected' ? 'active' : ''} onClick={() => setTab('rejected')}>Rejected <span>{rejectedCount}</span></button>
-        <button type="button" className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>All <span>{displayRequests.length}</span></button>
+        <button type="button" className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>All <span>{displayLeavePeriods(displayRequests, holidaySet).length}</span></button>
       </nav>}
       {myStaff && canSeeMyBalance && (
         <div className="collapsible-card">
@@ -404,33 +411,68 @@ function LeavePage() {
         </form>
       )}
 
-      <div className="long-register-toolbar"><div><strong>Leave request register</strong><span>{visibleRequests.length} matching requests</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
+      <div className="long-register-toolbar"><div><strong>Leave request register</strong><span>{displayedPeriods.length} leave periods ({visibleRequests.length} original records)</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
       <div className={`staff-list leave-management-list ${showRegister ? '' : 'long-register-collapsed'}`}>
         {visibleRequests.length === 0 ? (<div className="empty-state"><p>No leave requests found.</p></div>) : (
           <table className="leave-management-table">
             <thead><tr><th>Staff</th><th>Dept</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Requested by / time</th><th>Status / decision audit</th><th>Actions</th></tr></thead>
             <tbody>
-              {visibleRequests.map((r: any) => {
+              {displayedPeriods.map((period) => {
+                const r = period.records[0];
+                const isMerged = period.records.length > 1;
                 const approverName = r.reviewedBy ? (staffList.find(s => (s.email || '').toLowerCase() === r.reviewedBy.toLowerCase())?.name || r.reviewedBy) : null;
                 const requesterName = r.requestedBy ? (staffList.find(s => (s.email || '').toLowerCase() === r.requestedBy.toLowerCase())?.name || r.requestedBy) : 'System';
+                const lastAudit = period.records.reduce((mostRecent, item) =>
+                  String(item.reviewedAt || item.requestedAt || '') > String(mostRecent.reviewedAt || mostRecent.requestedAt || '') ? item : mostRecent, r);
                 return (
-                  <tr key={r.id}>
-                    <td><strong>{r.staffName}</strong> {r.staffIsSMT && '⭐'}</td>
-                    <td style={{ fontSize: '12px' }}>{r.staffDepartment}</td>
-                    <td><span className="leave-type-badge">{r.leaveType}</span></td>
-                    <td>{formatDisplay(r.startDate)}</td>
-                    <td>{formatDisplay(r.endDate)}</td>
-                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.days}</td>
-                    <td><div className="request-audit"><strong>{requesterName}</strong><span>{formatAuditDate(r.requestedAt)}</span></div></td>
-                    <td><span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span><div className="request-audit decision"><strong>{approverName || 'Awaiting decision'}</strong><span>{formatAuditDate(r.reviewedAt)}</span></div></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
-                      {canApproveRequest(r) && r.status?.toLowerCase() === 'pending' && (
+                  <tr key={period.id}>
+                    <td data-label="Staff"><strong>{r.staffName}</strong> {r.staffIsSMT && '⭐'}{isMerged && <small className="leave-period-pill">Continuous leave · {period.records.length} records</small>}</td>
+                    <td data-label="Department" style={{ fontSize: '12px' }}>{r.staffDepartment}</td>
+                    <td data-label="Leave type"><span className="leave-type-badge">{r.leaveType}</span></td>
+                    <td data-label="From">{formatDisplay(period.startDate)}</td>
+                    <td data-label="To">{formatDisplay(period.endDate)}</td>
+                    <td data-label="Days" style={{ textAlign: 'center', fontWeight: 600 }}>{period.days}</td>
+                    <td data-label="Requested / entered"><div className="request-audit"><strong>{isMerged ? `${period.records.length} original records` : requesterName}</strong><span>{formatAuditDate(isMerged ? lastAudit.requestedAt : r.requestedAt)}</span></div></td>
+                    <td data-label="Decision / audit">
+                      <span className={`status-badge status-${(r.status || '').toLowerCase()}`}>{(r.status || '').toUpperCase()}</span>
+                      <div className="request-audit decision">
+                        <strong>{isMerged ? 'See individual approval audit' : approverName || 'Awaiting decision'}</strong>
+                        <span>{formatAuditDate(isMerged ? lastAudit.reviewedAt : r.reviewedAt)}</span>
+                        {isMerged && period.hasDifferentRecordedAccounts && <small className="leave-audit-context">Different system accounts recorded actions, including a possible roster edit. This does not establish different human approvers.</small>}
+                      </div>
+                    </td>
+                    <td data-label="Actions" className="leave-period-actions">
+                      {isMerged ? (
+                        <details className="leave-period-detail">
+                          <summary>View {period.records.length} original entries</summary>
+                          <div className="leave-period-history">
+                            {period.records.map((original) => {
+                              const recordedBy = original.reviewedBy ? (staffList.find(s => (s.email || '').toLowerCase() === original.reviewedBy.toLowerCase())?.name || original.reviewedBy) : 'Not recorded';
+                              return <div className="leave-period-history-item" key={original.id}>
+                                <strong>{formatDisplay(original.startDate)} – {formatDisplay(original.endDate)}</strong>
+                                <span>{original.days} recorded days · {original.reason === 'Entered from Duty Roster' ? 'Entered from roster' : 'Leave request'}</span>
+                                <span>Decision recorded under: {recordedBy}</span>
+                                <span>{formatAuditDate(original.reviewedAt)}</span>
+                                <div className="leave-period-history-buttons">
+                                  <button type="button" onClick={() => setChitTarget(original)}>Leave Chit</button>
+                                  {canDeleteRequest(original) && <button type="button" className="delete-btn" onClick={() => setDeleteTarget(original)}>Delete this entry</button>}
+                                </div>
+                              </div>;
+                            })}
+                          </div>
+                        </details>
+                      ) : (
                         <>
-                          <button type="button" className="approve-btn" title="Approve request" onClick={() => setApproveTarget(r)}>Approve</button>
-                          <button type="button" className="reject-btn" title="Reject request" onClick={() => setRejectTarget(r)}>Reject</button>
+                          {canApproveRequest(r) && r.status?.toLowerCase() === 'pending' && (
+                            <>
+                              <button type="button" className="approve-btn" title="Approve request" onClick={() => setApproveTarget(r)}>Approve</button>
+                              <button type="button" className="reject-btn" title="Reject request" onClick={() => setRejectTarget(r)}>Reject</button>
+                            </>
+                          )}
+                          {String(r.status || '').toLowerCase() === 'approved' && <button type="button" onClick={() => setChitTarget(r)} title="Generate printable leave chit">Leave Chit</button>}
+                          {canDeleteRequest(r) && <button type="button" className="delete-btn" onClick={() => setDeleteTarget(r)}>Delete</button>}
                         </>
                       )}
-                      {canDeleteRequest(r) && <button type="button" className="delete-btn" onClick={() => setDeleteTarget(r)}>Delete</button>}
                     </td>
                   </tr>
                 );
@@ -440,6 +482,7 @@ function LeavePage() {
         )}
       </div>
 
+      {chitTarget && <LeaveChit request={chitTarget} onClose={() => setChitTarget(null)} />}
       <ConfirmDialog isOpen={!!approveTarget} title="Approve Leave?" message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?`} confirmText="Yes, Approve" isDanger={false} onConfirm={confirmApprove} onCancel={() => setApproveTarget(null)} />
       <PromptDialog isOpen={!!rejectTarget} title="Reject Leave?" message="Please provide a reason for rejection (optional):" placeholder="e.g. Operational requirements" onSubmit={confirmReject} onCancel={() => setRejectTarget(null)} />
       <ConfirmDialog isOpen={!!deleteTarget && legacyRestoreDates.length === 0} title="Delete Leave Request?" message={`Delete this leave for ${deleteTarget?.staffName}? Previously saved roster shifts/OFF days will be restored.`} confirmText="Delete and restore roster" isDanger={true} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />

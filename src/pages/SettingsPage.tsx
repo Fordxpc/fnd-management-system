@@ -29,7 +29,7 @@ function SettingsPage() {
   const [deleteInspectorTarget, setDeleteInspectorTarget] = useState<string | null>(null);
   const [deleteUserTarget, setDeleteUserTarget] = useState<{id: string, email: string} | null>(null);
   const [editingUser, setEditingUser] = useState<any>(null);
-  const resetShareMessage = completedReset ? `Funadhoo Airport Management System\n\nYour forgot-password request has been approved.\n\nLogin link: ${completedReset.loginUrl}\nUsername: ${completedReset.userName}\nTemporary password: ${completedReset.temporaryPassword}\n\nPlease sign in and change your password immediately. Your new password must be between 6 and 10 characters. Do not share this message with anyone else.` : '';
+  const resetShareMessage = completedReset ? `Funadhoo Airport Management System\n\nYour forgot-password request has been approved.\n\nLogin link: ${completedReset.loginUrl}\nUsername: ${completedReset.userName}\nTemporary password: ${completedReset.temporaryPassword}\n\nPlease sign in and change your password immediately. Your new password must be between 8 and 128 characters. Do not share this message with anyone else.` : '';
   const copyResetMessage = async () => {
     try { await navigator.clipboard.writeText(resetShareMessage); toast.success('Complete reset message copied'); }
     catch { toast.error('Unable to copy automatically. Select the message and copy it manually.'); }

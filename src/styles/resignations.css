@@ -1,0 +1,32 @@
+.resignation-page{max-width:1300px;margin:0 auto;padding:22px;color:#123149}
+.resignation-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:20px}
+.resignation-hero span{font-size:.72rem;color:#087b77;letter-spacing:.1em;font-weight:800}
+.resignation-hero h2{font-size:1.5rem;margin:8px 0;color:#0c2a42}
+.resignation-hero p,.resignation-panel p{color:#587086;line-height:1.6}
+.resignation-hero button,.resignation-actions button,.resignation-form button{border:1px solid #067f80;border-radius:9px;padding:9px 13px;background:#087b77;color:white;font:inherit;font-weight:650;cursor:pointer}
+.resignation-hero button:disabled,.resignation-actions button:disabled,.resignation-form button:disabled{opacity:.55;cursor:not-allowed}
+.resignation-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.resignation-panel{background:#fff;border:1px solid #dce6ec;box-shadow:0 8px 25px rgba(22,58,77,.04);padding:18px;border-radius:17px;margin-bottom:17px}
+.resignation-panel h3{margin:0 0 10px;font-size:1.1rem}
+.resignation-form{display:grid;gap:13px}
+.resignation-form label,.resignation-modal label{display:grid;gap:6px;font-size:.88rem;font-weight:650}
+.resignation-form input,.resignation-modal textarea{padding:11px;border:1px solid #c7d8e1;border-radius:9px;font:inherit;max-width:100%;box-sizing:border-box}
+.resignation-list{display:grid;gap:12px}
+.resignation-entry{padding:15px;border:1px solid #d9e5eb;border-radius:13px;background:#fbfdff}
+.resignation-entry-header{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.resignation-entry-header small{display:block;margin-top:3px;color:#688195}
+.resignation-status{font-size:.8rem;font-weight:750;padding:5px 9px;border-radius:50px;background:#e9eef3;color:#4f6477;white-space:nowrap}
+.resignation-status.status-approved{background:#dbf7eb;color:#13754e}
+.resignation-status.status-rejected{background:#fff0e8;color:#98400f}
+.resignation-meta{display:flex;gap:10px 22px;flex-wrap:wrap;font-size:.82rem;color:#546b81;margin:12px 0}
+.resignation-note{font-size:.85rem;margin:8px 0}
+.resignation-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.resignation-actions button{font-size:.81rem;padding:7px 10px}
+.resignation-actions button.outline{background:#fff;color:#0d6174;border-color:#b2d1d9}
+.resignation-actions button.danger{background:#a83b37;border-color:#a83b37}
+.resignation-letter{margin-top:12px;border-top:1px solid #dce6ec;padding-top:12px}
+.resignation-letter pre{white-space:pre-wrap;font: .86rem/1.7 Georgia,serif;overflow-wrap:anywhere}
+.resignation-modal-backdrop{position:fixed;inset:0;background:#061d32a9;z-index:500;display:grid;place-items:center;padding:18px}
+.resignation-modal{width:min(100%,530px);background:#fff;border-radius:16px;padding:22px;box-shadow:0 30px 70px #061d3260}
+.resignation-modal textarea{width:100%}
+@media(max-width:760px){.resignation-page{padding:12px}.resignation-columns{grid-template-columns:1fr}.resignation-hero{align-items:center}.resignation-hero h2{font-size:1.25rem}.resignation-panel{padding:13px}.resignation-actions button{flex:1 1 auto}}

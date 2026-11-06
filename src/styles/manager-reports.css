@@ -1,0 +1,13 @@
+
+.manager-reports-control,.manager-report-paper{background:#fff;border:1px solid #e0e7ef;border-radius:14px;padding:22px;margin-bottom:18px}
+.manager-reports-control h2,.manager-report-paper h2{margin:0;color:#123552}.manager-reports-control p{color:#64748b}
+.manager-reports-filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px}.manager-reports-filters label{display:grid;gap:5px;font-size:13px;color:#334155}.manager-reports-filters input,.manager-reports-filters select{padding:10px;border:1px solid #cbd5e1;border-radius:8px}
+.manager-reports button{padding:10px 15px;background:#0f766e;color:white;border:none;border-radius:8px;cursor:pointer}.manager-reports button:disabled{opacity:.5}
+.manager-report-paper{max-width:950px;margin:auto}.manager-report-paper>header{text-align:center;border-bottom:2px solid #0f766e;padding-bottom:17px}.manager-report-paper>header span{font-size:12px;letter-spacing:.15em;color:#0f766e;font-weight:bold}
+.manager-report-paper h3{font-size:16px;color:#163a58;margin-top:22px}.manager-report-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:24px 0}
+.manager-report-cards>div{background:#f0f7f7;padding:12px;border-radius:10px}.manager-report-cards small{display:block;color:#64748b}.manager-report-cards strong{font-size:26px;color:#145b66}
+.manager-report-paper table{border-collapse:collapse;width:100%;font-size:13px}.manager-report-paper th,.manager-report-paper td{border:1px solid #d5e1e8;padding:9px;text-align:left}
+.manager-report-paper th{background:#edf4f8}.manager-report-note{color:#64748b;font-size:12px;margin-top:20px}.manager-report-actions{display:flex;gap:10px;margin-top:25px}
+@media(max-width:680px){.manager-report-cards{grid-template-columns:repeat(2,1fr)}}
+@media print{body:has(.manager-report-paper) .app-sidebar,body:has(.manager-report-paper) .app-topbar,body:has(.manager-report-paper) .app-subnav,body:has(.manager-report-paper) .no-print{display:none!important}
+body:has(.manager-report-paper) .app-page,body:has(.manager-report-paper) .app-main{margin:0!important;padding:0!important}.manager-report-paper{border:0;padding:0;margin:0;max-width:none;box-shadow:none;break-inside:auto}.manager-report-paper h3{break-after:avoid}}

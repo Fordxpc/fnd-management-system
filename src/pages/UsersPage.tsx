@@ -89,7 +89,7 @@ function UsersPage() {
     
     const email = formData.email.trim().toLowerCase();
     if (!email || !formData.password) { toast.error('Email and Password are required'); return; }
-    if (formData.password.length < 6 || formData.password.length > 10) { toast.error('Password must be between 6 and 10 characters'); return; }
+    if (formData.password.length < 8 || formData.password.length > 128) { toast.error('Password must be between 8 and 128 characters'); return; }
     if (users.some((u) => (u.email || '').toLowerCase() === email)) { toast.error('This user already exists in the active database.'); return; }
 
     setSavingPreset(true);
@@ -142,12 +142,12 @@ function UsersPage() {
 
       {showPresetForm && canEdit && (
         <form className="users-create-form" onSubmit={handleCreateUser}>
-          <header><div><span>New access</span><h3>Create user account</h3></div><small>Temporary passwords must contain 6–10 characters.</small></header>
+          <header><div><span>New access</span><h3>Create user account</h3></div><small>Temporary passwords must contain 8–128 characters.</small></header>
           <div className="users-create-grid">
             <label><span>Full name</span><input placeholder="e.g. Mohamed Fuadhu" value={formData.name} onChange={event => setFormData({...formData, name: event.target.value})} required /></label>
             <label><span>Designation</span><input placeholder="e.g. Operations Officer" value={formData.position} onChange={event => setFormData({...formData, position: event.target.value})} /></label>
             <label><span>Work email</span><input type="email" placeholder="email@funadhooairport.com" value={formData.email} onChange={event => setFormData({...formData, email: event.target.value})} required /></label>
-            <label><span>Temporary password</span><input type="password" minLength={6} maxLength={10} autoComplete="new-password" placeholder="6–10 characters" value={formData.password} onChange={event => setFormData({...formData, password: event.target.value})} required /></label>
+            <label><span>Temporary password</span><input type="password" minLength={8} maxLength={128} autoComplete="new-password" placeholder="8–128 characters" value={formData.password} onChange={event => setFormData({...formData, password: event.target.value})} required /></label>
             <label><span>Role</span><select value={formData.role} onChange={event => setFormData({...formData, role: event.target.value})}>{assignableRoles.map(value => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label>
             <label><span>Department</span><select value={formData.department} onChange={event => setFormData({...formData, department: event.target.value})}>{DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}</select></label>
           </div>

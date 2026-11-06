@@ -1,7 +1,7 @@
 import { getAuth } from "../../src/lib/auth.js";
 import { getDb } from "../../src/lib/db.js";
-import { users } from "../../src/db/schema.js";
-import { eq } from "drizzle-orm";
+import { users, staff } from "../../src/db/schema.js";
+import { eq, or, sql } from "drizzle-orm";
 
 export async function requireAuth(request: Request, env: any) {
   const session = await getAuth(env).api.getSession({ 
@@ -24,6 +24,15 @@ export async function requireAuth(request: Request, env: any) {
     .from(users)
     .where(eq(users.email, email))
     .limit(1);
+
+  const staffNumber = email.split('@')[0].replace(/^sn-/i, '').toUpperCase();
+  const [staffRecord] = await db.select({status:staff.status}).from(staff)
+    .where(or(sql`lower(${staff.email}) = ${email}`,sql`upper(${staff.sn}) = ${`SN-${staffNumber}`}`)).limit(1);
+  if (String(staffRecord?.status || '').toLowerCase() === 'resigned') {
+    const err: any = new Error('This staff account has been deactivated. Contact Administration.');
+    err.status = 403;
+    throw err;
+  }
 
   return {
     id: session.user.id,

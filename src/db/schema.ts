@@ -249,10 +249,56 @@ export const rwyLights = pgTable("rwy_lights", {
 	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
+// Employee-submitted resignation letters and approval history. Never cascade-delete staff records.
+export const resignationRequests = pgTable("resignation_requests", {
+  id: text().primaryKey().notNull(),
+  staffId: text("staff_id").notNull(),
+  staffSn: text("staff_sn").notNull(),
+  staffName: text("staff_name").notNull(),
+  department: text().notNull(),
+  requestedLastDay: text("requested_last_day").notNull(),
+  submittedByUserId: text("submitted_by_user_id").notNull(),
+  attachmentName: text("attachment_name").notNull(),
+  attachmentData: text("attachment_data").notNull(),
+  status: text().default('pending').notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  reviewedAt: timestamp("reviewed_at", { mode: 'string' }),
+  reviewedByUserId: text("reviewed_by_user_id"),
+  reviewerName: text("reviewer_name"),
+  reviewNote: text("review_note"),
+  acceptanceLetter: text("acceptance_letter"),
+  offboardingStatus: text("offboarding_status").default('not_started').notNull(),
+  offboardedAt: timestamp("offboarded_at", { mode: 'string' }),
+  offboardedByUserId: text("offboarded_by_user_id"),
+});
+
 export const passwordResetRequests = pgTable("password_reset_requests", {
 	id: text().primaryKey().notNull(), email: text().notNull(), status: text().default('pending'),
 	requestedAt: timestamp("requested_at", { mode: 'string' }).defaultNow(),
 });
+
+// User-scoped notifications; never infer authorization from a display name.
+export const appNotifications = pgTable("app_notifications", {
+  id: text().primaryKey().notNull(),
+  userId: text("user_id").notNull(),
+  kind: text().notNull(),
+  title: text().notNull(),
+  body: text().notNull(),
+  targetPage: text("target_page").notNull(),
+  sourceId: text("source_id"),
+  dedupeKey: text("dedupe_key").notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+  readAt: timestamp("read_at", { mode: 'string' }),
+}, table => [unique("app_notifications_dedupe_key_uq").on(table.dedupeKey)]);
+
+export const appPushSubscriptions = pgTable("app_push_subscriptions", {
+  id: text().primaryKey().notNull(),
+  userId: text("user_id").notNull(),
+  endpoint: text().notNull(),
+  p256dh: text().notNull(),
+  auth: text().notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+}, table => [unique("app_push_subscriptions_endpoint_uq").on(table.endpoint)]);
 
 export const announcements = pgTable("announcements", {
 	id: text().primaryKey().notNull(), title: text().notNull(), message: text().notNull(),

@@ -31,13 +31,13 @@ export function getAuth(env: any) {
     }),
     emailAndPassword: {
       enabled: true,
-      minPasswordLength: 6,
-      maxPasswordLength: 10,
+      minPasswordLength: 8,
+      maxPasswordLength: 128,
     },
     user: {
       additionalFields: {
-        role: { type: "string", required: false },
-        department: { type: "string", required: false },
+        role: { type: "string", required: false, input: false },
+        department: { type: "string", required: false, input: false },
       },
     },
   });

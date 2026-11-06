@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const api = readFileSync(new URL('../functions/api/[[path]].ts',import.meta.url),'utf8');
+const reset = api.slice(api.indexOf('if (pathname.startsWith("/api/password-reset-requests/")'),api.indexOf('// AUTO-SYNC BETTER AUTH'));
+assert.ok(reset.includes('hashPassword('));
+assert.ok(!reset.includes('db.delete(user)'));
+assert.ok(!reset.includes('db.delete(account)'));
+assert.ok(reset.includes('UPDATE "account"'));
+assert.ok(reset.includes('DELETE FROM "session"'));
+const getLeave = api.slice(api.indexOf('if (pathname === "/api/leave-requests" && method === "GET")'),api.indexOf('if (pathname === "/api/leave-requests" && method === "POST")'));
+assert.ok(!getLeave.includes('reconcileRosterLeaveHistory'));
+assert.ok(!getLeave.includes('db.delete('));
+assert.ok(!api.includes('/api/chat/direct/'));
+assert.ok(api.includes('if (pathname === "/api/chat/groups"'));
+assert.ok(api.includes('getOvertimeDuration'));
+console.log('PASS static security regression checks');

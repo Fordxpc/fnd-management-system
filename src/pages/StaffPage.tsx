@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
-import { reviewKnownStaffIdentityCollisions } from '../lib/duty-identity';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
@@ -59,7 +58,7 @@ const SENSITIVE_INFO_ROLES = ['developer'];
 function StaffPage() {
   const { profile, user } = useAuth();
   const isDev = profile?.role === 'developer';
-  const isManager = profile?.role === 'manager' || profile?.role === 'admin';
+  const isManager = ['manager','admin','owner'].includes(profile?.role || '');
   const canSeeSensitive = SENSITIVE_INFO_ROLES.includes(profile?.role || '');
   const canViewFinancials = isDev || isManager;
 
@@ -125,8 +124,10 @@ function StaffPage() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !sn.trim()) { toast.error('Name, Email and a unique Staff Number (SN) are required'); return; }
-    const payload: any = { sn, name, email, photoBase64, personalEmail, nid, joinDate, phone, gender, department, position, isSMT: isSmt, balanceVisible };
+    if (!name || ((!editingId || isDev || isManager) && !email)) { toast.error('Name and Email are required'); return; }
+    const payload: any = !isDev && !isManager && editingId
+      ? { name, position, phone, gender, photoBase64 }
+      : { sn, name, email, photoBase64, personalEmail, nid, joinDate, phone, gender, department, position, isSMT: isSmt, balanceVisible };
     if (canViewFinancials) {
       payload.basicSalary = Number(basicSalary) || 0;
       payload.dailyAllowance = Number(dailyAllowance) || 0;
@@ -205,15 +206,12 @@ function StaffPage() {
   };
 
   // Role-based staff controls
-const myDept = myStaff?.department;
-  const isDeptIncharge = myStaff?.isIncharge === true;
-  const isSafetyIncharge = isDeptIncharge && myDept === 'Safety';
-
-  const canEditStaff = (targetDept: string) => {
+const myDept = myStaff?.department || profile?.department;
+  const isDeptIncharge = myStaff?.isIncharge === true || profile?.isIncharge === true;
+  const canEditStaff = (targetDept: string, target: any = {}) => {
     if (isDev || isManager) return true;
-    if (isSafetyIncharge && targetDept === 'Security') return true;
-    if (isDeptIncharge && targetDept === myDept) return true;
-    return false;
+    if (!isDeptIncharge || targetDept !== myDept || target.isSmt === true || target.isSMT === true) return false;
+    return !['developer','manager','admin','owner','smt'].includes(String(target.role || '').toLowerCase());
   };
 
   const canAddStaff = isDev || isManager;
@@ -225,7 +223,6 @@ const myDept = myStaff?.department;
     return matchesDepartment && matchesSearch;
   }).sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
 
-  const knownIdentityReviews = reviewKnownStaffIdentityCollisions(staff);
   const departmentCount = new Set(staff.map((member) => member.department).filter(Boolean)).size;
   const smtCount = staff.filter((member) => member.isSmt === true || member.isSMT === true).length;
 
@@ -250,15 +247,6 @@ const myDept = myStaff?.department;
       </header>
 
       {loadError && <div className="staff-management-alert" role="alert"><strong>Staff information may be out of date.</strong><span>{loadError}</span></div>}
-      {(isDev || isManager) && knownIdentityReviews.length > 0 && (
-        <div className="staff-management-alert" role="status">
-          <strong>{knownIdentityReviews.length} staff profile{knownIdentityReviews.length === 1 ? '' : 's'} need identity review.</strong>
-          <span>Dashboard duplicates are hidden by verified SN, but historical records have not been deleted. Review the original SN and linked history before removing a profile.</span>
-          <ul>{knownIdentityReviews.map((item) => (
-            <li key={item.id}>{item.name || 'Unnamed'} ({item.sn || 'SN missing'}) → {item.correctName} ({item.correctSn})</li>
-          ))}</ul>
-        </div>
-      )}
 
       <section className="staff-management-summary" aria-label="Staff summary">
         <div><span>Total workforce</span><strong>{staff.length}</strong><small>staff records</small></div>
@@ -281,18 +269,18 @@ const myDept = myStaff?.department;
         <form className="staff-form staff-management-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, marginBottom: '4px' }}>{editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}</div>
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb' }}>👤 Personal Information</div>
-          <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} required />
+          <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} disabled={!!editingId && !isDev && !isManager} />
           <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
           <label className="staff-photo-upload"><span>{photoBase64 ? <img src={photoBase64} alt="Staff preview" /> : 'PHOTO'}</span><div><strong>Passport-size profile picture</strong><small>JPG or PNG, maximum 650 KB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} /></div>{photoBase64 && <button type="button" onClick={() => setPhotoBase64('')}>Remove</button>}</label>
           <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <select value={gender} onChange={(e) => setGender(e.target.value)}><option value="">Gender — select...</option><option value="Male">Male</option><option value="Female">Female</option></select>
-          <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} title="Join Date" />
-          <input placeholder="NID (National ID)" value={nid} onChange={(e) => setNid(e.target.value)} />
-          <input type="email" placeholder="Work Email *" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <input type="email" placeholder="Personal Email" value={personalEmail} onChange={(e) => setPersonalEmail(e.target.value)} />
+          <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} title="Join Date" disabled={!!editingId && !isDev && !isManager} />
+          <input placeholder="NID (National ID)" value={nid} onChange={(e) => setNid(e.target.value)} disabled={!!editingId && !isDev && !isManager} />
+          <input type="email" placeholder="Work Email *" value={email} onChange={(e) => setEmail(e.target.value)} required disabled={!!editingId && !isDev && !isManager} />
+          <input type="email" placeholder="Personal Email" value={personalEmail} onChange={(e) => setPersonalEmail(e.target.value)} disabled={!!editingId && !isDev && !isManager} />
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb', marginTop: '8px' }}>💼 Job Information</div>
           <input list="designation-options" placeholder="Designation (type or pick from list)" value={position} onChange={(e) => setPosition(e.target.value)} />
-          <select value={department} onChange={(e) => setDepartment(e.target.value)}>{DEPARTMENTS.map((d) => (<option key={d} value={d}>{d}</option>))}</select>
+          <select value={department} onChange={(e) => setDepartment(e.target.value)} disabled={!!editingId && !isDev && !isManager}>{DEPARTMENTS.map((d) => (<option key={d} value={d}>{d}</option>))}</select>
           {canViewFinancials && <>
             <div className="staff-management-form__section staff-management-form__section--finance">Salary and allowances</div>
             <input type="number" placeholder="Basic Salary (MVR)" value={basicSalary} onChange={(e) => setBasicSalary(e.target.value)} step="0.01" min="0" />
@@ -300,8 +288,8 @@ const myDept = myStaff?.department;
             <input type="number" placeholder="Holiday Allowance Rate (MVR)" value={holidayAllowanceRate} onChange={(e) => setHolidayAllowanceRate(e.target.value)} step="0.01" min="0" />
           </>}
           {canSeeSensitive && (<><div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#dc2626', marginTop: '8px' }}>📝 Internal Notes (developer only)</div><textarea placeholder="Internal notes..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} style={{ gridColumn: 'span 2', padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px' }} /></>)}
-          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e' }}><input type="checkbox" checked={isSmt} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px' }} />⭐ Mark as SMT (Senior Management Team) member</label>
-          <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#eff6ff', border: '1px solid #2563eb', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#1e40af' }}><input type="checkbox" checked={balanceVisible} onChange={(e) => setBalanceVisible(e.target.checked)} style={{ width: '18px', height: '18px' }} />👁 Allow this staff member to view their own leave balance</label>
+          {(isDev || isManager || !editingId) && <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#92400e' }}><input type="checkbox" checked={isSmt} onChange={(e) => setIsSMT(e.target.checked)} style={{ width: '18px', height: '18px' }} />⭐ Mark as SMT (Senior Management Team) member</label>}
+          {(isDev || isManager || !editingId) && <label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#eff6ff', border: '1px solid #2563eb', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#1e40af' }}><input type="checkbox" checked={balanceVisible} onChange={(e) => setBalanceVisible(e.target.checked)} style={{ width: '18px', height: '18px' }} />👁 Allow this staff member to view their own leave balance</label>}
           {!editingId && (<label style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#dcfce7', border: '1px solid #16a34a', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, color: '#166534' }}><input type="checkbox" checked={createUserAccount} onChange={(e) => setCreateUserAccount(e.target.checked)} style={{ width: '18px', height: '18px' }} />🔑 Create User Login (Pre-register email)</label>)}
           <button type="submit" disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save staff member'}</button>
         </form>
@@ -319,7 +307,7 @@ const myDept = myStaff?.department;
               </thead>
               <tbody>
                 {visibleStaff.map((s) => {
-                  const hasEditPermission = canEditStaff(s.department);
+                  const hasEditPermission = canEditStaff(s.department, s);
                   return (
                     <tr key={s.id}>
                       <td>{s.sn || '—'}</td><td><strong>{s.name}</strong></td><td>{s.position || '—'}</td><td style={{ fontSize: '12px' }}>{s.department}</td><td>{s.gender || '—'}</td><td>{s.joinDate || '—'}</td>

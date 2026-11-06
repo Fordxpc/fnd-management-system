@@ -1,0 +1,11 @@
+{
+  "name": "FND Management System",
+  "short_name": "FND Management",
+  "description": "Funadhoo Airport Management System",
+  "start_url": "/?page=dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f8fa",
+  "theme_color": "#143a58",
+  "icons": [{"src": "/fnd-logo2.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable"}]
+}

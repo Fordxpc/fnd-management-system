@@ -1,0 +1,28 @@
+/* Continuous leave grouping: read-only presentation; original request actions stay accessible. */
+.leave-period-pill{display:block;width:max-content;max-width:100%;margin-top:7px;padding:5px 8px;border-radius:10px;background:#dbeafe;color:#1e40af;font-size:10px;font-weight:750;white-space:normal}
+.leave-audit-context{display:block;max-width:230px;margin-top:5px;color:#9a3412;font-size:10px;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+.leave-period-actions{min-width:140px;vertical-align:top}
+.leave-period-detail{max-width:290px;color:#334155}
+.leave-period-detail summary{cursor:pointer;display:inline-block;border:1px solid #bfdbfe;border-radius:9px;padding:8px 11px;background:#eff6ff;color:#1d4ed8;font-size:11px;font-weight:800;line-height:1.3;white-space:normal}
+.leave-period-history{display:grid;gap:9px;margin-top:10px}
+.leave-period-history-item{display:flex;flex-direction:column;gap:4px;border:1px solid #e2e8f0;border-radius:10px;padding:10px;background:#fff;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+.leave-period-history-item>strong{color:#0f172a}
+.leave-period-history-buttons{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.leave-period-history-buttons button{padding:7px 9px;border:1px solid #cbd5e1;border-radius:7px;background:#f8fafc;color:#334155;font-size:10px;font-weight:700;cursor:pointer}
+.leave-period-history-buttons .delete-btn{border-color:#fecaca;background:#fef2f2;color:#b91c1c}
+@media(max-width:760px){
+  .leave-management-list{overflow:visible!important}
+  .leave-management-list>table.leave-management-table{display:block;min-width:0!important;width:100%;border-collapse:separate}
+  .leave-management-list>table.leave-management-table>thead{display:none}
+  .leave-management-list>table.leave-management-table>tbody{display:grid;gap:13px;padding:12px;background:#f1f5f9}
+  .leave-management-list>table.leave-management-table>tbody>tr{display:block;min-width:0;overflow:hidden;border:1px solid #dbe3ee;border-radius:15px;background:#fff;box-shadow:0 5px 15px rgba(15,23,42,.04)}
+  .leave-management-list>table.leave-management-table>tbody>tr>td{display:grid;grid-template-columns:minmax(93px,33%) minmax(0,1fr);align-items:start;gap:10px;min-width:0;box-sizing:border-box;padding:11px 14px;border-bottom:1px solid #f1f5f9;font-size:13px;text-align:left!important;overflow-wrap:anywhere}
+  .leave-management-list>table.leave-management-table>tbody>tr>td:last-child{border-bottom:0}
+  .leave-management-list>table.leave-management-table>tbody>tr>td:before{content:attr(data-label);color:#64748b;font-size:11px;font-weight:750;line-height:1.4}
+  .leave-management-list>table.leave-management-table>tbody>tr>td:first-child{padding-top:16px}
+  .leave-management-list>table.leave-management-table .request-audit{min-width:0;max-width:100%;margin-top:0;overflow-wrap:anywhere}
+  .leave-management-list>table.leave-management-table .request-audit strong{font-size:12px;overflow-wrap:anywhere}
+  .leave-management-list>table.leave-management-table .leave-period-actions{min-width:0}
+  .leave-management-list>table.leave-management-table .leave-period-detail{max-width:100%;min-width:0}
+  .leave-management-list>table.leave-management-table .leave-period-detail summary{display:block}
+}

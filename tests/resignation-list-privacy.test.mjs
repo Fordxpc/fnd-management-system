@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const source = readFileSync(new URL('../functions/api/[[path]].ts', import.meta.url), 'utf8');
+const start = source.indexOf("if (pathname === '/api/resignations' && method === 'GET')");
+const end = source.indexOf("if (pathname === '/api/resignations' && method === 'POST')", start);
+assert.ok(start > 0 && end > start, 'Resignations GET handler found');
+const handler = source.slice(start, end);
+assert.match(handler, /db\.select\(\{[\s\S]*?\.from\(resignationRequests\)/, 'List uses explicit projection');
+assert.doesNotMatch(handler, /attachmentData\s*:/, 'List never selects attachment content');
+assert.ok(source.includes('(attachment|letter)'), 'Document route exists');
+console.log('PASS resignation list excludes attachment content');

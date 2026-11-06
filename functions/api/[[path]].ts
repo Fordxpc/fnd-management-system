@@ -1,21 +1,27 @@
 import { requireAuth } from "../middleware/auth.js";
 import { requireManager, requireSMT } from "../middleware/authorization.js";
 import { getAuth } from "../../src/lib/auth.js";
+import { hashPassword } from "better-auth/crypto";
+import { buildManagerSummary } from "../../src/lib/manager-summary.js";
 import { getDb } from "../../src/lib/db.js";
 import {
   user, session, account, users, staff, holidays, flights, leaveRequests, overtimeEntries,
   rosterEntries, birdCounts, safetyOccurrenceReports, rampInspections, tempAccess, settings,
   userPresets, timesheets, opsGroundHistory, opsRunwayHistory, fodCollections,
   lightsInspectors, rwyLights, savedReports, rampLiveDraft, opsChecks,
-  passwordResetRequests, announcements, chatGroups, chatGroupMembers, chatMessages
+  passwordResetRequests, announcements, chatGroups, chatGroupMembers, chatMessages,
+  appNotifications, appPushSubscriptions, resignationRequests
 } from "../../src/db/schema.js";
-import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
+import { eq, and, inArray, sql, asc, desc, or, isNull } from "drizzle-orm";
+import { getVapidAuthorization, isTrustedPushEndpoint } from "../../src/lib/web-push.js";
+import { canReceiveRequestNotification } from "../../src/lib/notification-policy.js";
 import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib/roster-leave-history.js";
 import { canonicalSn, staffNumberConflict, deduplicateDutyEntries, groupDutyDisplayEntries, reconcileDutyAvailability } from "../../src/lib/duty-identity.js";
 import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
 import { buildDutyConflictReport } from "../../src/lib/duty-conflict-report.js";
 import { planLegacyDutyRepair } from "../../src/lib/legacy-duty-repair.js";
 import { approvalRosterConflict, auditLeaveRosterIntegrity, countLeaveDays, leaveDateRange, overlappingLeaveRequest } from "../../src/lib/leave-integrity.js";
+import { globalHR, canEditDepartmentProfile, canReviewResignation, restrictInchargeEditPayload, isValidISODate, validateLetterUpload, makeResignationAcceptanceLetter } from "../../src/lib/resignation-policy.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -35,7 +41,7 @@ import {
 
 let staffPhotoColumnReady = false;
 let rosterRestoreColumnsReady = false;
-let lastRosterLeaveReconcileAt = 0;
+let notificationTablesReady = false;
 
 const isManagerRole = (role: string | undefined | null) =>
   ['developer', 'manager', 'admin', 'owner'].includes(role || '');
@@ -135,6 +141,148 @@ export const onRequest = async (context: any) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
+
+  // Notification tables are created on demand; migration SQL is also provided
+  // for controlled pre-deployment rollout. No existing staff data is touched.
+  const ensureNotificationTables = async () => {
+    if (notificationTablesReady) return;
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS "app_notifications" (
+      "id" text PRIMARY KEY NOT NULL, "user_id" text NOT NULL,
+      "kind" text NOT NULL, "title" text NOT NULL, "body" text NOT NULL,
+      "target_page" text NOT NULL, "source_id" text,
+      "dedupe_key" text NOT NULL UNIQUE,
+      "created_at" timestamp DEFAULT now(), "read_at" timestamp
+    )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "app_notifications_user_created_idx" ON "app_notifications"("user_id", "created_at" DESC)`);
+    await db.execute(sql`CREATE TABLE IF NOT EXISTS "app_push_subscriptions" (
+      "id" text PRIMARY KEY NOT NULL, "user_id" text NOT NULL,
+      "endpoint" text NOT NULL UNIQUE, "p256dh" text NOT NULL, "auth" text NOT NULL,
+      "created_at" timestamp DEFAULT now()
+    )`);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "app_push_subscriptions_user_idx" ON "app_push_subscriptions"("user_id")`);
+    notificationTablesReady = true;
+  };
+
+  const pushToUser = async (userId: string) => {
+    if (!env?.VAPID_PUBLIC_KEY || !env?.VAPID_PRIVATE_KEY) return;
+    const subscriptions = await db.select().from(appPushSubscriptions)
+      .where(eq(appPushSubscriptions.userId, userId)).limit(20);
+    await Promise.allSettled(subscriptions.map(async subscription => {
+      if (!isTrustedPushEndpoint(subscription.endpoint)) return;
+      try {
+        const authorization = await getVapidAuthorization(subscription.endpoint, env);
+        // No message body is sent to a third-party push service.
+        const response = await fetch(subscription.endpoint, {
+          method: 'POST',
+          headers: { Authorization: authorization, TTL: '60', Urgency: 'normal' },
+        });
+        if (response.status === 404 || response.status === 410) {
+          await db.delete(appPushSubscriptions).where(eq(appPushSubscriptions.id, subscription.id));
+        } else if (!response.ok) {
+          console.warn('Push delivery rejected:', response.status);
+        }
+      } catch (error) { console.warn('Push delivery unavailable:', error); }
+    }));
+  };
+
+  const notifyPasswordResetApprovers = async (requestId: string, email: string) => {
+    await ensureNotificationTables();
+    // Only approved management roles receive password-reset notifications.
+    const recipients = await db.select({ id: user.id }).from(user)
+      .innerJoin(users, sql`lower(${user.email}) = lower(${users.email})`)
+      .where(inArray(users.role, ['developer', 'manager', 'admin', 'owner']));
+    await Promise.allSettled(recipients.map(async recipient => {
+      const rows = await db.insert(appNotifications).values({
+        id: crypto.randomUUID(), userId: recipient.id,
+        kind: 'password_reset_request', title: 'Password reset request',
+        body: `${email} requested a password reset. Review the pending request in Settings.`,
+        targetPage: 'settings', sourceId: requestId,
+        dedupeKey: `password-reset:${requestId}:${recipient.id}`,
+        createdAt: new Date().toISOString(),
+      }).onConflictDoNothing().returning({ id: appNotifications.id });
+      if (rows.length) {
+        const delivery = pushToUser(recipient.id).catch(error => console.warn('Password reset phone push failed', error));
+        if (typeof context.waitUntil === 'function') context.waitUntil(delivery);
+        else await delivery;
+      }
+    }));
+  };
+
+  // In-app alerts survive failed/unavailable phone push delivery. Browser push is
+  // scheduled separately via waitUntil; employee names never go in a push payload.
+  const emitNotifications = async (recipients: string[], message: {
+    kind: string; title: string; body: string; targetPage: string; sourceId: string; eventKey: string;
+  }) => {
+    const uniqueIds = [...new Set(recipients.filter(Boolean))];
+    if (!uniqueIds.length) return;
+    await ensureNotificationTables();
+    for (const recipientId of uniqueIds) {
+      try {
+        const created = await db.insert(appNotifications).values({
+          id: crypto.randomUUID(), userId: recipientId, kind: message.kind,
+          title: message.title, body: message.body, targetPage: message.targetPage,
+          sourceId: message.sourceId, dedupeKey: `${message.eventKey}:${recipientId}`,
+          createdAt: new Date().toISOString(),
+        }).onConflictDoNothing().returning({ id: appNotifications.id });
+        if (created.length) {
+          const delivery = pushToUser(recipientId).catch(error => console.warn('Device push failed', error));
+          if (typeof context.waitUntil === 'function') context.waitUntil(delivery);
+          else await delivery;
+        }
+      } catch (error) { console.error('Failed to create recipient notification', error); }
+    }
+  };
+
+  const getRequestApprovers = async (target: any, requesterEmail: string): Promise<string[]> => {
+    // Approval roles: Developer/Admin/Manager/Owner globally; SMT/Incharge only
+    // for the target employee's department, per requireDepartmentApproval.
+    const [accounts, directory] = await Promise.all([
+      db.select({ id: user.id, email: user.email, role: users.role })
+        .from(user).innerJoin(users, sql`lower(${user.email}) = lower(${users.email})`),
+      db.select({ email: staff.email, department: staff.department, isSmt: staff.isSmt, isIncharge: staff.isIncharge })
+        .from(staff),
+    ]);
+    return accounts.filter(accountRow => {
+      const linked = directory.find(person => String(person.email || '').trim().toLowerCase() ===
+        String(accountRow.email || '').trim().toLowerCase());
+      return canReceiveRequestNotification({ ...accountRow, department: linked?.department,
+        isSmt: linked?.isSmt, isIncharge: linked?.isIncharge },
+        { email: target.email, department: target.department }, requesterEmail);
+    }).map(accountRow => accountRow.id);
+  };
+
+  const getRequestOwner = async (targetEmail: unknown): Promise<string[]> => {
+    const email = String(targetEmail || '').trim().toLowerCase();
+    if (!email) return [];
+    const accounts = await db.select({ id: user.id }).from(user)
+      .where(sql`lower(${user.email}) = ${email}`).limit(1);
+    return accounts.map(accountRow => accountRow.id);
+  };
+
+  const closePendingApproverNotifications = async (kind: string, sourceId: string) => {
+    try {
+      await ensureNotificationTables();
+      await db.update(appNotifications).set({ readAt: new Date().toISOString() }).where(and(
+        eq(appNotifications.kind, kind), eq(appNotifications.sourceId, sourceId), isNull(appNotifications.readAt)
+      ));
+    } catch (error) { console.warn('Unable to close old request notification', error); }
+  };
+
+  const getOvertimeDuration = (date: unknown, startTime: unknown, endTime: unknown) => {
+    const day = String(date || '');
+    const start = String(startTime || '');
+    const end = String(endTime || '');
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day + 'T12:00:00Z'));
+    const timeRE = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!validDate || !timeRE.test(start) || !timeRE.test(end)) return null;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    let minutes = eh * 60 + em - sh * 60 - sm;
+    if (minutes < 0) minutes += 24 * 60; // overnight shift
+    if (minutes < 15 || minutes > 16 * 60) return null;
+    return Math.round(minutes / 60 * 100) / 100;
+  };
+
   const ensureSafetyOccurrenceTable = () => db.execute(sql`
     CREATE TABLE IF NOT EXISTS safety_occurrence_reports (
       id text PRIMARY KEY NOT NULL, report_no text, date text, time text, reporter_name text,
@@ -168,10 +316,27 @@ export const onRequest = async (context: any) => {
     const profile = await getCurrentStaffProfile(currentUser);
     return profile?.id ? String(profile.id) : String(currentUser.id || '');
   };
+  const canAccessSystemGroup = (group: any, currentUser: any, profile: any) => {
+    if (group.createdBy !== 'system') return false;
+    const role = String(currentUser.role || 'staff').toLowerCase();
+    const department = String(profile?.department || currentUser.department || '');
+    const management = isManagerRole(role);
+    const smt = management || role === 'smt' || profile?.isSmt === true || profile?.isIncharge === true;
+    if (group.name === 'FND Staffs') return !!currentUser.id;
+    if (group.name === 'SMT & Management') return smt;
+    if (group.name === 'Flight Operations') return smt || department === 'Ground Operations';
+    return !!department && group.department === department;
+  };
   const requireChatGroupAccess = async (groupId: string, currentUser: any) => {
     const [group] = await db.select().from(chatGroups).where(eq(chatGroups.id, groupId)).limit(1);
     if (!group) { const err: any = new Error("Channel not found"); err.status = 404; throw err; }
-    if (isManagerRole(currentUser.role)) return group;
+    const profile = await getCurrentStaffProfile(currentUser);
+    if (group.createdBy === 'system') {
+      if (canAccessSystemGroup(group, currentUser, profile)) return group;
+      const denied: any = new Error('You are not authorized for this channel');
+      denied.status = 403;
+      throw denied;
+    }
     const chatStaffId = await getChatStaffId(currentUser);
     const membership = await db.select().from(chatGroupMembers).where(and(
       eq(chatGroupMembers.groupId, groupId),
@@ -251,16 +416,21 @@ export const onRequest = async (context: any) => {
       const notes = newAudit.length
         ? [oldNotes, `Merged roster approvals: ${newAudit.join('; ')}`].filter(Boolean).join(' | ')
         : oldNotes;
-      // Updating the survivor first makes an interrupted repair recoverable on the next run.
-      await db.update(leaveRequests).set({
+      const updateSurvivor = db.update(leaveRequests).set({
         startDate: plan.startDate, endDate: plan.endDate, days: plan.days,
         ...(newAudit.length ? { reviewNotes: notes } : {}),
       }).where(eq(leaveRequests.id, plan.keepId));
       if (plan.removeIds.length) {
-        await db.update(rosterEntries).set({ leaveRequestId: plan.keepId }).where(
-          inArray(rosterEntries.leaveRequestId, plan.removeIds)
-        );
-        await db.delete(leaveRequests).where(inArray(leaveRequests.id, plan.removeIds));
+        // Move roster links and delete daily duplicates in one database transaction.
+        await db.batch([
+          updateSurvivor,
+          db.update(rosterEntries).set({ leaveRequestId: plan.keepId }).where(
+            inArray(rosterEntries.leaveRequestId, plan.removeIds)
+          ),
+          db.delete(leaveRequests).where(inArray(leaveRequests.id, plan.removeIds)),
+        ]);
+      } else {
+        await updateSurvivor;
       }
     }
   };
@@ -350,6 +520,85 @@ export const onRequest = async (context: any) => {
     if (!isPublicRequest) {
       await requireAuth(request, env);
     }
+  // Personal notification APIs: every query is scoped to the logged-in auth ID.
+  if (pathname === '/api/notifications' && method === 'GET') {
+    const currentUser = await requireAuth(request, env);
+    await ensureNotificationTables();
+    const [items, unreadRows] = await Promise.all([
+      db.select().from(appNotifications).where(eq(appNotifications.userId, currentUser.id))
+        .orderBy(desc(appNotifications.createdAt)).limit(100),
+      db.select({ total: sql<number>`count(*)::int` }).from(appNotifications)
+        .where(and(eq(appNotifications.userId, currentUser.id), isNull(appNotifications.readAt))),
+    ]);
+    return json({ items, unread: Number(unreadRows[0]?.total || 0) });
+  }
+  if (pathname === '/api/notifications/read-all' && method === 'POST') {
+    const currentUser = await requireAuth(request, env);
+    await ensureNotificationTables();
+    await db.update(appNotifications).set({ readAt: new Date().toISOString() }).where(
+      and(eq(appNotifications.userId, currentUser.id), isNull(appNotifications.readAt)));
+    return json({ success: true });
+  }
+  const notificationReadMatch = pathname.match(/^\/api\/notifications\/([^/]+)\/read$/);
+  if (notificationReadMatch && method === 'POST') {
+    const currentUser = await requireAuth(request, env);
+    await ensureNotificationTables();
+    await db.update(appNotifications).set({ readAt: new Date().toISOString() }).where(
+      and(eq(appNotifications.id, notificationReadMatch[1]), eq(appNotifications.userId, currentUser.id)));
+    return json({ success: true });
+  }
+  if (pathname === '/api/push/public-key' && method === 'GET') {
+    await requireAuth(request, env);
+    return json({ enabled: !!(env?.VAPID_PUBLIC_KEY && env?.VAPID_PRIVATE_KEY),
+      publicKey: env?.VAPID_PUBLIC_KEY && env?.VAPID_PRIVATE_KEY ? String(env.VAPID_PUBLIC_KEY) : '' });
+  }
+  if (pathname === '/api/push/subscriptions' && method === 'POST') {
+    const currentUser = await requireAuth(request, env);
+    if (!env?.VAPID_PRIVATE_KEY || !env?.VAPID_PUBLIC_KEY) return json({ message: 'Phone push has not been configured' }, 503);
+    await ensureNotificationTables();
+    const body: any = await request.json();
+    const subscription = body?.subscription;
+    const endpoint = subscription?.endpoint;
+    const p256dh = subscription?.keys?.p256dh;
+    const auth = subscription?.keys?.auth;
+    if (!isTrustedPushEndpoint(endpoint) || !/^[A-Za-z0-9_-]{40,200}$/.test(String(p256dh || '')) ||
+        !/^[A-Za-z0-9_-]{16,100}$/.test(String(auth || ''))) {
+      return json({ message: 'Invalid push subscription' }, 400);
+    }
+    await db.insert(appPushSubscriptions).values({ id: crypto.randomUUID(), userId: currentUser.id,
+      endpoint, p256dh, auth, createdAt: new Date().toISOString() }).onConflictDoUpdate({
+        target: appPushSubscriptions.endpoint,
+        set: { p256dh, auth, userId: currentUser.id },
+      });
+    return json({ success: true });
+  }
+  if (pathname === '/api/push/subscriptions' && method === 'DELETE') {
+    const currentUser = await requireAuth(request, env);
+    await ensureNotificationTables();
+    const body: any = await request.json();
+    if (typeof body?.endpoint !== 'string') return json({ message: 'Endpoint required' }, 400);
+    await db.delete(appPushSubscriptions).where(and(eq(appPushSubscriptions.userId, currentUser.id),
+      eq(appPushSubscriptions.endpoint, body.endpoint)));
+    return json({ success: true });
+  }
+  if (pathname === '/api/notifications/test' && method === 'POST') {
+    const currentUser = await requireAuth(request, env);
+    await ensureNotificationTables();
+    const previous = await db.select({ createdAt: appNotifications.createdAt }).from(appNotifications)
+      .where(and(eq(appNotifications.userId, currentUser.id), eq(appNotifications.kind, 'push_test')))
+      .orderBy(desc(appNotifications.createdAt)).limit(1);
+    if (previous[0]?.createdAt && Date.now() - Date.parse(String(previous[0].createdAt)) < 60_000) {
+      return json({ message: 'Please wait one minute before sending another test' }, 429);
+    }
+    await db.insert(appNotifications).values({ id: crypto.randomUUID(), userId: currentUser.id,
+      kind: 'push_test', title: 'FND notification test',
+      body: 'Your in-app notifications are working. If phone alerts are enabled, you should receive a device alert.',
+      targetPage: 'notifications', dedupeKey: `push-test:${crypto.randomUUID()}`,
+      createdAt: new Date().toISOString() });
+    await pushToUser(currentUser.id);
+    return json({ success: true });
+  }
+
 
     // ==========================================
     // CHAT SYSTEM
@@ -371,32 +620,17 @@ export const onRequest = async (context: any) => {
         await db.insert(chatGroups).values(coreChannels).onConflictDoNothing();
         allGroups = await db.select().from(chatGroups);
       }
-      const staffRows = await db.select().from(staff);
-      const userRows = await db.select().from(users);
-      const roleByEmail = new Map(userRows.map((account: any) => [String(account.email || "").toLowerCase(), String(account.role || "staff").toLowerCase()]));
-      for (const group of allGroups.filter((item: any) => item.createdBy === "system")) {
-        const existingMembers = await db.select().from(chatGroupMembers).where(eq(chatGroupMembers.groupId, group.id)).limit(1);
-        if (existingMembers.length > 0) continue;
-        const recommended = staffRows.filter((member: any) => {
-          const memberRole = roleByEmail.get(String(member.email || "").toLowerCase()) || (member.isSmt ? "smt" : "staff");
-          const management = ["developer", "admin", "manager", "owner"].includes(memberRole);
-          if (group.name === "FND Staffs") return true;
-          if (group.name === "SMT & Management") return management || memberRole === "smt" || member.isSmt === true || member.isIncharge === true;
-          if (group.name === "Flight Operations") return management || memberRole === "smt" || member.isSmt === true || member.isIncharge === true || member.department === "Ground Operations";
-          return group.department === member.department;
-        });
-        if (recommended.length > 0) await db.insert(chatGroupMembers).values(recommended.map((member: any) => ({
-          id: crypto.randomUUID(), groupId: group.id, staffId: member.id, role: 'member', createdAt: new Date().toISOString()
-        }))).onConflictDoNothing();
-      }
       const chatStaffId = await getChatStaffId(currentUser);
       const myMemberships = await db.select().from(chatGroupMembers).where(or(
         eq(chatGroupMembers.staffId, chatStaffId),
         eq(chatGroupMembers.staffId, String(currentUser.id || ''))
       ));
-      const myGroupIds = myMemberships.map((membership: any) => membership.groupId);
-      const isDevOrManager = ['developer', 'manager', 'admin', 'owner'].includes(currentUser.role);
-      return json(allGroups.filter((group: any) => isDevOrManager || myGroupIds.includes(group.id)));
+      const myGroupIds = new Set(myMemberships.map((membership: any) => membership.groupId));
+      const profile = await getCurrentStaffProfile(currentUser);
+      // Effective access to automatic channels is based on today's verified
+      // role/department, so new staff need no database member-sync on GET.
+      return json(allGroups.filter((group: any) => group.createdBy === 'system'
+        ? canAccessSystemGroup(group, currentUser, profile) : myGroupIds.has(group.id)));
     }
 
     if (pathname === "/api/chat/groups" && method === "POST") {
@@ -510,22 +744,35 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/request-password-reset" && method === "POST") {
       const body: any = await request.json();
-      if (!body.email) return json({ message: "Email required" }, 400);
+      const requestedEmail = String(body?.email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(requestedEmail) || requestedEmail.length > 254) {
+        return json({ message: 'Enter a valid email address' }, 400);
+      }
 
-      const existingUser = await db.select().from(users).where(eq(users.email, body.email.toLowerCase())).limit(1);
+      const existingUser = await db.select().from(users)
+        .where(sql`lower(${users.email}) = ${requestedEmail}`).limit(1);
       if (existingUser.length === 0) {
          return json({ message: "If an account exists, a request was sent." });
       }
 
-      const existingRequest = await db.select().from(passwordResetRequests).where(and(eq(passwordResetRequests.email, body.email.toLowerCase()), eq(passwordResetRequests.status, "pending"))).limit(1);
-      if (existingRequest.length > 0) return json({ success: true, message: "A forgot-password request is already pending." });
+      const existingRequest = await db.select().from(passwordResetRequests).where(and(eq(passwordResetRequests.email, requestedEmail), eq(passwordResetRequests.status, "pending"))).limit(1);
+      if (existingRequest.length > 0) return json({ success: true, message: "If an account exists, the request has been recorded." });
+      const recent = await db.select({ requestedAt: passwordResetRequests.requestedAt })
+        .from(passwordResetRequests).where(eq(passwordResetRequests.email, requestedEmail))
+        .orderBy(desc(passwordResetRequests.requestedAt)).limit(1);
+      if (recent[0]?.requestedAt && Date.now() - Date.parse(String(recent[0].requestedAt)) < 15 * 60 * 1000) {
+        return json({ success: true, message: "If an account exists, the request has been recorded." });
+      }
 
       const id = crypto.randomUUID();
       await db.insert(passwordResetRequests).values({
-        id, email: body.email.toLowerCase(), status: "pending", requestedAt: new Date().toISOString(),
+        id, email: requestedEmail, status: "pending", requestedAt: new Date().toISOString(),
       });
+      // Persist the request even if notification delivery temporarily fails.
+      try { await notifyPasswordResetApprovers(id, requestedEmail); }
+      catch (error) { console.error('Could not notify password-reset approvers:', error); }
 
-      return json({ success: true, message: "Request sent to Admin." });
+      return json({ success: true, message: "If an account exists, the request has been recorded." });
     }
 
     if (pathname === "/api/password-reset-requests" && method === "GET") {
@@ -546,23 +793,51 @@ export const onRequest = async (context: any) => {
       const targetUser = await db.select().from(user).where(eq(user.email, reqData.email)).limit(1);
       if (targetUser.length === 0) return json({ message: "User not found" }, 404);
 
+      if (reqData.status !== "pending") return json({ message: "Request already processed" }, 409);
       const userId = targetUser[0].id;
+      const [credential] = await db.select({ id: account.id }).from(account).where(and(
+        eq(account.userId, userId), eq(account.providerId, "credential")
+      )).limit(1);
+      if (!credential) return json({ message: "This user has no email/password credential. Contact the system administrator." }, 409);
 
+      // Preserve the auth user and all its linked staff data. The password,
+      // session revocation and request resolution are one atomic SQL statement.
+      // No user or credential rows are ever deleted.
       try {
-        await db.delete(session).where(eq(session.userId, userId));
-        await db.delete(account).where(eq(account.userId, userId));
-        await db.delete(user).where(eq(user.id, userId));
-
-        const temporaryPassword = `Fnd!${crypto.randomUUID().replace(/-/g, "").slice(0, 6)}`;
-        await getAuth(env).api.signUpEmail({
-          body: { email: reqData.email, password: temporaryPassword, name: targetUser[0].name || "Staff Member" }
-        });
-
-        await db.update(passwordResetRequests).set({ status: "resolved" }).where(eq(passwordResetRequests.id, id));
-        return json({ success: true, message: "Password reset completed", temporaryPassword, userName: reqData.email, loginUrl: env?.BETTER_AUTH_URL || "https://management.funadhooairport.com" });
+        const temporaryPassword = `Fnd!${crypto.randomUUID().replace(/-/g, "").slice(0, 18)}`;
+        const hash = await hashPassword(temporaryPassword);
+        const result: any = await db.execute(sql`
+          WITH changed AS (
+            UPDATE "account" SET "password" = ${hash}, "updated_at" = now()
+            WHERE "id" = ${credential.id} AND "user_id" = ${userId} AND "provider_id" = 'credential'
+              AND EXISTS (SELECT 1 FROM "password_reset_requests" WHERE "id" = ${id} AND "status" = 'pending')
+            RETURNING "id"
+          ), revoked AS (
+            DELETE FROM "session" WHERE "user_id" = ${userId} AND EXISTS (SELECT 1 FROM changed)
+            RETURNING "id"
+          )
+          UPDATE "password_reset_requests" SET "status" = 'resolved'
+          WHERE "id" = ${id} AND "status" = 'pending' AND EXISTS (SELECT 1 FROM changed)
+          RETURNING "id"
+        `);
+        if (!result?.rows?.length) return json({ message: "Reset already processed. No password changed." }, 409);
+        try {
+          await ensureNotificationTables();
+          await db.update(appNotifications).set({ readAt: new Date().toISOString() }).where(and(
+            eq(appNotifications.kind, 'password_reset_request'), eq(appNotifications.sourceId, id)));
+        } catch (error) { console.warn('Reset completed; notification cleanup failed:', error); }
+        try {
+          await emitNotifications([userId], {
+            kind: 'password_reset_completed', title: 'Your password was reset',
+            body: 'Management reset your sign-in password. Contact your administrator for your new temporary password.',
+            targetPage: 'notifications', sourceId: id!, eventKey: `password-reset:completed:${id}`,
+          });
+        } catch (notifyError) { console.warn('Password reset completed; user notification unavailable', notifyError); }
+        return json({ success: true, message: "Password reset completed; previous sessions were revoked", temporaryPassword,
+          userName: reqData.email, loginUrl: env?.BETTER_AUTH_URL || "https://management.funadhooairport.com" });
       } catch (err: any) {
-        console.error("Failed to reset password", err);
-        return json({ message: "Failed to reset password" }, 500);
+        console.error("Failed to reset password (account preserved)", err);
+        return json({ message: "Password reset failed. The existing account was not deleted." }, 500);
       }
     }
 
@@ -703,6 +978,9 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       const results = await db.select().from(staff).orderBy(asc(staff.orderIndex));
       const canViewPrivateStaffData = ["developer", "manager", "admin", "owner"].includes(currentUser.role);
+      const viewerStaff = await getCurrentStaffProfile(currentUser);
+      const canSeeOwnDepartmentDetails = (record: any) => Boolean(viewerStaff?.isIncharge &&
+        String(viewerStaff.department || '').toLowerCase() === String(record.department || '').toLowerCase());
       const canViewInternalNotes = currentUser.role === "developer";
       const requesterEmail = String(currentUser.email || "").toLowerCase();
       const developerEmails = currentUser.role === "developer"
@@ -717,6 +995,10 @@ export const onRequest = async (context: any) => {
         if (canViewPrivateStaffData || isOwnRecord) {
           return canViewInternalNotes ? record : { ...record, notes: "" };
         }
+        if (canSeeOwnDepartmentDetails(record)) return {
+          ...record, personalEmail:'', nid:'', notes:'', basicSalary:0,
+          dailyAllowance:0, holidayAllowanceRate:0, bankAccount:'',
+        };
         return {
           ...record,
           personalEmail: "",
@@ -820,19 +1102,29 @@ export const onRequest = async (context: any) => {
 
     if (pathname.startsWith("/api/staff/") && method === "PUT") {
       const currentUser = await requireAuth(request, env);
-      requireManager(currentUser.role);
       const id = pathname.split("/").pop();
-      const body: any = await request.json();
+      const originalBody: any = await request.json();
       const [targetStaff] = await db.select().from(staff).where(eq(staff.id, id!)).limit(1);
       if (!targetStaff) return json({ message: "Staff member not found" }, 404);
-      const [targetUser] = targetStaff.email ? await db.select().from(users).where(eq(users.email, targetStaff.email.toLowerCase())).limit(1) : [];
+      const [targetUser] = targetStaff.email ? await db.select().from(users).where(
+        sql`lower(${users.email}) = ${String(targetStaff.email).toLowerCase()}`).limit(1) : [];
+      const editorStaff = await getCurrentStaffProfile(currentUser);
+      const restrictedAccount = ['developer','manager','admin','owner','smt'].includes(String(targetUser?.role || '').toLowerCase());
+      if (!canEditDepartmentProfile(currentUser, editorStaff, targetStaff, restrictedAccount)) {
+        return json({message:'You may only edit non-sensitive fields of staff in your own department'},403);
+      }
       if (targetUser?.role === "developer" && currentUser.role !== "developer") return json({ message: "Developer records can only be modified by the Developer" }, 403);
+      const isGlobalEditor = isManagerRole(currentUser.role);
+      const body: any = isGlobalEditor ? originalBody : restrictInchargeEditPayload(originalBody);
       const targetIsSMT = targetStaff.isSmt === true || targetUser?.role === "smt" || body.isSMT === true;
       if (body.isIncharge === true && !targetIsSMT) return json({ message: "Only SMT members can be department in-charge" }, 400);
       if (body.specialOpsAccess === true && !["Ground Operations", "Maintenance", "Fire & Rescue"].includes(targetStaff.department || "")) {
         return json({ message: "Special Ops Access is limited to eligible operational departments" }, 400);
       }
       if (body.photoBase64 && (!String(body.photoBase64).startsWith('data:image/') || String(body.photoBase64).length > 900_000)) return json({ message: 'Profile photo must be an image smaller than 650 KB' }, 400);
+      if (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 160)) return json({message:'A valid staff name is required'},400);
+      if (body.position !== undefined && (typeof body.position !== 'string' || body.position.length > 160)) return json({message:'Invalid designation'},400);
+      if (body.phone !== undefined && (typeof body.phone !== 'string' || body.phone.length > 60)) return json({message:'Invalid phone number'},400);
       const requestedSn = body.sn !== undefined ? canonicalSn(body.sn) : canonicalSn(targetStaff.sn);
       if (!requestedSn) return json({ message: 'A unique staff number (SN) is required' }, 400);
       const existingSnRows = await db.select({ id: staff.id, sn: staff.sn }).from(staff);
@@ -898,6 +1190,174 @@ export const onRequest = async (context: any) => {
       }
       await db.delete(staff).where(eq(staff.id, id!));
       return json({ success: true });
+    }
+
+    // ==========================================
+    // RESIGNATIONS — employee upload, own-department review, manual offboarding.
+    // Apply migrations/phase13_resignations.sql before first use.
+    // ==========================================
+    if (pathname === '/api/resignations' && method === 'GET') {
+      const actor = await requireAuth(request, env);
+      const actorStaff = await getCurrentStaffProfile(actor);
+      // Do not fetch letter attachments for the general list. Documents are read
+      // only through the separately authorized /attachment endpoint.
+      const directory = await db.select({
+        id: resignationRequests.id,
+        staffId: resignationRequests.staffId,
+        staffSn: resignationRequests.staffSn,
+        staffName: resignationRequests.staffName,
+        department: resignationRequests.department,
+        requestedLastDay: resignationRequests.requestedLastDay,
+        submittedByUserId: resignationRequests.submittedByUserId,
+        attachmentName: resignationRequests.attachmentName,
+        status: resignationRequests.status,
+        createdAt: resignationRequests.createdAt,
+        reviewedAt: resignationRequests.reviewedAt,
+        reviewedByUserId: resignationRequests.reviewedByUserId,
+        reviewerName: resignationRequests.reviewerName,
+        reviewNote: resignationRequests.reviewNote,
+        acceptanceLetter: resignationRequests.acceptanceLetter,
+        offboardingStatus: resignationRequests.offboardingStatus,
+        offboardedAt: resignationRequests.offboardedAt,
+        offboardedByUserId: resignationRequests.offboardedByUserId,
+      }).from(resignationRequests)
+        .orderBy(desc(resignationRequests.createdAt)).limit(250);
+      const visible = directory.filter(row => globalHR(actor.role) ||
+        row.submittedByUserId === actor.id ||
+        (actorStaff?.id === row.staffId) ||
+        (actorStaff?.isIncharge && String(actorStaff.department || '') === row.department));
+      return json(visible.map(row => {
+        return { ...row, canReview: row.status === 'pending' &&
+            canReviewResignation(actor, actorStaff, {id: row.staffId, department: row.department}),
+          canOffboard: globalHR(actor.role) && row.status === 'approved' && row.offboardingStatus !== 'completed' };
+      }));
+    }
+
+    if (pathname === '/api/resignations' && method === 'POST') {
+      const actor = await requireAuth(request, env);
+      const ownStaff = await getCurrentStaffProfile(actor);
+      if (!ownStaff || ownStaff.status && ownStaff.status !== 'active') return json({message:'An active linked staff profile is required to resign'},403);
+      const body: any = await request.json();
+      const lastDay = String(body.requestedLastDay || '');
+      const todayLocal = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Indian/Maldives', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      if (!isValidISODate(lastDay) || lastDay < todayLocal || lastDay > `${Number(todayLocal.slice(0,4)) + 2}-12-31`) {
+        return json({message:'Choose a valid last working day within two years'},400);
+      }
+      const uploaded = validateLetterUpload(body.letterDataUrl);
+      if (!uploaded) return json({message:'Upload a valid PDF, PNG or JPG resignation letter (maximum 2 MB)'},400);
+      const attachmentName = String(body.attachmentName || '').trim().replace(/[^a-zA-Z0-9_.() -]/g,'').slice(0,120);
+      const allowedExtension = uploaded.mime === 'application/pdf' ? /\.pdf$/i : uploaded.mime === 'image/png' ? /\.png$/i : /\.jpe?g$/i;
+      if (!attachmentName || !allowedExtension.test(attachmentName)) return json({message:'The letter filename must match its file type'},400);
+      const pending = await db.select({id:resignationRequests.id}).from(resignationRequests).where(and(
+        eq(resignationRequests.staffId, ownStaff.id), eq(resignationRequests.status, 'pending'))).limit(1);
+      if (pending.length) return json({message:'You already have a pending resignation request'},409);
+      const id = crypto.randomUUID();
+      await db.insert(resignationRequests).values({
+        id, staffId: ownStaff.id, staffSn: String(ownStaff.sn || ''), staffName: String(ownStaff.name || ''),
+        department: String(ownStaff.department || ''), requestedLastDay: lastDay,
+        submittedByUserId: actor.id, attachmentName, attachmentData: body.letterDataUrl,
+        status: 'pending', createdAt: new Date().toISOString(), offboardingStatus: 'not_started',
+      });
+      try {
+        const recipients = await getRequestApprovers(ownStaff, actor.email);
+        await emitNotifications(recipients, {kind:'resignation_request', title:'Resignation request awaiting review',
+          body:'A staff resignation has been submitted with a letter. Review it in Resignations.',
+          targetPage:'resignations', sourceId:id, eventKey:`resignation-submitted:${id}`});
+      } catch (err) { console.warn('Resignation submitted, notification delivery unavailable',err); }
+      return json({success:true,id},201);
+    }
+
+    const resignationDocumentMatch = pathname.match(/^\/api\/resignations\/([a-z0-9-]+)\/(attachment|letter)$/);
+    if (resignationDocumentMatch && method === 'GET') {
+      const actor = await requireAuth(request, env);
+      const actorStaff = await getCurrentStaffProfile(actor);
+      const [record] = await db.select().from(resignationRequests).where(eq(resignationRequests.id,resignationDocumentMatch[1])).limit(1);
+      if (!record) return json({message:'Resignation not found'},404);
+      const allowed = globalHR(actor.role) || record.submittedByUserId === actor.id ||
+        actorStaff?.id === record.staffId ||
+        (actorStaff?.isIncharge && actorStaff.department === record.department);
+      if (!allowed) return json({message:'Not authorized for this resignation letter'},403);
+      if (resignationDocumentMatch[2] === 'attachment') return json({name:record.attachmentName,dataUrl:record.attachmentData});
+      if (record.status !== 'approved' || !record.acceptanceLetter) return json({message:'The acceptance letter is not available until approval'},409);
+      return json({name:`Resignation_Acceptance_${record.staffSn || record.id}.txt`,text:record.acceptanceLetter});
+    }
+
+    const resignationDecisionMatch = pathname.match(/^\/api\/resignations\/([a-z0-9-]+)\/(approve|reject|offboard)$/);
+    if (resignationDecisionMatch && method === 'POST') {
+      const actor = await requireAuth(request, env);
+      const actorStaff = await getCurrentStaffProfile(actor);
+      const [record] = await db.select().from(resignationRequests).where(eq(resignationRequests.id,resignationDecisionMatch[1])).limit(1);
+      if (!record) return json({message:'Resignation not found'},404);
+      const [targetStaff] = await db.select().from(staff).where(eq(staff.id,record.staffId)).limit(1);
+      if (!targetStaff) return json({message:'Staff record is missing; contact Administration'},409);
+      const action = resignationDecisionMatch[2];
+      if (record.submittedByUserId === actor.id) return json({message:'You cannot approve or complete your own resignation'},403);
+      if (action === 'offboard') {
+        if (!globalHR(actor.role) || actorStaff?.id === targetStaff.id) return json({message:'Admin/Manager authorization required'},403);
+        if (record.status !== 'approved' || !['not_started','retry_required'].includes(record.offboardingStatus || 'not_started')) return json({message:'Only an approved, unfinished resignation can be offboarded'},409);
+        const todayLocal = new Intl.DateTimeFormat('sv-SE',{timeZone:'Indian/Maldives'}).format(new Date());
+        if (record.requestedLastDay > todayLocal) return json({message:'Last working day has not arrived yet'},409);
+        const [appAccount] = await db.select({id:user.id,email:user.email}).from(user)
+          .where(sql`lower(${user.email}) = ${String(targetStaff.email || '').toLowerCase()}`).limit(1);
+        const [roleRecord] = targetStaff.email ? await db.select({role:users.role}).from(users).where(
+          sql`lower(${users.email}) = ${String(targetStaff.email).toLowerCase()}`).limit(1) : [];
+        if (roleRecord?.role === 'developer' && actor.role !== 'developer') return json({message:'Developer account can only be deactivated by a Developer'},403);
+        const claimed = await db.update(resignationRequests).set({offboardingStatus:'processing'})
+          .where(and(eq(resignationRequests.id,record.id),
+            inArray(resignationRequests.offboardingStatus,['not_started','retry_required'])))
+          .returning({id:resignationRequests.id});
+        if (!claimed.length) return json({message:'Offboarding is being handled or already completed'},409);
+        try {
+          // Archive, never hard-delete. If a later step fails, retain a retryable state.
+          await db.update(staff).set({status:'resigned',updatedAt:new Date().toISOString()}).where(eq(staff.id,targetStaff.id));
+          if (appAccount?.id) await db.delete(session).where(eq(session.userId,appAccount.id));
+          await db.update(resignationRequests).set({offboardingStatus:'completed',
+            offboardedAt:new Date().toISOString(),offboardedByUserId:actor.id})
+            .where(eq(resignationRequests.id,record.id));
+        } catch (error) {
+          await db.update(resignationRequests).set({offboardingStatus:'retry_required'})
+            .where(eq(resignationRequests.id,record.id)).catch(()=>{});
+          throw error;
+        }
+        return json({success:true,message:'Staff archived and existing sessions revoked where an account was linked. Retain history; review permanent deletion separately.'});
+      }
+      if (!canReviewResignation(actor,actorStaff,targetStaff)) return json({message:'Only the department In-Charge or authorized management may decide this request'},403);
+      if (record.status !== 'pending') return json({message:'This resignation has already been decided'},409);
+      const body: any = await request.json().catch(() => ({}));
+      const note = String(body.note || '').trim().slice(0,900);
+      if (action === 'reject' && note.length < 5) return json({message:'Please provide a rejection reason'},400);
+      const approved = action === 'approve';
+      const acceptance = approved ? makeResignationAcceptanceLetter({
+        employeeName: record.staffName, employeeSn: record.staffSn, department: record.department,
+        lastWorkingDay: record.requestedLastDay, approvalDate: new Intl.DateTimeFormat('sv-SE', {timeZone:'Indian/Maldives'}).format(new Date()),
+        approvingOfficer: `${actorStaff?.name || actor.name || actor.email} (${actorStaff?.sn || actor.role})`,
+      }) : null;
+      const decided = await db.update(resignationRequests).set({
+        status:approved?'approved':'rejected',reviewedAt:new Date().toISOString(),reviewedByUserId:actor.id,
+        reviewerName:String(actorStaff?.name || actor.name || actor.email),reviewNote:note,acceptanceLetter:acceptance,
+        offboardingStatus:approved?'not_started':'not_required',
+      }).where(and(eq(resignationRequests.id,record.id),eq(resignationRequests.status,'pending')))
+        .returning({id:resignationRequests.id});
+      if (!decided.length) return json({message:'This request was already reviewed'},409);
+      try {
+        const owners = [record.submittedByUserId];
+        await emitNotifications(owners,{kind:approved?'resignation_approved':'resignation_rejected',
+          title:approved?'Resignation accepted':'Resignation request returned',
+          body:approved?'Your acceptance letter is available in Resignations.':'Your resignation requires attention in Resignations.',
+          targetPage:'resignations',sourceId:record.id,eventKey:`resignation-decision:${record.id}`});
+        if (approved) {
+          const [authRows, roleRows] = await Promise.all([
+            db.select({id:user.id,email:user.email}).from(user),
+            db.select({email:users.email,role:users.role}).from(users),
+          ]);
+          const adminEmails = new Set(roleRows.filter(row => globalHR(row.role)).map(row=>String(row.email||'').toLowerCase()));
+          const managerIds = authRows.filter(row=>adminEmails.has(String(row.email||'').toLowerCase())).map(row=>row.id);
+          await emitNotifications(managerIds,{kind:'resignation_offboarding', title:'Offboarding follow-up required',
+            body:'An approved resignation needs an account deactivation and staff archive review after the last working day. Preserve historical records.',
+            targetPage:'resignations',sourceId:record.id,eventKey:`resignation-offboarding:${record.id}`});
+        }
+      } catch (err) { console.warn('Resignation decided; notification delivery unavailable',err); }
+      return json({success:true,status:approved?'approved':'rejected'});
     }
 
     // ==========================================
@@ -1029,6 +1489,47 @@ export const onRequest = async (context: any) => {
     }
 
     // ==========================================
+    // PHASE 11: MANAGER REPORTS, AGGREGATED WITHOUT PERSONAL REASONS.
+    // ==========================================
+    if (pathname === "/api/manager/summary" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      requireManager(currentUser.role);
+      const from = String(url.searchParams.get('from') || '');
+      const to = String(url.searchParams.get('to') || '');
+      const department = String(url.searchParams.get('department') || '');
+      const dateRE = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRE.test(from) || !dateRE.test(to) || from > to ||
+          Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(to)) ||
+          (Date.parse(to) - Date.parse(from)) / 86400000 > 366) {
+        return json({ message: 'Select a valid date range up to 366 days' }, 400);
+      }
+      if (department && !ACCESS_DEPARTMENTS.includes(department)) return json({ message: 'Invalid department' }, 400);
+      const [roster, leaves, overtime, flightRows, birds, fod, ramp, lights] = await Promise.all([
+        db.select({ staffId: rosterEntries.staffId, staffDepartment: rosterEntries.staffDepartment,
+          date: rosterEntries.date, status: rosterEntries.status }).from(rosterEntries)
+          .where(and(sql`${rosterEntries.date} >= ${from}`, sql`${rosterEntries.date} <= ${to}`)),
+        db.select({ staffDepartment: leaveRequests.staffDepartment, status: leaveRequests.status,
+          startDate: leaveRequests.startDate, endDate: leaveRequests.endDate }).from(leaveRequests)
+          .where(and(sql`${leaveRequests.startDate} <= ${to}`, sql`${leaveRequests.endDate} >= ${from}`)),
+        db.select({ staffDepartment: overtimeEntries.staffDepartment, status: overtimeEntries.status,
+          date: overtimeEntries.date, hours: overtimeEntries.hours }).from(overtimeEntries)
+          .where(and(sql`${overtimeEntries.date} >= ${from}`, sql`${overtimeEntries.date} <= ${to}`)),
+        db.select({ date: flights.date }).from(flights)
+          .where(and(sql`${flights.date} >= ${from}`, sql`${flights.date} <= ${to}`)),
+        db.select({ date: birdCounts.date }).from(birdCounts)
+          .where(and(sql`${birdCounts.date} >= ${from}`, sql`${birdCounts.date} <= ${to}`)),
+        db.select({ date: fodCollections.date }).from(fodCollections)
+          .where(and(sql`${fodCollections.date} >= ${from}`, sql`${fodCollections.date} <= ${to}`)),
+        db.select({ date: rampInspections.date }).from(rampInspections)
+          .where(and(sql`${rampInspections.date} >= ${from}`, sql`${rampInspections.date} <= ${to}`)),
+        db.select({ date: rwyLights.date }).from(rwyLights)
+          .where(and(sql`${rwyLights.date} >= ${from}`, sql`${rwyLights.date} <= ${to}`)),
+      ]);
+      return json(buildManagerSummary({ roster, leaves, overtime, flights: flightRows, birds, fod, ramp, lights },
+        from, to, department));
+    }
+
+    // ==========================================
     // LEAVE REQUESTS MODULE
     // ==========================================
     // Manager-only, read-only Phase 6 audit; does not consolidate or modify records.
@@ -1045,12 +1546,8 @@ export const onRequest = async (context: any) => {
     }
     if (pathname === "/api/leave-requests" && method === "GET") {
       const currentUser = await requireAuth(request, env);
-      // Repair legacy per-day roster history on the first read in each worker
-      // and periodically thereafter. Roster writes reconcile their own staff immediately.
-      if (Date.now() - lastRosterLeaveReconcileAt > 5 * 60 * 1000) {
-        await reconcileRosterLeaveHistory();
-        lastRosterLeaveReconcileAt = Date.now();
-      }
+      // A GET request is read-only. Never merge/delete historical leave while listing it.
+      // Roster writes still reconcile their own entries; older rows need an explicit audit.
       const results = await db.select().from(leaveRequests)
         .orderBy(desc(leaveRequests.startDate), desc(leaveRequests.requestedAt));
       return json(await scopeRequestsForUser(currentUser, results, true));
@@ -1097,8 +1594,15 @@ export const onRequest = async (context: any) => {
           reason: String(body.reason || '').slice(0, 2000),
           status: "pending", requestedBy: currentUser.email, requestedAt: new Date().toISOString(),
         });
+        // For manual leave, one alert covers the entire approved date range.
+        try { const approvers = await getRequestApprovers(targetStaff, currentUser.email);
+        await emitNotifications(approvers, {
+          kind: 'leave_request', title: 'New leave request',
+          body: `${targetStaff.name || 'Staff member'} · ${leaveType} · ${dates[0]} to ${dates[dates.length - 1]}`,
+          targetPage: 'leave', sourceId: id, eventKey: `leave:submitted:${id}`,
+        }); } catch (notifyError) { console.warn('Leave request saved; notification unavailable', notifyError); }
         return json({ success: true, id, days });
-      } catch { return json({ message: "Failed to create leave request." }, 400); }
+      } catch (error) { console.error('Leave request creation failed', error); return json({ message: "Failed to create leave request." }, 400); }
     }
 
     if (url.pathname.startsWith("/api/leave-requests/") && url.pathname.endsWith("/approve") && method === "PUT") {
@@ -1210,14 +1714,26 @@ export const onRequest = async (context: any) => {
             previousStatus: snapshot.previousStatus, previousShiftTime: snapshot.previousShiftTime,
           });
         }
+        // Neon HTTP executes batch() as one non-interactive database transaction:
+        // roster deletion, replacement and approval either all commit or all roll back.
+        // A database uniqueness strategy is still needed to prevent concurrent writers.
         if (dateStrings.length > 0) {
-          await db.delete(rosterEntries).where(and(eq(rosterEntries.staffId, actualStaffId), inArray(rosterEntries.date, dateStrings)));
-          await db.insert(rosterEntries).values(entriesToInsert);
+          await db.batch([
+            db.delete(rosterEntries).where(and(eq(rosterEntries.staffId, actualStaffId), inArray(rosterEntries.date, dateStrings))),
+            db.insert(rosterEntries).values(entriesToInsert),
+            db.update(leaveRequests).set({ status: "approved", reviewedBy: currentUser.email, reviewedAt })
+              .where(and(eq(leaveRequests.id, id!), eq(leaveRequests.status, 'pending'))),
+          ]);
         }
-        await db.update(leaveRequests).set({
-          status: "approved", reviewedBy: currentUser.email, reviewedAt
-        }).where(eq(leaveRequests.id, id!));
       }
+      await closePendingApproverNotifications('leave_request', id!);
+      try {
+        await emitNotifications(await getRequestOwner(targetStaff.email), {
+          kind: 'leave_approved', title: 'Leave request approved',
+          body: `Your ${String(leaveRow.leaveType || 'leave')} request for ${leaveRow.startDate} to ${leaveRow.endDate} was approved.`,
+          targetPage: 'leave', sourceId: id!, eventKey: `leave:approved:${id}`,
+        });
+      } catch (notifyError) { console.warn('Leave approved; staff notification unavailable', notifyError); }
       return json({ success: true });
     }
 
@@ -1269,11 +1785,24 @@ export const onRequest = async (context: any) => {
       if (targetStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return json({ message: "You cannot review your own leave request" }, 403);
       await requireLeaveApproval(env, currentUser.email, targetStaff.email);
 
+      if (String(leaveRow.status || '').toLowerCase() !== 'pending') {
+        return json({ message: 'Only pending leave can be rejected.' }, 409);
+      }
       const body: any = await request.json();
-      await db.update(leaveRequests).set({
-        status: "rejected", reviewedBy: currentUser.email, reviewedAt: new Date().toISOString(),
-        reviewNotes: body.reviewNotes || ""
-      }).where(eq(leaveRequests.id, id!));
+      const changed = await db.update(leaveRequests).set({
+        status: 'rejected', reviewedBy: currentUser.email, reviewedAt: new Date().toISOString(),
+        reviewNotes: String(body.reviewNotes || '').slice(0, 2000),
+      }).where(and(eq(leaveRequests.id, id!), eq(leaveRequests.status, 'pending')))
+        .returning({ id: leaveRequests.id });
+      if (!changed.length) return json({ message: 'Request already reviewed' }, 409);
+      await closePendingApproverNotifications('leave_request', id!);
+      try {
+        await emitNotifications(await getRequestOwner(targetStaff.email), {
+          kind: 'leave_rejected', title: 'Leave request rejected',
+          body: `Your ${String(leaveRow.leaveType || 'leave')} request for ${leaveRow.startDate} to ${leaveRow.endDate} was rejected.`,
+          targetPage: 'leave', sourceId: id!, eventKey: `leave:rejected:${id}`,
+        });
+      } catch (notifyError) { console.warn('Leave rejected; notification unavailable', notifyError); }
       return json({ success: true });
     }
 
@@ -1498,18 +2027,21 @@ export const onRequest = async (context: any) => {
         ? snapshotRosterBeforeLeave(existing) : null;
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
       const rosterLeaveRequestId = await ensureRosterLeaveHistory(currentUser, targetStaff, body.status, body.date);
-      // One roster row per staff/day: remove any legacy duplicates when replacing it.
-      if (existing.length > 0) await db.delete(rosterEntries).where(and(
+      const deletePrevious = db.delete(rosterEntries).where(and(
         eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date)
       ));
       if (body.status !== "clear") {
-        await db.insert(rosterEntries).values({
+        const insertReplacement = db.insert(rosterEntries).values({
           id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
           date: body.date, shiftTime: body.status === "scheduled" ? body.shiftTime : "", status: body.status,
           leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
           previousStatus: restoringSnapshot?.previousStatus ?? null,
           previousShiftTime: restoringSnapshot?.previousShiftTime ?? null,
         });
+        // Never leave a blank shift from a failure between delete and insert.
+        await db.batch([deletePrevious, insertReplacement]);
+      } else {
+        await deletePrevious;
       }
       if (rosterLeaveRequestId) await reconcileRosterLeaveHistory(targetStaff.id);
       return json({ success: true, id });
@@ -1777,7 +2309,7 @@ export const onRequest = async (context: any) => {
       const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
       validateAccessAssignment(currentUser.role, role, department);
 
-      if (!/^\S+@\S+\.\S+$/.test(email) || typeof password !== "string" || password.length < 6 || password.length > 10) return json({ message: "A valid email and password of 6 to 10 characters are required" }, 400);
+      if (!/^\S+@\S+\.\S+$/.test(email) || typeof password !== "string" || password.length < 8 || password.length > 128) return json({ message: "A valid email and password of 8 to 128 characters are required" }, 400);
       const activeUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
       if (activeUser.length > 0) return json({ message: "This user already exists." }, 400);
 
@@ -1874,6 +2406,8 @@ export const onRequest = async (context: any) => {
 
       const body: any = await request.json();
       const targetStaff = await getAuthorizedRequestStaff(currentUser, String(body.staffId || ""));
+      const duration = getOvertimeDuration(body.date, body.startTime, body.endTime);
+      if (duration === null) return json({ message: "Enter valid OT date and times (15 minutes to 16 hours)." }, 400);
       const id = crypto.randomUUID();
       const existingOvertime = await db.select().from(overtimeEntries).where(and(
         eq(overtimeEntries.staffId, body.staffId),
@@ -1886,9 +2420,16 @@ export const onRequest = async (context: any) => {
         await db.insert(overtimeEntries).values({
           id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffSn: targetStaff.sn || "",
           staffDepartment: targetStaff.department || "", date: body.date, startTime: body.startTime,
-          endTime: body.endTime, hours: body.hours, notes: body.notes || "",
+          endTime: body.endTime, hours: duration, notes: String(body.notes || "").slice(0, 1000),
           status: "pending", createdBy: currentUser.email, createdAt: new Date().toISOString(),
         });
+        try {
+          await emitNotifications(await getRequestApprovers(targetStaff, currentUser.email), {
+            kind: 'ot_request', title: 'New overtime request',
+            body: `${targetStaff.name || 'Staff member'} · ${body.date} · ${body.startTime}–${body.endTime}`,
+            targetPage: 'overtime', sourceId: id, eventKey: `ot:submitted:${id}`,
+          });
+        } catch (notifyError) { console.warn('OT saved; notification unavailable', notifyError); }
         return json({ success: true, id });
       } catch { return json({ message: "Failed to create overtime." }, 400); }
     }
@@ -1908,9 +2449,11 @@ export const onRequest = async (context: any) => {
       const [overtimeRecord] = await db.select().from(overtimeEntries).where(eq(overtimeEntries.id, id!)).limit(1);
       await requireRequestMutationAccess(currentUser, overtimeRecord, 'Overtime request');
       const body: any = await request.json();
+      const duration = getOvertimeDuration(body.date, body.startTime, body.endTime);
+      if (duration === null) return json({ message: "Enter valid OT date and times (15 minutes to 16 hours)." }, 400);
       await db.update(overtimeEntries).set({
         date: body.date, startTime: body.startTime, endTime: body.endTime,
-        hours: body.hours, notes: body.notes || ""
+        hours: duration, notes: String(body.notes || "").slice(0, 1000)
       }).where(eq(overtimeEntries.id, id!));
       return json({ success: true });
     }
@@ -1964,9 +2507,19 @@ export const onRequest = async (context: any) => {
       await requireOTApproval(env, currentUser.email, targetStaff.email);
 
       await request.json();
-      await db.update(overtimeEntries).set({
-        status: "approved", reviewedBy: currentUser.email, reviewedAt: new Date().toISOString()
-      }).where(eq(overtimeEntries.id, id!));
+      const changed = await db.update(overtimeEntries).set({
+        status: 'approved', reviewedBy: currentUser.email, reviewedAt: new Date().toISOString()
+      }).where(and(eq(overtimeEntries.id, id!), eq(overtimeEntries.status, 'pending')))
+        .returning({ id: overtimeEntries.id });
+      if (!changed.length) return json({ message: 'OT already reviewed' }, 409);
+      await closePendingApproverNotifications('ot_request', id!);
+      try {
+        await emitNotifications(await getRequestOwner(targetStaff.email), {
+          kind: 'ot_approved', title: 'Overtime request approved',
+          body: `Your overtime request for ${overtimeRow.date} (${overtimeRow.startTime}–${overtimeRow.endTime}) was approved.`,
+          targetPage: 'overtime', sourceId: id!, eventKey: `ot:approved:${id}`,
+        });
+      } catch (notifyError) { console.warn('OT approved; notification unavailable', notifyError); }
       return json({ success: true });
     }
     if (url.pathname.startsWith("/api/overtime/") && url.pathname.endsWith("/reject") && method === "PUT") {
@@ -2019,9 +2572,19 @@ export const onRequest = async (context: any) => {
       await requireOTApproval(env, currentUser.email, targetStaff.email);
 
       await request.json();
-      await db.update(overtimeEntries).set({
-        status: "rejected", reviewedBy: currentUser.email, reviewedAt: new Date().toISOString()
-      }).where(eq(overtimeEntries.id, id!));
+      const changed = await db.update(overtimeEntries).set({
+        status: 'rejected', reviewedBy: currentUser.email, reviewedAt: new Date().toISOString()
+      }).where(and(eq(overtimeEntries.id, id!), eq(overtimeEntries.status, 'pending')))
+        .returning({ id: overtimeEntries.id });
+      if (!changed.length) return json({ message: 'OT already reviewed' }, 409);
+      await closePendingApproverNotifications('ot_request', id!);
+      try {
+        await emitNotifications(await getRequestOwner(targetStaff.email), {
+          kind: 'ot_rejected', title: 'Overtime request rejected',
+          body: `Your overtime request for ${overtimeRow.date} (${overtimeRow.startTime}–${overtimeRow.endTime}) was rejected.`,
+          targetPage: 'overtime', sourceId: id!, eventKey: `ot:rejected:${id}`,
+        });
+      } catch (notifyError) { console.warn('OT rejected; notification unavailable', notifyError); }
       return json({ success: true });
     }
     if (pathname.startsWith("/api/overtime/") && method === "DELETE") {
@@ -2637,45 +3200,31 @@ export const onRequest = async (context: any) => {
         timeZone: 'Indian/Maldives', year: 'numeric', month: '2-digit', day: '2-digit'
       }).format(new Date());
 
-      const staffList =
-        await db
-          .select()
-          .from(staff);
-
-      const leaveList =
-        await db
-          .select()
-          .from(leaveRequests);
-
-      const roster =
-        await db
-          .select()
-          .from(rosterEntries);
-
-      const flightList =
-        await db
-          .select()
-          .from(flights);
-
-      const birdData =
-        await db
-          .select()
-          .from(birdCounts);
-
-      const fodData =
-        await db
-          .select()
-          .from(fodCollections);
-
-      const lightsData =
-        await db
-          .select()
-          .from(rwyLights);
-
-      const rampData =
-        await db
-          .select()
-          .from(rampInspections);
+      // Dashboard uses only today's operational data and pending requests.
+      // Never load or return leave reasons, salary, phone or other private fields.
+      const [staffList, leaveList, roster, flightList, birdData, fodData, lightsData, rampData] = await Promise.all([
+        db.select({ id: staff.id, name: staff.name, sn: staff.sn, email: staff.email,
+          department: staff.department, isSmt: staff.isSmt, isIncharge: staff.isIncharge,
+          specialOpsAccess: staff.specialOpsAccess, flightsViewAccess: staff.flightsViewAccess,
+          flightsEditAccess: staff.flightsEditAccess }).from(staff),
+        db.select({ id: leaveRequests.id, staffId: leaveRequests.staffId, staffName: leaveRequests.staffName,
+          staffSn: leaveRequests.staffSn, staffDepartment: leaveRequests.staffDepartment,
+          leaveType: leaveRequests.leaveType, status: leaveRequests.status,
+          startDate: leaveRequests.startDate, endDate: leaveRequests.endDate,
+          requestedAt: leaveRequests.requestedAt, requestedBy: leaveRequests.requestedBy }).from(leaveRequests)
+          .where(or(eq(leaveRequests.status, 'pending'), and(
+            eq(leaveRequests.status, 'approved'),
+            sql`${leaveRequests.startDate} <= ${today}`, sql`${leaveRequests.endDate} >= ${today}`))),
+        db.select({ id: rosterEntries.id, staffId: rosterEntries.staffId,
+          staffName: rosterEntries.staffName, staffDepartment: rosterEntries.staffDepartment,
+          date: rosterEntries.date, status: rosterEntries.status, shiftTime: rosterEntries.shiftTime,
+          leaveRequestId: rosterEntries.leaveRequestId }).from(rosterEntries).where(eq(rosterEntries.date, today)),
+        db.select().from(flights),
+        db.select({ date: birdCounts.date }).from(birdCounts).where(eq(birdCounts.date, today)),
+        db.select({ date: fodCollections.date }).from(fodCollections).where(eq(fodCollections.date, today)),
+        db.select({ date: rwyLights.date }).from(rwyLights).where(eq(rwyLights.date, today)),
+        db.select({ date: rampInspections.date }).from(rampInspections).where(eq(rampInspections.date, today)),
+      ]);
 
       const liveRampRows = await db.select().from(rampLiveDraft);
       const liveRampDraftMap = new Map<string, any>();
@@ -2836,8 +3385,10 @@ export const onRequest = async (context: any) => {
         pendingOT =
           (
             await db
-              .select()
-              .from(overtimeEntries)
+              .select({ id: overtimeEntries.id, staffId: overtimeEntries.staffId,
+                staffDepartment: overtimeEntries.staffDepartment, status: overtimeEntries.status,
+                createdBy: overtimeEntries.createdBy })
+              .from(overtimeEntries).where(eq(overtimeEntries.status, 'pending'))
           ).filter(
             o =>
               o.status === "pending" &&
@@ -2862,8 +3413,10 @@ export const onRequest = async (context: any) => {
         pendingOT =
           (
             await db
-              .select()
-              .from(overtimeEntries)
+              .select({ id: overtimeEntries.id, staffId: overtimeEntries.staffId,
+                staffDepartment: overtimeEntries.staffDepartment, status: overtimeEntries.status,
+                createdBy: overtimeEntries.createdBy })
+              .from(overtimeEntries).where(eq(overtimeEntries.status, 'pending'))
           ).filter(
             o =>
               o.createdBy ===
@@ -2909,7 +3462,11 @@ export const onRequest = async (context: any) => {
 
         onLeaveToday,
 
-        unavailableToday: [...activeLeaveToday, ...rosterUnavailableToday],
+        unavailableToday: [...activeLeaveToday, ...rosterUnavailableToday].map((row: any) => ({
+          staffId: row.staffId, staffName: row.staffName, staffDepartment: row.staffDepartment,
+          leaveType: row.leaveType, status: row.status, date: row.date,
+          startDate: row.startDate, endDate: row.endDate,
+        })),
 
         pendingLeave,
 

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const api=readFileSync(new URL('../functions/api/[[path]].ts',import.meta.url),'utf8');
+const middleware=readFileSync(new URL('../functions/middleware/auth.ts',import.meta.url),'utf8');
+assert.ok(api.includes("if (pathname === '/api/resignations' && method === 'POST')"));
+assert.ok(api.includes('validateLetterUpload(body.letterDataUrl)'));
+assert.ok(api.includes('canReviewResignation(actor,actorStaff,targetStaff)'));
+assert.ok(api.includes("record.submittedByUserId === actor.id"));
+assert.ok(api.includes("status:'resigned'"));
+assert.ok(api.includes("offboardingStatus:'retry_required'"));
+assert.ok(api.includes("targetPage:'resignations'"));
+assert.ok(middleware.includes("=== 'resigned'"));
+console.log('resignation workflow static regression passed');

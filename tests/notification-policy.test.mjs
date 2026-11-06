@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { canReceiveRequestNotification, readableNotificationTarget } from '../src/lib/notification-policy.ts';
+const target = { email:'staff@funadhooairport.com', department:'Ground Operations' };
+const requester = 'requester@funadhooairport.com';
+const allowed = (role, email, department, attrs={}) => canReceiveRequestNotification({role,email,department,...attrs},target,requester);
+assert.equal(allowed('manager','manager@funadhooairport.com','Security'), true);
+assert.equal(allowed('admin','admin@funadhooairport.com',null), true);
+assert.equal(allowed('developer','developer@funadhooairport.com',null), true);
+assert.equal(allowed('smt','smt@funadhooairport.com','Ground Operations'), true);
+assert.equal(allowed('smt','smt@funadhooairport.com','Security'), false);
+assert.equal(allowed('staff','staff2@funadhooairport.com','Ground Operations',{isIncharge:true}), true);
+assert.equal(allowed('staff','staff2@funadhooairport.com','Ground Operations'), false);
+assert.equal(allowed('manager','staff@funadhooairport.com','Security'), false);
+assert.equal(allowed('manager','requester@funadhooairport.com','Security'), false);
+assert.equal(readableNotificationTarget('https://evil.example'), 'notifications');
+assert.equal(readableNotificationTarget('leave'), 'leave');
+console.log('PASS approval notification eligibility and safe routes');

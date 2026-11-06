@@ -23,8 +23,8 @@ function ChangePasswordModal({ onClose }: Props) {
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error('Please fill in all password fields'); return;
     }
-    if (newPassword.length < 6 || newPassword.length > 10) {
-      toast.error('New password must be between 6 and 10 characters'); return;
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      toast.error('New password must be between 8 and 128 characters'); return;
     }
     if (newPassword !== confirmPassword) {
       toast.error('New passwords do not match'); return;
@@ -67,9 +67,9 @@ function ChangePasswordModal({ onClose }: Props) {
           </div>
 
           <div className="input-group" style={{ marginBottom: '12px' }}>
-            <label>New Password (6–10 characters)</label>
+            <label>New Password (8–128 characters)</label>
             <div style={{ position: 'relative' }}>
-              <input type={showNew ? "text" : "password"} minLength={6} maxLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required style={{ width: '100%', paddingRight: '40px' }} />
+              <input type={showNew ? "text" : "password"} minLength={8} maxLength={128} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required style={{ width: '100%', paddingRight: '40px' }} />
               <button type="button" onClick={() => setShowNew(!showNew)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#64748b' }}>{showNew ? '🙈' : '👁️'}</button>
             </div>
           </div>
@@ -77,7 +77,7 @@ function ChangePasswordModal({ onClose }: Props) {
           <div className="input-group" style={{ marginBottom: '12px' }}>
             <label>Confirm New Password</label>
             <div style={{ position: 'relative' }}>
-              <input type={showConfirm ? "text" : "password"} minLength={6} maxLength={10} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required style={{ width: '100%', paddingRight: '40px' }} />
+              <input type={showConfirm ? "text" : "password"} minLength={8} maxLength={128} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required style={{ width: '100%', paddingRight: '40px' }} />
               <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#64748b' }}>{showConfirm ? '🙈' : '👁️'}</button>
             </div>
           </div>
