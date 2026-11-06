@@ -13,6 +13,7 @@ import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib/roster-leave-history.js";
 import { canonicalSn, staffNumberConflict, deduplicateDutyEntries, groupDutyDisplayEntries, reconcileDutyAvailability } from "../../src/lib/duty-identity.js";
 import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
+import { buildDutyConflictReport } from "../../src/lib/duty-conflict-report.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -2628,6 +2629,11 @@ export const onRequest = async (context: any) => {
       );
       const dutyLeaveConflictCount = conflictingDutyEntries.length;
       const dutyIdentityConflictCount = conflictingDutyEntries.filter(item => item.reason === 'name-review').length;
+      // Record-level evidence is restricted to managers and SMT. This read-only
+      // report never changes roster, leave, or Staff Directory records.
+      const dutyConflictDetails = (isManagerRole(currentUser.role) || currentUser.role === 'smt')
+        ? buildDutyConflictReport(conflictingDutyEntries, staffList)
+        : [];
       // Use verified staff ID/SN and authoritative directory spelling.
       // Do not guess that two similar names belong to the same employee.
       const onDutyToday = deduplicateDutyEntries(visibleDutyEntries, staffList);
@@ -2732,6 +2738,7 @@ export const onRequest = async (context: any) => {
         dutyIdentityReviewCount,
         dutyLeaveConflictCount,
         dutyIdentityConflictCount,
+        dutyConflictDetails,
 
         onLeaveToday,
 

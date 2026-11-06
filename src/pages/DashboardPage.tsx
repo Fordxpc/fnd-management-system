@@ -102,6 +102,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [weatherError, setWeatherError] = useState('');
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [dutyFilter, setDutyFilter] = useState('all');
+  const [showDutyConflictDetails, setShowDutyConflictDetails] = useState(false);
 
   const role = (profile?.role || '').toLowerCase();
   const accountName = String(profile?.name || user?.name || user?.email?.split('@')[0] || 'Airport User').trim();
@@ -197,6 +198,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const dutyIdentityReviewCount = Number(dashboard?.dutyIdentityReviewCount || 0);
   const dutyLeaveConflictCount = Number(dashboard?.dutyLeaveConflictCount || 0);
   const dutyIdentityConflictCount = Number(dashboard?.dutyIdentityConflictCount || 0);
+  const dutyConflictDetails = Array.isArray(dashboard?.dutyConflictDetails) ? dashboard.dutyConflictDetails : EMPTY_LIST;
   const onLeave = dashboard?.onLeaveToday || EMPTY_LIST;
   const pendingLeave = dashboard?.pendingLeave || EMPTY_LIST;
   const pendingOT = dashboard?.pendingOT || EMPTY_LIST;
@@ -431,6 +433,34 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   {' '}These roster entries overlap approved leave or another unavailable status.
                   {dutyIdentityConflictCount > 0 && ` ${dutyIdentityConflictCount} match by name/spelling only and need staff ID verification.`}
                   {' '}<button type="button" className="overview-text-button" onClick={() => onNavigate('roster')}>Review roster</button>
+                  {canSeeTeamRequests && dutyConflictDetails.length > 0 && (
+                    <>
+                      {' '}<button type="button" className="overview-text-button"
+                        onClick={() => setShowDutyConflictDetails(current => !current)}
+                        aria-expanded={showDutyConflictDetails}>
+                        {showDutyConflictDetails ? 'Hide conflict details' : 'Inspect conflict details'}
+                      </button>
+                      {showDutyConflictDetails && (
+                        <div style={{ marginTop: 12, display: 'grid', gap: 9, maxHeight: 340, overflowY: 'auto' }}>
+                          {dutyConflictDetails.map((conflict: any, index: number) => (
+                            <div key={`${conflict.rosterEntryId}-${conflict.unavailableRecordId}-${index}`}
+                              style={{ background: '#fff', border: '1px solid #f3c98a', padding: 10, borderRadius: 8 }}>
+                              <div><strong>Duty:</strong> {conflict.rosterName} ({conflict.rosterSn}) · {conflict.rosterShift || 'Shift not set'} · {conflict.rosterDate}</div>
+                              <div><strong>Unavailable:</strong> {conflict.unavailableName} ({conflict.unavailableSn}) · {conflict.unavailableLabel} · {conflict.unavailableDates}</div>
+                              <div><strong>Evidence:</strong> {conflict.evidence}</div>
+                              {conflict.needsIdentityReview ? (
+                                <div style={{ fontWeight: 600 }}>Verify both staff profiles in the Staff Directory before changing any roster or leave record.</div>
+                              ) : (
+                                <div>Both records identify the same employee. Correct the conflicting roster entry without deleting approved leave history.</div>
+                              )}
+                              <small style={{ color: '#92400e' }}>Roster record: {conflict.rosterEntryId || 'ID unavailable'} · Unavailable record: {conflict.unavailableRecordId || 'ID unavailable'}</small>
+                            </div>
+                          ))}
+                          <small>Review-only diagnostics. No employee, roster, or leave data has been modified.</small>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
               <div className="overview-duty-grid">
