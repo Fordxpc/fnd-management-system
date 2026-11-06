@@ -203,7 +203,7 @@ function OvertimePage() {
       const query = search.trim().toLowerCase();
       return !query || [entry.staffName, entry.staffSN, entry.staffDepartment, entry.notes].some((value) => String(value || '').toLowerCase().includes(query));
     })
-    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 
   const weekMap: { [key: string]: any[] } = {};
   filtered.forEach((entry) => {
@@ -211,7 +211,7 @@ function OvertimePage() {
     if (!weekMap[weekKey]) weekMap[weekKey] = [];
     weekMap[weekKey].push(entry);
   });
-  const weekKeys = Object.keys(weekMap).sort((a, b) => (a.split('::')[1] || '').localeCompare(b.split('::')[1] || ''));
+  const weekKeys = Object.keys(weekMap).sort((a, b) => (b.split('::')[1] || '').localeCompare(a.split('::')[1] || ''));
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();

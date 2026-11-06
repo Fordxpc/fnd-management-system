@@ -69,9 +69,12 @@ function LeavePage() {
       const rawLeaveData = getData(1);
       const holidaysData = getData(2);
       const failedRequests = results.filter((result) => result.status === 'rejected').length;
-      const uniqueLeaves = Array.from(new Map(rawLeaveData.map((item: any) => [`${item.staffId}-${item.startDate}-${item.endDate}-${item.leaveType}`, item])).values());
+      // Never conceal distinct/manual requests by collapsing identical date ranges client-side.
+      const orderedLeaves = (Array.isArray(rawLeaveData) ? rawLeaveData : []).slice()
+        .sort((a: any, b: any) => String(b.startDate || '').localeCompare(String(a.startDate || '')) ||
+          String(b.requestedAt || '').localeCompare(String(a.requestedAt || '')));
       setStaffList(Array.isArray(staffData) ? staffData : []);
-      setRequests(uniqueLeaves);
+      setRequests(orderedLeaves);
       setHolidays(Array.isArray(holidaysData) ? holidaysData : []);
       setLoadError(failedRequests ? failedRequests + ' leave data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
       const mine = (Array.isArray(staffData) ? staffData : []).find((member: any) => (member.email || '').toLowerCase() === (user?.email || '').toLowerCase());

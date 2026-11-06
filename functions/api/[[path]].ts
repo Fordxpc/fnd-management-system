@@ -10,6 +10,8 @@ import {
   passwordResetRequests, announcements, chatGroups, chatGroupMembers, chatMessages
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
+import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib/roster-leave-history.js";
+import { deduplicateDutyEntries } from "../../src/lib/duty-identity.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -28,6 +30,7 @@ import {
 } from "../../src/lib/permission-check.js";
 
 let staffPhotoColumnReady = false;
+let lastRosterLeaveReconcileAt = 0;
 
 const isManagerRole = (role: string | undefined | null) =>
   ['developer', 'manager', 'admin', 'owner'].includes(role || '');
@@ -203,25 +206,83 @@ export const onRequest = async (context: any) => {
     return target;
   };
   const rosterLeaveStatuses = new Set(["ANNUAL LEAVE", "SICK LEAVE", "SICK LEAVE / MC", "NO PAY LEAVE", "DUTY TRAVEL", "PATERNITY LEAVE", "MATERNITY LEAVE", "PRE-MATERNITY LEAVE", "FAMILY RESPONSIBILITY LEAVE (FRL)"]);
+  /**
+   * Consolidate only approved, roster-generated leave with matching roster links.
+   * Keep the earliest history row and move every linked roster day before
+   * deleting redundant rows. Manual leave requests are never modified.
+   */
+  const reconcileRosterLeaveHistory = async (staffId?: string) => {
+    const restrictions = and(
+      eq(leaveRequests.reason, ROSTER_LEAVE_REASON),
+      eq(leaveRequests.status, 'approved'),
+      ...(staffId ? [eq(leaveRequests.staffId, staffId)] : [])
+    );
+    const generatedRequests = await db.select().from(leaveRequests).where(restrictions);
+    if (!generatedRequests.length) return;
+    const linkedRosterRows = await db.select().from(rosterEntries).where(
+      inArray(rosterEntries.leaveRequestId, generatedRequests.map(row => row.id))
+    );
+    if (!linkedRosterRows.length) return;
+    const publicHolidays = await db.select({ date: holidays.date }).from(holidays);
+    const plans = planRosterLeaveConsolidation(
+      generatedRequests, linkedRosterRows, publicHolidays.map(row => row.date).filter((date): date is string => !!date)
+    );
+    for (const plan of plans) {
+      // Preserve references to deleted daily approvals in the surviving history record.
+      const keeper = generatedRequests.find(row => row.id === plan.keepId)!;
+      const mergedRows = generatedRequests.filter(row => plan.removeIds.includes(row.id));
+      const oldNotes = String(keeper.reviewNotes || '').trim();
+      const newAudit = mergedRows.filter(row => !oldNotes.includes(row.id)).map(row =>
+        `${row.startDate} (${row.id}, approved by ${row.reviewedBy || 'unknown'})`
+      );
+      const notes = newAudit.length
+        ? [oldNotes, `Merged roster approvals: ${newAudit.join('; ')}`].filter(Boolean).join(' | ')
+        : oldNotes;
+      // Updating the survivor first makes an interrupted repair recoverable on the next run.
+      await db.update(leaveRequests).set({
+        startDate: plan.startDate, endDate: plan.endDate, days: plan.days,
+        ...(newAudit.length ? { reviewNotes: notes } : {}),
+      }).where(eq(leaveRequests.id, plan.keepId));
+      if (plan.removeIds.length) {
+        await db.update(rosterEntries).set({ leaveRequestId: plan.keepId }).where(
+          inArray(rosterEntries.leaveRequestId, plan.removeIds)
+        );
+        await db.delete(leaveRequests).where(inArray(leaveRequests.id, plan.removeIds));
+      }
+    }
+  };
   const ensureRosterLeaveHistory = async (currentUser: any, targetStaff: any, leaveType: string, date: string) => {
     if (!rosterLeaveStatuses.has(leaveType)) return null;
+    // Never convert an employee's manually submitted request into a roster-generated approval.
+    const overlappingManualRequests = await db.select({ id: leaveRequests.id }).from(leaveRequests).where(and(
+      eq(leaveRequests.staffId, targetStaff.id),
+      sql`${leaveRequests.startDate} <= ${date}`,
+      sql`${leaveRequests.endDate} >= ${date}`,
+      sql`${leaveRequests.reason} IS DISTINCT FROM ${ROSTER_LEAVE_REASON}`,
+      sql`lower(coalesce(${leaveRequests.status}, 'pending')) <> 'rejected'`
+    )).limit(1);
+    if (overlappingManualRequests.length) {
+      const error: any = new Error('This date is covered by a manually submitted leave request. Review it in Leave Requests instead.');
+      error.status = 409;
+      throw error;
+    }
     const existing = await db.select().from(leaveRequests).where(and(
       eq(leaveRequests.staffId, targetStaff.id), eq(leaveRequests.startDate, date),
-      eq(leaveRequests.endDate, date), eq(leaveRequests.leaveType, leaveType)
+      eq(leaveRequests.endDate, date), eq(leaveRequests.leaveType, leaveType),
+      eq(leaveRequests.reason, ROSTER_LEAVE_REASON)
     )).limit(1);
-    const now = new Date().toISOString();
     if (existing[0]) {
-      if (existing[0].status !== "approved") await db.update(leaveRequests).set({
-        status: "approved", reason: existing[0].reason || "Entered from Duty Roster",
-        reviewedBy: currentUser.email, reviewedAt: now,
+      if (existing[0].status !== 'approved') await db.update(leaveRequests).set({
+        status: 'approved', reviewedBy: currentUser.email, reviewedAt: new Date().toISOString(),
       }).where(eq(leaveRequests.id, existing[0].id));
       return existing[0].id;
     }
+    const now = new Date().toISOString();
     const id = crypto.randomUUID();
     await db.insert(leaveRequests).values({
       id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
       staffSn: targetStaff.sn || "", staffGender: targetStaff.gender || "", leaveType,
-      startDate: date, endDate: date, days: 1, reason: "Entered from Duty Roster",
+      startDate: date, endDate: date, days: 1, reason: ROSTER_LEAVE_REASON,
       status: "approved", requestedBy: currentUser.email, requestedAt: now, reviewedBy: currentUser.email, reviewedAt: now,
     });
     return id;
@@ -798,7 +859,7 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/checklist" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       await requireOpsBoardView(env, currentUser);
-      const results = await db.select().from(opsChecks).orderBy(desc(opsChecks.date), asc(opsChecks.time));
+      const results = await db.select().from(opsChecks).orderBy(desc(opsChecks.date), desc(opsChecks.time));
       return json(results);
     }
     if (pathname === "/api/checklist" && method === "POST") {
@@ -925,7 +986,14 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/leave-requests" && method === "GET") {
       const currentUser = await requireAuth(request, env);
-      const results = await db.select().from(leaveRequests).orderBy(asc(leaveRequests.startDate));
+      // Repair legacy per-day roster history on the first read in each worker
+      // and periodically thereafter. Roster writes reconcile their own staff immediately.
+      if (Date.now() - lastRosterLeaveReconcileAt > 5 * 60 * 1000) {
+        await reconcileRosterLeaveHistory();
+        lastRosterLeaveReconcileAt = Date.now();
+      }
+      const results = await db.select().from(leaveRequests)
+        .orderBy(desc(leaveRequests.startDate), desc(leaveRequests.requestedAt));
       return json(await scopeRequestsForUser(currentUser, results, true));
     }
     if (pathname === "/api/leave-requests" && method === "POST") {
@@ -1106,7 +1174,7 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/roster" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       await requireRosterView(env, currentUser);
-      const results = await db.select().from(rosterEntries).orderBy(asc(rosterEntries.date), asc(rosterEntries.staffName));
+      const results = await db.select().from(rosterEntries).orderBy(desc(rosterEntries.date), asc(rosterEntries.staffName));
       return json(results);
     }
 
@@ -1124,11 +1192,14 @@ export const onRequest = async (context: any) => {
       const targetStaff = await getAuthorizedRosterStaff(currentUser, body.staffId);
       const existing = await db.select().from(rosterEntries).where(and(
         eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date)
-      )).limit(1);
-      if (existing.length > 0 && existing[0].leaveRequestId) return json({ message: "Cannot overwrite approved leave." }, 400);
+      ));
+      if (existing.some(row => row.leaveRequestId)) return json({ message: "Cannot overwrite approved leave." }, 400);
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
       const rosterLeaveRequestId = await ensureRosterLeaveHistory(currentUser, targetStaff, body.status, body.date);
-      if (existing.length > 0) await db.delete(rosterEntries).where(eq(rosterEntries.id, id));
+      // One roster row per staff/day: remove any legacy duplicates when replacing it.
+      if (existing.length > 0) await db.delete(rosterEntries).where(and(
+        eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date)
+      ));
       if (body.status !== "clear") {
         await db.insert(rosterEntries).values({
           id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
@@ -1136,6 +1207,7 @@ export const onRequest = async (context: any) => {
           leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
         });
       }
+      if (rosterLeaveRequestId) await reconcileRosterLeaveHistory(targetStaff.id);
       return json({ success: true, id });
     }
 
@@ -1149,6 +1221,7 @@ export const onRequest = async (context: any) => {
       const allowedStatuses = ["scheduled", "OFF DAY", "ABSENT", "ANNUAL LEAVE", "SICK LEAVE", "SICK LEAVE / MC", "NO PAY LEAVE", "DUTY TRAVEL", "PATERNITY LEAVE", "MATERNITY LEAVE", "PRE-MATERNITY LEAVE", "FAMILY RESPONSIBILITY LEAVE (FRL)"];
       const validated: any[] = [];
       const staffCache = new Map<string, any>();
+      const seenAssignments = new Set<string>();
       for (const entry of body.entries) {
         if (!entry.staffId || !/^\d{4}-\d{2}-\d{2}$/.test(entry.date || "") || !allowedStatuses.includes(entry.status)) {
           return json({ message: "Bulk assignment contains an invalid entry" }, 400);
@@ -1156,24 +1229,47 @@ export const onRequest = async (context: any) => {
         if (entry.status === "scheduled" && (!entry.shiftTime || String(entry.shiftTime).length > 40)) {
           return json({ message: "Every scheduled entry requires a valid shift" }, 400);
         }
+        const assignmentKey = `${entry.staffId}|${entry.date}`;
+        if (seenAssignments.has(assignmentKey)) {
+          return json({ message: "Bulk assignment contains the same staff member and date more than once" }, 400);
+        }
+        seenAssignments.add(assignmentKey);
         let targetStaff = staffCache.get(entry.staffId);
         if (!targetStaff) { targetStaff = await getAuthorizedRosterStaff(currentUser, entry.staffId); staffCache.set(entry.staffId, targetStaff); }
         const existing = await db.select().from(rosterEntries).where(and(
           eq(rosterEntries.staffId, entry.staffId), eq(rosterEntries.date, entry.date)
-        )).limit(1);
-        if (existing[0]?.leaveRequestId) return json({ message: `Approved leave protects ${targetStaff.name} on ${entry.date}` }, 400);
+        ));
+        if (existing.some(row => row.leaveRequestId)) return json({ message: `Approved leave protects ${targetStaff.name} on ${entry.date}` }, 400);
         validated.push({ entry, targetStaff, existing: existing[0] });
       }
+      // Validate leave collisions before writing any bulk roster rows.
       for (const item of validated) {
-        if (item.existing) await db.delete(rosterEntries).where(eq(rosterEntries.id, item.existing.id));
+        if (rosterLeaveStatuses.has(item.entry.status)) {
+          const overlap = await db.select({ id: leaveRequests.id }).from(leaveRequests).where(and(
+            eq(leaveRequests.staffId, item.targetStaff.id),
+            sql`${leaveRequests.startDate} <= ${item.entry.date}`,
+            sql`${leaveRequests.endDate} >= ${item.entry.date}`,
+            sql`${leaveRequests.reason} IS DISTINCT FROM ${ROSTER_LEAVE_REASON}`,
+            sql`lower(coalesce(${leaveRequests.status}, 'pending')) <> 'rejected'`
+          )).limit(1);
+          if (overlap.length) return json({ message: `A manually submitted leave request covers ${item.targetStaff.name} on ${item.entry.date}` }, 409);
+        }
+      }
+      const affectedLeaveStaff = new Set<string>();
+      for (const item of validated) {
         const rosterLeaveRequestId = await ensureRosterLeaveHistory(currentUser, item.targetStaff, item.entry.status, item.entry.date);
+        if (item.existing) await db.delete(rosterEntries).where(and(
+          eq(rosterEntries.staffId, item.entry.staffId), eq(rosterEntries.date, item.entry.date)
+        ));
         await db.insert(rosterEntries).values({
           id: item.existing?.id || crypto.randomUUID(), staffId: item.targetStaff.id,
           staffName: item.targetStaff.name || "", staffDepartment: item.targetStaff.department || "",
           date: item.entry.date, shiftTime: item.entry.status === "scheduled" ? item.entry.shiftTime : "",
           status: item.entry.status, leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
         });
+        if (rosterLeaveRequestId) affectedLeaveStaff.add(item.targetStaff.id);
       }
+      for (const staffId of affectedLeaveStaff) await reconcileRosterLeaveHistory(staffId);
       return json({ success: true, count: validated.length });
     }
     // ==========================================
@@ -1458,7 +1554,7 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/overtime" && method === "GET") {
       const currentUser = await requireAuth(request, env);
-      const results = await db.select().from(overtimeEntries).orderBy(asc(overtimeEntries.date));
+      const results = await db.select().from(overtimeEntries).orderBy(desc(overtimeEntries.date), desc(overtimeEntries.createdAt));
       return json(await scopeRequestsForUser(currentUser, results, false));
     }
     if (pathname === "/api/overtime" && method === "POST") {
@@ -1656,7 +1752,7 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/ops/runway" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       await requireOpsBoardView(env, currentUser);
-      const results = await db.select().from(opsRunwayHistory).orderBy(desc(opsRunwayHistory.date));
+      const results = await db.select().from(opsRunwayHistory).orderBy(desc(opsRunwayHistory.date), desc(opsRunwayHistory.createdAt));
       return json(results.map((row: any) => ({
         ...row,
         rwy19: typeof row.rwy19 === "string" ? JSON.parse(row.rwy19) : row.rwy19,
@@ -1688,7 +1784,7 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/ops/ground" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       await requireOpsBoardView(env, currentUser);
-      const results = await db.select().from(opsGroundHistory).orderBy(desc(opsGroundHistory.date));
+      const results = await db.select().from(opsGroundHistory).orderBy(desc(opsGroundHistory.date), desc(opsGroundHistory.createdAt));
       return json(results.map((row: any) => ({
         ...row,
         assignments: typeof row.assignments === "string" ? JSON.parse(row.assignments) : row.assignments,
@@ -2003,7 +2099,7 @@ export const onRequest = async (context: any) => {
     if (pathname === "/api/timesheets" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
-      const results = await db.select().from(timesheets).orderBy(asc(timesheets.date));
+      const results = await db.select().from(timesheets).orderBy(desc(timesheets.date));
       return json(results);
     }
     if (pathname === "/api/timesheets" && method === "POST") {
@@ -2423,14 +2519,10 @@ export const onRequest = async (context: any) => {
         const linkedSn = normalizeSn(linkedStaff?.sn);
         return !leaveStaffIds.has(staffId) && !leaveStaffNames.has(normalizedName) && !leaveIdentityKeys.has(identityKey) && (!linkedSn || !leaveStaffSns.has(linkedSn));
       });
-      const onDutyToday = Array.from(new Map(visibleDutyEntries.map(entry => [
-        `${normalizeStaffName(entry.staffName)}|${canonicalDepartment(entry.staffDepartment)}`,
-        entry,
-      ])).values());
-      const onLeaveToday = Array.from(new Map(activeLeaveToday.map(entry => [
-        `${normalizeStaffName(entry.staffName)}|${canonicalDepartment(entry.staffDepartment)}`,
-        entry,
-      ])).values());
+      // Use verified staff ID/SN and authoritative directory spelling.
+      // Do not guess that two similar names belong to the same employee.
+      const onDutyToday = deduplicateDutyEntries(visibleDutyEntries, staffList);
+      const onLeaveToday = deduplicateDutyEntries(activeLeaveToday, staffList);
       let pendingLeave: any[] = [];
       let pendingOT: any[] = [];
 
