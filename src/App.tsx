@@ -82,7 +82,7 @@ function App() {
   };
 
   if (user) {
-    return <Dashboard user={user} logout={logout} />;
+    return <Dashboard />;
   }
 
   return (

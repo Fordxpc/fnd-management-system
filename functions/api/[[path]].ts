@@ -11,7 +11,7 @@ import {
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib/roster-leave-history.js";
-import { deduplicateDutyEntries, groupDutyDisplayEntries, reconcileDutyAvailability } from "../../src/lib/duty-identity.js";
+import { canonicalSn, staffNumberConflict, deduplicateDutyEntries, groupDutyDisplayEntries, reconcileDutyAvailability } from "../../src/lib/duty-identity.js";
 import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
 import {
   requireFlightsEdit,
@@ -732,14 +732,24 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
+      const sn = canonicalSn(body.sn);
+      if (!sn) return json({ message: 'A unique staff number (SN) is required' }, 400);
+      const existingStaffSn = await db.select({ id: staff.id, sn: staff.sn }).from(staff);
+      if (staffNumberConflict(existingStaffSn, sn)) {
+        return json({ message: `Staff number SN-${sn} already exists. Edit that staff record instead of creating a duplicate.` }, 409);
+      }
       const id = crypto.randomUUID();
       const createdAt = new Date().toISOString();
       if (body.photoBase64 && (!String(body.photoBase64).startsWith('data:image/') || String(body.photoBase64).length > 900_000)) return json({ message: 'Profile photo must be an image smaller than 650 KB' }, 400);
 
+      const officialNames: Record<string, string> = {
+        '0037': 'Adam Faisal', '0038': 'Adam Shakir',
+        '0729': 'Mohamed Fuadhu', '0757': 'Mohamed Adam',
+      };
       await db.insert(staff).values({
         id,
-        sn: body.sn || "",
-        name: body.name,
+        sn: `SN-${sn}`,
+        name: officialNames[sn] || body.name,
         email: body.email,
         photoBase64: body.photoBase64 || "",
         personalEmail: body.personalEmail || "",
@@ -820,6 +830,12 @@ export const onRequest = async (context: any) => {
         return json({ message: "Special Ops Access is limited to eligible operational departments" }, 400);
       }
       if (body.photoBase64 && (!String(body.photoBase64).startsWith('data:image/') || String(body.photoBase64).length > 900_000)) return json({ message: 'Profile photo must be an image smaller than 650 KB' }, 400);
+      const requestedSn = body.sn !== undefined ? canonicalSn(body.sn) : canonicalSn(targetStaff.sn);
+      if (!requestedSn) return json({ message: 'A unique staff number (SN) is required' }, 400);
+      const existingSnRows = await db.select({ id: staff.id, sn: staff.sn }).from(staff);
+      if (staffNumberConflict(existingSnRows, requestedSn, id!)) {
+        return json({ message: `Staff number SN-${requestedSn} already belongs to another record. Review the duplicate before saving.` }, 409);
+      }
       const updatedAt = new Date().toISOString();
 
       const updateData: any = { updatedAt };
@@ -847,6 +863,13 @@ export const onRequest = async (context: any) => {
         }
       }
 
+      if (body.sn !== undefined) updateData.sn = `SN-${requestedSn}`;
+      // Preserve confirmed official spellings when the matching SN is edited.
+      const officialNames: Record<string, string> = {
+        '0037': 'Adam Faisal', '0038': 'Adam Shakir',
+        '0729': 'Mohamed Fuadhu', '0757': 'Mohamed Adam',
+      };
+      if (officialNames[requestedSn]) updateData.name = officialNames[requestedSn];
       await db.update(staff).set(updateData).where(eq(staff.id, id!));
       return json({ success: true });
     }
@@ -859,6 +882,17 @@ export const onRequest = async (context: any) => {
       if (!targetStaff) return json({ message: "Staff member not found" }, 404);
       const [targetUser] = targetStaff.email ? await db.select().from(users).where(eq(users.email, targetStaff.email.toLowerCase())).limit(1) : [];
       if (targetUser?.role === "developer" && currentUser.role !== "developer") return json({ message: "Developer records can only be removed by the Developer" }, 403);
+      const linkedRecords = await Promise.all([
+        db.select({ id: rosterEntries.id }).from(rosterEntries).where(eq(rosterEntries.staffId, id!)).limit(1),
+        db.select({ id: leaveRequests.id }).from(leaveRequests).where(eq(leaveRequests.staffId, id!)).limit(1),
+        db.select({ id: overtimeEntries.id }).from(overtimeEntries).where(eq(overtimeEntries.staffId, id!)).limit(1),
+        db.select({ id: timesheets.id }).from(timesheets).where(eq(timesheets.staffId, id!)).limit(1),
+        db.select({ id: chatGroupMembers.id }).from(chatGroupMembers).where(eq(chatGroupMembers.staffId, id!)).limit(1),
+        db.select({ staffId: lightsInspectors.staffId }).from(lightsInspectors).where(eq(lightsInspectors.staffId, id!)).limit(1),
+      ]);
+      if (linkedRecords.some(rows => rows.length > 0)) {
+        return json({ message: 'This staff record has roster, leave, overtime or other history. It cannot be deleted until its references have been safely reviewed and reassigned.' }, 409);
+      }
       await db.delete(staff).where(eq(staff.id, id!));
       return json({ success: true });
     }

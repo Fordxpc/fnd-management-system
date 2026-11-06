@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
+import { reviewKnownStaffIdentityCollisions } from '../lib/duty-identity';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
@@ -124,7 +125,7 @@ function StaffPage() {
 
   const handleSubmit = async (e: any) => {
     e.preventDefault();
-    if (!name || !email) { toast.error('Name and Email are required'); return; }
+    if (!name.trim() || !email.trim() || !sn.trim()) { toast.error('Name, Email and a unique Staff Number (SN) are required'); return; }
     const payload: any = { sn, name, email, photoBase64, personalEmail, nid, joinDate, phone, gender, department, position, isSMT: isSmt, balanceVisible };
     if (canViewFinancials) {
       payload.basicSalary = Number(basicSalary) || 0;
@@ -224,6 +225,7 @@ const myDept = myStaff?.department;
     return matchesDepartment && matchesSearch;
   }).sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
 
+  const knownIdentityReviews = reviewKnownStaffIdentityCollisions(staff);
   const departmentCount = new Set(staff.map((member) => member.department).filter(Boolean)).size;
   const smtCount = staff.filter((member) => member.isSmt === true || member.isSMT === true).length;
 
@@ -248,6 +250,15 @@ const myDept = myStaff?.department;
       </header>
 
       {loadError && <div className="staff-management-alert" role="alert"><strong>Staff information may be out of date.</strong><span>{loadError}</span></div>}
+      {(isDev || isManager) && knownIdentityReviews.length > 0 && (
+        <div className="staff-management-alert" role="status">
+          <strong>{knownIdentityReviews.length} staff profile{knownIdentityReviews.length === 1 ? '' : 's'} need identity review.</strong>
+          <span>Dashboard duplicates are hidden by verified SN, but historical records have not been deleted. Review the original SN and linked history before removing a profile.</span>
+          <ul>{knownIdentityReviews.map((item) => (
+            <li key={item.id}>{item.name || 'Unnamed'} ({item.sn || 'SN missing'}) → {item.correctName} ({item.correctSn})</li>
+          ))}</ul>
+        </div>
+      )}
 
       <section className="staff-management-summary" aria-label="Staff summary">
         <div><span>Total workforce</span><strong>{staff.length}</strong><small>staff records</small></div>
@@ -270,7 +281,7 @@ const myDept = myStaff?.department;
         <form className="staff-form staff-management-form" onSubmit={handleSubmit}>
           <div style={{ gridColumn: 'span 2', fontWeight: 600, marginBottom: '4px' }}>{editingId ? '✏️ Edit Staff Member' : '➕ Add New Staff Member'}</div>
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb' }}>👤 Personal Information</div>
-          <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
+          <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} required />
           <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
           <label className="staff-photo-upload"><span>{photoBase64 ? <img src={photoBase64} alt="Staff preview" /> : 'PHOTO'}</span><div><strong>Passport-size profile picture</strong><small>JPG or PNG, maximum 650 KB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} /></div>{photoBase64 && <button type="button" onClick={() => setPhotoBase64('')}>Remove</button>}</label>
           <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />

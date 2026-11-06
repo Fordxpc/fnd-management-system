@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreignKey, serial, doublePrecision } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, unique, boolean, real, integer, index, foreignKey, doublePrecision } from "drizzle-orm/pg-core"
 
 // ==========================================
 // BETTER AUTH TABLES

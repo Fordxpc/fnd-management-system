@@ -1,6 +1,7 @@
 /**
  * Canonicalize dashboard duty entries by verified identity (staff number or ID).
- * Similar names with different IDs are NOT silently treated as the same person.
+ * Only four user-confirmed official Staff Directory identities may override
+ * outdated name/ID aliases when the unique official SN exists.
  */
 type StaffIdentity = {
   id?: string | null;
@@ -30,21 +31,106 @@ const canonicalDept = (value: unknown) => {
   if (department.includes('safe')) return 'safety';
   return department || 'unassigned';
 };
-const canonicalSn = (value: unknown) => String(value || '').trim().replace(/^sn-/i, '').toUpperCase();
+/** Normalize both SN-0038 and 0038 to one staff-number identity. */
+export const canonicalSn = (value: unknown) => {
+  const normalized = String(value || '').trim().replace(/^SN[\s-]*/i, '').toUpperCase();
+  if (!normalized) return '';
+  return /^\d{1,4}$/.test(normalized) ? normalized.padStart(4, '0') : normalized;
+};
+
+/** These four identities come from the app's official Staff Directory seed. */
+const verifiedNames = [
+  { sn: '0037', name: 'Adam Faisal', aliases: ['Adam Faisal'], department: 'ground operations' },
+  { sn: '0038', name: 'Adam Shakir', aliases: ['Adam Shakir', 'Adam Skakir'], department: 'ground operations' },
+  { sn: '0729', name: 'Mohamed Fuadhu', aliases: ['Mohamed Fuadhu', 'Mohamed Fuadh'], department: 'ground operations' },
+  { sn: '0757', name: 'Mohamed Adam', aliases: ['Mohamed Adam'], department: 'ground operations' },
+];
+
+/**
+ * Resolve a known legacy spelling/duplicate to a current, uniquely identified
+ * Staff Directory member. Do not use fuzzy matching, and NEVER alter database
+ * records as part of dashboard rendering.
+ *
+ * A confirmed alias resolves only if a unique profile with the official SN
+ * exists in the matching department. Unrelated names are not reassigned.
+ */
+function resolveStaffEntry(entry: DutyEntry, staff: StaffIdentity[], byId: Map<string, StaffIdentity>) {
+  const linked = byId.get(String(entry.staffId || ''));
+  const originalName = normalize(linked?.name || entry.staffName);
+  const originalDepartment = canonicalDept(linked?.department || entry.staffDepartment);
+  const canonical = verifiedNames.find(person =>
+    person.department === originalDepartment &&
+    person.aliases.some(alias => normalize(alias) === originalName)
+  );
+  if (canonical) {
+    const matches = staff.filter(person =>
+      canonicalSn(person.sn) === canonical.sn && canonicalDept(person.department) === canonical.department
+    );
+    if (matches.length === 1) {
+      const master = matches[0];
+      return { id: String(master.id || ''), sn: canonical.sn, name: canonical.name, department: canonical.department };
+    }
+  }
+  return {
+    id: String(linked?.id || entry.staffId || ''),
+    sn: canonicalSn(linked?.sn || entry.staffSn),
+    name: String(linked?.name || entry.staffName || ''),
+    department: canonicalDept(linked?.department || entry.staffDepartment),
+  };
+}
+
+/**
+ * Read-only list of obsolete / colliding profiles for the Staff Directory.
+ * These are suggestions for a controlled data repair, NEVER a deletion list.
+ */
+export function reviewKnownStaffIdentityCollisions(directory: StaffIdentity[]): Array<{
+  id: string; name: string; sn: string; correctName: string; correctSn: string;
+}> {
+  const reviews: Array<{ id: string; name: string; sn: string; correctName: string; correctSn: string }> = [];
+  for (const canonical of verifiedNames) {
+    const candidates = directory.filter(person =>
+      canonicalDept(person.department) === canonical.department &&
+      (canonicalSn(person.sn) === canonical.sn ||
+        canonical.aliases.some(alias => normalize(alias) === normalize(person.name)))
+    );
+    const official = candidates.filter(person => canonicalSn(person.sn) === canonical.sn);
+    // Never mark a row as disposable without a unique official record.
+    if (official.length !== 1) continue;
+    for (const person of candidates) {
+      if (person.id === official[0].id && normalize(person.name) === normalize(canonical.name)) continue;
+      if (!person.id) continue;
+      reviews.push({ id: person.id, name: String(person.name || ''),
+        sn: String(person.sn || ''), correctName: canonical.name, correctSn: `SN-${canonical.sn}` });
+    }
+  }
+  return reviews;
+}
+
+/** Used by the Staff API to prevent SN-0038 and 0038 being registered twice. */
+export function staffNumberConflict<T extends { id?: string | null; sn?: string | null }>(
+  directory: T[], requestedSn: unknown, excludingId?: string,
+): T | undefined {
+  const desired = canonicalSn(requestedSn);
+  if (!desired) return undefined;
+  return directory.find(person =>
+    String(person.id || '') !== String(excludingId || '') && canonicalSn(person.sn) === desired
+  );
+}
 
 export function deduplicateDutyEntries<T extends DutyEntry>(entries: T[], staff: StaffIdentity[]): T[] {
   const byId = new Map(staff.filter(member => member.id).map(member => [String(member.id), member] as const));
   const unique = new Map<string, T>();
   for (const entry of entries) {
-    const linked = byId.get(String(entry.staffId || ''));
-    const sn = canonicalSn(linked?.sn || entry.staffSn);
-    const identity = sn ? `sn:${sn}` : linked?.id ? `id:${linked.id}` :
-      entry.staffId ? `roster:${entry.staffId}` : `name:${normalize(entry.staffName)}`;
-    const key = `${identity}|${canonicalDept(linked?.department || entry.staffDepartment)}`;
+    const resolved = resolveStaffEntry(entry, staff, byId);
+    const identity = resolved.sn ? `sn:${resolved.sn}` : resolved.id ? `id:${resolved.id}` :
+      `unlinked:${normalize(entry.staffName)}`;
+    const key = `${identity}|${resolved.department}`;
     const canonicalEntry: T = {
       ...entry,
-      staffName: linked?.name || entry.staffName,
-      staffDepartment: linked?.department || entry.staffDepartment,
+      staffId: resolved.id || entry.staffId,
+      staffSn: resolved.sn || entry.staffSn,
+      staffName: resolved.name || entry.staffName,
+      staffDepartment: resolved.department || entry.staffDepartment,
     };
     const previous = unique.get(key);
     if (!previous) { unique.set(key, canonicalEntry); continue; }
@@ -78,12 +164,12 @@ export function reconcileDutyAvailability<T extends DutyEntry, U extends DutyEnt
 } {
   const byId = new Map(staff.filter(member => member.id).map(member => [String(member.id), member] as const));
   const resolve = (entry: DutyEntry) => {
-    const linked = byId.get(String(entry.staffId || ''));
+    const verified = resolveStaffEntry(entry, staff, byId);
     return {
-      id: String(entry.staffId || ''),
-      sn: canonicalSn(linked?.sn || entry.staffSn),
-      name: normalize(linked?.name || entry.staffName),
-      department: canonicalDept(linked?.department || entry.staffDepartment),
+      id: verified.id,
+      sn: verified.sn,
+      name: normalize(verified.name),
+      department: verified.department,
     };
   };
   const unavailableResolved = unavailable.map(entry => ({ entry, identity: resolve(entry) }));
@@ -156,6 +242,9 @@ export function groupDutyDisplayEntries<T extends DutyEntry>(entries: T[]): Arra
     const match = groups.find(group => group.rows.some(other =>
       canonicalDept(other.staffDepartment) === department &&
       normalize(other.shiftTime) === shift &&
+      // Different verified staff numbers are separate people, even with similar names.
+      !(canonicalSn(other.staffSn) && canonicalSn(entry.staffSn) &&
+        canonicalSn(other.staffSn) !== canonicalSn(entry.staffSn)) &&
       (normalize(other.staffName) === normalize(entry.staffName) ||
        possibleOneLetterTypo(String(other.staffName || ''), String(entry.staffName || '')))
     ));
