@@ -14,6 +14,7 @@ import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib
 import { canonicalSn, staffNumberConflict, deduplicateDutyEntries, groupDutyDisplayEntries, reconcileDutyAvailability } from "../../src/lib/duty-identity.js";
 import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
 import { buildDutyConflictReport } from "../../src/lib/duty-conflict-report.js";
+import { planLegacyDutyRepair } from "../../src/lib/legacy-duty-repair.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -1299,6 +1300,125 @@ export const onRequest = async (context: any) => {
         return json({ message: 'Leave request could not be removed safely. Refresh and try again.' }, 409);
       }
       return json({ success: true, rosterRestored: Number(responseRows[0]?.restored_count || 0) });
+    }
+
+    // Manager-confirmed repair for an orphaned historical duty entry which
+    // overlaps a real approved leave. This never edits the leave request or
+    // deletes a staff account. All row changes + the audit record are atomic.
+    if (pathname === "/api/roster/repair-verified-conflict" && method === "POST") {
+      const currentUser = await requireAuth(request, env);
+      if (!isManagerRole(currentUser.role)) {
+        return json({ message: "Only Developer, Admin or Manager can repair legacy roster identities." }, 403);
+      }
+      await requireRosterEdit(env, currentUser);
+      const body: any = await request.json().catch(() => ({}));
+      const rosterEntryId = String(body.rosterEntryId || '').trim();
+      const leaveRequestId = String(body.leaveRequestId || '').trim();
+      if (!/^[0-9a-f-]{36}$/i.test(rosterEntryId) || !/^[0-9a-f-]{36}$/i.test(leaveRequestId)) {
+        return json({ message: "Valid roster and leave record IDs are required." }, 400);
+      }
+      const [legacy] = await db.select().from(rosterEntries).where(eq(rosterEntries.id, rosterEntryId)).limit(1);
+      const [approvedLeave] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, leaveRequestId)).limit(1);
+      if (!legacy || !approvedLeave) {
+        return json({ message: "Roster or leave record no longer exists." }, 404);
+      }
+      const [official] = await db.select().from(staff).where(eq(staff.id, String(approvedLeave.staffId || ''))).limit(1);
+      const directory = await db.select().from(staff);
+      const officialRows = official?.id ? await db.select().from(rosterEntries).where(and(
+        eq(rosterEntries.staffId, official.id), eq(rosterEntries.date, String(legacy.date || ''))
+      )) : [];
+      let repairPlan: ReturnType<typeof planLegacyDutyRepair>;
+      try {
+        repairPlan = planLegacyDutyRepair(legacy, approvedLeave, official, directory, officialRows);
+      } catch (error: any) {
+        return json({ message: `Cannot safely repair this roster entry: ${error.message}` }, 409);
+      }
+      // We require the user to affirm that this old duty is the shift which
+      // should return if the approved leave is ever removed.
+      if (body.confirmPreviousShift !== true) {
+        return json({ message: "Confirm that the displayed duty time was the original shift before leave." }, 400);
+      }
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS roster_identity_repair_audit (
+          id text PRIMARY KEY, roster_entry_id text NOT NULL, leave_request_id text NOT NULL,
+          official_staff_id text NOT NULL, reviewed_by text NOT NULL,
+          old_data jsonb NOT NULL, repair_action text NOT NULL, created_at timestamp DEFAULT now()
+        )
+      `);
+      const backup = JSON.stringify({ legacy, officialRoster: officialRows });
+      const hasExisting = repairPlan.action === 'merge';
+      const repairId = crypto.randomUUID();
+      const originalStaffId = legacy.staffId || null;
+      let outcome: any;
+      if (hasExisting) {
+        // One SQL statement: preserve the historical shift in the approved
+        // leave row, remove only the exact orphan duplicate and write an audit.
+        outcome = await db.execute(sql`
+          WITH source AS MATERIALIZED (
+            SELECT r.id FROM roster_entries r WHERE r.id = ${legacy.id}
+              AND r.staff_id IS NOT DISTINCT FROM ${originalStaffId}
+              AND r.date = ${legacy.date} AND r.status = 'scheduled'
+              AND r.shift_time = ${legacy.shiftTime} AND r.leave_request_id IS NULL
+            FOR UPDATE
+          ), restored AS (
+            UPDATE roster_entries r SET
+              previous_status = 'scheduled', previous_shift_time = ${legacy.shiftTime}
+            WHERE r.id = ${officialRows[0].id}
+              AND r.staff_id = ${official.id} AND r.date = ${legacy.date}
+              AND r.leave_request_id = ${approvedLeave.id} AND r.status = ${approvedLeave.leaveType}
+              AND (r.previous_status IS NULL OR r.previous_status = ${EMPTY_ROSTER_BEFORE_LEAVE}
+                   OR (r.previous_status = 'scheduled' AND r.previous_shift_time = ${legacy.shiftTime}))
+              AND EXISTS (SELECT 1 FROM source) RETURNING id
+          ), removed AS (
+            DELETE FROM roster_entries r WHERE r.id IN (SELECT id FROM source)
+              AND EXISTS (SELECT 1 FROM restored) RETURNING id
+          ), audited AS (
+            INSERT INTO roster_identity_repair_audit
+              (id, roster_entry_id, leave_request_id, official_staff_id, reviewed_by, old_data, repair_action)
+            SELECT ${repairId}, ${legacy.id}, ${approvedLeave.id}, ${official.id},
+              ${currentUser.email || ''}, ${backup}::jsonb, 'merged_old_shift'
+            WHERE EXISTS (SELECT 1 FROM removed) RETURNING id
+          )
+          SELECT (SELECT count(*) FROM removed) AS count,
+                 (SELECT count(*) FROM audited) AS audits
+        `);
+      } else {
+        // No official roster row exists yet. Convert the orphan duty to one
+        // leave-linked roster entry, with its old shift safely retained.
+        outcome = await db.execute(sql`
+          WITH source AS MATERIALIZED (
+            SELECT r.id FROM roster_entries r WHERE r.id = ${legacy.id}
+              AND r.staff_id IS NOT DISTINCT FROM ${originalStaffId}
+              AND r.date = ${legacy.date} AND r.status = 'scheduled'
+              AND r.shift_time = ${legacy.shiftTime} AND r.leave_request_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM roster_entries other
+                WHERE other.staff_id = ${official.id} AND other.date = ${legacy.date})
+            FOR UPDATE
+          ), linked AS (
+            UPDATE roster_entries r SET staff_id = ${official.id},
+              staff_name = ${official.name || ''}, staff_department = ${official.department || ''},
+              status = ${approvedLeave.leaveType}, shift_time = '',
+              leave_request_id = ${approvedLeave.id}, previous_status = 'scheduled',
+              previous_shift_time = ${legacy.shiftTime}
+            WHERE r.id IN (SELECT id FROM source) RETURNING id
+          ), audited AS (
+            INSERT INTO roster_identity_repair_audit
+              (id, roster_entry_id, leave_request_id, official_staff_id, reviewed_by, old_data, repair_action)
+            SELECT ${repairId}, ${legacy.id}, ${approvedLeave.id}, ${official.id},
+              ${currentUser.email || ''}, ${backup}::jsonb, 'relinked_old_shift'
+            WHERE EXISTS (SELECT 1 FROM linked) RETURNING id
+          )
+          SELECT (SELECT count(*) FROM linked) AS count,
+                 (SELECT count(*) FROM audited) AS audits
+        `);
+      }
+      const resultRows = Array.isArray(outcome) ? outcome : (outcome?.rows || []);
+      if (Number(resultRows[0]?.count || 0) !== 1 || Number(resultRows[0]?.audits || 0) !== 1) {
+        return json({ message: "Record changed during repair; no matching row was updated. Refresh and review." }, 409);
+      }
+      return json({ success: true, staffName: official.name, staffSn: official.sn,
+        action: hasExisting ? 'merged_duplicate' : 'relinked_roster',
+        restoredOriginalShift: legacy.shiftTime });
     }
 
     // ==========================================

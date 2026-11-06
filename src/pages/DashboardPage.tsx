@@ -103,6 +103,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [dutyFilter, setDutyFilter] = useState('all');
   const [showDutyConflictDetails, setShowDutyConflictDetails] = useState(false);
+  const [repairingRosterId, setRepairingRosterId] = useState('');
 
   const role = (profile?.role || '').toLowerCase();
   const accountName = String(profile?.name || user?.name || user?.email?.split('@')[0] || 'Airport User').trim();
@@ -111,6 +112,36 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const accountDepartment = profile?.department && profile.department !== '—' ? profile.department : 'Funadhoo Airport';
   const canManageRequests = ['manager', 'admin', 'developer', 'owner'].includes(role);
   const canSeeTeamRequests = canManageRequests || role === 'smt';
+
+  const repairLegacyDuty = async (conflict: any) => {
+    const confirmation = window.confirm(
+      `Repair the old duty record for ${conflict.rosterName}?\n\n` +
+      `Official leave: ${conflict.unavailableName} (${conflict.unavailableSn}).\n` +
+      `Roster date: ${conflict.rosterDate}. Previous shift: ${conflict.rosterShift}.\n\n` +
+      'Confirm that this was the original shift before leave. ' +
+      'It will be backed up and the duplicate duty removed or linked to leave. ' +
+      'No leave request or staff profile will be deleted.'
+    );
+    if (!confirmation) return;
+    setRepairingRosterId(String(conflict.rosterEntryId));
+    try {
+      await apiFetch('/roster/repair-verified-conflict', {
+        method: 'POST',
+        body: JSON.stringify({
+          rosterEntryId: conflict.rosterEntryId,
+          leaveRequestId: conflict.unavailableRecordId,
+          confirmPreviousShift: true,
+        }),
+      });
+      const refreshed = await apiFetch('/dashboard', { cache: 'no-store' });
+      setDashboard(refreshed);
+      window.alert('Roster identity corrected. Approved leave was preserved; the previous shift was saved.');
+    } catch (error: any) {
+      window.alert(`Roster repair was not applied: ${String(error?.message || error)}`);
+    } finally {
+      setRepairingRosterId('');
+    }
+  };
 
   useEffect(() => {
     const updateClock = () => setTime(new Date());
@@ -449,9 +480,17 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                               <div><strong>Unavailable:</strong> {conflict.unavailableName} ({conflict.unavailableSn}) · {conflict.unavailableLabel} · {conflict.unavailableDates}</div>
                               <div><strong>Evidence:</strong> {conflict.evidence}</div>
                               {conflict.needsIdentityReview ? (
-                                <div style={{ fontWeight: 600 }}>Verify both staff profiles in the Staff Directory before changing any roster or leave record.</div>
+                                <div style={{ fontWeight: 600 }}>Legacy identity needs repair. The official SN must be verified before changing this roster record.</div>
                               ) : (
                                 <div>Both records identify the same employee. Correct the conflicting roster entry without deleting approved leave history.</div>
+                              )}
+                              {canManageRequests && conflict.unavailableType === 'Approved leave' && conflict.needsIdentityReview && (
+                                <button type="button" className="overview-text-button"
+                                  disabled={Boolean(repairingRosterId)}
+                                  style={{ marginTop: 8, fontWeight: 700 }}
+                                  onClick={() => void repairLegacyDuty(conflict)}>
+                                  {repairingRosterId === conflict.rosterEntryId ? 'Repairing…' : 'Repair verified staff link & preserve shift'}
+                                </button>
                               )}
                               <small style={{ color: '#92400e' }}>Roster record: {conflict.rosterEntryId || 'ID unavailable'} · Unavailable record: {conflict.unavailableRecordId || 'ID unavailable'}</small>
                             </div>
