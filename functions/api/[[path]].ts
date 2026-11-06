@@ -15,6 +15,7 @@ import { canonicalSn, staffNumberConflict, deduplicateDutyEntries, groupDutyDisp
 import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
 import { buildDutyConflictReport } from "../../src/lib/duty-conflict-report.js";
 import { planLegacyDutyRepair } from "../../src/lib/legacy-duty-repair.js";
+import { approvalRosterConflict, auditLeaveRosterIntegrity, countLeaveDays, leaveDateRange, overlappingLeaveRequest } from "../../src/lib/leave-integrity.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -1030,6 +1031,18 @@ export const onRequest = async (context: any) => {
     // ==========================================
     // LEAVE REQUESTS MODULE
     // ==========================================
+    // Manager-only, read-only Phase 6 audit; does not consolidate or modify records.
+    if (pathname === "/api/leave-integrity" && method === "GET") {
+      const currentUser = await requireAuth(request, env);
+      if (!isManagerRole(currentUser.role)) return json({ message: "Manager access required" }, 403);
+      const [requests, roster, holidayRows, staffRows] = await Promise.all([
+        db.select().from(leaveRequests), db.select().from(rosterEntries),
+        db.select({ date: holidays.date }).from(holidays),
+        db.select({ id: staff.id, name: staff.name, sn: staff.sn }).from(staff),
+      ]);
+      return json(auditLeaveRosterIntegrity(requests, roster,
+        holidayRows.map(row => row.date).filter((date): date is string => !!date), staffRows));
+    }
     if (pathname === "/api/leave-requests" && method === "GET") {
       const currentUser = await requireAuth(request, env);
       // Repair legacy per-day roster history on the first read in each worker
@@ -1046,23 +1059,45 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       const body: any = await request.json();
       const targetStaff = await getAuthorizedRequestStaff(currentUser, String(body.staffId || ""));
+      const permittedTypes = new Set([
+        ...rosterLeaveStatuses, 'ABSENT',
+      ]);
+      const leaveType = String(body.leaveType || '').trim();
+      if (!permittedTypes.has(leaveType)) return json({ message: 'Select a valid leave type.' }, 400);
+
+      let dates: string[];
+      try { dates = leaveDateRange(String(body.startDate || ''), String(body.endDate || '')); }
+      catch (error: any) { return json({ message: String(error.message || 'Invalid leave dates') }, 400); }
+
+      // Compare the whole period, not only identical start/end dates.
+      // Pending and approved records must not overlap; rejected requests can be replaced.
+      const otherRequests = await db.select({
+        id: leaveRequests.id, staffId: leaveRequests.staffId, status: leaveRequests.status,
+        startDate: leaveRequests.startDate, endDate: leaveRequests.endDate,
+      }).from(leaveRequests).where(and(
+        eq(leaveRequests.staffId, targetStaff.id),
+        sql`${leaveRequests.startDate} <= ${dates[dates.length - 1]}`,
+        sql`${leaveRequests.endDate} >= ${dates[0]}`,
+      ));
+      if (overlappingLeaveRequest(otherRequests, targetStaff.id, dates[0], dates[dates.length - 1])) {
+        return json({ message: 'This leave period overlaps another pending or approved request. Review that request first.' }, 409);
+      }
+      const holidayRows = leaveType === 'ANNUAL LEAVE'
+        ? await db.select({ date: holidays.date }).from(holidays) : [];
+      const days = countLeaveDays(leaveType, dates,
+        holidayRows.map(row => row.date).filter((date): date is string => !!date));
+      if (days === 0) return json({ message: 'No countable leave days in this period.' }, 400);
+
       const id = crypto.randomUUID();
-      const existingLeave = await db.select().from(leaveRequests).where(and(
-        eq(leaveRequests.staffId, body.staffId),
-        eq(leaveRequests.startDate, body.startDate),
-        eq(leaveRequests.endDate, body.endDate)
-      )).limit(1);
-
-      if (existingLeave.length > 0) return json({ message: "A leave request for these exact dates already exists." }, 400);
-
       try {
         await db.insert(leaveRequests).values({
           id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
-          staffSn: targetStaff.sn || "", staffGender: targetStaff.gender || "", leaveType: body.leaveType,
-          startDate: body.startDate, endDate: body.endDate, days: body.days, reason: body.reason || "",
+          staffSn: targetStaff.sn || "", staffGender: targetStaff.gender || "", leaveType,
+          startDate: dates[0], endDate: dates[dates.length - 1], days,
+          reason: String(body.reason || '').slice(0, 2000),
           status: "pending", requestedBy: currentUser.email, requestedAt: new Date().toISOString(),
         });
-        return json({ success: true, id });
+        return json({ success: true, id, days });
       } catch { return json({ message: "Failed to create leave request." }, 400); }
     }
 
@@ -1116,6 +1151,14 @@ export const onRequest = async (context: any) => {
       await request.json();
       const reviewedAt = new Date().toISOString();
 
+      // A repeated approval must not reset the original roster backup.
+      if (String(leaveRow.status || '').toLowerCase() === 'approved') {
+        return json({ success: true, alreadyApproved: true });
+      }
+      if (String(leaveRow.status || '').toLowerCase() !== 'pending') {
+        return json({ message: 'Only pending leave can be approved.' }, 409);
+      }
+
       // Do not mark a request approved until we have verified and saved its
       // roster backups. In particular, a duplicate employee name is not an ID.
       const reqData = leaveRow;
@@ -1124,15 +1167,24 @@ export const onRequest = async (context: any) => {
         const actualStaffId = String(reqData.staffId || '');
         if (!actualStaffId) return json({ message: "Staff ID not found" }, 400);
 
-        const start = new Date(reqData.startDate + "T00:00:00");
-        const end = new Date(reqData.endDate + "T00:00:00");
-        const dateStrings: string[] = [];
+        let dateStrings: string[];
+        try { dateStrings = leaveDateRange(String(reqData.startDate || ''), String(reqData.endDate || '')); }
+        catch (error: any) { return json({ message: `Invalid leave period: ${error.message}` }, 409); }
         const entriesToInsert: any[] = [];
         const datesAndBackups: Array<{ date: string; snapshot: ReturnType<typeof snapshotRosterBeforeLeave> }> = [];
 
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split("T")[0];
-          dateStrings.push(dateStr);
+        // Prevent this approval from replacing an overlapping approved/pending request.
+        const overlappingRequests = await db.select({
+          id: leaveRequests.id, staffId: leaveRequests.staffId, status: leaveRequests.status,
+          startDate: leaveRequests.startDate, endDate: leaveRequests.endDate,
+        }).from(leaveRequests).where(and(
+          eq(leaveRequests.staffId, actualStaffId),
+          sql`${leaveRequests.startDate} <= ${dateStrings[dateStrings.length - 1]}`,
+          sql`${leaveRequests.endDate} >= ${dateStrings[0]}`,
+        ));
+        if (overlappingLeaveRequest(overlappingRequests, actualStaffId,
+          dateStrings[0], dateStrings[dateStrings.length - 1], id)) {
+          return json({ message: 'This leave overlaps another approved or pending request; no roster rows were changed.' }, 409);
         }
 
         // Validate every day's original assignment before replacing ANY roster rows.
@@ -1142,17 +1194,12 @@ export const onRequest = async (context: any) => {
             )) : [];
         for (const dateStr of dateStrings) {
           const oldRows = priorRoster.filter(row => row.date === dateStr);
-          // Reapproving the same request should preserve its original saved snapshot.
-          if (oldRows.length && oldRows.every(row => row.leaveRequestId === id)) {
-            const existingSnapshot = oldRows[0].previousStatus;
-            if (existingSnapshot === null || existingSnapshot === undefined) {
-              return json({ message: `The existing leave for ${dateStr} has no original roster backup. Review before reapproving.` }, 409);
-            }
-            datesAndBackups.push({ date: dateStr, snapshot: {
-              previousStatus: existingSnapshot, previousShiftTime: oldRows[0].previousShiftTime
-            } });
-          } else {
+          const conflict = approvalRosterConflict(oldRows, id!);
+          if (conflict) return json({ message: `${dateStr}: ${conflict} No changes were made.` }, 409);
+          try {
             datesAndBackups.push({ date: dateStr, snapshot: snapshotRosterBeforeLeave(oldRows) });
+          } catch (error: any) {
+            return json({ message: `Cannot safely approve leave on ${dateStr}: ${error.message}` }, 409);
           }
         }
         for (const { date: dateStr, snapshot } of datesAndBackups) {

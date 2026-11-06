@@ -59,6 +59,10 @@ function LeavePage() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [legacyRestoreDates, setLegacyRestoreDates] = useState<string[]>([]);
   const [legacyRestores, setLegacyRestores] = useState<Record<string, { status: string; shiftTime: string }>>({});
+  const [integrityAudit, setIntegrityAudit] = useState<any>(null);
+  const [integrityLoading, setIntegrityLoading] = useState(false);
+  const [integrityVisible, setIntegrityVisible] = useState(false);
+
   const isDepartmentLead = isSMT || myStaff?.isSMT === true || myStaff?.isSmt === true || myStaff?.isIncharge === true;
   const isStaff = accountIsStaff && !isDepartmentLead;
 
@@ -197,6 +201,17 @@ function LeavePage() {
     } catch (error: any) { toast.error('Error: ' + error.message); } finally { setSubmitting(false); }
   };
 
+  // Read-only check: no leave or roster records are changed by this action.
+  const runIntegrityAudit = async () => {
+    setIntegrityVisible(true);
+    setIntegrityLoading(true);
+    try {
+      setIntegrityAudit(await apiFetch('/leave-integrity'));
+    } catch (error: any) {
+      toast.error(`Could not complete integrity audit: ${error.message}`);
+    } finally { setIntegrityLoading(false); }
+  };
+
   const confirmApprove = async () => {
     if (!approveTarget) return;
     try {
@@ -265,12 +280,51 @@ function LeavePage() {
           <p>Submit requests, review approvals, and understand leave availability before roster changes are applied.</p>
         </div>
         <div className="leave-management-hero__actions">
+          {canApproveAnyDept && <button type="button" className="leave-management-secondary"
+            disabled={integrityLoading} onClick={() => integrityVisible ? setIntegrityVisible(false) : void runIntegrityAudit()}>
+            {integrityLoading ? 'Checking roster…' : integrityVisible ? 'Hide integrity audit' : 'Audit leave & roster'}
+          </button>}
           <button type="button" className="leave-management-secondary" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
           <button type="button" className="leave-management-primary" onClick={() => setShowForm(!showForm)}>{showForm ? 'Close request form' : 'Request leave'}</button>
         </div>
       </header>
 
       {loadError && <div className="leave-management-alert" role="alert"><strong>Leave information may be out of date.</strong><span>{loadError}</span></div>}
+
+      {canApproveAnyDept && integrityVisible && (
+        <section style={{ border: '1px solid #d5e2ee', background: '#fff', borderRadius: 12, padding: 16, marginBottom: 18 }} aria-label="Leave and roster integrity audit">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div><strong>Leave & roster integrity audit</strong><p style={{ margin: '5px 0', color: '#64748b', fontSize: 13 }}>Read-only check. This report does not edit staff, shifts, or leave requests.</p></div>
+            <button type="button" className="leave-management-secondary" disabled={integrityLoading} onClick={() => void runIntegrityAudit()}>
+              {integrityLoading ? 'Checking…' : 'Run again'}
+            </button>
+          </div>
+          {integrityLoading && <p role="status">Checking leave and roster records…</p>}
+          {integrityAudit && !integrityLoading && (
+            <>
+              <p style={{ margin: '12px 0', fontSize: 14 }}>
+                <strong>{integrityAudit.totalIssues} issue(s) found</strong> across {integrityAudit.scanned?.leaves ?? 0} leave requests and {integrityAudit.scanned?.roster ?? 0} roster entries.
+                {integrityAudit.totalIssues > 200 && ' Only the first 200 issues are displayed.'}
+              </p>
+              {integrityAudit.totalIssues === 0
+                ? <p style={{ color: '#047857' }}>No inconsistencies detected by these checks. Continue testing leave restoration with controlled records.</p>
+                : <div style={{ maxHeight: 380, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                    <table className="leave-management-table" style={{ width: '100%', fontSize: 12 }}>
+                      <thead><tr><th>Issue</th><th>Staff / SN</th><th>Date</th><th>Details</th></tr></thead>
+                      <tbody>{(integrityAudit.issues || []).map((issue: any, index: number) => (
+                        <tr key={`${issue.kind}-${issue.staffId}-${issue.date}-${index}`}>
+                          <td>{String(issue.kind || '').replace(/_/g, ' ')}</td>
+                          <td><strong>{issue.staffName}</strong><div>{issue.staffSn}</div></td>
+                          <td>{issue.date || '—'}</td><td>{issue.detail}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>}
+              <p style={{ color: '#92400e', fontSize: 12 }}>Back up Neon and verify identities before fixing historical records. This report can flag old holiday-count differences that may be intentional.</p>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="leave-management-summary" aria-label="Leave request summary">
         <div><span>Pending</span><strong>{pendingCount}</strong><small>awaiting a decision</small></div>
@@ -279,7 +333,7 @@ function LeavePage() {
         <div><span>Current view</span><strong>{visibleRequests.length}</strong><small>matching records</small></div>
       </section>
 
-      <div className="leave-management-note">Roster entries are created only after an authorized supervisor approves the request.</div>
+      <div className="leave-management-note">Manually submitted leave updates the roster after approval; leave entered directly through the roster is automatically approved.</div>
 
       <section className="leave-management-controls">
         <label><span>Search requests</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Staff, leave type, department…" /></label>
