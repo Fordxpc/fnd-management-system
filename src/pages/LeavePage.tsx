@@ -57,6 +57,8 @@ function LeavePage() {
   const [approveTarget, setApproveTarget] = useState<any>(null);
   const [rejectTarget, setRejectTarget] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [legacyRestoreDates, setLegacyRestoreDates] = useState<string[]>([]);
+  const [legacyRestores, setLegacyRestores] = useState<Record<string, { status: string; shiftTime: string }>>({});
   const isDepartmentLead = isSMT || myStaff?.isSMT === true || myStaff?.isSmt === true || myStaff?.isIncharge === true;
   const isStaff = accountIsStaff && !isDepartmentLead;
 
@@ -215,7 +217,34 @@ function LeavePage() {
     if (!deleteTarget) return;
     try {
       await apiFetch(`/leave-requests/${deleteTarget.id}`, { method: 'DELETE' });
-      toast.success('Leave request deleted.'); setDeleteTarget(null); fetchData();
+      toast.success('Leave deleted and the original roster assignments restored.');
+      setDeleteTarget(null); fetchData();
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      if (message.includes('Cannot safely delete this older leave:')) {
+        const dates = [...new Set(message.match(/\d{4}-\d{2}-\d{2}/g) || [])].sort();
+        setLegacyRestoreDates(dates);
+        setLegacyRestores({});
+        toast.error('Older leave: confirm the original shift/OFF for each listed day before deleting.');
+      } else toast.error('Error: ' + message);
+    }
+  };
+
+  const handleLegacyDelete = async () => {
+    if (!deleteTarget || legacyRestoreDates.length === 0) return;
+    for (const date of legacyRestoreDates) {
+      const choice = legacyRestores[date];
+      if (!choice?.status || (choice.status === 'scheduled' && !choice.shiftTime.trim())) {
+        toast.error(`Select the original roster status and shift for ${formatDisplay(date)}.`);
+        return;
+      }
+    }
+    try {
+      await apiFetch(`/leave-requests/${deleteTarget.id}`, {
+        method: 'DELETE', body: JSON.stringify({ legacyRestores })
+      });
+      toast.success('Leave deleted. The confirmed previous roster entries were restored.');
+      setLegacyRestoreDates([]); setLegacyRestores({}); setDeleteTarget(null); fetchData();
     } catch (error: any) { toast.error('Error: ' + error.message); }
   };
 
@@ -359,7 +388,43 @@ function LeavePage() {
 
       <ConfirmDialog isOpen={!!approveTarget} title="Approve Leave?" message={`Approve ${approveTarget?.leaveType} for ${approveTarget?.staffName}?`} confirmText="Yes, Approve" isDanger={false} onConfirm={confirmApprove} onCancel={() => setApproveTarget(null)} />
       <PromptDialog isOpen={!!rejectTarget} title="Reject Leave?" message="Please provide a reason for rejection (optional):" placeholder="e.g. Operational requirements" onSubmit={confirmReject} onCancel={() => setRejectTarget(null)} />
-      <ConfirmDialog isOpen={!!deleteTarget} title="Delete Leave Request?" message={`Are you sure you want to permanently delete this leave request for ${deleteTarget?.staffName}?`} confirmText="Delete" isDanger={true} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
+      <ConfirmDialog isOpen={!!deleteTarget && legacyRestoreDates.length === 0} title="Delete Leave Request?" message={`Delete this leave for ${deleteTarget?.staffName}? Previously saved roster shifts/OFF days will be restored.`} confirmText="Delete and restore roster" isDanger={true} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
+      {deleteTarget && legacyRestoreDates.length > 0 && (
+        <div className="modal-backdrop no-print" role="dialog" aria-modal="true" aria-label="Restore older roster entries">
+          <div className="modal-content" style={{ maxWidth: 650, maxHeight: '85vh', overflowY: 'auto' }}>
+            <h3>Confirm previous roster — {deleteTarget.staffName}</h3>
+            <p style={{ color: '#9a580a' }}>
+              This older leave was saved before roster backups existed. Choose what each date
+              showed BEFORE leave (using the original roster or backup). Nothing will be
+              deleted until every date has a confirmed selection.
+            </p>
+            {legacyRestoreDates.map(date => {
+              const current = legacyRestores[date] || { status: '', shiftTime: '' };
+              return <div key={date} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                <strong>{formatDisplay(date)}</strong>
+                <select value={current.status} style={selectStyle} onChange={event => setLegacyRestores(previous => ({ ...previous,
+                  [date]: { status: event.target.value, shiftTime: '' }
+                }))}>
+                  <option value="">Select previous status</option>
+                  <option value="scheduled">Scheduled shift</option>
+                  <option value="OFF DAY">OFF DAY</option>
+                  <option value="ABSENT">ABSENT</option>
+                  <option value="__EMPTY__">Originally blank</option>
+                </select>
+                {current.status === 'scheduled' && <input style={{ ...selectStyle, gridColumn: '1 / -1' }}
+                  placeholder="Previous shift, e.g. 06:00 - 14:00" value={current.shiftTime}
+                  onChange={event => setLegacyRestores(previous => ({ ...previous,
+                    [date]: { ...current, shiftTime: event.target.value }
+                  }))} />}
+              </div>;
+            })}
+            <div className="modal-actions" style={{ marginTop: 24 }}>
+              <button className="cancel-btn" onClick={() => { setDeleteTarget(null); setLegacyRestoreDates([]); setLegacyRestores({}); }}>Cancel</button>
+              <button className="submit-btn" onClick={handleLegacyDelete}>Restore confirmed roster and delete leave</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

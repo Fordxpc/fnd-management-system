@@ -185,7 +185,9 @@ export const settings = pgTable("settings", {
 export const rosterEntries = pgTable("roster_entries", {
 	id: text().primaryKey().notNull(), staffId: text("staff_id"), staffName: text("staff_name"),
 	staffDepartment: text("staff_department"), date: text(), shiftTime: text("shift_time"),
-	status: text(), leaveRequestId: text("leave_request_id"), createdAt: timestamp("created_at", { mode: 'string' }),
+	status: text(), leaveRequestId: text("leave_request_id"),
+	previousStatus: text("previous_status"), previousShiftTime: text("previous_shift_time"),
+	createdAt: timestamp("created_at", { mode: 'string' }),
 });
 
 export const tempAccess = pgTable("temp_access", {

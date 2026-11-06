@@ -58,3 +58,59 @@ export function deduplicateDutyEntries<T extends DutyEntry>(entries: T[], staff:
   return [...unique.values()].sort((a, b) =>
     String(a.staffName || '').localeCompare(String(b.staffName || '')));
 }
+
+/**
+ * Group only the *presentation* of likely duplicate roster identities.
+ * These records are never deleted/merged in the database. A flagged group
+ * must be verified in the Staff Directory by official staff number before
+ * combining or deleting actual staff accounts.
+ */
+function possibleOneLetterTypo(a: string, b: string): boolean {
+  const aa = normalize(a).split(' ');
+  const bb = normalize(b).split(' ');
+  if (aa.length < 2 || bb.length !== aa.length || aa[0] !== bb[0]) return false;
+  if (aa.slice(1, -1).join(' ') !== bb.slice(1, -1).join(' ')) return false;
+  const x = aa.at(-1) || '';
+  const y = bb.at(-1) || '';
+  if (Math.min(x.length, y.length) < 4 || Math.abs(x.length - y.length) > 1) return false;
+  let edits = 0, i = 0, j = 0;
+  while (i < x.length && j < y.length) {
+    if (x[i] === y[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (x.length > y.length) i++;
+    else if (y.length > x.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (x.length - i) + (y.length - j) === 1;
+}
+
+export function groupDutyDisplayEntries<T extends DutyEntry>(entries: T[]): Array<T & {
+  possibleDuplicate: boolean;
+  candidateNames: string[];
+  sourceCount: number;
+}> {
+  const groups: Array<{ rows: T[] }> = [];
+  for (const entry of entries) {
+    const department = canonicalDept(entry.staffDepartment);
+    const shift = normalize(entry.shiftTime);
+    const match = groups.find(group => group.rows.some(other =>
+      canonicalDept(other.staffDepartment) === department &&
+      normalize(other.shiftTime) === shift &&
+      (normalize(other.staffName) === normalize(entry.staffName) ||
+       possibleOneLetterTypo(String(other.staffName || ''), String(entry.staffName || '')))
+    ));
+    if (match) match.rows.push(entry);
+    else groups.push({ rows: [entry] });
+  }
+  return groups.map(({ rows }) => {
+    const preferred = [...rows].sort((a, b) =>
+      String(b.staffName || '').length - String(a.staffName || '').length)[0];
+    const names = [...new Set(rows.map(r => String(r.staffName || '')))].sort();
+    return {
+      ...preferred,
+      possibleDuplicate: rows.length > 1,
+      candidateNames: names,
+      sourceCount: rows.length,
+    };
+  }).sort((a, b) => String(a.staffName || '').localeCompare(String(b.staffName || '')));
+}

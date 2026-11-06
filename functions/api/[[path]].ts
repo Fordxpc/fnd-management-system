@@ -11,7 +11,8 @@ import {
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib/roster-leave-history.js";
-import { deduplicateDutyEntries } from "../../src/lib/duty-identity.js";
+import { deduplicateDutyEntries, groupDutyDisplayEntries } from "../../src/lib/duty-identity.js";
+import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -30,6 +31,7 @@ import {
 } from "../../src/lib/permission-check.js";
 
 let staffPhotoColumnReady = false;
+let rosterRestoreColumnsReady = false;
 let lastRosterLeaveReconcileAt = 0;
 
 const isManagerRole = (role: string | undefined | null) =>
@@ -108,6 +110,14 @@ export const onRequest = async (context: any) => {
   if (!staffPhotoColumnReady) {
     await db.execute(sql`ALTER TABLE "staff" ADD COLUMN IF NOT EXISTS "photo_base64" text`);
     staffPhotoColumnReady = true;
+  }
+
+  // Keep original roster values when a shift/OFF/absence is temporarily covered by leave.
+  // This migration is idempotent on Cloudflare and does not change old roster values.
+  if (!rosterRestoreColumnsReady) {
+    await db.execute(sql`ALTER TABLE "roster_entries" ADD COLUMN IF NOT EXISTS "previous_status" text`);
+    await db.execute(sql`ALTER TABLE "roster_entries" ADD COLUMN IF NOT EXISTS "previous_shift_time" text`);
+    rosterRestoreColumnsReady = true;
   }
 
   const corsHeaders = {
@@ -1070,34 +1080,60 @@ export const onRequest = async (context: any) => {
       await request.json();
       const reviewedAt = new Date().toISOString();
 
-      const [reqData] = await db.update(leaveRequests).set({
-        status: "approved", reviewedBy: currentUser.email, reviewedAt
-      }).where(eq(leaveRequests.id, id!)).returning();
+      // Do not mark a request approved until we have verified and saved its
+      // roster backups. In particular, a duplicate employee name is not an ID.
+      const reqData = leaveRow;
 
       if (reqData) {
-        const [staffRec] = await db.select().from(staff).where(eq(staff.name, reqData.staffName!)).limit(1);
-        const actualStaffId = staffRec ? staffRec.id : reqData.staffId;
+        const actualStaffId = String(reqData.staffId || '');
         if (!actualStaffId) return json({ message: "Staff ID not found" }, 400);
 
         const start = new Date(reqData.startDate + "T00:00:00");
         const end = new Date(reqData.endDate + "T00:00:00");
         const dateStrings: string[] = [];
         const entriesToInsert: any[] = [];
+        const datesAndBackups: Array<{ date: string; snapshot: ReturnType<typeof snapshotRosterBeforeLeave> }> = [];
 
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toISOString().split("T")[0];
           dateStrings.push(dateStr);
+        }
+
+        // Validate every day's original assignment before replacing ANY roster rows.
+        const priorRoster = dateStrings.length
+          ? await db.select().from(rosterEntries).where(and(
+              eq(rosterEntries.staffId, actualStaffId), inArray(rosterEntries.date, dateStrings)
+            )) : [];
+        for (const dateStr of dateStrings) {
+          const oldRows = priorRoster.filter(row => row.date === dateStr);
+          // Reapproving the same request should preserve its original saved snapshot.
+          if (oldRows.length && oldRows.every(row => row.leaveRequestId === id)) {
+            const existingSnapshot = oldRows[0].previousStatus;
+            if (existingSnapshot === null || existingSnapshot === undefined) {
+              return json({ message: `The existing leave for ${dateStr} has no original roster backup. Review before reapproving.` }, 409);
+            }
+            datesAndBackups.push({ date: dateStr, snapshot: {
+              previousStatus: existingSnapshot, previousShiftTime: oldRows[0].previousShiftTime
+            } });
+          } else {
+            datesAndBackups.push({ date: dateStr, snapshot: snapshotRosterBeforeLeave(oldRows) });
+          }
+        }
+        for (const { date: dateStr, snapshot } of datesAndBackups) {
           entriesToInsert.push({
             id: crypto.randomUUID(), staffId: actualStaffId, staffName: reqData.staffName,
             staffDepartment: reqData.staffDepartment, date: dateStr, shiftTime: "",
             status: reqData.leaveType, leaveRequestId: id, createdAt: new Date().toISOString(),
+            previousStatus: snapshot.previousStatus, previousShiftTime: snapshot.previousShiftTime,
           });
         }
-
         if (dateStrings.length > 0) {
           await db.delete(rosterEntries).where(and(eq(rosterEntries.staffId, actualStaffId), inArray(rosterEntries.date, dateStrings)));
           await db.insert(rosterEntries).values(entriesToInsert);
         }
+        await db.update(leaveRequests).set({
+          status: "approved", reviewedBy: currentUser.email, reviewedAt
+        }).where(eq(leaveRequests.id, id!));
       }
       return json({ success: true });
     }
@@ -1163,9 +1199,71 @@ export const onRequest = async (context: any) => {
       const id = pathname.split("/").pop();
       const [leaveRecord] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id!)).limit(1);
       await requireRequestMutationAccess(currentUser, leaveRecord, 'Leave request');
-      await db.delete(leaveRequests).where(eq(leaveRequests.id, id!));
-      await db.delete(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
-      return json({ success: true });
+      const linked = await db.select({ date: rosterEntries.date, previousStatus: rosterEntries.previousStatus })
+        .from(rosterEntries).where(eq(rosterEntries.leaveRequestId, id!));
+      const missingBackups = linked.filter(row => row.previousStatus == null);
+      const suppliedBody: any = await request.json().catch(() => ({}));
+      const suppliedRestores = suppliedBody?.legacyRestores && typeof suppliedBody.legacyRestores === 'object'
+        ? suppliedBody.legacyRestores : {};
+      if (missingBackups.some(row => !row.date || !suppliedRestores[row.date])) {
+        return json({
+          message: `Cannot safely delete this older leave: the previous roster assignments were never saved for ${missingBackups.map(row => row.date).join(', ')}. Select the correct earlier shift or OFF for each date; no changes were made.`,
+          code: 'ROSTER_RESTORE_BACKUP_MISSING',
+          dates: missingBackups.map(row => row.date)
+        }, 409);
+      }
+      // Only managers who passed mutation authorization can supply legacy
+      // replacements. They must explicitly select the prior roster state per day.
+      const legacyRestores: Record<string, { status: string; shiftTime: string }> = {};
+      for (const row of missingBackups) {
+        const original = suppliedRestores[row.date!];
+        const priorStatus = String(original?.status || '');
+        const priorShift = String(original?.shiftTime || '').trim();
+        if (![EMPTY_ROSTER_BEFORE_LEAVE, 'scheduled', 'OFF DAY', 'ABSENT'].includes(priorStatus) ||
+          (priorStatus === 'scheduled' && (priorShift.length < 3 || priorShift.length > 40))) {
+          return json({ message: `Select a valid earlier shift or OFF for ${row.date}. No changes were made.` }, 400);
+        }
+        legacyRestores[row.date!] = { status: priorStatus, shiftTime: priorStatus === 'scheduled' ? priorShift : '' };
+      }
+      const legacyPayload = JSON.stringify(legacyRestores);
+      // This single Postgres statement restores known previous assignments and
+      // explicitly chosen legacy values, then deletes the leave record atomically.
+      // Empty before leave is distinguished from a missing historical snapshot.
+      const restoreResult: any = await db.execute(sql`
+        WITH target AS (
+          SELECT id FROM leave_requests WHERE id = ${id!} AND NOT EXISTS (
+            SELECT 1 FROM roster_entries r
+            WHERE r.leave_request_id = ${id!} AND r.previous_status IS NULL
+              AND (${legacyPayload}::jsonb -> r.date ->> 'status') IS NULL
+          ) FOR UPDATE
+        ), restored AS (
+          UPDATE roster_entries AS r SET
+            status = coalesce(r.previous_status, (${legacyPayload}::jsonb -> r.date ->> 'status')),
+            shift_time = CASE
+              WHEN coalesce(r.previous_status, (${legacyPayload}::jsonb -> r.date ->> 'status')) = 'scheduled'
+              THEN coalesce(r.previous_shift_time, (${legacyPayload}::jsonb -> r.date ->> 'shiftTime'), '')
+              ELSE '' END,
+            leave_request_id = NULL, previous_status = NULL, previous_shift_time = NULL
+          WHERE r.leave_request_id = (SELECT id FROM target)
+            AND coalesce(r.previous_status, (${legacyPayload}::jsonb -> r.date ->> 'status')) <> ${EMPTY_ROSTER_BEFORE_LEAVE}
+          RETURNING r.id
+        ), cleared AS (
+          DELETE FROM roster_entries AS r
+          WHERE r.leave_request_id = (SELECT id FROM target)
+            AND coalesce(r.previous_status, (${legacyPayload}::jsonb -> r.date ->> 'status')) = ${EMPTY_ROSTER_BEFORE_LEAVE}
+          RETURNING r.id
+        ), removed AS (
+          DELETE FROM leave_requests WHERE id = (SELECT id FROM target) RETURNING id
+        )
+        SELECT (SELECT count(*) FROM restored) AS restored_count,
+               (SELECT count(*) FROM cleared) AS cleared_count,
+               (SELECT count(*) FROM removed) AS removed_count
+      `);
+      const responseRows = Array.isArray(restoreResult) ? restoreResult : (restoreResult?.rows || []);
+      if (Number(responseRows[0]?.removed_count || 0) !== 1) {
+        return json({ message: 'Leave request could not be removed safely. Refresh and try again.' }, 409);
+      }
+      return json({ success: true, rosterRestored: Number(responseRows[0]?.restored_count || 0) });
     }
 
     // ==========================================
@@ -1194,6 +1292,8 @@ export const onRequest = async (context: any) => {
         eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date)
       ));
       if (existing.some(row => row.leaveRequestId)) return json({ message: "Cannot overwrite approved leave." }, 400);
+      const restoringSnapshot = rosterLeaveStatuses.has(body.status)
+        ? snapshotRosterBeforeLeave(existing) : null;
       const id = existing.length > 0 ? existing[0].id : crypto.randomUUID();
       const rosterLeaveRequestId = await ensureRosterLeaveHistory(currentUser, targetStaff, body.status, body.date);
       // One roster row per staff/day: remove any legacy duplicates when replacing it.
@@ -1205,6 +1305,8 @@ export const onRequest = async (context: any) => {
           id, staffId: targetStaff.id, staffName: targetStaff.name || "", staffDepartment: targetStaff.department || "",
           date: body.date, shiftTime: body.status === "scheduled" ? body.shiftTime : "", status: body.status,
           leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
+          previousStatus: restoringSnapshot?.previousStatus ?? null,
+          previousShiftTime: restoringSnapshot?.previousShiftTime ?? null,
         });
       }
       if (rosterLeaveRequestId) await reconcileRosterLeaveHistory(targetStaff.id);
@@ -1240,7 +1342,9 @@ export const onRequest = async (context: any) => {
           eq(rosterEntries.staffId, entry.staffId), eq(rosterEntries.date, entry.date)
         ));
         if (existing.some(row => row.leaveRequestId)) return json({ message: `Approved leave protects ${targetStaff.name} on ${entry.date}` }, 400);
-        validated.push({ entry, targetStaff, existing: existing[0] });
+        const restoringSnapshot = rosterLeaveStatuses.has(entry.status)
+          ? snapshotRosterBeforeLeave(existing) : null;
+        validated.push({ entry, targetStaff, existing: existing[0], restoringSnapshot });
       }
       // Validate leave collisions before writing any bulk roster rows.
       for (const item of validated) {
@@ -1266,6 +1370,8 @@ export const onRequest = async (context: any) => {
           staffName: item.targetStaff.name || "", staffDepartment: item.targetStaff.department || "",
           date: item.entry.date, shiftTime: item.entry.status === "scheduled" ? item.entry.shiftTime : "",
           status: item.entry.status, leaveRequestId: rosterLeaveRequestId, createdAt: new Date().toISOString(),
+          previousStatus: item.restoringSnapshot?.previousStatus ?? null,
+          previousShiftTime: item.restoringSnapshot?.previousShiftTime ?? null,
         });
         if (rosterLeaveRequestId) affectedLeaveStaff.add(item.targetStaff.id);
       }
@@ -2522,6 +2628,11 @@ export const onRequest = async (context: any) => {
       // Use verified staff ID/SN and authoritative directory spelling.
       // Do not guess that two similar names belong to the same employee.
       const onDutyToday = deduplicateDutyEntries(visibleDutyEntries, staffList);
+      // Presentation-only grouping. Preserve all source roster records and flag
+      // unverified spelling/name collisions rather than silently deleting identities.
+      const onDutyDisplayToday = groupDutyDisplayEntries(onDutyToday);
+      const dutyIdentityReviewCount = onDutyDisplayToday.reduce((sum, group) =>
+        sum + Math.max(0, group.sourceCount - 1), 0);
       const onLeaveToday = deduplicateDutyEntries(activeLeaveToday, staffList);
       let pendingLeave: any[] = [];
       let pendingOT: any[] = [];
@@ -2614,6 +2725,8 @@ export const onRequest = async (context: any) => {
         },
 
         onDutyToday,
+        onDutyDisplayToday,
+        dutyIdentityReviewCount,
 
         onLeaveToday,
 

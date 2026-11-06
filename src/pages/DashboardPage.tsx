@@ -193,7 +193,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const radarFlightId = String(trackedFlight?.flightNo || '').replace(/[^a-zA-Z0-9]/g, '');
   const canViewFlightBoard = dashboard?.canViewFlightBoard !== false;
   const operations = dashboard?.operations || {};
-  const onDuty = dashboard?.onDutyToday || EMPTY_LIST;
+  const onDuty = dashboard?.onDutyDisplayToday || dashboard?.onDutyToday || EMPTY_LIST;
+  const dutyIdentityReviewCount = Number(dashboard?.dutyIdentityReviewCount || 0);
   const onLeave = dashboard?.onLeaveToday || EMPTY_LIST;
   const pendingLeave = dashboard?.pendingLeave || EMPTY_LIST;
   const pendingOT = dashboard?.pendingOT || EMPTY_LIST;
@@ -347,7 +348,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               <div className="overview-staffing-total">
                 <div>
                   <strong>{onDuty.length}</strong>
-                  <span>staff on duty</span>
+                  <span>duty groups{dutyIdentityReviewCount ? ` · ${dutyIdentityReviewCount} unverified duplicate records` : ''}</span>
                 </div>
                 <div>
                   <strong>{onLeave.length}</strong>
@@ -428,7 +429,14 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   <details key={department} className="overview-duty-department" open>
                     <summary><strong>{department}</strong><span>{departmentStaff.length}</span></summary>
                     {departmentStaff.length > 0 ? (
-                      <ul>{departmentStaff.map((entry: any) => <li key={entry.id}><span>{entry.staffName}</span><small>{entry.shiftTime || entry.status || 'On duty'}</small></li>)}</ul>
+                      <ul>{departmentStaff.map((entry: any) => <li key={entry.id}>
+                        <span>{entry.staffName}
+                          {entry.possibleDuplicate && <small style={{ display: 'block', color: '#9a580a', marginTop: 3 }} title={entry.candidateNames.join(' / ')}>
+                            ⚠ {entry.sourceCount} records: {entry.candidateNames.join(' / ')} · verify SN
+                          </small>}
+                        </span>
+                        <small>{entry.shiftTime || entry.status || 'On duty'}</small>
+                      </li>)}</ul>
                     ) : <p>No staff scheduled</p>}
                   </details>
                 );
