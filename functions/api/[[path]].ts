@@ -11,7 +11,7 @@ import {
 } from "../../src/db/schema.js";
 import { eq, and, inArray, sql, asc, desc, or } from "drizzle-orm";
 import { planRosterLeaveConsolidation, ROSTER_LEAVE_REASON } from "../../src/lib/roster-leave-history.js";
-import { deduplicateDutyEntries, groupDutyDisplayEntries } from "../../src/lib/duty-identity.js";
+import { deduplicateDutyEntries, groupDutyDisplayEntries, reconcileDutyAvailability } from "../../src/lib/duty-identity.js";
 import { EMPTY_ROSTER_BEFORE_LEAVE, snapshotRosterBeforeLeave } from "../../src/lib/roster-restore.js";
 import {
   requireFlightsEdit,
@@ -2576,55 +2576,24 @@ export const onRequest = async (context: any) => {
         }) : [];
 
       const nextFlight = upcomingFlights[0] || null;
-      const normalizeStaffName = (value: any) => String(value || '')
-        .normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
-      const normalizeDepartment = (value: any) => String(value || '')
-        .normalize('NFKC').replace(/[\u200B-\u200D\uFEFF]/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
-      const canonicalDepartment = (value: any) => {
-        const department = normalizeDepartment(value);
-        if (department.includes('ground') || department === 'operations') return 'ground operations';
-        if (department.includes('maint')) return 'maintenance';
-        if (department.includes('secur')) return 'security';
-        if (department.includes('fire') || department.includes('rescue')) return 'fire & rescue';
-        if (department.includes('admin')) return 'administration';
-        if (department.includes('safe')) return 'safety';
-        return department || 'unassigned';
-      };
-      const normalizeSn = (value: any) => String(value || '').trim().replace(/^sn-/i, '').toUpperCase();
       const activeLeaveToday = leaveList.filter(leave =>
         String(leave.status || '').trim().toLowerCase() === 'approved' &&
         String(leave.startDate || '') <= today &&
         String(leave.endDate || '') >= today
       );
-      const rosterUnavailableStatuses = new Set(['absent', 'annual leave', 'sick leave', 'sick leave / mc', 'no pay leave', 'duty travel', 'paternity leave', 'maternity leave', 'pre-maternity leave', 'family responsibility leave (frl)']);
-      const rosterUnavailableToday = roster.filter(entry => {
-        if (entry.date !== today) return false;
-        const status = String(entry.status || '').trim().toLowerCase();
-        return status !== 'scheduled' || rosterUnavailableStatuses.has(status);
-      });
-      const leaveStaffIds = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => String(entry.staffId || '')).filter(Boolean));
-      const leaveStaffNames = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => normalizeStaffName(entry.staffName)).filter(Boolean));
-      const leaveIdentityKeys = new Set([...activeLeaveToday, ...rosterUnavailableToday].map(entry => `${normalizeStaffName(entry.staffName)}|${normalizeDepartment(entry.staffDepartment)}`));
-      const leaveStaffSns = new Set(activeLeaveToday.map(leave => normalizeSn((leave as any).staffSn)).filter(Boolean));
-      const addLinkedUnavailableStaff = (entry: any) => {
-        const linkedStaff = staffList.find(member => String(member.id || '') === String(entry.staffId || '') || normalizeStaffName(member.name) === normalizeStaffName(entry.staffName));
-        if (!linkedStaff) return;
-        leaveStaffIds.add(String(linkedStaff.id || ''));
-        leaveStaffNames.add(normalizeStaffName(linkedStaff.name));
-        leaveIdentityKeys.add(`${normalizeStaffName(linkedStaff.name)}|${normalizeDepartment(linkedStaff.department)}`);
-        if (linkedStaff.sn) leaveStaffSns.add(normalizeSn(linkedStaff.sn));
-      };
-      activeLeaveToday.forEach(addLinkedUnavailableStaff);
-      rosterUnavailableToday.forEach(addLinkedUnavailableStaff);
-      const visibleDutyEntries = roster.filter(entry => {
-        if (entry.date !== today || String(entry.status || '').trim().toLowerCase() !== 'scheduled') return false;
-        const staffId = String(entry.staffId || '');
-        const normalizedName = normalizeStaffName(entry.staffName);
-        const identityKey = `${normalizedName}|${normalizeDepartment(entry.staffDepartment)}`;
-        const linkedStaff = staffList.find(member => String(member.id || '') === staffId || normalizeStaffName(member.name) === normalizedName);
-        const linkedSn = normalizeSn(linkedStaff?.sn);
-        return !leaveStaffIds.has(staffId) && !leaveStaffNames.has(normalizedName) && !leaveIdentityKeys.has(identityKey) && (!linkedSn || !leaveStaffSns.has(linkedSn));
-      });
+      const rosterUnavailableToday = roster.filter(entry =>
+        entry.date === today && String(entry.status || '').trim().toLowerCase() !== 'scheduled'
+      );
+      const scheduledRosterToday = roster.filter(entry =>
+        entry.date === today && String(entry.status || '').trim().toLowerCase() === 'scheduled'
+      );
+      const { visibleDutyEntries, conflictingDutyEntries } = reconcileDutyAvailability(
+        scheduledRosterToday,
+        [...activeLeaveToday, ...rosterUnavailableToday],
+        staffList,
+      );
+      const dutyLeaveConflictCount = conflictingDutyEntries.length;
+      const dutyIdentityConflictCount = conflictingDutyEntries.filter(item => item.reason === 'name-review').length;
       // Use verified staff ID/SN and authoritative directory spelling.
       // Do not guess that two similar names belong to the same employee.
       const onDutyToday = deduplicateDutyEntries(visibleDutyEntries, staffList);
@@ -2727,6 +2696,8 @@ export const onRequest = async (context: any) => {
         onDutyToday,
         onDutyDisplayToday,
         dutyIdentityReviewCount,
+        dutyLeaveConflictCount,
+        dutyIdentityConflictCount,
 
         onLeaveToday,
 

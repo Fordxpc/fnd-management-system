@@ -60,6 +60,66 @@ export function deduplicateDutyEntries<T extends DutyEntry>(entries: T[], staff:
 }
 
 /**
+ * Avoid displaying a person as available for duty when a roster assignment
+ * conflicts with approved leave or another unavailable roster status.
+ *
+ * ID/SN matches are definitive. Same-name and one-letter spelling matches in
+ * the same department are provisional: those assignments are withheld from the
+ * duty count and returned as conflicts for a manager to verify. Source records
+ * are NEVER changed by this helper.
+ */
+export function reconcileDutyAvailability<T extends DutyEntry, U extends DutyEntry>(
+  scheduled: T[],
+  unavailable: U[],
+  staff: StaffIdentity[],
+): {
+  visibleDutyEntries: T[];
+  conflictingDutyEntries: Array<{ entry: T; unavailable: U; reason: 'staff-id' | 'staff-number' | 'name-review' }>;
+} {
+  const byId = new Map(staff.filter(member => member.id).map(member => [String(member.id), member] as const));
+  const resolve = (entry: DutyEntry) => {
+    const linked = byId.get(String(entry.staffId || ''));
+    return {
+      id: String(entry.staffId || ''),
+      sn: canonicalSn(linked?.sn || entry.staffSn),
+      name: normalize(linked?.name || entry.staffName),
+      department: canonicalDept(linked?.department || entry.staffDepartment),
+    };
+  };
+  const unavailableResolved = unavailable.map(entry => ({ entry, identity: resolve(entry) }));
+  const visibleDutyEntries: T[] = [];
+  const conflictingDutyEntries: Array<{
+    entry: T;
+    unavailable: U;
+    reason: 'staff-id' | 'staff-number' | 'name-review';
+  }> = [];
+  for (const entry of scheduled) {
+    const identity = resolve(entry);
+    const conflict = unavailableResolved.map(row => {
+      if (identity.id && row.identity.id && identity.id === row.identity.id) {
+        return { ...row, reason: 'staff-id' as const };
+      }
+      if (identity.sn && row.identity.sn && identity.sn === row.identity.sn) {
+        return { ...row, reason: 'staff-number' as const };
+      }
+      // A possible spelling error must not make an employee appear available
+      // while an approved leave entry may belong to the same person.
+      if (identity.name && row.identity.name && identity.department === row.identity.department &&
+        (identity.name === row.identity.name || possibleOneLetterTypo(identity.name, row.identity.name))) {
+        return { ...row, reason: 'name-review' as const };
+      }
+      return null;
+    }).find(Boolean);
+    if (conflict) {
+      conflictingDutyEntries.push({ entry, unavailable: conflict.entry, reason: conflict.reason });
+    } else {
+      visibleDutyEntries.push(entry);
+    }
+  }
+  return { visibleDutyEntries, conflictingDutyEntries };
+}
+
+/**
  * Group only the *presentation* of likely duplicate roster identities.
  * These records are never deleted/merged in the database. A flagged group
  * must be verified in the Staff Directory by official staff number before

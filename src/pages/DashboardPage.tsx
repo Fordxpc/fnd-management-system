@@ -195,6 +195,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const operations = dashboard?.operations || {};
   const onDuty = dashboard?.onDutyDisplayToday || dashboard?.onDutyToday || EMPTY_LIST;
   const dutyIdentityReviewCount = Number(dashboard?.dutyIdentityReviewCount || 0);
+  const dutyLeaveConflictCount = Number(dashboard?.dutyLeaveConflictCount || 0);
+  const dutyIdentityConflictCount = Number(dashboard?.dutyIdentityConflictCount || 0);
   const onLeave = dashboard?.onLeaveToday || EMPTY_LIST;
   const pendingLeave = dashboard?.pendingLeave || EMPTY_LIST;
   const pendingOT = dashboard?.pendingOT || EMPTY_LIST;
@@ -422,7 +424,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           {loading ? (
             <LoadingBlock />
           ) : (
-            <div className="overview-duty-grid">
+            <>
+              {dutyLeaveConflictCount > 0 && (
+                <div role="status" style={{ padding: '10px 12px', marginBottom: 12, border: '1px solid #f3c98a', borderRadius: 10, background: '#fffbeb', color: '#78350f', fontSize: 12 }}>
+                  <strong>{dutyLeaveConflictCount} conflicting duty assignment{dutyLeaveConflictCount === 1 ? '' : 's'} withheld.</strong>
+                  {' '}These roster entries overlap approved leave or another unavailable status.
+                  {dutyIdentityConflictCount > 0 && ` ${dutyIdentityConflictCount} match by name/spelling only and need staff ID verification.`}
+                  {' '}<button type="button" className="overview-text-button" onClick={() => onNavigate('roster')}>Review roster</button>
+                </div>
+              )}
+              <div className="overview-duty-grid">
               {visibleDutyDepartments.map((department) => {
                 const departmentStaff = dutyByDepartment[department] || [];
                 return (
@@ -432,7 +443,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                       <ul>{departmentStaff.map((entry: any) => <li key={entry.id}>
                         <span>{entry.staffName}
                           {entry.possibleDuplicate && <small style={{ display: 'block', color: '#9a580a', marginTop: 3 }} title={entry.candidateNames.join(' / ')}>
-                            ⚠ {entry.sourceCount} records: {entry.candidateNames.join(' / ')} · verify SN
+                            ⚠ {entry.sourceCount} possible duplicates · check Staff Directory
                           </small>}
                         </span>
                         <small>{entry.shiftTime || entry.status || 'On duty'}</small>
@@ -441,7 +452,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </details>
                 );
               })}
-            </div>
+              </div>
+            </>
           )}
         </Panel>
 
