@@ -96,7 +96,7 @@ function SettingsPage() {
     const memberRole = getStaffRole(s);
     if (["developer", "admin", "manager", "owner"].includes(memberRole)) return true;
     if (s.specialOpsAccess && ["opsBoardViewAccess", "opsBoardEditAccess", "rampsheetViewAccess", "rampsheetEditAccess", "flightsViewAccess", "flightsEditAccess", "birdCountViewAccess", "birdCountEditAccess", "rwyLightViewAccess", "rwyLightEditAccess"].includes(field)) return true;
-    if ((s.isSmt || memberRole === "smt") && ["opsBoardViewAccess", "rampsheetViewAccess", "flightsViewAccess", "birdCountViewAccess", "rwyLightViewAccess", "rosterViewAccess", "leaveViewAccess", "leaveEditAccess", "overtimeViewAccess", "overtimeEditAccess", "reportsViewAccess"].includes(field)) return true;
+    if ((s.isSmt || memberRole === "smt") && ["opsBoardViewAccess", "rampsheetViewAccess", "flightsViewAccess", "birdCountViewAccess", "rwyLightViewAccess", "rosterViewAccess", "rosterEditAccess", "leaveViewAccess", "leaveEditAccess", "overtimeViewAccess", "overtimeEditAccess", "reportsViewAccess"].includes(field)) return true;
     if (s.department === "Ground Operations" && (s.isSmt || memberRole === "smt") && field === "opsBoardEditAccess") return true;
     if (s.department === "Safety" && ["opsBoardViewAccess", "opsBoardEditAccess"].includes(field)) return true;
     return false;
@@ -309,7 +309,7 @@ function SettingsPage() {
                   <tr key={s.id}>
                     <td><strong>{s.name}</strong></td>
                     <td>{s.department}</td>
-                    <td style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: 700 }}>{s.isSmt ? 'SMT' : 'Staff'}</td>
+                    <td style={{ textTransform: 'uppercase', fontSize: '10px', fontWeight: 700 }}>{getStaffRole(s)}</td>
                     <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'rampsheetViewAccess') || s.rampsheetViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'rampsheetEditAccess') || s.rampsheetEditAccess) ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'rwyLightViewAccess') || s.rwyLightViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'rwyLightEditAccess') || s.rwyLightEditAccess) ? '✅' : '❌'}</td>
                     <td style={{ textAlign: 'center' }}>{(isRoleAutoGranted(s, 'birdCountViewAccess') || s.birdCountViewAccess) ? '✅' : '❌'} / {(isRoleAutoGranted(s, 'birdCountEditAccess') || s.birdCountEditAccess) ? '✅' : '❌'}</td>

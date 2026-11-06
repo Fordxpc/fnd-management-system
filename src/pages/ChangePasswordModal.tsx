@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { authClient } from '../lib/auth-client';
+import { toast } from 'sonner';
 
 interface Props {
   onClose: () => void;
@@ -20,16 +21,16 @@ function ChangePasswordModal({ onClose }: Props) {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!currentPassword || !newPassword || !confirmPassword) {
-      alert('Please fill in all fields'); return;
+      toast.error('Please fill in all password fields'); return;
     }
     if (newPassword.length < 6 || newPassword.length > 10) {
-      alert('New password must be between 6 and 10 characters'); return;
+      toast.error('New password must be between 6 and 10 characters'); return;
     }
     if (newPassword !== confirmPassword) {
-      alert('New passwords do not match'); return;
+      toast.error('New passwords do not match'); return;
     }
     if (newPassword === currentPassword) {
-      alert('New password must be different from current password'); return;
+      toast.error('New password must be different from the current password'); return;
     }
 
     setSubmitting(true);
@@ -42,12 +43,13 @@ function ChangePasswordModal({ onClose }: Props) {
 
       if (error) throw new Error(error.message);
 
-      alert('✅ Password changed successfully!');
+      toast.success('Password changed successfully');
       onClose();
     } catch (err: any) {
-      alert('Error: ' + (err.message || 'Current password might be incorrect'));
+      toast.error(err.message || 'Password could not be changed. Check your current password.');
+    } finally {
+      setSubmitting(false);
     }
-    setSubmitting(false);
   };
 
   return (

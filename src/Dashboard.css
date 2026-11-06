@@ -2441,3 +2441,95 @@ body.printing-bird-count .modal-backdrop,body.printing-bird-count .modal-content
 @media(max-width:600px){.overview-greeting-board{min-height:0!important;padding:20px 17px!important;border-width:5px!important}.overview-greeting-copy{grid-template-columns:69px minmax(0,1fr)!important;column-gap:13px!important}.overview-greeting-copy>.overview-profile-stack{align-self:start!important;margin-top:4px!important}.overview-greeting-copy>.overview-profile-stack .overview-profile-mark{width:58px!important;height:58px!important;border-width:3px!important}.overview-greeting-copy>h1{font-size:22px!important}.overview-greeting-copy>h1 span{font-size:17px!important}.overview-greeting-copy>h1 strong{font-size:22px!important}.overview-greeting-copy>.overview-identity-row{gap:4px!important;margin-top:9px!important}.overview-greeting-copy>.overview-identity-row>span{padding-left:21px!important;font-size:9px!important}.overview-identity-row>span:before{width:15px;height:15px;font-size:11px}.overview-airport-art{left:38%;right:-16%;height:56%;opacity:.58}.overview-greeting-board .overview-clock{grid-template-columns:1fr auto!important}.overview-greeting-board .overview-clock strong{grid-column:2!important;grid-row:1/3!important;font-size:27px!important}.overview-greeting-board .overview-clock small{grid-column:1!important;grid-row:2!important;font-size:9px!important}.overview-station-status{grid-column:1!important;grid-row:1!important;font-size:9px!important}.overview-flight-board>.overview-panel-header,.overview-weather-panel>.overview-panel-header{padding:12px!important}.overview-flight-board>.overview-panel-header h2,.overview-weather-panel>.overview-panel-header h2{font-size:17px!important}.overview-flight-board .overview-live-badge{margin-left:6px!important;padding:6px 8px!important}.overview-flight-board .overview-text-button{padding:7px 9px!important;font-size:9px!important}.overview-flight-board-list{padding:0 9px 9px!important}.overview-flight-service{grid-column:1/6!important;padding:12px!important}.overview-flight-service strong{font-size:22px!important}.overview-flight-route{grid-column:6/13!important;padding:12px 82px 12px 13px!important}.overview-flight-route strong{font-size:15px!important}.overview-flight-board-list .overview-board-status{position:absolute!important;right:12px!important;top:13px!important;padding:7px 9px!important;font-size:9px!important}.overview-flight-times small,.overview-flight-details-compact small{padding:10px 4px!important;font-size:8px!important}.overview-flight-times strong{font-size:14px!important}.overview-flight-details-compact strong{font-size:12px!important}.overview-flight-carousel{margin:0 9px}.overview-weather-content{margin:0 9px 9px!important}.overview-weather-now{grid-template-columns:1fr 1fr!important;min-height:100px!important}.overview-weather-now>div{min-height:100px!important;padding:12px!important}.overview-weather-condition{gap:8px!important}.overview-weather-icon{font-size:37px!important}.overview-weather-now strong{font-size:27px!important}.overview-weather-now small{font-size:9px!important}.overview-weather-wind strong{font-size:14px!important}.overview-weather-metrics>div,.overview-weather-metrics>div:nth-child(3n){min-height:72px!important;padding:10px 2px!important}.overview-weather-metrics span{font-size:7px!important}.overview-weather-metrics strong{font-size:11px!important}.overview-weather-content>p{padding:10px!important;font-size:8px!important;text-align:center!important}}
 /* Phase 59: explicit Ramp live-page control */
 .ramp-clear-live-btn{border:1px solid rgba(254,202,202,.65)!important;color:#fee2e2!important;background:rgba(185,28,28,.32)!important}.ramp-clear-live-btn:hover{background:rgba(185,28,28,.52)!important}.ramp-live-cleared{display:flex;max-width:1100px;min-height:300px;box-sizing:border-box;margin:0 auto;align-items:center;justify-content:center;flex-direction:column;gap:8px;border:1px dashed #94a3b8;border-radius:16px;color:#64748b;background:#fff;text-align:center}.ramp-live-cleared strong{color:#1e293b;font-size:22px}.ramp-live-cleared span{font-size:13px}
+/* Consolidated print isolation: prevent blank/extra sheets across operational exports. */
+@media print {
+  html,
+  body {
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-roster #root * {
+    visibility: hidden !important;
+  }
+  body.printing-roster .roster-export-area,
+  body.printing-roster .roster-export-area * {
+    visibility: visible !important;
+  }
+  body.printing-roster .roster-export-area {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    background: #fff !important;
+    zoom: 1 !important;
+  }
+  body.printing-roster .roster-week-section:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  body.printing-ramp .ramp-sheet,
+  body.printing-ramp .flight-form {
+    height: auto !important;
+    min-height: 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid-page !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+  body.printing-ramp:not(.printing-modal) .ramp-container {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+  }
+  body.printing-modal .ramp-container,
+  body.printing-modal .ramp-container * {
+    visibility: hidden !important;
+  }
+  body.printing-modal .modal-backdrop,
+  body.printing-modal .modal-backdrop *,
+  body.printing-modal .modal-backdrop .ramp-container,
+  body.printing-modal .modal-backdrop .ramp-container * {
+    visibility: visible !important;
+  }
+  body.printing-modal .modal-backdrop {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body.printing-modal .modal-content,
+  body.printing-modal .modal-scrollable-body {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body.printing-report .reports-print-root,
+  body.printing-bird-count .wildlife-print-root {
+    height: auto !important;
+    min-height: 0 !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+}

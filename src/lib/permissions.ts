@@ -74,7 +74,8 @@ export function isSMT(
 ): boolean {
   return (
     role(profile) === "smt" ||
-    staff?.isSmt === true
+    staff?.isSmt === true ||
+    staff?.isIncharge === true
   );
 }
 
@@ -243,8 +244,8 @@ export function canEditRoster(
 ): boolean {
   return (
     hasFullAccess(profile) ||
-    staff?.rosterEditAccess === true ||
-    staff?.isIncharge === true
+    isSMT(profile, staff) ||
+    staff?.rosterEditAccess === true
   );
 }
 

@@ -38,12 +38,45 @@ const rampFlightStatus = (draft: any, routeValue?: any) => {
   if (draft?.ata) return 'Landed';
   if (draft?.eta) {
     const route = String(draft.route || routeValue || '');
-    const airports = route.split(/[\/>]+/).map(code => code.trim().toUpperCase()).filter(Boolean);
+    const airports = route.split(/[\s/>\-–—]+/).map(code => code.trim().toUpperCase()).filter(Boolean);
     const fndIndex = airports.indexOf('FND');
     const origin = fndIndex > 0 ? airports[fndIndex - 1] : '';
     return origin ? `Departed from ${origin}` : 'Departed from origin';
   }
   return 'Scheduled';
+};
+
+const normalizeRampPayload = (value: any) => {
+  const normalized: any = value && typeof value === 'object' ? { ...value } : {};
+  const legacyAliases: Record<string, string> = { baggage: 'bag' };
+  Object.entries(legacyAliases).forEach(([legacy, current]) => {
+    ['In', 'Out', 'Trans'].forEach(direction => {
+      ['', 'Pcs', 'Kg'].forEach(suffix => {
+        const legacyKey = `${legacy}${direction}${suffix}`;
+        const currentKey = `${current}${direction}${suffix}`;
+        if ((normalized[currentKey] === undefined || normalized[currentKey] === '') && normalized[legacyKey] !== undefined && normalized[legacyKey] !== '') {
+          normalized[currentKey] = normalized[legacyKey];
+        }
+      });
+    });
+  });
+  ['cargo', 'mail', 'bag', 'other'].forEach(prefix => {
+    ['In', 'Out', 'Trans'].forEach(direction => {
+      const combinedKey = `${prefix}${direction}`;
+      const piecesKey = `${combinedKey}Pcs`;
+      const kgKey = `${combinedKey}Kg`;
+      const combined = String(normalized[combinedKey] ?? '').trim();
+      if (combined && (normalized[piecesKey] === undefined || normalized[piecesKey] === '' || normalized[kgKey] === undefined || normalized[kgKey] === '')) {
+        const parts = combined.split(/[\/|]/).map(part => part.trim());
+        if (normalized[piecesKey] === undefined || normalized[piecesKey] === '') normalized[piecesKey] = parts[0] || '';
+        if (normalized[kgKey] === undefined || normalized[kgKey] === '') normalized[kgKey] = parts[1] || '';
+      }
+      if (!combined && (normalized[piecesKey] !== undefined || normalized[kgKey] !== undefined)) {
+        normalized[combinedKey] = `${normalized[piecesKey] ?? ''}/${normalized[kgKey] ?? ''}`;
+      }
+    });
+  });
+  return normalized;
 };
 
 const requireRoleAssignment = (currentRole: string, requestedRole: string | undefined) => {
@@ -1830,11 +1863,25 @@ export const onRequest = async (context: any) => {
       const body: any = await request.json();
       const payloadStr = JSON.stringify(body);
       const requestedDraftId = String(url.searchParams.get('draftId') || 'current').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || 'current';
+      const [previousDraftRow] = requestedDraftId === 'current' ? [] : await db.select().from(rampLiveDraft).where(eq(rampLiveDraft.id, requestedDraftId)).limit(1);
+      let previousDraft: any = {};
+      try { previousDraft = previousDraftRow?.payload ? JSON.parse(previousDraftRow.payload) : {}; }
+      catch { previousDraft = {}; }
       await db.insert(rampLiveDraft).values({ id: requestedDraftId, payload: payloadStr })
         .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
       if (requestedDraftId !== 'current' && Object.keys(body).length > 0) {
         await db.insert(rampLiveDraft).values({ id: 'current', payload: payloadStr })
           .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: payloadStr } });
+      } else if (requestedDraftId !== 'current' && Object.keys(body).length === 0 && previousDraft?.date && previousDraft?.fltNo) {
+        const [currentDraftRow] = await db.select().from(rampLiveDraft).where(eq(rampLiveDraft.id, 'current')).limit(1);
+        try {
+          const currentDraft = currentDraftRow?.payload ? JSON.parse(currentDraftRow.payload) : {};
+          const clearsCurrentAlias = currentDraft?.date === previousDraft.date && normalizeFlightNumber(currentDraft?.fltNo) === normalizeFlightNumber(previousDraft.fltNo);
+          if (clearsCurrentAlias) {
+            await db.insert(rampLiveDraft).values({ id: 'current', payload: '{}' })
+              .onConflictDoUpdate({ target: rampLiveDraft.id, set: { payload: '{}' } });
+          }
+        } catch { /* A malformed current alias is ignored. */ }
       }
       if (body.fltNo && body.date) {
         const normalizedFlightNo = normalizeFlightNumber(body.fltNo);
@@ -1858,11 +1905,16 @@ export const onRequest = async (context: any) => {
       await requireRampView(env, currentUser);
       const results = await db.select().from(rampInspections)
         .orderBy(desc(rampInspections.date), desc(rampInspections.createdAt));
-      return json(results.map((row: any) => ({
-        ...JSON.parse(row.payload || "{}"),
-        id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg,
-        createdAt: row.createdAt, updatedAt: row.updatedAt
-      })));
+      return json(results.map((row: any) => {
+        let payload: any = {};
+        try { payload = normalizeRampPayload(JSON.parse(row.payload || "{}")); }
+        catch { payload = {}; }
+        return {
+          ...payload,
+          id: row.id, date: row.date, fltNo: row.fltNo, acReg: row.acReg,
+          createdAt: row.createdAt, updatedAt: row.updatedAt
+        };
+      }));
     }
     if (pathname === "/api/ramp/reports" && method === "POST") {
       const currentUser = await requireAuth(request, env);
@@ -2223,11 +2275,16 @@ export const onRequest = async (context: any) => {
 
       const liveRampRows = await db.select().from(rampLiveDraft);
       const liveRampDraftMap = new Map<string, any>();
-      liveRampRows.forEach(row => {
+      const orderedLiveRows = [
+        ...liveRampRows.filter(row => row.id !== 'current'),
+        ...liveRampRows.filter(row => row.id === 'current'),
+      ];
+      orderedLiveRows.forEach(row => {
         try {
           const draft = row.payload ? JSON.parse(row.payload) : {};
           if (draft?.date && draft?.fltNo) {
-            liveRampDraftMap.set(`${draft.date}|${normalizeFlightNumber(draft.fltNo)}`, draft);
+            const key = `${draft.date}|${normalizeFlightNumber(draft.fltNo)}`;
+            if (!liveRampDraftMap.has(key)) liveRampDraftMap.set(key, draft);
           }
         } catch { /* Ignore malformed legacy draft. */ }
       });
@@ -2278,7 +2335,9 @@ export const onRequest = async (context: any) => {
         .sort((a: any, b: any) => {
           const dateCompare = String(b.date || '').localeCompare(String(a.date || ''));
           if (dateCompare !== 0) return dateCompare;
-          return String(b.createdAt || b.updatedAt || '').localeCompare(String(a.createdAt || a.updatedAt || ''));
+          const movementCompare = String(b.departureTime || b.arrivalTime || '').localeCompare(String(a.departureTime || a.arrivalTime || ''));
+          if (movementCompare !== 0) return movementCompare;
+          return String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''));
         })[0];
       const flightMinutes = (flight: any) => {
         const value = String(flight.arrivalTime || flight.departureTime || '');

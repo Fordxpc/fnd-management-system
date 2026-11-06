@@ -155,6 +155,32 @@ function StaffPage() {
     setEditingId(s.id); setSn(s.sn || ''); setName(s.name || ''); setEmail(s.email || ''); setPersonalEmail(s.personalEmail || ''); setNid(s.nid || ''); setJoinDate(s.joinDate || ''); setPhone(s.phone || ''); setGender(s.gender || ''); setDepartment(s.department || 'Ground Operations'); setPosition(s.position || ''); setIsSMT(s.isSmt === true || s.isSMT === true); setBalanceVisible(!!s.balanceVisible); setNotes(s.notes || ''); setBasicSalary(s.basicSalary ? String(s.basicSalary) : ''); setDailyAllowance(s.dailyAllowance ? String(s.dailyAllowance) : ''); setHolidayAllowanceRate(s.holidayAllowanceRate ? String(s.holidayAllowanceRate) : ''); setPhotoBase64(s.photoBase64 || ''); setCreateUserAccount(false); setShowForm(true); window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowedTypes.has(file.type)) {
+      toast.error('Profile photo must be a JPG, PNG or WebP image');
+      return;
+    }
+    if (file.size > 650 * 1024) {
+      toast.error('Photo must be 650 KB or smaller');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => toast.error('The selected photo could not be read');
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      if (!result.startsWith('data:image/') || result.length > 900_000) {
+        toast.error('The selected photo could not be prepared. Choose a smaller image.');
+        return;
+      }
+      setPhotoBase64(result);
+      toast.success('Profile photo ready to save');
+    };
+    reader.readAsDataURL(file);
+  };
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try { await apiFetch(`/staff/${deleteTarget.id}`, { method: 'DELETE' }); toast.success('Staff deleted.'); fetchStaff(); setDeleteTarget(null); } 
@@ -246,7 +272,7 @@ const myDept = myStaff?.department;
           <div style={{ gridColumn: 'span 2', fontSize: '13px', fontWeight: 600, color: '#2563eb' }}>👤 Personal Information</div>
           <input placeholder="SN Number (e.g. SN-0439)" value={sn} onChange={(e) => setSn(e.target.value)} />
           <input placeholder="Full Name *" value={name} onChange={(e) => setName(e.target.value)} required />
-          <label className="staff-photo-upload"><span>{photoBase64 ? <img src={photoBase64} alt="Staff preview" /> : 'PHOTO'}</span><div><strong>Passport-size profile picture</strong><small>JPG or PNG, maximum 650 KB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (!file) return; if (file.size > 650 * 1024) { toast.error('Photo must be 650 KB or smaller'); return; } const reader = new FileReader(); reader.onloadend = () => setPhotoBase64(String(reader.result || '')); reader.readAsDataURL(file); }} /></div>{photoBase64 && <button type="button" onClick={() => setPhotoBase64('')}>Remove</button>}</label>
+          <label className="staff-photo-upload"><span>{photoBase64 ? <img src={photoBase64} alt="Staff preview" /> : 'PHOTO'}</span><div><strong>Passport-size profile picture</strong><small>JPG or PNG, maximum 650 KB</small><input type="file" accept="image/jpeg,image/png,image/webp" onChange={handlePhotoUpload} /></div>{photoBase64 && <button type="button" onClick={() => setPhotoBase64('')}>Remove</button>}</label>
           <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <select value={gender} onChange={(e) => setGender(e.target.value)}><option value="">Gender — select...</option><option value="Male">Male</option><option value="Female">Female</option></select>
           <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} title="Join Date" />
