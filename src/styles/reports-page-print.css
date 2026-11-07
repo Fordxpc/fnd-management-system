@@ -1,0 +1,37 @@
+/* Phase 16B: Operations Reports only (not Management Summary).
+   Global print isolation hides every descendant of #root; restore this page's
+   printable report whether printed with its button or Ctrl+P. */
+@media print {
+  body:has(.reports-print-root) #root .reports-print-root,
+  body:has(.reports-print-root) #root .reports-print-root * {
+    visibility: visible !important;
+  }
+
+  body:has(.reports-print-root) #root .reports-print-root {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    overflow: visible !important;
+    zoom: 1 !important;
+    box-shadow: none !important;
+    break-after: auto !important;
+  }
+
+  body:has(.reports-print-root) #root .reports-print-root table {
+    break-inside: auto !important;
+  }
+
+  body:has(.reports-print-root) #root .reports-print-root thead {
+    display: table-header-group !important;
+  }
+}

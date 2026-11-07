@@ -69,8 +69,17 @@ function RampReportsPage({ onEdit }: RampReportsPageProps) {
   }), [reports, search, dateFrom, dateTo]);
 
   const handlePrintModal = () => {
-    document.body.classList.add('printing-modal', 'printing-ramp'); window.print();
-    window.setTimeout(() => document.body.classList.remove('printing-modal', 'printing-ramp'), 1000);
+    const cleanup = () => document.body.classList.remove('printing-modal', 'printing-ramp');
+    document.body.classList.add('printing-modal', 'printing-ramp');
+    // Wait for the browser's print lifecycle rather than a timed reset.
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      window.removeEventListener('afterprint', cleanup);
+      cleanup();
+      throw error;
+    }
   };
 
   if (loading) return <div className="ramp-reports-empty">Loading Ramp reports…</div>;

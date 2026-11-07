@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import '../styles/reports-page-print.css';
 
 const TABS = ['DFIS', 'Wildlife', 'FOD', 'Statistics', 'Traffic', 'RWY Lights'];
 const AIRCRAFT_COLORS: Record<string, string> = { 'ATR-72/600': '#fef3c7', 'ATR-42/600': '#dcfce7', 'DASH-8/300': '#dbeafe', 'DH-8/300': '#dbeafe', 'DASH-8/200': '#f3e8ff', 'DH-8/200': '#f3e8ff' };
@@ -65,7 +66,20 @@ function ReportsPage() {
 
   useEffect(() => { fetchAllData(); const interval = setInterval(fetchAllData, 15000); return () => clearInterval(interval); }, [fetchAllData]);
 
-  const handlePrint = () => { document.body.classList.add('printing-report'); window.print(); setTimeout(() => document.body.classList.remove('printing-report'), 1000); };
+  const handlePrint = () => {
+    const cleanup = () => document.body.classList.remove('printing-report');
+    // Chromium can prepare the print document after window.print() returns.
+    // Never remove the print-only class on a one-second timer.
+    document.body.classList.add('printing-report');
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch (error) {
+      window.removeEventListener('afterprint', cleanup);
+      cleanup();
+      throw error;
+    }
+  };
   const handleSaveReport = async () => { try { await apiFetch('/reports/save-monthly', { method: 'POST', body: JSON.stringify({ month: selectedMonth || 'ALL', dateFrom, dateTo, type: activeTab }) }); toast.success(`${activeTab} report saved to database!`); } catch (err: any) { toast.error('Failed to save report.'); } };
   const handleClearFilter = () => { setDateFrom(''); setDateTo(''); setSelectedMonth(''); };
 

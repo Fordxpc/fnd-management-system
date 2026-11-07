@@ -361,3 +361,69 @@
     display: none !important;
   }
 }
+
+/* Phase 16B: saved Ramp report modal print isolation.
+   Do not change the live Ramp sheet: only the saved-report modal is targeted. */
+@media print {
+  body.printing-ramp.printing-modal .ramp-reports-summary,
+  body.printing-ramp.printing-modal .ramp-reports-controls,
+  body.printing-ramp.printing-modal .ramp-reports-register {
+    display: none !important;
+  }
+
+  body.printing-ramp.printing-modal .ramp-reports-workspace {
+    display: block !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-ramp.printing-modal #viewReportModal {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  body.printing-ramp.printing-modal #viewReportModal .modal-scrollable-body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-ramp.printing-modal .modal-backdrop {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  body.printing-ramp.printing-modal .ramp-sheet {
+    break-before: auto !important;
+    break-after: auto !important;
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+  }
+}
