@@ -68,7 +68,133 @@ function ReportsPage() {
 
   const handlePrint = () => {
     const printRoot = document.querySelector<HTMLElement>('.reports-print-root');
-    const fitThisReport = activeTab !== 'Wildlife';
+
+    // Operations/analytics reports must print outside the application dashboard.
+    // The dashboard's global print styles leave hidden layout boxes behind,
+    // causing empty pages before the actual report in Chromium/Edge.
+    // Wildlife is intentionally left on its existing print path until its
+    // reporting format is redesigned.
+    if (activeTab !== 'Wildlife') {
+      if (!printRoot) {
+        toast.error('Report is not ready to print.');
+        return;
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.title = 'FND report print document';
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.cssText =
+        'position:fixed;left:-20000px;top:0;width:1400px;height:900px;border:0;pointer-events:none;';
+      document.body.appendChild(iframe);
+
+      const printDocument = iframe.contentDocument;
+      const printWindow = iframe.contentWindow;
+      if (!printDocument || !printWindow) {
+        iframe.remove();
+        toast.error('Could not open the report print document.');
+        return;
+      }
+
+      // Reuse the actual rendered table, colors, headings and data. No report
+      // fields are regenerated or reordered for printing.
+      const reportCopy = printRoot.cloneNode(true) as HTMLElement;
+      reportCopy.classList.remove('reports-print-root', 'dash-card');
+      reportCopy.removeAttribute('data-report-tab');
+      reportCopy.id = 'fnd-isolated-print-report';
+      reportCopy.style.removeProperty('zoom');
+      reportCopy.style.removeProperty('overflow-x');
+      reportCopy.style.overflow = 'visible';
+      reportCopy.style.width = 'max-content';
+      reportCopy.style.maxWidth = 'none';
+      reportCopy.style.margin = '0';
+      reportCopy.style.padding = '0';
+      reportCopy.style.border = '0';
+      reportCopy.style.boxShadow = 'none';
+
+      // Copy the already loaded style sheets so report appearance stays intact.
+      // Using a separate document prevents the global #root visibility and
+      // page-flow rules from consuming an extra blank sheet.
+      const styleTags = Array.from(document.head.querySelectorAll('link[rel="stylesheet"], style'))
+        .map((node) => node.outerHTML)
+        .join('\n');
+      const printOverrides = `
+        @page { size: A4 landscape; margin: 4mm; }
+        html, body { margin: 0 !important; padding: 0 !important; height: auto !important;
+          min-height: 0 !important; width: auto !important; overflow: visible !important;
+          background: #fff !important; }
+        body { display: block !important; }
+        #fnd-isolated-print-report { display: block !important; position: static !important;
+          box-sizing: border-box !important; height: auto !important; min-height: 0 !important;
+          max-width: none !important; margin: 0 !important; padding: 0 !important;
+          border: 0 !important; border-radius: 0 !important; background: white !important;
+          box-shadow: none !important; overflow: visible !important;
+          page-break-before: avoid !important; page-break-after: auto !important;
+          break-before: avoid !important; break-after: auto !important; }
+        #fnd-isolated-print-report table { border-collapse: collapse; }
+        #fnd-isolated-print-report tr { break-inside: avoid; page-break-inside: avoid; }
+        #fnd-isolated-print-report thead { display: table-header-group; }
+        @media print { html, body, #fnd-isolated-print-report { overflow: visible !important; } }
+      `;
+
+      printDocument.open();
+      printDocument.write(`<!doctype html><html><head><meta charset="utf-8" />
+        <base href="${window.location.origin}/" /><title>${activeTab} — FND Airport Report</title>
+        ${styleTags}<style>${printOverrides}</style></head>
+        <body>${reportCopy.outerHTML}</body></html>`);
+      printDocument.close();
+
+      const cleanup = () => iframe.remove();
+      printWindow.addEventListener('afterprint', cleanup, { once: true });
+
+      const printIsolated = async () => {
+        try {
+          // The copied style sheets should finish loading before measurements,
+          // otherwise the report may be measured before table styles apply.
+          await Promise.race([
+            Promise.all(Array.from(printDocument.querySelectorAll('link[rel="stylesheet"]')).map((link) =>
+              (link as HTMLLinkElement).sheet ? Promise.resolve() : new Promise<void>((resolve) => {
+                link.addEventListener('load', () => resolve(), { once: true });
+                link.addEventListener('error', () => resolve(), { once: true });
+              })
+            )),
+            new Promise<void>((resolve) => setTimeout(resolve, 1200)),
+          ]);
+          await printDocument.fonts.ready;
+          await Promise.race([
+            Promise.all(Array.from(printDocument.images).map((img) =>
+              img.complete ? Promise.resolve() : new Promise<void>((resolve) => {
+                img.addEventListener('load', () => resolve(), { once: true });
+                img.addEventListener('error', () => resolve(), { once: true });
+              })
+            )),
+            new Promise<void>((resolve) => setTimeout(resolve, 1200)),
+          ]);
+
+          const page = printDocument.getElementById('fnd-isolated-print-report');
+          if (!page) throw new Error('Missing printable report');
+          // A4 landscape with 4 mm margins. Work in CSS pixels (96 per inch).
+          const pageWidth = (297 - 8) * 96 / 25.4;
+          const pageHeight = (210 - 8) * 96 / 25.4;
+          const contentWidth = Math.max(page.scrollWidth, page.getBoundingClientRect().width, 1);
+          const contentHeight = Math.max(page.scrollHeight, page.getBoundingClientRect().height, 1);
+          const scale = Math.min(1, (pageWidth - 4) / contentWidth, (pageHeight - 4) / contentHeight);
+          // Preserve legibility for long report periods: a very long report may
+          // legitimately span multiple pages rather than be shrunk to nothing.
+          page.style.zoom = String(Math.max(0.45, scale));
+          printWindow.focus();
+          printWindow.print();
+        } catch (error) {
+          cleanup();
+          console.error('FND report print failed', error);
+          toast.error('Report print preview could not open.');
+        }
+      };
+      void printIsolated();
+      return;
+    }
+
+    // Retain the Wildlife print behavior until the bird-count format is updated.
+    const fitThisReport = false;
 
     const fitToLandscapePage = () => {
       if (!printRoot || !fitThisReport) return;
