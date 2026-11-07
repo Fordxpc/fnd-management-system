@@ -2315,9 +2315,29 @@ export const onRequest = async (context: any) => {
 
       try {
         await getAuth(env).api.signUpEmail({ body: { email, password, name: name || "New User" } });
+      
       } catch (err: any) {
         console.error("Failed to create auth account", err);
-        return json({ message: "Failed to create auth account" }, 400);
+
+        const isPreview =
+          url.hostname ===
+          "feature-fnd-phase13-rebased-fnd-management-system.funadhoo-airport.workers.dev";
+
+        return json(
+          {
+            message: "Failed to create auth account",
+            ...(isPreview
+              ? {
+                  diagnostic: {
+                    type: err?.name ?? "Unknown",
+                    code: err?.body?.code ?? err?.code ?? err?.cause?.code ?? null,
+                    status: err?.statusCode ?? err?.status ?? null,
+                  },
+                }
+              : {}),
+          },
+          400
+        );
       }
 
       const id = crypto.randomUUID();
