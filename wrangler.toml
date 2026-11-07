@@ -14,3 +14,12 @@ BETTER_AUTH_URL = "https://feature-fnd-phase13-rebased-fnd-management-system.fun
 directory = "./dist"
 not_found_handling = "single-page-application"
 binding = "ASSETS"
+
+
+[previews.observability]
+enabled = true
+
+[previews.observability.logs]
+enabled = true
+invocation_logs = true
+persist = true
