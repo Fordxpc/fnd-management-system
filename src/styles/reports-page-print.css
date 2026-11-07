@@ -35,3 +35,23 @@
     display: table-header-group !important;
   }
 }
+
+/* Phase 16C: the Analytics & Reports print view uses landscape A4 paper.
+   Preserve existing report contents, columns, colors and proportions.
+   Wildlife/Bird Count formatting remains unchanged for its later redesign.
+   Named pages prevent this print rule from changing Management Summary or Ramp. */
+@page fndAnalyticsLandscape {
+  size: A4 landscape;
+  margin: 5mm;
+}
+
+@media print {
+  body:has(.reports-print-root[data-report-tab]:not([data-report-tab="Wildlife"]))
+  #root .reports-print-root {
+    page: fndAnalyticsLandscape !important;
+    zoom: var(--fnd-report-print-scale, 1) !important;
+    transform: none !important;
+    break-before: auto !important;
+    break-after: auto !important;
+  }
+}

@@ -67,10 +67,32 @@ function ReportsPage() {
   useEffect(() => { fetchAllData(); const interval = setInterval(fetchAllData, 15000); return () => clearInterval(interval); }, [fetchAllData]);
 
   const handlePrint = () => {
-    const cleanup = () => document.body.classList.remove('printing-report');
-    // Chromium can prepare the print document after window.print() returns.
-    // Never remove the print-only class on a one-second timer.
+    const printRoot = document.querySelector<HTMLElement>('.reports-print-root');
+    const fitThisReport = activeTab !== 'Wildlife';
+
+    const fitToLandscapePage = () => {
+      if (!printRoot || !fitThisReport) return;
+      // Scale the existing layout proportionally; never alter table columns or data.
+      // Measurements are taken during beforeprint, when print media styles apply.
+      printRoot.style.setProperty('--fnd-report-print-scale', '1');
+      const width = Math.max(printRoot.scrollWidth, printRoot.getBoundingClientRect().width, 1);
+      const height = Math.max(printRoot.scrollHeight, printRoot.getBoundingClientRect().height, 1);
+      // A4 landscape, 5 mm margins on each side, converted to CSS px at 96 dpi.
+      const availableWidth = (297 - 10) * 96 / 25.4;
+      const availableHeight = (210 - 10) * 96 / 25.4;
+      const scale = Math.min(1, availableWidth / width, availableHeight / height);
+      // Extremely long reports may still span sheets, rather than becoming unreadable.
+      printRoot.style.setProperty('--fnd-report-print-scale', String(Math.max(0.5, scale)));
+    };
+
+    const cleanup = () => {
+      document.body.classList.remove('printing-report');
+      window.removeEventListener('beforeprint', fitToLandscapePage);
+      printRoot?.style.removeProperty('--fnd-report-print-scale');
+    };
+
     document.body.classList.add('printing-report');
+    window.addEventListener('beforeprint', fitToLandscapePage);
     window.addEventListener('afterprint', cleanup, { once: true });
     try {
       window.print();
@@ -144,7 +166,7 @@ function ReportsPage() {
       </div>
 
       {loading ? (<div className="empty-state">Loading report data...</div>) : (
-        <div className="dash-card reports-print-root" style={{ overflowX: 'auto', zoom: zoom }}>
+        <div className="dash-card reports-print-root" data-report-tab={activeTab} style={{ overflowX: 'auto', zoom: zoom }}>
           {activeTab === 'DFIS' && (
             <div className="dfis-print-table">
               <div style={{ textAlign: 'center', marginBottom: '20px' }}>
