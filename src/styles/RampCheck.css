@@ -322,3 +322,42 @@
     break-after: avoid-page !important;
   }
 }
+
+/* Phase 16: keep the printable Ramp Form in normal document flow.
+   Absolute positioning left an extra empty sheet in Chromium print preview.
+   This targets the main Ramp Form only, not its separately printed modals. */
+@media print {
+  body.printing-ramp:not(.printing-modal) .ramp-workspace-page,
+  body.printing-ramp:not(.printing-modal) .ramp-workspace-page > div,
+  body.printing-ramp:not(.printing-modal) .ramp-container {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-ramp:not(.printing-modal) .ramp-workspace-page {
+    display: block !important;
+  }
+
+  body.printing-ramp:not(.printing-modal) .ramp-container {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+  }
+
+  body.printing-ramp:not(.printing-modal) .ramp-sheet {
+    break-before: auto !important;
+    break-after: auto !important;
+    page-break-before: auto !important;
+    page-break-after: auto !important;
+  }
+
+  body.printing-ramp:not(.printing-modal) .ramp-workspace-page .no-print {
+    display: none !important;
+  }
+}

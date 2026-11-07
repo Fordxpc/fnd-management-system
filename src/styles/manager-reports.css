@@ -11,3 +11,40 @@
 @media(max-width:680px){.manager-report-cards{grid-template-columns:repeat(2,1fr)}}
 @media print{body:has(.manager-report-paper) .app-sidebar,body:has(.manager-report-paper) .app-topbar,body:has(.manager-report-paper) .app-subnav,body:has(.manager-report-paper) .no-print{display:none!important}
 body:has(.manager-report-paper) .app-page,body:has(.manager-report-paper) .app-main{margin:0!important;padding:0!important}.manager-report-paper{border:0;padding:0;margin:0;max-width:none;box-shadow:none;break-inside:auto}.manager-report-paper h3{break-after:avoid}}
+
+
+/* Phase 16: restore the report content hidden by the global print isolation.
+   The rest of the app remains hidden; only the generated summary is printed. */
+@media print {
+  body:has(.manager-report-paper) #root .manager-report-paper,
+  body:has(.manager-report-paper) #root .manager-report-paper * {
+    visibility: visible !important;
+  }
+
+  body:has(.manager-report-paper) .manager-reports,
+  body:has(.manager-report-paper) .manager-report-paper {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has(.manager-report-paper) .manager-report-paper {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    break-before: auto !important;
+    break-after: auto !important;
+  }
+
+  body:has(.manager-report-paper) .manager-report-paper table {
+    break-inside: auto !important;
+  }
+
+  body:has(.manager-report-paper) .manager-report-paper tr {
+    break-inside: avoid !important;
+  }
+}
