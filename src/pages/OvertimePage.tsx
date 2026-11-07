@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
+import { otPeriod } from '../lib/ot-eligibility';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const formatAuditDate = (value?: string) => value ? new Date(value).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -54,7 +55,6 @@ function OvertimePage() {
   const { profile, user } = useAuth();
   const [entries, setEntries] = useState<any[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
-  const [leaveReqs, setLeaveReqs] = useState<any[]>([]);
   const [myStaff, setMyStaff] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,7 +62,7 @@ function OvertimePage() {
   const [search, setSearch] = useState('');
   const [showRegister, setShowRegister] = useState<boolean>(true);
 
-  const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
+  const [eligibility, setEligibility] = useState<any>(null);
 
   const [monthFilter, setMonthFilter] = useState<string>(INITIAL_MONTH);
   const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
@@ -88,19 +88,17 @@ function OvertimePage() {
     if (!quiet) setRefreshing(true);
     try {
       const results = await Promise.allSettled([
-        apiFetch('/overtime'), apiFetch('/staff'), apiFetch('/leave-requests'), apiFetch('/settings/ot_rules')
+        apiFetch('/overtime'), apiFetch('/staff'), apiFetch(`/overtime/eligibility?month=${monthFilter}`)
       ]);
       const getData = (index: number) => results[index].status === 'fulfilled' ? (results[index] as PromiseFulfilledResult<any>).value : [];
       const otData = getData(0);
       const staffData = getData(1);
-      const leaveData = getData(2);
-      const rulesData = getData(3);
+      const eligibilityData = getData(2);
       const failedRequests = results.filter((result) => result.status === 'rejected').length;
 
       setEntries(Array.isArray(otData) ? otData : []);
       setStaff(Array.isArray(staffData) ? staffData : []);
-      setLeaveReqs(Array.isArray(leaveData) ? leaveData : []);
-      if (rulesData && !Array.isArray(rulesData)) setOtRules(rulesData);
+      setEligibility(eligibilityData && !Array.isArray(eligibilityData) ? eligibilityData : null);
       setLoadError(failedRequests ? failedRequests + ' overtime data source' + (failedRequests === 1 ? '' : 's') + ' could not be refreshed.' : '');
 
       const mine = (Array.isArray(staffData) ? staffData : []).find((member: any) => (member.email || '').toLowerCase() === (user?.email || '').toLowerCase());
@@ -117,7 +115,7 @@ function OvertimePage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, formStaffId]);
+  }, [user, formStaffId, monthFilter]);
 
   useEffect(() => { const initialLoad = window.setTimeout(() => void fetchData(true), 0); const interval = window.setInterval(() => void fetchData(true), 15000); return () => { window.clearTimeout(initialLoad); window.clearInterval(interval); }; }, [fetchData]);
 
@@ -161,7 +159,8 @@ function OvertimePage() {
   };
 
   // Build filtered list with hierarchy
-  let filtered = entries.filter((e) => (e.date || '').startsWith(monthFilter));
+  const payrollWindow = otPeriod(monthFilter);
+  let filtered = entries.filter((e) => e.date && e.date >= payrollWindow.from && e.date <= payrollWindow.to);
 
   if (viewMode === 'individual' && myStaff) {
     // Individual mode: always shows own entries
@@ -318,8 +317,42 @@ function OvertimePage() {
         <div><span>Current view</span><strong>{filtered.length}</strong><small>matching entries</small></div>
       </section>
 
+      {eligibility && <section aria-label="Approved overtime eligibility" style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <h3 style={{ margin: '0 0 6px' }}>Approved OT · Eligibility and expected income</h3>
+        <p style={{ color: '#64748b', fontSize: 13 }}>Roster period: {formatDisplay(payrollWindow.from)} – {formatDisplay(payrollWindow.to)}. Saturday–Friday duty weeks are never reset at the monthly boundary. Calculated using current policy revision {eligibility.policyRevision ?? 0}; not finalized payroll.</p>
+        {(eligibility.summaries || []).filter((item: any) => {
+          if (viewMode === 'individual' && myStaff) return item.staffId === myStaff.id;
+          if (canViewAll && item.staffId !== myStaff?.id) {
+            const member = staff.find(s => s.id === item.staffId);
+            return member?.department === filterDept && (filterStaff === 'all' || filterStaff === item.staffId);
+          }
+          return item.staffId !== myStaff?.id;
+        }).map((item: any) => <div key={item.staffId} style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, marginTop: 12 }}>
+          <strong>{item.staffName}</strong>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, margin: '10px 0', fontSize: 13 }}>
+            <span>Approved OT: <strong>{item.approvedHours.toFixed(2)} h</strong></span>
+            <span>Eligible: <strong>{item.eligibleHours.toFixed(2)} h</strong></span>
+            <span>Ineligible: <strong>{item.ineligibleHours.toFixed(2)} h</strong></span>
+            <span>Pending: <strong>{item.pendingHours.toFixed(2)} h</strong></span>
+            <span>Expected eligible income: <strong>{item.estimatedEligibleIncomeMvr == null ? 'Rate not configured' : `MVR ${Number(item.estimatedEligibleIncomeMvr).toFixed(2)}`}</strong></span>
+            <span>Approved OT value (before deductions): <strong>{item.estimatedApprovedIncomeMvr == null ? 'Rate not configured' : `MVR ${Number(item.estimatedApprovedIncomeMvr).toFixed(2)}`}</strong></span>
+          </div>
+          <details><summary style={{ cursor: 'pointer', color: '#1d4ed8' }}>Weekly duty and deduction breakdown</summary>
+            <div style={{ overflowX: 'auto' }}><table className="overtime-management-table">
+              <thead><tr><th>Week</th><th>Required duty</th><th>Duty/credited</th><th>Approved OT</th><th>Eligible</th><th>Ineligible</th><th>Reason</th></tr></thead>
+              <tbody>{item.weeks.map((week: any) => <tr key={week.weekStart}>
+                <td>{formatDisplay(week.weekStart)} – {formatDisplay(week.weekEnd)}</td>
+                <td>{week.requiredDutyHours} h</td><td>{week.dutyHours} h</td><td>{week.approvedOtHours} h</td>
+                <td>{week.eligibleOtHours} h</td><td>{week.ineligibleOtHours} h</td>
+                <td>{week.excludedLeaveDates.length ? week.excludedLeaveDates.join('; ') : week.shortfallHours ? `Duty shortfall ${week.shortfallHours} h` : 'None'}{week.incompleteRoster ? ' · Check missing roster data' : ''}</td>
+              </tr>)}</tbody>
+            </table></div>
+          </details>
+        </div>)}
+      </section>}
+
       <section className="overtime-management-controls">
-        <label><span>Month</span><input type="month" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} /></label>
+        <label><span>OT period ending on the 15th</span><input type="month" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} /><small>{formatDisplay(payrollWindow.from)} – {formatDisplay(payrollWindow.to)}</small></label>
         <label className="overtime-management-search"><span>Search entries</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Staff, SN, department or notes…" /></label>
       </section>
 
@@ -387,37 +420,15 @@ function OvertimePage() {
           if (!firstEntry) return null;
           const weekStart = weekKey.split('::')[1] || INITIAL_DATE;
           const weekTotal = weekEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-          
-          const sampleStaff = staff.find(s => s.id === firstEntry.staffId);
-          const isAdminDept = sampleStaff?.department === 'Administration';
-          const targetHours = isAdminDept ? otRules.adminHours : otRules.regularHours;
-
           const weekEnd = getWeekEnd(weekStart);
-          const weekLeaves = leaveReqs.filter(r => 
-            r.staffId === firstEntry.staffId && r.status === 'approved' && otRules.deductLeaves.includes(r.leaveType) && r.startDate <= weekEnd && r.endDate >= weekStart
-          );
-          
-          let deductionHours = 0;
-          weekLeaves.forEach(l => {
-            const s = new Date(l.startDate + 'T00:00:00');
-            const e = new Date(l.endDate + 'T00:00:00');
-            let count = 0;
-            for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
-              const dStr = formatDate(d);
-              if (dStr >= weekStart && dStr <= weekEnd) count++;
-            }
-            deductionHours += count * 8;
-          });
-
-          const adjustedTarget = Math.max(0, targetHours - deductionHours);
-          const isOver = weekTotal > adjustedTarget;
-          const eligible = Math.max(0, weekTotal - adjustedTarget);
+          const summary = (eligibility?.summaries || []).find((item: any) => item.staffId === firstEntry.staffId);
+          const weekEligibility = summary?.weeks?.find((item: any) => item.weekStart === weekStart);
 
           return (
             <section key={weekKey} className="overtime-week-card">
-              <header className={isOver ? 'overtime-week-card__header is-eligible' : 'overtime-week-card__header'}>
+              <header className={weekEligibility?.eligibleOtHours ? 'overtime-week-card__header is-eligible' : 'overtime-week-card__header'}>
                 <span>Week: {formatDisplay(weekStart)} – {formatDisplay(weekEnd)}</span>
-                <span>Total: {weekTotal.toFixed(2)} hrs {isOver ? `· ✅ Eligible (${eligible.toFixed(2)} OT)` : `· ${(adjustedTarget - weekTotal).toFixed(2)} hrs to ${adjustedTarget}`}</span>
+                <span>Shown {tab} OT: {weekTotal.toFixed(2)} hrs · Approved eligible: {weekEligibility ? `${weekEligibility.eligibleOtHours.toFixed(2)} h` : 'Not calculated'} · Ineligible: {weekEligibility ? `${weekEligibility.ineligibleOtHours.toFixed(2)} h` : '—'}</span>
               </header>
               <div className="staff-list overtime-week-card__table-wrap">
                 <table className="overtime-management-table">

@@ -6,6 +6,16 @@ import { toast } from 'sonner';
 import ChangePasswordModal from './ChangePasswordModal';
 import { ConfirmDialog } from '../components/Dialogs';
 import { UserEditModal } from '../components/UserEditModal';
+import { DEFAULT_OT_POLICY } from '../lib/ot-eligibility';
+
+type OTManagerRules = typeof DEFAULT_OT_POLICY & {
+  ratesByStaffId: Record<string, number>;
+  weeklyHoursByStaffId: Record<string, number>;
+  revision?: number;
+  updatedAt?: string;
+};
+const LEAVE_OPTIONS = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'ABSENT',
+  'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL'];
 
 
 function SettingsPage() {
@@ -17,7 +27,7 @@ function SettingsPage() {
   const isManager = ['manager', 'admin', 'owner'].includes((profile?.role || '').toLowerCase());
   const canManageAccess = isDev || isManager;
 
-  const [otRules, setOtRules] = useState({ adminHours: 40, regularHours: 48, deductLeaves: ['SICK LEAVE', 'SICK LEAVE / MC'] });
+  const [otRules, setOtRules] = useState<OTManagerRules>({ ...DEFAULT_OT_POLICY, ratesByStaffId: {}, weeklyHoursByStaffId: {} });
   const [savingRules, setSavingRules] = useState(false);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -49,7 +59,7 @@ function SettingsPage() {
         canManageAccess ? apiFetch('/password-reset-requests').catch(() => []) : Promise.resolve([])
       ]);
 
-      if (rulesData) setOtRules(rulesData);
+      if (rulesData) setOtRules({ ...DEFAULT_OT_POLICY, ratesByStaffId: {}, weeklyHoursByStaffId: {}, ...rulesData });
       setActiveUsers(Array.isArray(usersData) ? usersData : []);
       setStaffList(Array.isArray(staffData) ? staffData : []);
       setInspectorList(Array.isArray(inspectorsData) ? inspectorsData : []);
@@ -194,7 +204,50 @@ function SettingsPage() {
                 <input type="number" value={otRules.adminHours} onChange={e => setOtRules({...otRules, adminHours: Number(e.target.value)})} style={{ padding: '10px', border: '1px solid #cbd5e1', borderRadius: '6px', width: '120px', color: '#1e293b' }} />
               </div>
             </div>
-            <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save Rules'}</button>
+            <h4 style={{ color: '#1e293b' }}>Leave types NOT counted as weekly duty</h4>
+            <p style={{ color: '#475569', fontSize: 13 }}>Only the affected Saturday–Friday week is reduced. Approved OT records are never changed.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8, marginBottom: 16 }}>
+              {LEAVE_OPTIONS.map(type => <label key={type} style={{ fontSize: 13, display: 'flex', gap: 8, alignItems: 'center', color: '#1e293b' }}>
+                <input type="checkbox" checked={otRules.deductLeaves.includes(type)} onChange={event => setOtRules(old => ({
+                  ...old, deductLeaves: event.target.checked ? [...old.deductLeaves, type] : old.deductLeaves.filter(item => item !== type)
+                }))} />{type}
+              </label>)}
+            </div>
+            <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 16 }}>
+              <label style={{ fontSize: 13, color: '#1e293b' }}>Hours credited per qualifying leave day
+                <input type="number" min="0" max="16" step="0.25" value={otRules.leaveDayHours} onChange={event => setOtRules({ ...otRules, leaveDayHours: Number(event.target.value) })} style={{ display: 'block', padding: 8, width: 110 }} />
+              </label>
+              <label style={{ fontSize: 13, color: '#1e293b' }}>Excluded final days of FRL (when FRL is selected)
+                <input type="number" min="0" max="365" step="1" value={otRules.frlFinalDays} onChange={event => setOtRules({ ...otRules, frlFinalDays: Number(event.target.value) })} style={{ display: 'block', padding: 8, width: 110 }} />
+              </label>
+            </div>
+            <h4 style={{ color: '#1e293b' }}>Staff duty patterns and estimated OT pay rates</h4>
+            <p style={{ fontSize: 13, color: '#475569' }}>Choose 40 or 48 hours for staff whose duty pattern differs from the department default. Enter an approved MVR/hour rate for estimates. Blank rates show no income estimate. Rates are visible only to Manager/Admin.</p>
+            <div style={{ maxHeight: 330, overflowY: 'auto', border: '1px solid #cbd5e1', borderRadius: 6, marginBottom: 16 }}>
+              <table className="mini-table" style={{ width: '100%' }}>
+                <thead><tr><th>Staff</th><th>Weekly hours</th><th>MVR per OT hour</th></tr></thead>
+                <tbody>{staffList.filter(s => String(s.status || 'active').toLowerCase() === 'active').map(s => <tr key={s.id}>
+                  <td>{s.name} ({s.sn})</td>
+                  <td><select aria-label={`Weekly duty hours for ${s.name}`} value={otRules.weeklyHoursByStaffId[s.id] ?? ''}
+                    onChange={event => setOtRules(old => {
+                      const map = { ...old.weeklyHoursByStaffId };
+                      if (!event.target.value) delete map[s.id]; else map[s.id] = Number(event.target.value);
+                      return { ...old, weeklyHoursByStaffId: map };
+                    })} style={{ maxWidth: 160 }}>
+                    <option value="">Dept default</option><option value="40">40 hours / 5 days</option><option value="48">48 hours / 6 days</option>
+                  </select></td>
+                  <td><input aria-label={`Overtime rate for ${s.name}`} type="number" min="0" max="10000" step="0.01"
+                    value={otRules.ratesByStaffId[s.id] ?? ''} placeholder="Not configured" style={{ maxWidth: 140 }}
+                    onChange={event => setOtRules(old => {
+                      const map = { ...old.ratesByStaffId };
+                      if (!event.target.value) delete map[s.id]; else map[s.id] = Number(event.target.value);
+                      return { ...old, ratesByStaffId: map };
+                    })} /></td>
+                </tr>)}</tbody>
+              </table>
+            </div>
+            <p style={{ color: '#92400e', fontSize: 12 }}>Estimates use the current policy and are not final payroll. Revisions are recorded, but historical periods may be recalculated until payroll is finalized.</p>
+            <button type="submit" disabled={savingRules} className="quick-btn" style={{ background: '#2563eb', color: 'white' }}>{savingRules ? 'Saving...' : 'Save OT Rules'}</button>
           </form>
 
           {isDev && (

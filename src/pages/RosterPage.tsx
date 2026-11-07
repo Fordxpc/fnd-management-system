@@ -4,6 +4,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
+import { isInactiveStaff, showStaffInRosterPeriod, shouldDisplayResigned } from '../lib/resigned-roster';
 
 const ROSTER_DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
 const ADMIN_DEPARTMENTS = ['Administration'];
@@ -176,9 +177,15 @@ const userDepartment = myStaff?.department || profile?.department;
     ? (selectedDept === 'all' ? '' : selectedDept.toUpperCase())
     : (userDepartment?.toUpperCase() || '');
 
+  const periodStartISO = formatDate(periodStart);
+  const periodEndISO = formatDate(periodEnd);
+  const staffWithHistoryInPeriod = new Set(entries
+    .filter((entry) => entry.date >= periodStartISO && entry.date <= periodEndISO)
+    .map((entry) => entry.staffId));
   const visibleStaff = [...staff]
     .filter((s) => {
       if (!ROSTER_DEPARTMENTS.includes(s.department)) return false;
+      if (!showStaffInRosterPeriod(s, periodStartISO, staffWithHistoryInPeriod.has(s.id))) return false;
       const query = search.trim().toLowerCase();
       if (query && ![s.name, s.sn, s.position, s.department].some((value) => String(value || '').toLowerCase().includes(query))) return false;
       if (isAdmin) {
@@ -228,6 +235,9 @@ const userDepartment = myStaff?.department || profile?.department;
     if (!staffId) { toast.error('Please select a staff member'); return; }
     
     const staffMember = staff.find((s) => s.id === staffId);
+    if (staffMember && isInactiveStaff(staffMember)) {
+      toast.error('Resigned or archived staff cannot receive new roster duties.'); return;
+    }
     if (!staffMember || !canEditDept(staffMember.department)) {
       toast.error('You do not have permission to edit this department.');
       return;
@@ -336,7 +346,8 @@ const userDepartment = myStaff?.department || profile?.department;
     const prevStartStr = formatDate(prevStart); const prevEndStr = formatDate(prevEnd);
 
     const prevEntries = entries.filter((e) =>
-      e.date >= prevStartStr && e.date <= prevEndStr && !isApprovedLeaveStatus(e.status) && !e.leaveRequestId
+      e.date >= prevStartStr && e.date <= prevEndStr && !isApprovedLeaveStatus(e.status) && !e.leaveRequestId &&
+      !isInactiveStaff(staff.find((person) => person.id === e.staffId) || { status: 'archived' })
     );
     if (prevEntries.length === 0) { toast.error('No entries found in the previous period to copy.'); return; }
 
@@ -451,7 +462,7 @@ const userDepartment = myStaff?.department || profile?.department;
     setTimeout(() => document.body.classList.remove('printing-roster'), 1000);
   };
 
-  const editableStaffList = visibleStaff.filter(s => canEditDept(s.department));
+  const editableStaffList = visibleStaff.filter(s => canEditDept(s.department) && !isInactiveStaff(s));
 
   const summaryStaff = staff.filter(member => ROSTER_DEPARTMENTS.includes(member.department) && (isAdmin ? selectedDept === 'all' || member.department === selectedDept : member.department === userDepartment));
   const visibleStaffIds = new Set(summaryStaff.map(member => String(member.id || '')));
@@ -608,7 +619,7 @@ const userDepartment = myStaff?.department || profile?.department;
                 {visibleStaff.length === 0 ? <tr><td colSpan={reorderMode ? 10 : 9} style={{ textAlign: 'center', padding: '15px' }}>No staff found for this department.</td></tr> : visibleStaff.map((s) => (
                   <tr key={s.id}>
                     <td className="col-sn">{s.sn || '—'}</td>
-                    <td className="col-name">{s.name}</td>
+                    <td className="col-name">{s.name}{isInactiveStaff(s) && <small style={{ marginLeft: 5, color: '#991b1b' }}> (Resigned)</small>}</td>
                     {reorderMode && (
                       <td className="reorder-col">
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -628,9 +639,14 @@ const userDepartment = myStaff?.department || profile?.department;
                       }
 
                       let displayValue = ''; let cellClass = 'empty-cell';
-                      let cellEditable = canEditDept(s.department) && !reorderMode;
+                      let cellEditable = canEditDept(s.department) && !reorderMode && !isInactiveStaff(s);
+                      const resignedCell = shouldDisplayResigned(s, dStr, periodStartISO, periodEndISO);
 
-                      if (entry) {
+                      if (resignedCell) {
+                        displayValue = 'RES';
+                        cellClass = 'leave-other';
+                        cellEditable = false;
+                      } else if (entry) {
                         displayValue = entry.status === 'scheduled' ? (entry.shiftTime || '') : getShortLeave(entry.status);
                         if (entry.status === 'scheduled') cellClass = getShiftColorClass(entry.shiftTime || '');
                         else cellClass = getLeaveColorClass(entry.status);
@@ -643,6 +659,8 @@ const userDepartment = myStaff?.department || profile?.department;
 
                       return (
                         <td key={dStr} className={`${cellClass} ${cellEditable ? 'clickable-cell' : ''}`}
+                            title={resignedCell ? `Resigned after ${s.resignationLastDay}; no duties permitted` : undefined}
+                            style={resignedCell ? { background: '#fee2e2', color: '#991b1b', fontWeight: 800 } : undefined}
                             onClick={() => {
                               if (!cellEditable) return;
                               if (entry && (isApprovedLeaveStatus(entry.status) || entry.leaveRequestId)) {

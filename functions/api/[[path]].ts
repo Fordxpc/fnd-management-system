@@ -22,6 +22,8 @@ import { buildDutyConflictReport } from "../../src/lib/duty-conflict-report.js";
 import { planLegacyDutyRepair } from "../../src/lib/legacy-duty-repair.js";
 import { approvalRosterConflict, auditLeaveRosterIntegrity, countLeaveDays, leaveDateRange, overlappingLeaveRequest } from "../../src/lib/leave-integrity.js";
 import { globalHR, canEditDepartmentProfile, canReviewResignation, restrictInchargeEditPayload, isValidISODate, validateLetterUpload, makeResignationAcceptanceLetter } from "../../src/lib/resignation-policy.js";
+import { isInactiveStaff } from "../../src/lib/resigned-roster.js";
+import { calculateOTPeriod, normalizeOtPolicy, otPeriod, offsetDate } from "../../src/lib/ot-eligibility.js";
 import {
   requireFlightsEdit,
   requireFlightsView,
@@ -976,7 +978,26 @@ export const onRequest = async (context: any) => {
     // ==========================================
     if (pathname === "/api/staff" && method === "GET") {
       const currentUser = await requireAuth(request, env);
-      const results = await db.select().from(staff).orderBy(asc(staff.orderIndex));
+      const staffRecords = await db.select().from(staff).orderBy(asc(staff.orderIndex));
+      // A resignation date is derived from completed offboarding, not today's date.
+      // Preserve the original staff row and Staff SN for all historical references.
+      const completedDepartures = await db.select({
+        staffId: resignationRequests.staffId,
+        lastDay: resignationRequests.requestedLastDay,
+      }).from(resignationRequests)
+        .where(and(eq(resignationRequests.status, 'approved'),
+          eq(resignationRequests.offboardingStatus, 'completed')))
+        .orderBy(desc(resignationRequests.offboardedAt));
+      const lastDayByStaff = new Map<string, string>();
+      for (const departure of completedDepartures) {
+        if (!lastDayByStaff.has(departure.staffId)) {
+          lastDayByStaff.set(departure.staffId, departure.lastDay);
+        }
+      }
+      const results = staffRecords.map((record) => ({
+        ...record,
+        resignationLastDay: lastDayByStaff.get(record.id) || null,
+      }));
       const canViewPrivateStaffData = ["developer", "manager", "admin", "owner"].includes(currentUser.role);
       const viewerStaff = await getCurrentStaffProfile(currentUser);
       const canSeeOwnDepartmentDetails = (record: any) => Boolean(viewerStaff?.isIncharge &&
@@ -1177,19 +1198,17 @@ export const onRequest = async (context: any) => {
       if (!targetStaff) return json({ message: "Staff member not found" }, 404);
       const [targetUser] = targetStaff.email ? await db.select().from(users).where(eq(users.email, targetStaff.email.toLowerCase())).limit(1) : [];
       if (targetUser?.role === "developer" && currentUser.role !== "developer") return json({ message: "Developer records can only be removed by the Developer" }, 403);
-      const linkedRecords = await Promise.all([
-        db.select({ id: rosterEntries.id }).from(rosterEntries).where(eq(rosterEntries.staffId, id!)).limit(1),
-        db.select({ id: leaveRequests.id }).from(leaveRequests).where(eq(leaveRequests.staffId, id!)).limit(1),
-        db.select({ id: overtimeEntries.id }).from(overtimeEntries).where(eq(overtimeEntries.staffId, id!)).limit(1),
-        db.select({ id: timesheets.id }).from(timesheets).where(eq(timesheets.staffId, id!)).limit(1),
-        db.select({ id: chatGroupMembers.id }).from(chatGroupMembers).where(eq(chatGroupMembers.staffId, id!)).limit(1),
-        db.select({ staffId: lightsInspectors.staffId }).from(lightsInspectors).where(eq(lightsInspectors.staffId, id!)).limit(1),
-      ]);
-      if (linkedRecords.some(rows => rows.length > 0)) {
-        return json({ message: 'This staff record has roster, leave, overtime or other history. It cannot be deleted until its references have been safely reviewed and reassigned.' }, 409);
+      // Archive rather than hard-delete. Staff IDs and SNs must remain stable
+      // for roster/leave/OT/resignation history even when no history exists yet.
+      if (isInactiveStaff(targetStaff)) return json({ success: true, alreadyArchived: true });
+      await db.update(staff).set({ status: 'archived', updatedAt: new Date().toISOString() })
+        .where(eq(staff.id, id!));
+      if (targetStaff.email) {
+        const [authAccount] = await db.select({ id: user.id }).from(user)
+          .where(sql`lower(${user.email}) = ${targetStaff.email.toLowerCase()}`).limit(1);
+        if (authAccount) await db.delete(session).where(eq(session.userId, authAccount.id));
       }
-      await db.delete(staff).where(eq(staff.id, id!));
-      return json({ success: true });
+      return json({ success: true, archived: true });
     }
 
     // ==========================================
@@ -1556,6 +1575,7 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       const body: any = await request.json();
       const targetStaff = await getAuthorizedRequestStaff(currentUser, String(body.staffId || ""));
+      if (isInactiveStaff(targetStaff)) return json({ message: 'Cannot request future leave for an archived or resigned staff member.' }, 409);
       const permittedTypes = new Set([
         ...rosterLeaveStatuses, 'ABSENT',
       ]);
@@ -1651,6 +1671,8 @@ export const onRequest = async (context: any) => {
       if (!targetStaff?.email) return json({ message: "Linked staff profile not found" }, 409);
       if (targetStaff.email.toLowerCase() === currentUser.email.toLowerCase()) return json({ message: "You cannot review your own leave request" }, 403);
       await requireLeaveApproval(env, currentUser.email, targetStaff.email);
+      // Approval writes roster rows. Never recreate future duties after offboarding.
+      if (isInactiveStaff(targetStaff)) return json({ message: 'Archived or resigned staff cannot receive new roster or leave assignments.' }, 409);
 
       await request.json();
       const reviewedAt = new Date().toISOString();
@@ -2004,7 +2026,17 @@ export const onRequest = async (context: any) => {
       const currentUser = await requireAuth(request, env);
       await requireRosterView(env, currentUser);
       const results = await db.select().from(rosterEntries).orderBy(desc(rosterEntries.date), asc(rosterEntries.staffName));
-      return json(results);
+      const departed = await db.select({ staffId: resignationRequests.staffId,
+        lastDay: resignationRequests.requestedLastDay })
+        .from(resignationRequests).where(and(eq(resignationRequests.status, 'approved'),
+          eq(resignationRequests.offboardingStatus, 'completed')))
+        .orderBy(desc(resignationRequests.offboardedAt));
+      const dateByStaff = new Map<string, string>();
+      for (const row of departed) if (!dateByStaff.has(row.staffId)) dateByStaff.set(row.staffId, row.lastDay);
+      // Post-departure *planned* rows stay safely stored for audit; never
+      // advertise them as current duty or overwrite historical leave links.
+      return json(results.filter((row) => !dateByStaff.has(String(row.staffId || '')) ||
+        String(row.date || '') <= dateByStaff.get(String(row.staffId || ''))!));
     }
 
     if (pathname === "/api/roster" && method === "POST") {
@@ -2019,6 +2051,9 @@ export const onRequest = async (context: any) => {
         return json({ message: "A valid shift time is required" }, 400);
       }
       const targetStaff = await getAuthorizedRosterStaff(currentUser, body.staffId);
+      if (isInactiveStaff(targetStaff)) return json({
+        message: 'Archived or resigned staff cannot receive roster assignments.'
+      }, 409);
       const existing = await db.select().from(rosterEntries).where(and(
         eq(rosterEntries.staffId, body.staffId), eq(rosterEntries.date, body.date)
       ));
@@ -2072,6 +2107,9 @@ export const onRequest = async (context: any) => {
         seenAssignments.add(assignmentKey);
         let targetStaff = staffCache.get(entry.staffId);
         if (!targetStaff) { targetStaff = await getAuthorizedRosterStaff(currentUser, entry.staffId); staffCache.set(entry.staffId, targetStaff); }
+        if (isInactiveStaff(targetStaff)) return json({
+          message: `Archived or resigned staff ${targetStaff.name} cannot receive roster assignments.`
+        }, 409);
         const existing = await db.select().from(rosterEntries).where(and(
           eq(rosterEntries.staffId, entry.staffId), eq(rosterEntries.date, entry.date)
         ));
@@ -2183,23 +2221,110 @@ export const onRequest = async (context: any) => {
     // ==========================================
     // SETTINGS
     // ==========================================
+    // OT rules and staff-specific pay rates share the existing settings JSON column.
+    // Legacy JSON arrays are read without changing their meaning. Only managers
+    // can see pay rates; all authenticated staff receive non-sensitive rules.
+    const loadOTRules = async () => {
+      const [saved] = await db.select().from(settings).where(eq(settings.id, 'ot_rules')).limit(1);
+      let raw: any = {};
+      try { raw = JSON.parse(saved?.deductLeaves || '[]'); } catch { raw = []; }
+      const config: any = Array.isArray(raw) ? { deductLeaves: raw } : (raw && typeof raw === 'object' ? raw : {});
+      const policy = normalizeOtPolicy({ ...config, regularHours: saved?.regularHours ?? 48, adminHours: saved?.adminHours ?? 40 });
+      const rates: Record<string, number> = {};
+      const staffHours: Record<string, number> = {};
+      for (const [key, val] of Object.entries(config.ratesByStaffId || {})) {
+        if (typeof val === 'number' && Number.isFinite(val) && val >= 0 && val <= 10000) rates[key] = val;
+      }
+      for (const [key, val] of Object.entries(config.weeklyHoursByStaffId || {})) {
+        if (val === 40 || val === 48) staffHours[key] = val;
+      }
+      return { policy, rates, staffHours, revision: Number(config.revision || 0), updatedAt: String(config.updatedAt || ''), history: Array.isArray(config.history) ? config.history : [] };
+    };
     if (pathname === "/api/settings/ot_rules" && method === "GET") {
-      const rule: any = (await db.select().from(settings)).find((r: any) => r.id === "ot_rules");
-      if (rule) rule.deductLeaves = JSON.parse(rule.deductLeaves || "[]");
-      return json(rule || { adminHours: 40, regularHours: 48, deductLeaves: [] });
+      const currentUser = await requireAuth(request, env);
+      const config = await loadOTRules();
+      return json({ ...config.policy, revision: config.revision,
+        ...(isManagerRole(currentUser.role) ? {
+          ratesByStaffId: config.rates, weeklyHoursByStaffId: config.staffHours,
+          updatedAt: config.updatedAt
+        } : {}) });
     }
     if (pathname === "/api/settings/ot_rules" && method === "POST") {
       const currentUser = await requireAuth(request, env);
       requireManager(currentUser.role);
       const body: any = await request.json();
-      const deductLeavesStr = JSON.stringify(body.deductLeaves);
+      if (!Array.isArray(body.deductLeaves) || typeof body.regularHours !== 'number' || typeof body.adminHours !== 'number' ||
+        !Number.isFinite(body.regularHours) || !Number.isFinite(body.adminHours) || body.regularHours < 1 ||
+        body.adminHours < 1 || body.regularHours > 84 || body.adminHours > 84 ||
+        typeof body.leaveDayHours !== 'number' || !Number.isFinite(body.leaveDayHours) || body.leaveDayHours < 0 || body.leaveDayHours > 16 ||
+        typeof body.frlFinalDays !== 'number' || !Number.isInteger(body.frlFinalDays) || body.frlFinalDays < 0 || body.frlFinalDays > 365) {
+        return json({ message: 'Invalid overtime eligibility settings' }, 400);
+      }
+      const policy = normalizeOtPolicy(body);
+      const original = await loadOTRules();
+      const validStaff = await db.select({ id: staff.id }).from(staff);
+      const allowedIds = new Set(validStaff.map(s => s.id));
+      const rates: Record<string, number> = {};
+      const staffHours: Record<string, number> = {};
+      for (const [key, raw] of Object.entries(body.ratesByStaffId || {})) {
+        if (!allowedIds.has(key)) continue;
+        if (raw === '' || raw === null || raw === undefined) continue;
+        if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0 || raw > 10000) return json({ message: 'Invalid OT rate' }, 400);
+        rates[key] = raw;
+      }
+      for (const [key, value] of Object.entries(body.weeklyHoursByStaffId || {})) {
+        if (!allowedIds.has(key)) continue;
+        if (value !== 40 && value !== 48) return json({ message: 'Staff duty requirement must be 40 or 48 hours' }, 400);
+        staffHours[key] = value as number;
+      }
+      const auditAt = new Date().toISOString();
+      // Append policy history: existing records/approvals are never modified.
+      const history = [...original.history, {
+        revision: original.revision + 1, savedAt: auditAt, savedBy: currentUser.id,
+        policy, ratesByStaffId: rates, weeklyHoursByStaffId: staffHours,
+      }];
+      const serialized = JSON.stringify({ ...policy, revision: original.revision + 1,
+        updatedAt: auditAt, ratesByStaffId: rates, weeklyHoursByStaffId: staffHours, history });
       await db.insert(settings).values({
-        id: "ot_rules", adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr,
+        id: 'ot_rules', adminHours: policy.adminHours, regularHours: policy.regularHours, deductLeaves: serialized,
       }).onConflictDoUpdate({
         target: settings.id,
-        set: { adminHours: body.adminHours, regularHours: body.regularHours, deductLeaves: deductLeavesStr }
+        set: { adminHours: policy.adminHours, regularHours: policy.regularHours, deductLeaves: serialized },
       });
-      return json({ success: true });
+      return json({ success: true, revision: original.revision + 1 });
+    }
+    // Read-only OT payment eligibility report. Never changes Head Office approvals.
+    if (pathname === '/api/overtime/eligibility' && method === 'GET') {
+      const currentUser = await requireAuth(request, env);
+      const month = String(url.searchParams.get('month') || '');
+      let window: { from: string; to: string };
+      try { window = otPeriod(month); } catch { return json({ message: 'Invalid OT period (YYYY-MM)' }, 400); }
+      const start = offsetDate(window.from, -7);
+      const end = offsetDate(window.to, 7);
+      const [allOt, allRoster, allLeaves, allStaff, rules] = await Promise.all([
+        db.select().from(overtimeEntries).where(and(sql`${overtimeEntries.date} >= ${start}`, sql`${overtimeEntries.date} <= ${end}`)),
+        db.select().from(rosterEntries).where(and(sql`${rosterEntries.date} >= ${start}`, sql`${rosterEntries.date} <= ${end}`)),
+        db.select().from(leaveRequests).where(and(eq(leaveRequests.status, 'approved'), sql`${leaveRequests.startDate} <= ${end}`, sql`${leaveRequests.endDate} >= ${start}`)),
+        db.select({ id: staff.id, department: staff.department }).from(staff),
+        loadOTRules(),
+      ]);
+      const scopedOT = await scopeRequestsForUser(currentUser, allOt, false);
+      const allowedStaffIds = new Set(scopedOT.map((entry: any) => String(entry.staffId || '')).filter(Boolean));
+      const staffById = new Map(allStaff.map(s => [s.id, s]));
+      const ownStaff = isManagerRole(currentUser.role) ? null : await getCurrentStaffProfile(currentUser);
+      const summaries = [...allowedStaffIds].sort().map(id => {
+        const member = staffById.get(id);
+        const requiredHours = rules.staffHours[id] ?? (member?.department === 'Administration' ? rules.policy.adminHours : rules.policy.regularHours);
+        // In-Charge/SMT may review departmental OT hours, but must not receive
+        // colleagues' compensation estimates or hourly rates.
+        const canViewIncome = isManagerRole(currentUser.role) || String(ownStaff?.id || '') === id;
+        const result = calculateOTPeriod(month, id, requiredHours, scopedOT, allRoster, allLeaves, rules.policy,
+          canViewIncome ? (rules.rates[id] ?? null) : null);
+        return { ...result, staffName: scopedOT.find((e: any) => String(e.staffId) === id)?.staffName || '',
+          weeklyDutyRequirement: requiredHours };
+      });
+      return json({ ...window, month, policyRevision: rules.revision, summaries,
+        disclaimer: 'Estimated eligibility using current policy. Not finalized payroll; approvals unchanged.' });
     }
 
     // ==========================================
@@ -2426,6 +2551,7 @@ export const onRequest = async (context: any) => {
 
       const body: any = await request.json();
       const targetStaff = await getAuthorizedRequestStaff(currentUser, String(body.staffId || ""));
+      if (isInactiveStaff(targetStaff)) return json({ message: 'Cannot create overtime for an archived or resigned staff member.' }, 409);
       const duration = getOvertimeDuration(body.date, body.startTime, body.endTime);
       if (duration === null) return json({ message: "Enter valid OT date and times (15 minutes to 16 hours)." }, 400);
       const id = crypto.randomUUID();

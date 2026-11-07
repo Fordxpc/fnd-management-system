@@ -72,6 +72,7 @@ function StaffPage() {
   const [importing, setImporting] = useState<boolean>(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>('all');
+  const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState('');
   const [showFinancials, setShowFinancials] = useState<boolean>(false);
   const [showRegister, setShowRegister] = useState<boolean>(true);
@@ -185,10 +186,9 @@ function StaffPage() {
   };
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    try { await apiFetch(`/staff/${deleteTarget.id}`, { method: 'DELETE' }); toast.success('Staff deleted.'); fetchStaff(); setDeleteTarget(null); } 
+    try { await apiFetch(`/staff/${deleteTarget.id}`, { method: 'DELETE' }); toast.success('Staff archived; historical records retained.'); fetchStaff(); setDeleteTarget(null); }
     catch (error: any) { toast.error('Error: ' + error.message); }
   };
-
   const handleImportAll = async () => {
     const missing = FND_ALL_STAFF.filter((m) => !staff.some((s) => s.sn === m.sn));
     if (missing.length === 0) { toast.info(`All staff are already in the system.`); return; }
@@ -216,15 +216,18 @@ const myDept = myStaff?.department || profile?.department;
 
   const canAddStaff = isDev || isManager;
 
-  const visibleStaff = staff.filter((s) => {
+  const activeStaff = staff.filter((member) => !['resigned', 'archived'].includes(String(member.status || 'active').toLowerCase()));
+  const archivedStaff = staff.filter((member) => ['resigned', 'archived'].includes(String(member.status || '').toLowerCase()));
+  const staffInCurrentView = showArchived && canAddStaff ? archivedStaff : activeStaff;
+  const visibleStaff = staffInCurrentView.filter((s) => {
     const matchesDepartment = selectedDept === 'all' || (selectedDept === 'SMT' ? (s.isSmt === true || s.isSMT === true) : s.department === selectedDept);
     const query = search.trim().toLowerCase();
     const matchesSearch = !query || [s.sn, s.name, s.position, s.department, s.email].some((value) => String(value || '').toLowerCase().includes(query));
     return matchesDepartment && matchesSearch;
   }).sort((a, b) => (a.sn || '').localeCompare(b.sn || ''));
 
-  const departmentCount = new Set(staff.map((member) => member.department).filter(Boolean)).size;
-  const smtCount = staff.filter((member) => member.isSmt === true || member.isSMT === true).length;
+  const departmentCount = new Set(activeStaff.map((member) => member.department).filter(Boolean)).size;
+  const smtCount = activeStaff.filter((member) => member.isSmt === true || member.isSMT === true).length;
 
   if (loading) return <div className="page-content"><p>Loading data...</p></div>;
 
@@ -242,14 +245,17 @@ const myDept = myStaff?.department || profile?.department;
           <button type="button" className="staff-management-secondary" onClick={() => void fetchStaff()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
           {canViewFinancials && <button type="button" className="staff-management-secondary" onClick={() => setShowFinancials(!showFinancials)}>{showFinancials ? 'Hide financials' : 'Show financials'}</button>}
           {staff.length === 0 && canAddStaff && <button type="button" className="staff-management-secondary" onClick={handleImportAll} disabled={importing}>{importing ? 'Importing…' : 'Import FND staff'}</button>}
-          {canAddStaff && <button type="button" className="staff-management-primary" onClick={() => { if (showForm) { resetForm(); setShowForm(false); } else { resetForm(); setShowForm(true); } }}>{showForm ? 'Close form' : 'Add staff member'}</button>}
+          {canAddStaff && <button type="button" className="staff-management-secondary" onClick={() => { setShowArchived((value) => !value); setSelectedDept('all'); setShowForm(false); resetForm(); }}>
+            {showArchived ? `Active staff (${activeStaff.length})` : `Archived / resigned (${archivedStaff.length})`}
+          </button>}
+          {canAddStaff && !showArchived && <button type="button" className="staff-management-primary" onClick={() => { if (showForm) { resetForm(); setShowForm(false); } else { resetForm(); setShowForm(true); } }}>{showForm ? 'Close form' : 'Add staff member'}</button>}
         </div>
       </header>
 
       {loadError && <div className="staff-management-alert" role="alert"><strong>Staff information may be out of date.</strong><span>{loadError}</span></div>}
 
       <section className="staff-management-summary" aria-label="Staff summary">
-        <div><span>Total workforce</span><strong>{staff.length}</strong><small>staff records</small></div>
+        <div><span>Active workforce</span><strong>{activeStaff.length}</strong><small>{archivedStaff.length} archived records retained</small></div>
         <div><span>Departments</span><strong>{departmentCount}</strong><small>active teams</small></div>
         <div><span>SMT members</span><strong>{smtCount}</strong><small>leadership records</small></div>
         <div><span>Current view</span><strong>{visibleStaff.length}</strong><small>matching records</small></div>
@@ -261,8 +267,8 @@ const myDept = myStaff?.department || profile?.department;
       </section>
 
       <nav className="staff-management-tabs" aria-label="Department filter">
-        <button type="button" className={selectedDept === 'all' ? 'active' : ''} onClick={() => setSelectedDept('all')}>All <span>{staff.length}</span></button>
-        {DEPARTMENTS.map((item) => <button type="button" key={item} className={selectedDept === item ? 'active' : ''} onClick={() => setSelectedDept(item)}>{item} <span>{staff.filter((member) => member.department === item).length}</span></button>)}
+        <button type="button" className={selectedDept === 'all' ? 'active' : ''} onClick={() => setSelectedDept('all')}>All <span>{staffInCurrentView.length}</span></button>
+        {DEPARTMENTS.map((item) => <button type="button" key={item} className={selectedDept === item ? 'active' : ''} onClick={() => setSelectedDept(item)}>{item} <span>{staffInCurrentView.filter((member) => member.department === item).length}</span></button>)}
         <button type="button" className={selectedDept === 'SMT' ? 'active is-smt' : 'is-smt'} onClick={() => setSelectedDept('SMT')}>SMT <span>{smtCount}</span></button>
       </nav>
       {showForm && (
@@ -295,7 +301,7 @@ const myDept = myStaff?.department || profile?.department;
         </form>
       )}
 
-      <div className="long-register-toolbar"><div><strong>Staff register</strong><span>{visibleStaff.length} matching records</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
+      <div className="long-register-toolbar"><div><strong>{showArchived ? 'Archived / resigned staff — historical records retained' : 'Active staff register'}</strong><span>{visibleStaff.length} matching records</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>
       <div className={`staff-list staff-management-list ${showRegister ? '' : 'long-register-collapsed'}`}>
         {visibleStaff.length === 0 ? (
           <div className="empty-state"><p>No staff members found for <strong>{selectedDept === 'all' ? 'All Departments' : selectedDept}</strong>.</p></div>
@@ -310,13 +316,13 @@ const myDept = myStaff?.department || profile?.department;
                   const hasEditPermission = canEditStaff(s.department, s);
                   return (
                     <tr key={s.id}>
-                      <td>{s.sn || '—'}</td><td><strong>{s.name}</strong></td><td>{s.position || '—'}</td><td style={{ fontSize: '12px' }}>{s.department}</td><td>{s.gender || '—'}</td><td>{s.joinDate || '—'}</td>
+                      <td>{s.sn || '—'}</td><td><strong>{s.name}</strong>{showArchived && <div style={{ fontSize: 11, color: '#991b1b' }}>{String(s.status || 'Archived').toUpperCase()}{s.resignationLastDay ? ` · Last working day: ${s.resignationLastDay}` : ''}</div>}</td><td>{s.position || '—'}</td><td style={{ fontSize: '12px' }}>{s.department}</td><td>{s.gender || '—'}</td><td>{s.joinDate || '—'}</td>
                       {showFinancials && (<><td style={{ textAlign: 'right', fontWeight: 600 }}>{s.basicSalary ? `MVR ${Number(s.basicSalary).toLocaleString()}` : '—'}</td><td style={{ textAlign: 'right' }}>{s.dailyAllowance ? `MVR ${Number(s.dailyAllowance).toLocaleString()}` : '—'}</td><td style={{ textAlign: 'right' }}>{s.holidayAllowanceRate ? `MVR ${Number(s.holidayAllowanceRate).toLocaleString()}` : '—'}</td></>)}
                       {canSeeSensitive && (<td style={{ maxWidth: '200px', fontSize: '12px', color: s.notes ? '#1e293b' : '#94a3b8', whiteSpace: 'normal', wordBreak: 'break-word' }}>{s.notes || '—'}</td>)}
                       <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.isSmt === true || s.isSMT === true ? '⭐' : '—'}</td>
                       <td style={{ textAlign: 'center', fontSize: '16px' }}>{s.balanceVisible ? '👁' : '🚫'}</td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        {hasEditPermission && (<><button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>Edit</button>{canAddStaff && (<button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>Delete</button>)}</>)}
+                        {!showArchived && hasEditPermission && (<><button className="edit-btn" onClick={() => handleEdit(s)} style={{ marginRight: '6px' }}>Edit</button>{canAddStaff && (<button className="delete-btn" onClick={() => setDeleteTarget({ id: s.id, name: s.name, sn: s.sn })}>Archive</button>)}</>)}
                       </td>
                     </tr>
                   );
@@ -327,7 +333,7 @@ const myDept = myStaff?.department || profile?.department;
         )}
       </div>
 
-      <ConfirmDialog isOpen={!!deleteTarget} title="Delete Staff Member?" message={`Are you sure you want to delete ${deleteTarget?.name} (${deleteTarget?.sn || 'No SN'})?`} confirmText="Delete" isDanger={true} onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} />
+      <ConfirmDialog isOpen={!!deleteTarget} title="Archive Staff Member?" message={`Archive ${deleteTarget?.name} (${deleteTarget?.sn || 'No SN'}) from the active directory? Their staff record and all history will be retained, and login access will be restricted.`} confirmText="Archive" isDanger={true} onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)} />
     </div>
   );
 }
