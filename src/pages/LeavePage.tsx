@@ -6,6 +6,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog, PromptDialog } from '../components/Dialogs';
+import RequestFormModal from '../components/RequestFormModal';
 
 const LEAVE_TYPES = ['ANNUAL LEAVE', 'SICK LEAVE', 'SICK LEAVE / MC', 'NO PAY LEAVE', 'ABSENT', 'PATERNITY LEAVE', 'MATERNITY LEAVE', 'PRE-MATERNITY LEAVE', 'FAMILY RESPONSIBILITY LEAVE (FRL)', 'DUTY TRAVEL'];
 const ENTITLEMENTS: { [key: string]: number } = { 'ANNUAL LEAVE': 30, 'SICK LEAVE': 15, 'SICK LEAVE / MC': 15, 'FAMILY RESPONSIBILITY LEAVE (FRL)': 10, 'PRE-MATERNITY LEAVE': 15, 'MATERNITY LEAVE': 180, 'PATERNITY LEAVE': 30, 'NO PAY LEAVE': 365, 'DUTY TRAVEL': 0, 'ABSENT': 0 };
@@ -292,7 +293,7 @@ function LeavePage() {
             {integrityLoading ? 'Checking roster…' : integrityVisible ? 'Hide integrity audit' : 'Audit leave & roster'}
           </button>}
           <button type="button" className="leave-management-secondary" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
-          <button type="button" className="leave-management-primary" onClick={() => setShowForm(!showForm)}>{showForm ? 'Close request form' : 'Request leave'}</button>
+          <button type="button" className="leave-management-primary" onClick={() => setShowForm(true)}>+ Request leave</button>
         </div>
       </header>
 
@@ -398,8 +399,8 @@ function LeavePage() {
       )}
 
       {showForm && (
+        <RequestFormModal title="New Leave Request" description="Submit a leave request for approval." busy={submitting} onClose={() => setShowForm(false)}>
         <form className="staff-form leave-management-form" onSubmit={handleSubmit}>
-          <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>📝 New Leave Request</div>
           {!isStaff && (<select value={selectedFormDept} onChange={(e) => { setSelectedFormDept(e.target.value); setSelectedStaffId(''); }} required style={selectStyle}>{formDepartments.map(d => <option key={d} value={d}>{d}</option>)}</select>)}
           {!isStaff ? (<select value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} required style={selectStyle}><option value="">Select Staff Member...</option>{formStaffOptions.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sn})</option>)}</select>) : (<input value={myStaff ? `${myStaff.name} (${myStaff.sn})` : 'Not linked'} disabled />)}
           <select value={leaveType} onChange={(e) => setLeaveType(e.target.value)} style={selectStyle}>{allowedLeaveTypes.map((t) => <option key={t} value={t}>{t}</option>)}</select>
@@ -409,6 +410,7 @@ function LeavePage() {
           <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '12px', borderRadius: '6px', fontSize: '13px', color: '#475569' }}><strong>Countable days:</strong> {previewDays}{leaveType === 'ANNUAL LEAVE' && previewFridays > 0 && (<div style={{ fontSize: '11px', color: '#92400e', marginTop: '4px' }}>ℹ️ {previewFridays} Friday(s) will show on the roster but will not be deducted.</div>)}</div>
           <button type="submit" disabled={submitting || previewDays === 0} style={{ gridColumn: 'span 2' }}>{submitting ? 'Submitting...' : 'Submit Leave Request'}</button>
         </form>
+        </RequestFormModal>
       )}
 
       <div className="long-register-toolbar"><div><strong>Leave request register</strong><span>{displayedPeriods.length} leave periods ({visibleRequests.length} original records)</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>

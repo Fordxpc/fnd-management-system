@@ -3,6 +3,7 @@ import { apiFetch } from '../lib/api';
 import { useAuth } from '../auth';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '../components/Dialogs';
+import RequestFormModal from '../components/RequestFormModal';
 import { otPeriod } from '../lib/ot-eligibility';
 
 const DEPARTMENTS = ['Ground Operations', 'Maintenance', 'Security', 'Fire & Rescue', 'Administration', 'Safety'];
@@ -259,7 +260,6 @@ function OvertimePage() {
     setFormEnd(entry.endTime);
     setFormNotes(entry.notes || '');
     setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const confirmApprove = async () => {
@@ -304,7 +304,7 @@ function OvertimePage() {
         </div>
         <div className="overtime-management-hero__actions">
           <button type="button" className="overtime-management-secondary" onClick={() => void fetchData()} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
-          {(canViewAll || !isExcludedFromOT(myStaff?.name, myStaff?.position)) && <button type="button" className="overtime-management-primary" onClick={() => { setShowForm(!showForm); setEditingId(null); setFormNotes(''); }}>{showForm ? 'Close request form' : 'Request overtime'}</button>}
+          {(canViewAll || !isExcludedFromOT(myStaff?.name, myStaff?.position)) && <button type="button" className="overtime-management-primary" onClick={() => { setShowForm(true); setEditingId(null); setFormNotes(''); }}>+ Request overtime</button>}
         </div>
       </header>
 
@@ -372,10 +372,8 @@ function OvertimePage() {
         <button type="button" className={tab === 'rejected' ? 'active' : ''} onClick={() => setTab('rejected')}>Rejected <span>{rejectedCount}</span></button>
       </nav>
       {showForm && (canViewAll || !isExcludedFromOT(myStaff?.name, myStaff?.position)) && (
+        <RequestFormModal title={editingId ? 'Edit Overtime Entry' : 'New Overtime Request'} description="Record overtime hours and submit for approval." busy={submitting} onClose={() => { setShowForm(false); setEditingId(null); }}>
         <form className="staff-form overtime-management-form" onSubmit={handleSubmit}>
-          <div style={{ gridColumn: 'span 2', fontWeight: 600, color: '#1e293b', marginBottom: '4px' }}>
-            {editingId ? '✏️ Edit Overtime' : '⏰ Request Overtime'}
-          </div>
           
           {canManageAll && !editingId && (
             <select value={formDept} onChange={(e) => { setFormDept(e.target.value); setFormStaffId(''); }} required style={selectStyle}>
@@ -407,6 +405,7 @@ function OvertimePage() {
           <input placeholder="Notes (optional)" value={formNotes} onChange={(e) => setFormNotes(e.target.value)} style={{ gridColumn: 'span 2' }} />
           <button type="submit" disabled={submitting} style={{ gridColumn: 'span 2' }}>{submitting ? 'Saving...' : 'Save Entry'}</button>
         </form>
+        </RequestFormModal>
       )}
 
       <div className="long-register-toolbar"><div><strong>Overtime register</strong><span>{filtered.length} matching entries</span></div><button type="button" onClick={() => setShowRegister(value => !value)}>{showRegister ? 'Minimize' : 'Show list'}</button></div>

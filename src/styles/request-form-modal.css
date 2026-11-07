@@ -1,0 +1,78 @@
+/* Phase 15: request dialogs only. No change to existing request or approval logic. */
+.request-form-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, .70);
+  backdrop-filter: blur(5px);
+  box-sizing: border-box;
+}
+.request-form-dialog {
+  width: min(100%, 670px);
+  max-height: min(90vh, 850px);
+  max-height: min(90dvh, 850px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 20px;
+  box-shadow: 0 26px 90px rgba(0, 0, 0, .28);
+  box-sizing: border-box;
+}
+.request-form-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.request-form-dialog__heading { min-width: 0; }
+.request-form-dialog__heading h2 { margin: 0 0 5px; font-size: 21px; font-weight: 800; color: #0f172a; }
+.request-form-dialog__heading p { margin: 0; font-size: 13px; line-height: 1.5; color: #64748b; }
+.request-form-dialog__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 26px;
+  cursor: pointer;
+}
+.request-form-dialog__close:hover:not(:disabled) { background: #e2e8f0; }
+.request-form-dialog__close:focus-visible { outline: 3px solid #0ea5e9; outline-offset: 2px; }
+.request-form-dialog__body { overflow: auto; min-height: 0; padding: 20px 24px 24px; overscroll-behavior: contain; }
+.request-form-dialog__body .staff-form.leave-management-form,
+.request-form-dialog__body .staff-form.overtime-management-form {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  min-width: 0;
+}
+.request-form-dialog__body .staff-form input,
+.request-form-dialog__body .staff-form select { min-width: 0; box-sizing: border-box; }
+.request-form-dialog__body .staff-form button[type="submit"] { min-height: 44px; }
+@media (max-width: 600px) {
+  .request-form-overlay { padding: 0; align-items: flex-end; }
+  .request-form-dialog { width: 100%; max-height: 94vh; max-height: 94dvh; border-radius: 19px 19px 0 0; }
+  .request-form-dialog__header { padding: 18px 18px 14px; }
+  .request-form-dialog__body { padding: 16px 18px max(20px, env(safe-area-inset-bottom)); }
+  .request-form-dialog__body .leave-management-form,
+  .request-form-dialog__body .overtime-management-form { grid-template-columns: minmax(0, 1fr); }
+  .request-form-dialog__body .leave-management-form > *,
+  .request-form-dialog__body .overtime-management-form > * { grid-column: 1 / -1 !important; }
+}
+@media print {
+  .request-form-overlay { display: none !important; }
+}
